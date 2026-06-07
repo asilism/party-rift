@@ -52,8 +52,8 @@ export default function Board({ config, positions, players, activeId }) {
             viewBox="0 0 10 10"
             refX="6"
             refY="5"
-            markerWidth="5"
-            markerHeight="5"
+            markerWidth="4"
+            markerHeight="4"
             orient="auto-start-reverse"
           >
             <path d="M0,0 L10,5 L0,10 z" fill="var(--accent2)" />
@@ -63,8 +63,8 @@ export default function Board({ config, positions, players, activeId }) {
             viewBox="0 0 10 10"
             refX="6"
             refY="5"
-            markerWidth="5"
-            markerHeight="5"
+            markerWidth="4"
+            markerHeight="4"
             orient="auto-start-reverse"
           >
             <path d="M0,0 L10,5 L0,10 z" fill="#ff7b7b" />

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Board from './Board.jsx'
 import PlayerSetup from './PlayerSetup.jsx'
 import Dice from '../../shared/Dice.jsx'
-import { DEFAULT_CONFIG } from './board.config.js'
+import { DEFAULT_CONFIG, BOARDS } from './board.config.js'
 import { createGame, applyMove, computeMove, rollDice } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
@@ -10,7 +10,7 @@ import { sound } from '../../shared/sound.js'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 export default function LadderGame({ onExit }) {
-  const config = DEFAULT_CONFIG
+  const [config, setConfig] = useState(DEFAULT_CONFIG) // 선택된 보드(30칸/50칸)
   const [roster, setRoster] = useState(null) // [{ id, zodiacId }]
   const [game, setGame] = useState(null)
   const [displayPos, setDisplayPos] = useState({}) // id -> tile (애니메이션용)
@@ -31,17 +31,18 @@ export default function LadderGame({ onExit }) {
     return () => clearTimeout(t)
   }, [game])
 
-  function startGame(picks) {
+  function startGame(picks, boardConfig = config) {
     sound.setEnabled(soundOn)
+    setConfig(boardConfig)
     setRoster(picks)
     prevTurnRef.current = -1
-    const g = createGame(picks, config)
+    const g = createGame(picks, boardConfig)
     setGame(g)
     setDisplayPos(Object.fromEntries(g.players.map((p) => [p.id, p.position])))
   }
 
   function restart() {
-    if (roster) startGame(roster)
+    if (roster) startGame(roster, config)
   }
 
   function toggleSound() {
@@ -97,7 +98,7 @@ export default function LadderGame({ onExit }) {
   // 설정 화면
   if (!game) {
     return (
-      <PlayerSetup config={config} onStart={startGame} onExit={onExit} />
+      <PlayerSetup boards={BOARDS} onStart={startGame} onExit={onExit} />
     )
   }
 

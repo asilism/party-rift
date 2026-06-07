@@ -2,11 +2,14 @@ import { useState } from 'react'
 import { ZODIAC } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
 
-// 인원 수 선택 → 각자 12지신 말 선택(선택 순서 = 턴 순서, 중복 불가)
-export default function PlayerSetup({ config, onStart, onExit }) {
+// 보드 선택 → 인원 수 선택 → 각자 12지신 말 선택(선택 순서 = 턴 순서, 중복 불가)
+export default function PlayerSetup({ boards, onStart, onExit }) {
+  const [boardId, setBoardId] = useState(boards[0].id)
+  const board = boards.find((b) => b.id === boardId) || boards[0]
+  const config = board.config
   const [count, setCount] = useState(config.minPlayers)
   const [picks, setPicks] = useState([]) // [{ id, zodiacId, name }]
-  const [phase, setPhase] = useState('count') // 'count' | 'pick'
+  const [phase, setPhase] = useState('board') // 'board' | 'count' | 'pick'
   const [nameInput, setNameInput] = useState('')
 
   const taken = new Set(picks.map((p) => p.zodiacId))
@@ -26,7 +29,7 @@ export default function PlayerSetup({ config, onStart, onExit }) {
     const next = [...picks, { id: `p${picks.length + 1}`, zodiacId, name }]
     setPicks(next)
     setNameInput('')
-    if (next.length >= count) onStart(next)
+    if (next.length >= count) onStart(next, config)
   }
 
   function undo() {
@@ -43,6 +46,32 @@ export default function PlayerSetup({ config, onStart, onExit }) {
         <h2>사다리 게임</h2>
         <span style={{ width: 64 }} />
       </div>
+
+      {phase === 'board' && (
+        <div className="setup__panel">
+          <p className="setup__label">어떤 보드로 할까요?</p>
+          <div className="board-choices">
+            {boards.map((b) => (
+              <button
+                key={b.id}
+                className={`board-choice ${b.id === boardId ? 'is-selected' : ''}`}
+                onClick={() => {
+                  sound.unlock()
+                  setBoardId(b.id)
+                }}
+              >
+                <span className="board-choice__label">{b.label}</span>
+                <span className="board-choice__desc">
+                  1 ~ {b.config.tileCount}칸
+                </span>
+              </button>
+            ))}
+          </div>
+          <button className="btn btn--primary" onClick={() => setPhase('count')}>
+            다음 →
+          </button>
+        </div>
+      )}
 
       {phase === 'count' && (
         <div className="setup__panel">
