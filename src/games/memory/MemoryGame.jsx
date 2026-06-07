@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import MemorySetup from './MemorySetup.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
+import TurnOrderRoll from '../../shared/TurnOrderRoll.jsx'
 import { createGame, applyPair, winners } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
@@ -9,6 +10,8 @@ import { sound } from '../../shared/sound.js'
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
 export default function MemoryGame({ roster, onExit }) {
+  const [phase, setPhase] = useState('setup') // 'setup' | 'order' | 'play'
+  const [order, setOrder] = useState(roster) // 차례 정하기로 확정된 순서
   const [game, setGame] = useState(null)
   const [difficulty, setDifficulty] = useState(null) // 다시하기용
   const [flipped, setFlipped] = useState([]) // 현재 뒤집은 카드 id (최대 2)
@@ -28,25 +31,34 @@ export default function MemoryGame({ roster, onExit }) {
     return () => clearTimeout(t)
   }, [game])
 
-  function startGame(diff) {
-    sound.setEnabled(soundOn)
+  // 난이도 선택 → 차례 정하기 (혼자면 건너뛰고 바로 시작)
+  function chooseDifficulty(diff) {
     setDifficulty(diff)
+    if (roster.length < 2) beginGame(roster, diff)
+    else setPhase('order')
+  }
+
+  // 게임 시작: players = 차례 정하기로 확정된 순서
+  function beginGame(players, diff = difficulty) {
+    sound.setEnabled(soundOn)
+    setOrder(players)
     prevTurnRef.current = -1
     setFlipped([])
     setBusy(false)
     setBanner(null)
-    // 로비 참가자(roster)에 12지신 색을 붙여 플레이어로 사용
-    const players = roster.map((p) => ({
+    // 12지신 색을 붙여 플레이어로 사용 (순서 = 차례)
+    const built = players.map((p) => ({
       id: p.id,
       name: p.name,
       zodiacId: p.zodiacId,
       color: getZodiac(p.zodiacId)?.color,
     }))
-    setGame(createGame(players, diff))
+    setGame(createGame(built, diff))
+    setPhase('play')
   }
 
   function restart() {
-    if (difficulty) startGame(difficulty)
+    if (difficulty) beginGame(order)
   }
 
   function toggleSound() {
@@ -92,9 +104,15 @@ export default function MemoryGame({ roster, onExit }) {
     setBusy(false)
   }
 
-  // 설정 화면 (난이도 선택)
-  if (!game) {
-    return <MemorySetup roster={roster} onStart={startGame} onExit={onExit} />
+  // 1) 설정 화면 (난이도 선택)
+  if (phase === 'setup') {
+    return <MemorySetup roster={roster} onStart={chooseDifficulty} onExit={onExit} />
+  }
+  // 2) 차례 정하기 (2명 이상)
+  if (phase === 'order') {
+    return (
+      <TurnOrderRoll players={roster} onComplete={(p) => beginGame(p)} onBack={() => setPhase('setup')} />
+    )
   }
 
   const { difficulty: diff } = game

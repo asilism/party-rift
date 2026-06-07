@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
 
-// 보드(칸 수) 선택 화면. 참가자는 로비에서 정하므로 여기선 보드만 고른다.
-export default function LadderSetup({ boards, roster, onStart, onExit }) {
-  const [boardId, setBoardId] = useState(boards[0].id)
-  const board = boards.find((b) => b.id === boardId) || boards[0]
+// 보드(칸 수) 선택 화면. 참가자는 로비에서 정하므로 여기선 보드 크기만 고른다.
+// 실제 맵(사다리/미끄럼틀/열쇠칸)은 시작할 때마다 새로 생성된다.
+export default function LadderSetup({ sizes, roster, onStart, onExit }) {
+  const [sizeId, setSizeId] = useState(sizes[0].id)
+  const size = sizes.find((s) => s.id === sizeId) || sizes[0]
 
   return (
     <div className="setup">
@@ -20,20 +21,21 @@ export default function LadderSetup({ boards, roster, onStart, onExit }) {
       <div className="setup__panel">
         <p className="setup__label">어떤 보드로 할까요?</p>
         <div className="board-choices">
-          {boards.map((b) => (
+          {sizes.map((s) => (
             <button
-              key={b.id}
-              className={`board-choice ${b.id === boardId ? 'is-selected' : ''}`}
+              key={s.id}
+              className={`board-choice ${s.id === sizeId ? 'is-selected' : ''}`}
               onClick={() => {
                 sound.unlock()
-                setBoardId(b.id)
+                setSizeId(s.id)
               }}
             >
-              <span className="board-choice__label">{b.label}</span>
-              <span className="board-choice__desc">1 ~ {b.config.tileCount}칸</span>
+              <span className="board-choice__label">{s.label}</span>
+              <span className="board-choice__desc">1 ~ {s.tileCount}칸</span>
             </button>
           ))}
         </div>
+        <p className="setup__hint">🗺️ 맵은 시작할 때마다 새로 만들어져요</p>
 
         <div className="setup__roster">
           {roster.map((p) => {
@@ -47,7 +49,7 @@ export default function LadderSetup({ boards, roster, onStart, onExit }) {
           })}
         </div>
 
-        <button className="btn btn--primary" onClick={() => onStart(board.config)}>
+        <button className="btn btn--primary" onClick={() => onStart(size)}>
           시작! 🎲
         </button>
       </div>

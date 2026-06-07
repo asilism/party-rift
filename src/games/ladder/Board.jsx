@@ -25,6 +25,15 @@ export default function Board({ config, positions, players, activeId }) {
   downs.forEach((p) => (platformByTile[p.from] = 'down'))
   const keyTiles = new Set(config.keyTiles || [])
 
+  // 순차 등장 순서: 발판과 열쇠칸을 시작칸에 가까운 순으로 정렬해 등장 index 부여
+  const revealIndex = {}
+  ;[
+    ...[...ups, ...downs].map((p) => ({ k: `p${p.from}-${p.to}`, sort: Math.min(p.from, p.to) })),
+    ...(config.keyTiles || []).map((t) => ({ k: `k${t}`, sort: t })),
+  ]
+    .sort((a, b) => a.sort - b.sort)
+    .forEach((s, i) => (revealIndex[s.k] = i))
+
   // 구불구불 트랙: 1번 → 마지막 칸까지 중심을 잇는 경로
   const trackPath = Array.from({ length: config.tileCount })
     .map((_, i) => {
@@ -88,6 +97,8 @@ export default function Board({ config, positions, players, activeId }) {
               y1={a.y}
               x2={b.x}
               y2={b.y}
+              pathLength="1"
+              style={{ '--ri': revealIndex[`p${p.from}-${p.to}`] ?? 0 }}
               className={`plink plink--${up ? 'up' : 'down'}`}
               markerEnd={`url(#arrow-${up ? 'up' : 'down'})`}
             />
@@ -109,7 +120,12 @@ export default function Board({ config, positions, players, activeId }) {
             className={`node ${kind ? `node--${kind}` : ''} ${
               isStart ? 'node--start' : ''
             } ${isGoal ? 'node--goal' : ''} ${isKey ? 'node--key' : ''}`}
-            style={{ left: `${left}%`, top: `${top}%`, '--cols': config.cols }}
+            style={{
+              left: `${left}%`,
+              top: `${top}%`,
+              '--cols': config.cols,
+              ...(isKey ? { '--ri': revealIndex[`k${tile}`] ?? 0 } : {}),
+            }}
           >
             {isGoal ? (
               <span className="node__goal">🏁</span>
@@ -131,7 +147,7 @@ export default function Board({ config, positions, players, activeId }) {
         const occ = tileOccupants[tile] || []
         const order = occ.indexOf(p.id)
         const count = occ.length
-        const spread = count > 1 ? (order - (count - 1) / 2) * 9 : 0
+        const spread = count > 1 ? (order - (count - 1) / 2) * 13 : 0
         const z = getZodiac(p.zodiacId)
         return (
           <div

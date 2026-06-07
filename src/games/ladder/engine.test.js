@@ -1,7 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { computeMove, applyMove, createGame, tileToCoord } from './engine.js'
-import { BOARDS, validateBoard, validateNoCrossings, tileRow } from './board.config.js'
+import {
+  BOARD_SIZES,
+  generateBoard,
+  validateBoard,
+  validateNoCrossings,
+  tileRow,
+} from './board.config.js'
 import { resolveKeyCard, randomCardId, KEY_CARDS } from './keycards.js'
 
 const config = {
@@ -87,42 +93,118 @@ test('발판 칸은 열쇠카드가 아니다', () => {
   assert.equal(m.keyCard, false)
 })
 
-test('규칙: 모든 보드의 발판은 줄간 1칸 이동만 한다', () => {
-  for (const b of BOARDS) {
-    assert.deepEqual(validateBoard(b.config), [], `${b.label} 발판 규칙 위반`)
+// 결정적 rng (LCG) — 여러 시드로 랜덤 생성을 충분히 검증
+function makeRng(seed) {
+  let s = seed >>> 0
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0
+    return s / 4294967296
+  }
+}
+// 모든 보드 크기 × 60개 시드의 생성 결과
+const GENERATED = []
+for (const size of BOARD_SIZES) {
+  for (let seed = 0; seed < 60; seed++) {
+    GENERATED.push({ size, config: generateBoard(size, makeRng(seed + 1)) })
+  }
+}
+
+test('생성 규칙: 발판은 항상 줄간 1칸 이동만 한다', () => {
+  for (const { size, config: c } of GENERATED) {
+    assert.deepEqual(validateBoard(c), [], `${size.label} 발판 규칙 위반`)
   }
 })
 
-test('규칙: 발판 화살표가 서로 교차하지 않는다', () => {
-  for (const b of BOARDS) {
-    assert.deepEqual(validateNoCrossings(b.config), [], `${b.label} 화살표 교차`)
+test('생성 규칙: 발판 화살표가 절대 교차하지 않는다', () => {
+  for (const { size, config: c } of GENERATED) {
+    assert.deepEqual(validateNoCrossings(c), [], `${size.label} 화살표 교차`)
   }
 })
 
-test('반전: 골 바로 앞에 아랫줄로 내려가는 발판이 있다', () => {
-  for (const b of BOARDS) {
-    const c = b.config
-    const goalRow = tileRow(c.tileCount, c.cols)
-    // 마지막 줄에서 시작해 아랫줄로 내려가는 발판이 존재해야 함
-    const hasPreGoalDown = Object.entries(c.platforms).some(
-      ([from, to]) => tileRow(Number(from), c.cols) === goalRow && to < Number(from)
+test('생성 규칙: 가장자리(맨 왼/오른쪽 열) 칸에는 사다리가 없다', () => {
+  for (const { size, config: c } of GENERATED) {
+    const isEdge = (t) => {
+      const col = ((t - 1) % c.cols)
+      const row = Math.floor((t - 1) / c.cols)
+      const vcol = row % 2 === 1 ? c.cols - 1 - col : col
+      return vcol === 0 || vcol === c.cols - 1
+    }
+    for (const [from, to] of Object.entries(c.platforms)) {
+      assert.equal(isEdge(Number(from)), false, `${size.label} 가장자리 발판 ${from}`)
+      assert.equal(isEdge(to), false, `${size.label} 가장자리 발판 →${to}`)
+    }
+  }
+})
+
+test('생성 규칙: 한 band(두 줄 사이)에 같은 종류 발판은 1개뿐', () => {
+  for (const { size, config: c } of GENERATED) {
+    const perBand = {} // band -> { up, down }
+    for (const [from, to] of Object.entries(c.platforms)) {
+      const f = Number(from)
+      const band = Math.min(tileRow(f, c.cols), tileRow(to, c.cols))
+      const kind = to > f ? 'up' : 'down'
+      perBand[band] = perBand[band] || { up: 0, down: 0 }
+      perBand[band][kind]++
+    }
+    for (const band of Object.keys(perBand)) {
+      assert.ok(perBand[band].up <= 1, `${size.label} band ${band} 올라감 ${perBand[band].up}개`)
+      assert.ok(perBand[band].down <= 1, `${size.label} band ${band} 내려감 ${perBand[band].down}개`)
+    }
+  }
+})
+
+test('생성 규칙: 오르막과 내리막 개수가 비슷하다(차이 ≤ 1)', () => {
+  for (const { size, config: c } of GENERATED) {
+    let ups = 0
+    let downs = 0
+    for (const [from, to] of Object.entries(c.platforms)) {
+      if (to > Number(from)) ups++
+      else downs++
+    }
+    assert.ok(Math.abs(ups - downs) <= 1, `${size.label} 불균형 ups=${ups} downs=${downs}`)
+    assert.ok(downs >= 1, `${size.label} 미끄럼틀 없음`)
+  }
+})
+
+test('생성 규칙: 골 바로 앞에 항상 내려가는 미끄럼틀이 있다', () => {
+  for (const { size, config: c } of GENERATED) {
+    // goal-1 칸에서 시작해 아랫줄로 내려가는 발판이 반드시 존재
+    const from = c.tileCount - 1
+    const to = c.platforms[from]
+    assert.ok(to != null && to < from, `${size.label} 골 앞 미끄럼틀 없음`)
+    assert.equal(
+      tileRow(to, c.cols),
+      tileRow(from, c.cols) - 1,
+      `${size.label} 골 앞 미끄럼틀이 한 줄 아래가 아님`
     )
-    assert.equal(hasPreGoalDown, true, `${b.label} 골 앞 반전 발판 없음`)
   }
 })
 
-test('규칙: 열쇠칸은 발판/출발/골 칸과 겹치지 않는다', () => {
-  for (const b of BOARDS) {
-    const c = b.config
+test('생성 규칙: 열쇠칸은 발판/출발/골과 겹치지 않고 줄마다 1개', () => {
+  for (const { size, config: c } of GENERATED) {
     const used = new Set([1, c.tileCount])
     for (const [from, to] of Object.entries(c.platforms)) {
       used.add(Number(from))
       used.add(to)
     }
+    const rowsSeen = new Set()
     for (const k of c.keyTiles) {
-      assert.equal(used.has(k), false, `${b.label} 열쇠칸 ${k} 겹침`)
+      assert.equal(used.has(k), false, `${size.label} 열쇠칸 ${k} 겹침`)
+      const r = tileRow(k, c.cols)
+      assert.equal(rowsSeen.has(r), false, `${size.label} 같은 줄 열쇠칸 중복`)
+      rowsSeen.add(r)
     }
+    assert.equal(c.keyTiles.length, c.rows, `${size.label} 열쇠칸이 줄마다 1개가 아님`)
   }
+})
+
+test('생성: 같은 시드면 같은 맵, 다른 시드면 대체로 다른 맵', () => {
+  const a = generateBoard(BOARD_SIZES[0], makeRng(7))
+  const b = generateBoard(BOARD_SIZES[0], makeRng(7))
+  const d = generateBoard(BOARD_SIZES[0], makeRng(8))
+  assert.deepEqual(a.platforms, b.platforms)
+  assert.deepEqual(a.keyTiles, b.keyTiles)
+  assert.notDeepEqual(a.platforms, d.platforms)
 })
 
 function game4() {

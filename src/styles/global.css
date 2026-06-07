@@ -253,6 +253,83 @@ body {
   max-width: 560px;
 }
 
+/* ── 차례 정하기 ── */
+.turnorder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.turnorder__hint {
+  text-align: center;
+  font-size: clamp(15px, 2.4vh, 20px);
+  font-weight: 700;
+  color: var(--muted);
+  margin: 4px 0 0;
+}
+.turnorder__grid {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2vw, 22px);
+  padding: 12px;
+  overflow: auto;
+}
+.turnorder__player {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--panel);
+  border: 3px solid color-mix(in srgb, var(--z-color, var(--line)) 60%, var(--panel));
+  transition: transform 0.12s ease, box-shadow 0.2s ease;
+}
+.turnorder__player.is-active {
+  border-color: var(--z-color, var(--accent));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--z-color) 30%, transparent);
+  animation: to-pulse 1s ease-in-out infinite;
+}
+@keyframes to-pulse {
+  50% {
+    transform: translateY(-4px);
+  }
+}
+.turnorder__emoji {
+  font-size: clamp(34px, 6vh, 56px);
+  line-height: 1;
+}
+.turnorder__name {
+  font-weight: 800;
+  font-size: clamp(14px, 2vh, 18px);
+}
+.turnorder__roll {
+  min-height: 1.4em;
+  font-size: clamp(16px, 2.4vh, 22px);
+  font-weight: 900;
+  color: var(--z-color, var(--text));
+}
+.turnorder__rank {
+  position: absolute;
+  top: -12px;
+  right: -10px;
+  background: var(--accent);
+  color: #2a1f00;
+  font-weight: 900;
+  font-size: 14px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+.turnorder__go {
+  align-self: center;
+  margin: 0 0 16px;
+}
+
 /* ── 설정(인원/말 선택) ── */
 .setup {
   flex: 1;
@@ -435,6 +512,9 @@ body {
   align-items: center;
   justify-content: center;
   min-width: 0;
+  min-height: 0;
+  /* 보드 크기를 이 영역(cqw/cqh) 기준으로 계산하기 위한 컨테이너 */
+  container-type: size;
 }
 .ladder__side {
   width: 150px;
@@ -461,13 +541,13 @@ body {
 }
 
 /* ── 보드(스네이크 트랙) ── */
+/* 화면 비율과 무관하게 항상 cols:rows 종횡비를 유지하도록 영역 안에 들어가는
+   가장 큰 박스로 크기를 잡는다. (찌그러지면 SVG 트랙과 발판이 어긋남) */
 .board {
   position: relative;
-  aspect-ratio: var(--cols, 6) / var(--rows, 5);
-  height: 100%;
-  max-width: 100%;
-  max-height: 100%;
-  margin: auto;
+  aspect-ratio: var(--cols, 6) / var(--rows, 5); /* 폴백 */
+  width: min(100cqw, calc(100cqh * var(--cols, 6) / var(--rows, 5)));
+  height: min(100cqh, calc(100cqw * var(--rows, 5) / var(--cols, 6)));
   background: var(--bg2);
   border-radius: 16px;
   border: 1px solid var(--line);
@@ -496,16 +576,28 @@ body {
   stroke-dasharray: 0.12 0.34;
 }
 
-/* 발판 연결선 */
+/* 발판 연결선 — 시작 시 순차적으로 그려지며 등장 (--ri = 등장 순번) */
 .plink {
   stroke-width: 0.16;
   stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: plink-draw 0.5s ease both;
+  animation-delay: calc(var(--ri, 0) * 0.13s);
 }
 .plink--up {
   stroke: var(--accent2);
 }
 .plink--down {
   stroke: #ff7b7b;
+}
+@keyframes plink-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 /* 칸 노드 */
@@ -546,6 +638,23 @@ body {
 .node--key {
   background: color-mix(in srgb, #ffd34d 32%, var(--panel));
   border-color: #ffd34d;
+  /* 시작 시 발판들과 함께 순차 등장(팝) */
+  animation: key-pop 0.45s ease both;
+  animation-delay: calc(var(--ri, 0) * 0.13s);
+}
+@keyframes key-pop {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+  70% {
+    transform: translate(-50%, -50%) scale(1.25);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
 }
 .node__key {
   font-size: clamp(13px, 2vw, 20px);
@@ -557,10 +666,11 @@ body {
 }
 
 /* ── 말 ── */
+/* 발판 원(=칸 노드, 72%/cols)의 약 86% 크기로 키운다. cqmin으로 이모지를 말 크기에 맞춤. */
 .pawn {
   position: absolute;
-  width: 30px;
-  height: 30px;
+  width: calc(62% / var(--cols, 6));
+  aspect-ratio: 1; /* 너비 기준 정원 유지 (보드가 와이드해도 타원이 안 되게) */
   transform: translate(-50%, -50%);
   transition: left 0.26s ease, top 0.26s ease;
   display: flex;
@@ -571,9 +681,10 @@ body {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
   z-index: 5;
   pointer-events: none;
+  container-type: size;
 }
 .pawn__emoji {
-  font-size: 22px;
+  font-size: 80cqmin; /* 말 지름의 80% — 색 테두리는 살짝 남김 */
   line-height: 1;
 }
 .pawn--active {
@@ -949,8 +1060,13 @@ body {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .firework__spark {
+  .firework__spark,
+  .plink,
+  .node--key {
     animation: none;
+  }
+  .plink {
+    stroke-dashoffset: 0;
   }
 }
 
