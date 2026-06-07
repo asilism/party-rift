@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Board from './Board.jsx'
 import PlayerSetup from './PlayerSetup.jsx'
 import Dice from '../../shared/Dice.jsx'
@@ -16,11 +16,25 @@ export default function LadderGame({ onExit }) {
   const [displayPos, setDisplayPos] = useState({}) // id -> tile (애니메이션용)
   const [animating, setAnimating] = useState(false)
   const [center, setCenter] = useState(null) // { value, key }
+  const [banner, setBanner] = useState(null) // { text, key } — "○○ 차례!"
   const [soundOn, setSoundOn] = useState(config.sound)
+  const prevTurnRef = useRef(-1)
+
+  // 턴이 바뀔 때마다 "○○ 차례!" 배너 표시 (첫 턴 포함)
+  useEffect(() => {
+    if (!game || game.status !== 'playing') return
+    if (prevTurnRef.current === game.currentIndex) return
+    prevTurnRef.current = game.currentIndex
+    const p = game.players[game.currentIndex]
+    setBanner({ text: `${p.name} 차례!`, key: Date.now() })
+    const t = setTimeout(() => setBanner(null), 1300)
+    return () => clearTimeout(t)
+  }, [game])
 
   function startGame(picks) {
     sound.setEnabled(soundOn)
     setRoster(picks)
+    prevTurnRef.current = -1
     const g = createGame(picks, config)
     setGame(g)
     setDisplayPos(Object.fromEntries(g.players.map((p) => [p.id, p.position])))
@@ -75,10 +89,8 @@ export default function LadderGame({ onExit }) {
 
   const activePlayer = game && game.players[game.currentIndex]
   const activeZodiac = activePlayer && getZodiac(activePlayer.zodiacId)
-  const activeNo = activePlayer ? game.players.indexOf(activePlayer) + 1 : 0
   const winner = game && game.winnerId && game.players.find((p) => p.id === game.winnerId)
   const winnerZodiac = winner && getZodiac(winner.zodiacId)
-  const winnerNo = winner ? game.players.indexOf(winner) + 1 : 0
 
   const rollFn = useMemo(() => () => rollDice(config), [config])
 
@@ -100,7 +112,7 @@ export default function LadderGame({ onExit }) {
         {!finished ? (
           <div className="turn-indicator" style={{ '--z-color': activeZodiac?.color }}>
             <span className="turn-indicator__emoji">{activeZodiac?.emoji}</span>
-            <span>{activeNo}번 차례</span>
+            <span>{activePlayer.name} 차례</span>
           </div>
         ) : (
           <div className="turn-indicator">🏁 게임 끝!</div>
@@ -123,6 +135,11 @@ export default function LadderGame({ onExit }) {
               {center.value}
             </div>
           )}
+          {banner && (
+            <div key={banner.key} className="turn-banner">
+              {banner.text}
+            </div>
+          )}
         </div>
 
         <aside className="ladder__side">
@@ -138,7 +155,7 @@ export default function LadderGame({ onExit }) {
                   style={{ '--z-color': z.color }}
                 >
                   <span className="players-list__emoji">{z.emoji}</span>
-                  <span className="players-list__name">{i + 1}P</span>
+                  <span className="players-list__name">{p.name}</span>
                   <span className="players-list__pos">{displayPos[p.id]}칸</span>
                 </div>
               )
@@ -158,7 +175,7 @@ export default function LadderGame({ onExit }) {
         <div className="win-modal">
           <div className="win-modal__card" style={{ '--z-color': winnerZodiac?.color }}>
             <div className="win-modal__emoji">{winnerZodiac?.emoji}</div>
-            <h2>{winnerNo}번 플레이어 우승! 🎉</h2>
+            <h2>{winner?.name} 우승! 🎉</h2>
             <p>{winnerZodiac?.name} 골인!</p>
             <div className="win-modal__btns">
               <button className="btn btn--primary" onClick={restart}>

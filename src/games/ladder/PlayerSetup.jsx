@@ -5,8 +5,9 @@ import { sound } from '../../shared/sound.js'
 // 인원 수 선택 → 각자 12지신 말 선택(선택 순서 = 턴 순서, 중복 불가)
 export default function PlayerSetup({ config, onStart, onExit }) {
   const [count, setCount] = useState(config.minPlayers)
-  const [picks, setPicks] = useState([]) // [{ id, zodiacId }]
+  const [picks, setPicks] = useState([]) // [{ id, zodiacId, name }]
   const [phase, setPhase] = useState('count') // 'count' | 'pick'
+  const [nameInput, setNameInput] = useState('')
 
   const taken = new Set(picks.map((p) => p.zodiacId))
   const currentPlayer = picks.length + 1
@@ -21,13 +22,16 @@ export default function PlayerSetup({ config, onStart, onExit }) {
   function pickZodiac(zodiacId) {
     if (taken.has(zodiacId)) return
     sound.step()
-    const next = [...picks, { id: `p${picks.length + 1}`, zodiacId }]
+    const name = nameInput.trim() || `${currentPlayer}번`
+    const next = [...picks, { id: `p${picks.length + 1}`, zodiacId, name }]
     setPicks(next)
+    setNameInput('')
     if (next.length >= count) onStart(next)
   }
 
   function undo() {
     setPicks((p) => p.slice(0, -1))
+    setNameInput('')
   }
 
   return (
@@ -64,8 +68,17 @@ export default function PlayerSetup({ config, onStart, onExit }) {
       {phase === 'pick' && (
         <div className="setup__panel">
           <p className="setup__label">
-            <b>{currentPlayer}번 플레이어</b> 말을 골라요 ({picks.length}/{count})
+            <b>{currentPlayer}번 플레이어</b> ({picks.length}/{count})
           </p>
+          <input
+            className="name-input"
+            type="text"
+            value={nameInput}
+            maxLength={6}
+            placeholder={`이름 (선택) · 예: ${currentPlayer}번`}
+            onChange={(e) => setNameInput(e.target.value)}
+          />
+          <p className="setup__hint">이름을 적고 말을 고르세요 (이름은 생략 가능)</p>
           <div className="zodiac-grid">
             {ZODIAC.map((z) => {
               const used = taken.has(z.id)
