@@ -1,24 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Board from './Board.jsx'
-import PlayerSetup from './PlayerSetup.jsx'
+import LadderSetup from './LadderSetup.jsx'
 import Dice from '../../shared/Dice.jsx'
+import Fireworks from '../../shared/Fireworks.jsx'
+import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import { DEFAULT_CONFIG, BOARDS } from './board.config.js'
 import { createGame, applyMove, computeMove, rollDice } from './engine.js'
+import { randomCardId, resolveKeyCard, getCard } from './keycards.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-export default function LadderGame({ onExit }) {
+export default function LadderGame({ roster, onExit }) {
   const [config, setConfig] = useState(DEFAULT_CONFIG) // 선택된 보드(30칸/50칸)
-  const [roster, setRoster] = useState(null) // [{ id, zodiacId }]
   const [game, setGame] = useState(null)
   const [displayPos, setDisplayPos] = useState({}) // id -> tile (애니메이션용)
   const [animating, setAnimating] = useState(false)
   const [center, setCenter] = useState(null) // { value, key }
   const [banner, setBanner] = useState(null) // { text, key } — "○○ 차례!"
+  const [cardEvent, setCardEvent] = useState(null) // { slots:[id x5], chosen, revealed }
   const [soundOn, setSoundOn] = useState(config.sound)
   const prevTurnRef = useRef(-1)
+  const cardBaseRef = useRef(null) // 카드 적용 직전의 게임 상태
 
   // 턴이 바뀔 때마다 "○○ 차례!" 배너 표시 (첫 턴 포함)
   useEffect(() => {
@@ -31,18 +35,20 @@ export default function LadderGame({ onExit }) {
     return () => clearTimeout(t)
   }, [game])
 
-  function startGame(picks, boardConfig = config) {
+  function startGame(boardConfig = config) {
     sound.setEnabled(soundOn)
     setConfig(boardConfig)
-    setRoster(picks)
     prevTurnRef.current = -1
-    const g = createGame(picks, boardConfig)
+    setCardEvent(null)
+    setAnimating(false)
+    cardBaseRef.current = null
+    const g = createGame(roster, boardConfig)
     setGame(g)
     setDisplayPos(Object.fromEntries(g.players.map((p) => [p.id, p.position])))
   }
 
   function restart() {
-    if (roster) startGame(roster, config)
+    startGame(config)
   }
 
   function toggleSound() {
@@ -78,12 +84,72 @@ export default function LadderGame({ onExit }) {
       await sleep(500)
     }
 
-    // 4) 상태 확정
+    // 4) 열쇠카드 칸이면 카드 선택 이벤트로 진입(턴은 카드 적용 후 처리)
+    if (move.keyCard) {
+      // 멈춘 칸을 게임 상태에 반영(턴은 아직 넘기지 않음)
+      const landed = {
+        ...game,
+        players: game.players.map((p, i) =>
+          i === game.currentIndex ? { ...p, position: move.finalPosition } : p
+        ),
+        lastRoll: roll,
+      }
+      cardBaseRef.current = landed
+      setGame(landed)
+      await sleep(250)
+      sound.key()
+      setCardEvent({ slots: Array.from({ length: 5 }, () => randomCardId()), chosen: null })
+      return // setAnimating(false) 하지 않음 — 카드 고를 때까지 대기
+    }
+
+    // 5) 상태 확정
     const next = applyMove(game, roll)
     setGame(next)
     if (next.status === 'finished') {
       await sleep(150)
       sound.win()
+    }
+    setAnimating(false)
+  }
+
+  // 카드 1장 선택 → 효과 공개 → 적용 → 턴 처리
+  async function handleCardPick(index) {
+    const base = cardBaseRef.current
+    if (!base || !cardEvent || cardEvent.chosen != null) return
+    const cardId = cardEvent.slots[index]
+    sound.key()
+    setCardEvent((ce) => ({ ...ce, chosen: index, revealed: cardId }))
+    await sleep(1200) // 공개된 카드를 보여줌
+
+    const { next, changes, rollAgain } = resolveKeyCard(base, cardId)
+    setCardEvent(null)
+    cardBaseRef.current = null
+
+    // 자리 이동 애니메이션(부드럽게 미끄러짐 — pawn CSS transition)
+    if (changes.length) {
+      await sleep(150)
+      setDisplayPos((dp) => {
+        const nd = { ...dp }
+        changes.forEach((c) => (nd[c.id] = c.to))
+        return nd
+      })
+      changes.forEach((c) => (c.to > c.from ? sound.ladderUp() : sound.chuteDown()))
+      await sleep(650)
+    }
+
+    setGame(next)
+
+    if (next.status === 'finished') {
+      await sleep(150)
+      sound.win()
+      setAnimating(false)
+      return
+    }
+
+    if (rollAgain) {
+      // 같은 사람이 한 번 더 — 턴 그대로, 안내 배너만 표시
+      setBanner({ text: '한 번 더! 🎲', key: Date.now() })
+      setTimeout(() => setBanner(null), 1300)
     }
     setAnimating(false)
   }
@@ -95,11 +161,9 @@ export default function LadderGame({ onExit }) {
 
   const rollFn = useMemo(() => () => rollDice(config), [config])
 
-  // 설정 화면
+  // 설정 화면 (보드 선택)
   if (!game) {
-    return (
-      <PlayerSetup boards={BOARDS} onStart={startGame} onExit={onExit} />
-    )
+    return <LadderSetup boards={BOARDS} roster={roster} onStart={startGame} onExit={onExit} />
   }
 
   const finished = game.status === 'finished'
@@ -118,9 +182,12 @@ export default function LadderGame({ onExit }) {
         ) : (
           <div className="turn-indicator">🏁 게임 끝!</div>
         )}
-        <button className="btn btn--ghost" onClick={toggleSound} aria-label="소리">
-          {soundOn ? '🔊' : '🔇'}
-        </button>
+        <div className="topbar__right">
+          <button className="btn btn--ghost" onClick={toggleSound} aria-label="소리">
+            {soundOn ? '🔊' : '🔇'}
+          </button>
+          <FullscreenButton />
+        </div>
       </div>
 
       <div className="ladder__main">
@@ -166,14 +233,56 @@ export default function LadderGame({ onExit }) {
           <div className="dice-area">
             <Dice disabled={finished || animating} rollFn={rollFn} onResult={handleResult} />
             <p className="dice-area__hint">
-              {animating ? '이동 중...' : finished ? '' : '주사위를 눌러요'}
+              {cardEvent
+                ? '🔑 카드를 골라요'
+                : animating
+                ? '이동 중...'
+                : finished
+                ? ''
+                : '주사위를 눌러요'}
             </p>
           </div>
         </aside>
       </div>
 
+      {cardEvent && (
+        <div className="card-modal">
+          <div className="card-modal__title">
+            🔑 {cardEvent.chosen == null ? '열쇠카드! 한 장 고르세요' : getCard(cardEvent.revealed)?.title}
+          </div>
+          <div className="card-row">
+            {cardEvent.slots.map((slotId, i) => {
+              const chosen = cardEvent.chosen === i
+              const dim = cardEvent.chosen != null && !chosen
+              const card = getCard(slotId)
+              return (
+                <button
+                  key={i}
+                  className={`key-card ${chosen ? 'key-card--face' : 'key-card--back'} ${
+                    dim ? 'key-card--dim' : ''
+                  }`}
+                  disabled={cardEvent.chosen != null}
+                  onClick={() => handleCardPick(i)}
+                >
+                  {chosen ? (
+                    <>
+                      <span className="key-card__emoji">{card?.emoji}</span>
+                      <span className="key-card__title">{card?.title}</span>
+                      <span className="key-card__desc">{card?.desc}</span>
+                    </>
+                  ) : (
+                    <span className="key-card__back-icon">🔑</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {finished && (
         <div className="win-modal">
+          <Fireworks />
           <div className="win-modal__card" style={{ '--z-color': winnerZodiac?.color }}>
             <div className="win-modal__emoji">{winnerZodiac?.emoji}</div>
             <h2>{winner?.name} 우승! 🎉</h2>

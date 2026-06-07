@@ -27,6 +27,7 @@ export function createGame(players, config) {
 //  - platform: 발판 발동 시 { from, to, dir } / 없으면 null
 //  - finalPosition: 발판까지 적용한 최종 칸
 //  - won: 골인 여부
+//  - keyCard: 열쇠카드 칸에 정확히 멈췄는지 여부(발판/골인 시에는 false)
 export function computeMove(position, roll, config) {
   const goal = config.tileCount
   let landing = position + roll
@@ -60,7 +61,12 @@ export function computeMove(position, roll, config) {
     }
   }
 
-  return { walkPath, landing, platform, finalPosition, won }
+  // 열쇠카드: 발판이 없고 골인도 아닐 때, 멈춘 칸이 열쇠카드 칸이면 발동.
+  // (열쇠카드 칸은 발판 출발/도착 칸과 겹치지 않게 배치되어 있다.)
+  const keyTiles = config.keyTiles || []
+  const keyCard = !won && !platform && keyTiles.includes(landing)
+
+  return { walkPath, landing, platform, finalPosition, won, keyCard }
 }
 
 // 이동 결과를 상태에 반영한 새 상태를 반환.

@@ -64,4 +64,9 @@ export const sound = {
     const notes = [523, 659, 784, 1047]
     notes.forEach((f, i) => setTimeout(() => beep(f, 0.18, 'sine', 0.07), i * 130))
   },
+  // 열쇠카드 칸 발동 / 카드 공개
+  key() {
+    beep(880, 0.08, 'sine', 0.06)
+    setTimeout(() => beep(1175, 0.12, 'sine', 0.06), 90)
+  },
 }

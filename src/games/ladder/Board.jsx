@@ -23,6 +23,7 @@ export default function Board({ config, positions, players, activeId }) {
   const platformByTile = {}
   ups.forEach((p) => (platformByTile[p.from] = 'up'))
   downs.forEach((p) => (platformByTile[p.from] = 'down'))
+  const keyTiles = new Set(config.keyTiles || [])
 
   // 구불구불 트랙: 1번 → 마지막 칸까지 중심을 잇는 경로
   const trackPath = Array.from({ length: config.tileCount })
@@ -101,23 +102,24 @@ export default function Board({ config, positions, players, activeId }) {
         const kind = platformByTile[tile]
         const isStart = tile === 1
         const isGoal = tile === goal
+        const isKey = keyTiles.has(tile)
         return (
           <div
             key={tile}
             className={`node ${kind ? `node--${kind}` : ''} ${
               isStart ? 'node--start' : ''
-            } ${isGoal ? 'node--goal' : ''}`}
+            } ${isGoal ? 'node--goal' : ''} ${isKey ? 'node--key' : ''}`}
             style={{ left: `${left}%`, top: `${top}%`, '--cols': config.cols }}
           >
             {isGoal ? (
               <span className="node__goal">🏁</span>
             ) : isStart ? (
               <span className="node__goal">출발</span>
+            ) : isKey ? (
+              <span className="node__key">🔑</span>
             ) : (
               <span className="node__num">{tile}</span>
             )}
-            {kind === 'up' && <span className="node__badge node__badge--up">⬆</span>}
-            {kind === 'down' && <span className="node__badge node__badge--down">⬇</span>}
           </div>
         )
       })}
