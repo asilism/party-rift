@@ -24,7 +24,15 @@ const GAMES = [
     maxPlayers: 5,
     ready: true,
   },
-  { id: 'soon1', title: '준비 중', emoji: '✨', desc: '곧 추가됩니다', ready: false },
+  {
+    id: 'dobble',
+    title: '도블',
+    emoji: '🔍',
+    desc: '같은 문양을 먼저 찾아요!',
+    minPlayers: 2,
+    maxPlayers: 4,
+    ready: true,
+  },
 ]
 
 const MAX_PLAYERS = 5 // 로비 전체 참가 가능 최대 인원
@@ -53,6 +61,7 @@ export default function GameLobby({ roster, setRoster, onPlay }) {
   function reason(g) {
     if (!g.ready) return '준비 중'
     if (roster.length < g.minPlayers) return `${g.minPlayers}명 이상 필요`
+    if (g.maxPlayers && roster.length > g.maxPlayers) return `최대 ${g.maxPlayers}명`
     return null
   }
 

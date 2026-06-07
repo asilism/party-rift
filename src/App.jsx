@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import GameLobby from './lobby/GameLobby.jsx'
 import LadderGame from './games/ladder/LadderGame.jsx'
 import MemoryGame from './games/memory/MemoryGame.jsx'
+import DobbleGame from './games/dobble/DobbleGame.jsx'
 import { loadRoster, saveRoster } from './shared/storage.js'
 
 // 화면 흐름: 로비 → (게임 선택) → 게임
@@ -30,6 +31,7 @@ export default function App() {
       )}
       {screen === 'ladder' && <LadderGame roster={roster} onExit={() => setScreen('lobby')} />}
       {screen === 'memory' && <MemoryGame roster={roster} onExit={() => setScreen('lobby')} />}
+      {screen === 'dobble' && <DobbleGame roster={roster} onExit={() => setScreen('lobby')} />}
     </div>
   )
 }
