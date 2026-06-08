@@ -33,6 +33,15 @@ const GAMES = [
     maxPlayers: 4,
     ready: true,
   },
+  {
+    id: 'thrillpang',
+    title: '스릴팡',
+    emoji: '💣',
+    desc: '폭탄 터지기 직전 아슬아슬하게!',
+    minPlayers: 2,
+    maxPlayers: 4,
+    ready: true,
+  },
 ]
 
 const MAX_PLAYERS = 5 // 로비 전체 참가 가능 최대 인원

@@ -54,7 +54,7 @@ export default function Dice({ disabled, rollFn, onResult }) {
   return (
     <button
       className={`die ${rolling ? 'die--rolling' : ''}`}
-      onClick={handleRoll}
+      onPointerDown={handleRoll}
       disabled={disabled || rolling}
       aria-label="주사위 굴리기"
     >

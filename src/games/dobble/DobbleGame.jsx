@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import DobbleSetup from './DobbleSetup.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
+import ShootingStars from '../../shared/ShootingStars.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import { createGame, tapSymbol, winners } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
@@ -8,6 +9,8 @@ import { sound } from '../../shared/sound.js'
 
 const N = 5 // 보통 난이도: 카드당 6문양
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+// 진 사람(그 라운드 못 맞춘 사람) 격려 메시지
+const ENCOURAGE = ['할 수 있어!', '조금만 더 힘내!', '끝까지 집중하자!', '거의 다 왔어!', '다음엔 네가!']
 
 // 플레이어 수에 따른 좌석 배치 — 와이드 화면에 맞게 2인은 좌우, 3·4인은 꼭지점.
 const SEATS = {
@@ -16,6 +19,17 @@ const SEATS = {
   3: ['bl', 'br', 'tl'], // 4인처럼 꼭지점에, 한 자리(우상단)만 비움
   4: ['bl', 'br', 'tl', 'tr'],
 }
+// 정답 카드가 날아갈 방향(좌석별, vw/vh)
+const FLY_VEC = {
+  left: { tx: -40, ty: 0 },
+  right: { tx: 40, ty: 0 },
+  tl: { tx: -32, ty: -28 },
+  tr: { tx: 32, ty: -28 },
+  bl: { tx: -32, ty: 28 },
+  br: { tx: 32, ty: 28 },
+  bc: { tx: 0, ty: 34 },
+}
+const seatOf = (n, idx) => (SEATS[n] || SEATS[4])[idx] || 'bl'
 
 // 문양 배치를 카드 내용으로 결정(같은 카드는 항상 같은 배치).
 // 링(+중앙)에 균등 배치 후, 각 문양의 최대 반지름을 "이웃까지 거리/2"와 "테두리까지"로
@@ -48,11 +62,12 @@ function makeLayout(symbols) {
       if (half < maxR) maxR = half
     }
     const r = maxR * (0.74 + rng() * 0.26) // 한도 내 랜덤 크기
-    return { x: p.x, y: p.y, size: r * 1.85, rot: rng() * 70 - 35 } // 폰트 크기 ≈ 지름
+    // 문양은 0~360° 완전 무작위 회전 → 어느 좌석에서 봐도 공평
+    return { x: p.x, y: p.y, size: r * 1.85, rot: rng() * 360 }
   })
 }
 
-function DobbleCard({ symbols, emojiOf, onTap, disabled }) {
+function DobbleCard({ symbols, emojiOf, onTap, disabled, highlight }) {
   const layout = useMemo(() => makeLayout(symbols), [symbols.join(',')])
   return (
     <div className="dobble-card">
@@ -64,7 +79,9 @@ function DobbleCard({ symbols, emojiOf, onTap, disabled }) {
           fontSize: `${L.size}cqmin`,
           transform: `translate(-50%, -50%) rotate(${L.rot}deg)`,
         }
-        if (!onTap) return <span key={s} className="dobble-sym" style={style}>{emojiOf(s)}</span>
+        const cls = `dobble-sym ${s === highlight ? 'is-match' : ''}`
+        const inner = <span className="dobble-sym__in">{emojiOf(s)}</span>
+        if (!onTap) return <span key={s} className={cls} style={style}>{inner}</span>
         return (
           <button
             key={s}
@@ -72,9 +89,9 @@ function DobbleCard({ symbols, emojiOf, onTap, disabled }) {
             className="dobble-sym"
             style={style}
             disabled={disabled}
-            onClick={() => onTap(s)}
+            onPointerDown={() => onTap(s)}
           >
-            {emojiOf(s)}
+            {inner}
           </button>
         )
       })}
@@ -86,7 +103,11 @@ export default function DobbleGame({ roster, onExit }) {
   const [phase, setPhase] = useState('setup') // 'setup' | 'play'
   const [game, setGame] = useState(null)
   const [flash, setFlash] = useState(null) // { id, ok, key }
+  const [fly, setFly] = useState(null) // 정답 카드 날아가는 연출 { seat, card, symbol, color, key }
+  const [celebrate, setCelebrate] = useState(null) // { winnerId, combo, enc, key }
+  const [inputLocked, setInputLocked] = useState(false)
   const [soundOn, setSoundOn] = useState(true)
+  const comboRef = useRef({ id: null, n: 0 })
 
   function startGame() {
     sound.setEnabled(soundOn)
@@ -98,6 +119,10 @@ export default function DobbleGame({ roster, onExit }) {
     }))
     setGame(createGame(players, N))
     setFlash(null)
+    setFly(null)
+    setCelebrate(null)
+    setInputLocked(false)
+    comboRef.current = { id: null, n: 0 }
     setPhase('play')
   }
 
@@ -113,19 +138,42 @@ export default function DobbleGame({ roster, onExit }) {
   }
 
   async function handleTap(playerId, symbol) {
-    if (!game || game.status === 'finished') return
+    if (!game || game.status === 'finished' || inputLocked) return
     const r = tapSymbol(game, playerId, symbol)
     if (r.result === 'ignored' || r.result === 'locked') return
-    setGame(r.state)
     setFlash({ id: playerId, ok: r.result === 'correct', key: Date.now() })
-    if (r.result === 'correct') {
-      sound.ladderUp()
-      if (r.finished) {
-        await sleep(200)
-        sound.win()
-      }
-    } else {
+
+    if (r.result !== 'correct') {
+      setGame(r.state)
       sound.chuteDown()
+      return
+    }
+
+    // 정답 → 콤보 계산 + 카드 날아가는 연출 + 진 사람 격려 + 전체 입력 잠금
+    sound.ladderUp()
+    setInputLocked(true)
+    const idx = game.players.findIndex((p) => p.id === playerId)
+    const prev = comboRef.current
+    const combo = prev.id === playerId ? prev.n + 1 : 1
+    comboRef.current = { id: playerId, n: combo }
+    // 진 사람(나머지)에게 격려 메시지 랜덤 배정
+    const enc = {}
+    game.players.forEach((pl) => {
+      if (pl.id !== playerId) enc[pl.id] = ENCOURAGE[Math.floor(Math.random() * ENCOURAGE.length)]
+    })
+    const key = Date.now()
+    setFly({ seat: seatOf(game.players.length, idx), card: game.center, symbol, color: game.players[idx]?.color, key })
+    setCelebrate({ winnerId: playerId, combo, enc, key })
+    if (combo >= 4) sound.win() // 폭죽과 함께 팡파르
+
+    await sleep(combo >= 4 ? 1300 : 950)
+    setFly(null)
+    setCelebrate(null)
+    setGame(r.state) // 이제 중앙 카드 교체 + 점수 반영
+    setInputLocked(false)
+    if (r.finished) {
+      await sleep(150)
+      sound.win()
     }
   }
 
@@ -178,19 +226,58 @@ export default function DobbleGame({ roster, onExit }) {
                   symbols={p.card}
                   emojiOf={emojiOf}
                   onTap={(s) => handleTap(p.id, s)}
-                  disabled={finished || locked}
+                  disabled={finished || locked || inputLocked}
                 />
               </div>
+              {celebrate && (
+                <div className={`dobble-cele seat-rot--${seats[i] || 'bl'}`}>
+                  {celebrate.winnerId === p.id ? (
+                    <div className="dobble-pop" style={{ '--z-color': p.color }}>
+                      +1 Point
+                    </div>
+                  ) : (
+                    <div className="dobble-enc">{celebrate.enc[p.id]}</div>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
 
         <div className="dobble-seat seat--center">
           <div className="dobble-card-wrap dobble-card-wrap--center">
-            {game.center && <DobbleCard symbols={game.center} emojiOf={emojiOf} />}
+            {game.center && !fly && <DobbleCard symbols={game.center} emojiOf={emojiOf} />}
           </div>
         </div>
+
+        {/* 정답 카드가 그 사람에게 날아가는 연출(맞춘 문양 강조) */}
+        {fly && (
+          <div
+            key={fly.key}
+            className="dobble-fly"
+            style={{
+              '--tx': `${(FLY_VEC[fly.seat] || FLY_VEC.bl).tx}vw`,
+              '--ty': `${(FLY_VEC[fly.seat] || FLY_VEC.bl).ty}vh`,
+              '--z-color': fly.color,
+            }}
+          >
+            <DobbleCard symbols={fly.card} emojiOf={emojiOf} highlight={fly.symbol} />
+          </div>
+        )}
       </div>
+
+      {/* 콤보 배너 + 폭죽(4콤보~) + 별똥별(6콤보~) */}
+      {celebrate && celebrate.combo >= 2 && (
+        <div key={celebrate.key} className="dobble-combo-banner">
+          🔥 {celebrate.combo} COMBO!
+        </div>
+      )}
+      {celebrate && celebrate.combo >= 4 && (
+        <div className="dobble-fx">
+          <Fireworks />
+          {celebrate.combo >= 6 && <ShootingStars />}
+        </div>
+      )}
 
       {finished && (
         <div className="win-modal">

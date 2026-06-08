@@ -16,6 +16,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* 버튼은 포인터 이벤트로 동시 멀티터치 처리 + 더블탭 확대/지연 방지 */
+button {
+  touch-action: manipulation;
+}
+
 html,
 body,
 #root {
@@ -1245,3 +1250,213 @@ body {
   80% { transform: translateX(4px); }
 }
 @media (prefers-reduced-motion: reduce) { .flash-ok, .flash-bad { animation: none; } }
+
+/* 정답 카드가 그 사람에게 날아가는 연출 */
+.dobble-fly {
+  position: absolute; left: 50%; top: 50%; z-index: 30; pointer-events: none;
+  animation: dobble-fly 0.85s ease forwards;
+}
+.dobble-fly .dobble-card { width: min(42cqw, 44cqh); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); }
+@keyframes dobble-fly {
+  0% { transform: translate(-50%, -50%) scale(0.55); opacity: 0; }
+  18% { transform: translate(-50%, -50%) scale(1.12); opacity: 1; }
+  52% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--tx)), calc(-50% + var(--ty))) scale(0.28); opacity: 0; }
+}
+/* 맞춘 문양 강조(노란 링 펄스) — transform은 인라인 유지 위해 box-shadow만 애니메이션 */
+.dobble-sym.is-match {
+  border-radius: 50%;
+  background: rgba(255, 207, 77, 0.3);
+  box-shadow: 0 0 0 4px var(--accent), 0 0 18px 6px rgba(255, 207, 77, 0.8);
+  animation: dobble-match 0.4s ease-in-out infinite alternate;
+}
+@keyframes dobble-match {
+  from { box-shadow: 0 0 0 3px var(--accent), 0 0 10px 3px rgba(255, 207, 77, 0.6); }
+  to { box-shadow: 0 0 0 7px var(--accent), 0 0 26px 11px rgba(255, 207, 77, 0.95); }
+}
+/* 이모지 내부 래퍼: 맞춘 문양은 확대 + 통 튀어오르기 */
+.dobble-sym__in { display: inline-block; line-height: 1; }
+.dobble-sym.is-match .dobble-sym__in { animation: dobble-match-bounce 0.4s ease-in-out infinite alternate; }
+@keyframes dobble-match-bounce {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.6); }
+}
+
+/* ── 도블 콤보/응원 연출 ── */
+/* (.dobble-seat 는 이미 position:absolute 라 별도 relative 불필요) */
+/* 좌석 방향에 맞춰 회전(카드 회전과 동일) */
+.dobble-cele {
+  position: absolute; left: 50%; top: 56%; z-index: 25; pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.seat-rot--tl, .seat-rot--tr, .seat-rot--tc { transform: translate(-50%, -50%) rotate(180deg); }
+.seat-rot--left { transform: translate(-50%, -50%) rotate(90deg); }
+.seat-rot--right { transform: translate(-50%, -50%) rotate(-90deg); }
+.dobble-pop {
+  font-weight: 900; font-size: clamp(18px, 3.6vh, 30px); white-space: nowrap;
+  color: #fff; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  padding: 4px 12px; border-radius: 999px;
+  background: color-mix(in srgb, var(--z-color, var(--accent)) 70%, #000);
+  border: 2px solid #fff;
+  animation: dobble-pop-in 0.45s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+.dobble-enc {
+  font-weight: 800; font-size: clamp(14px, 2.6vh, 22px); white-space: nowrap;
+  color: #fff; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  padding: 4px 12px; border-radius: 999px;
+  background: rgba(77, 208, 160, 0.92);
+  animation: dobble-pop-in 0.45s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+@keyframes dobble-pop-in {
+  0% { transform: scale(0.2); opacity: 0; }
+  55% { transform: scale(1.2); opacity: 1; }
+  75% { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.dobble-combo-banner {
+  position: fixed; top: 14%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 41; pointer-events: none;
+  font-weight: 900; font-size: clamp(28px, 6vh, 56px); color: #ffd86b;
+  text-shadow: 0 3px 14px rgba(0, 0, 0, 0.7), 0 0 20px rgba(255, 180, 60, 0.6);
+  animation: combo-pop 0.5s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+@keyframes combo-pop {
+  0% { transform: translate(-50%, -50%) scale(0.3); opacity: 0; }
+  60% { transform: translate(-50%, -50%) scale(1.25); opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+.dobble-fx { position: fixed; inset: 0; pointer-events: none; z-index: 40; }
+
+/* 별똥별(6콤보~) */
+.shooting-stars { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.shooting-star {
+  position: absolute; top: -8%; font-size: clamp(24px, 5vh, 40px);
+  transform: translate(-50%, -50%) rotate(35deg);
+  animation: shoot 1.1s ease-in infinite;
+}
+@keyframes shoot {
+  0% { transform: translate(0, -10vh) rotate(35deg); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translate(-40vw, 90vh) rotate(35deg); opacity: 0; }
+}
+
+/* ── 스릴팡 (블랙홀 + 파이프 스택) ── */
+.thrill { flex: 1; display: flex; flex-direction: column; min-height: 0; position: relative; --ballh: clamp(26px, 7.4vh, 46px); }
+.thrill__arena { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+.thrill__pipes { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+/* 중앙 세로 튜브(유리관) */
+.thrill__tube {
+  position: absolute; transform: translateX(-50%);
+  width: clamp(40px, 11vh, 70px);
+  border-radius: 0 0 16px 16px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.05), rgba(120,140,210,0.16), rgba(255,255,255,0.05));
+  border: 2px solid rgba(160, 180, 240, 0.35);
+  border-top: none;
+  box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.4);
+  z-index: 1;
+}
+/* 블랙홀(타원 깔때기) — 안으로 빨려드는 듯한 그라데이션. 크기는 인라인(% 기준) */
+.thrill__blackhole {
+  position: absolute; transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 44%,
+    #050210 0%, #160c2a 20%, #271748 42%, #41306e 66%, #6a54a8 100%);
+  box-shadow: inset 0 0 36px rgba(0, 0, 0, 0.8), 0 0 0 3px #7a64b8, 0 0 30px rgba(140, 110, 220, 0.5);
+  z-index: 2;
+}
+/* 아래로 빨려드는 깔때기 끝(살짝 뾰족) */
+.thrill__blackhole::after {
+  content: ''; position: absolute; left: 50%; bottom: 1px; transform: translate(-50%, 96%);
+  width: 0; height: 0;
+  border-left: clamp(16px, 4.4vh, 30px) solid transparent;
+  border-right: clamp(16px, 4.4vh, 30px) solid transparent;
+  border-top: clamp(16px, 4.6vh, 32px) solid #160c2a;
+}
+/* 가운데 실제 구멍 — 작아진 폭탄(≈0.8배) 너비에 맞춘 타원 */
+.thrill__hole {
+  position: absolute; transform: translate(-50%, -50%); border-radius: 50%; z-index: 3;
+  width: clamp(26px, 6.8vh, 46px); aspect-ratio: 1.5; /* 너비:높이 = 1.5 → 타원 */
+  background: radial-gradient(ellipse at 50% 38%, #000 58%, #050210 100%);
+  box-shadow: inset 0 3px 9px rgba(0, 0, 0, 0.95), 0 0 0 2px rgba(160, 140, 225, 0.55),
+    0 0 10px rgba(0, 0, 0, 0.85);
+}
+/* 폭탄 토큰 */
+.thrill-bomb {
+  position: absolute; z-index: 4;
+  width: clamp(30px, 8vh, 54px); aspect-ratio: 1; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 38% 32%, #3a3a3a, #111);
+  border: 3px solid #ff8a5a;
+  box-shadow: 0 0 10px 2px rgba(255, 120, 70, 0.55);
+  font-size: clamp(16px, 4.4vh, 30px); line-height: 1;
+  transform: translate(-50%, -50%);
+}
+/* 쌓일 때는 폭탄도 공과 같은 지름(균일한 스택) */
+.thrill-bomb--stacked { width: var(--ballh); }
+/* 파이프로 쏙 떨어져 쌓이는 연출 */
+.thrill-bomb--stacked,
+.thrill-ball--stacked { animation: thrill-drop-in 0.34s cubic-bezier(0.3, 0.85, 0.4, 1.25); }
+@keyframes thrill-drop-in {
+  0% { transform: translate(-50%, -420%); }
+  70% { transform: translate(-50%, -50%); }
+  84% { transform: translate(-50%, -64%); }
+  100% { transform: translate(-50%, -50%); }
+}
+/* 플레이어 구슬 — 유광 마블(구르는 효과용 하이라이트) */
+.thrill-ball {
+  position: absolute; transform: translate(-50%, -50%); z-index: 3;
+  width: var(--ballh); aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%,
+    #ffffff 0%, var(--z-color, #ccc) 46%, color-mix(in srgb, var(--z-color, #888) 55%, #000) 100%);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
+}
+.thrill-ball--rolling { animation: marble-roll 0.6s linear infinite; }
+@keyframes marble-roll { to { transform: translate(-50%, -50%) rotate(360deg); } }
+.thrill-ball.is-disq { opacity: 0.45; filter: grayscale(0.85); }
+/* 파이프 옆 라운드 점수 라벨 (누구 + 점수) */
+.thrill-pipescore {
+  position: absolute; transform: translateY(-50%); z-index: 6;
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+  padding: 2px 9px; border-radius: 999px;
+  background: rgba(0, 0, 0, 0.5); border: 2px solid var(--z-color, var(--line));
+  font-weight: 800; font-size: clamp(12px, 1.9vh, 16px);
+  animation: pipescore-in 0.2s ease;
+}
+.thrill-pipescore__who { color: var(--text); }
+.thrill-pipescore__pt { font-weight: 900; }
+.thrill-pipescore.ok .thrill-pipescore__pt { color: var(--accent2); }
+.thrill-pipescore.bust .thrill-pipescore__pt { color: #ff7b7b; }
+@keyframes pipescore-in { from { opacity: 0; transform: translate(-6px, -50%); } to { opacity: 1; transform: translateY(-50%); } }
+/* 코너 스테이션(버튼) */
+.thrill-station {
+  position: absolute; transform: translate(-50%, -50%); z-index: 5;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 8px 12px; border-radius: 16px;
+  border: 3px solid var(--z-color, var(--line));
+  background: color-mix(in srgb, var(--z-color) 20%, var(--panel)); color: var(--text);
+  font-weight: 800; cursor: pointer; transition: transform 0.08s ease, opacity 0.12s ease;
+}
+.thrill-station:not(:disabled):active { transform: translate(-50%, -50%) scale(0.93); }
+.thrill-station:disabled { cursor: default; }
+.thrill-station.is-done { opacity: 0.6; }
+.thrill-station__emoji { font-size: clamp(24px, 4.2vh, 34px); }
+.thrill-station__name { font-size: clamp(12px, 1.7vh, 15px); }
+.thrill-station__score { font-size: clamp(12px, 1.7vh, 15px); color: var(--z-color); }
+.thrill__banner {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-size: clamp(30px, 7vh, 60px); font-weight: 900; color: var(--accent);
+  text-shadow: 0 4px 16px rgba(0, 0, 0, 0.6); pointer-events: none; z-index: 6;
+}
+/* 힌트·다음버튼은 오버레이(흐름 밖) → 레이아웃이 출렁이지 않음 */
+.thrill__hint {
+  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+  text-align: center; color: var(--muted); font-size: clamp(12px, 1.8vh, 15px);
+  pointer-events: none; z-index: 7; white-space: nowrap;
+}
+.thrill__next {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  z-index: 20;
+  padding: 14px 18px; border-radius: 18px;
+  background: color-mix(in srgb, var(--panel) 88%, #000);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}

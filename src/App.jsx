@@ -3,6 +3,8 @@ import GameLobby from './lobby/GameLobby.jsx'
 import LadderGame from './games/ladder/LadderGame.jsx'
 import MemoryGame from './games/memory/MemoryGame.jsx'
 import DobbleGame from './games/dobble/DobbleGame.jsx'
+import ThrillGame from './games/thrillpang/ThrillGame.jsx'
+import ErrorBoundary from './shared/ErrorBoundary.jsx'
 import { loadRoster, saveRoster } from './shared/storage.js'
 
 // 화면 흐름: 로비 → (게임 선택) → 게임
@@ -29,9 +31,14 @@ export default function App() {
       {screen === 'lobby' && (
         <GameLobby roster={roster} setRoster={setRoster} onPlay={(id) => setScreen(id)} />
       )}
-      {screen === 'ladder' && <LadderGame roster={roster} onExit={() => setScreen('lobby')} />}
-      {screen === 'memory' && <MemoryGame roster={roster} onExit={() => setScreen('lobby')} />}
-      {screen === 'dobble' && <DobbleGame roster={roster} onExit={() => setScreen('lobby')} />}
+      {screen !== 'lobby' && (
+        <ErrorBoundary key={screen} onExit={() => setScreen('lobby')}>
+          {screen === 'ladder' && <LadderGame roster={roster} onExit={() => setScreen('lobby')} />}
+          {screen === 'memory' && <MemoryGame roster={roster} onExit={() => setScreen('lobby')} />}
+          {screen === 'dobble' && <DobbleGame roster={roster} onExit={() => setScreen('lobby')} />}
+          {screen === 'thrillpang' && <ThrillGame roster={roster} onExit={() => setScreen('lobby')} />}
+        </ErrorBoundary>
+      )}
     </div>
   )
 }
