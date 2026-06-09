@@ -4,6 +4,9 @@ import LadderGame from './games/ladder/LadderGame.jsx'
 import MemoryGame from './games/memory/MemoryGame.jsx'
 import DobbleGame from './games/dobble/DobbleGame.jsx'
 import ThrillGame from './games/thrillpang/ThrillGame.jsx'
+import RaceGame from './games/race/RaceGame.jsx'
+import WhackGame from './games/whack/WhackGame.jsx'
+import TrafficGame from './games/traffic/TrafficGame.jsx'
 import ErrorBoundary from './shared/ErrorBoundary.jsx'
 import { loadRoster, saveRoster } from './shared/storage.js'
 
@@ -37,6 +40,9 @@ export default function App() {
           {screen === 'memory' && <MemoryGame roster={roster} onExit={() => setScreen('lobby')} />}
           {screen === 'dobble' && <DobbleGame roster={roster} onExit={() => setScreen('lobby')} />}
           {screen === 'thrillpang' && <ThrillGame roster={roster} onExit={() => setScreen('lobby')} />}
+          {screen === 'race' && <RaceGame roster={roster} onExit={() => setScreen('lobby')} />}
+          {screen === 'whack' && <WhackGame roster={roster} onExit={() => setScreen('lobby')} />}
+          {screen === 'traffic' && <TrafficGame roster={roster} onExit={() => setScreen('lobby')} />}
         </ErrorBoundary>
       )}
     </div>

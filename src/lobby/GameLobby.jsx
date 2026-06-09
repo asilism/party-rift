@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
 import { sound } from '../shared/sound.js'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
+import logoUrl from '../resources/logo.png'
 
 // 게임 컬렉션 진입점(로비). 게임이 늘어나면 이 목록에 추가한다.
 // minPlayers/maxPlayers 로 참가 인원에 따라 선택 가능 여부를 결정한다.
@@ -42,6 +43,33 @@ const GAMES = [
     maxPlayers: 4,
     ready: true,
   },
+  {
+    id: 'race',
+    title: '달리기 경주',
+    emoji: '🏁',
+    desc: '버튼을 마구 눌러 1등!',
+    minPlayers: 2,
+    maxPlayers: 5,
+    ready: true,
+  },
+  {
+    id: 'whack',
+    title: '두더지 잡기',
+    emoji: '🔨',
+    desc: '내 칸 두더지를 빨리 톡!',
+    minPlayers: 1,
+    maxPlayers: 5,
+    ready: true,
+  },
+  {
+    id: 'traffic',
+    title: '신호등 반응',
+    emoji: '🚦',
+    desc: '초록불에 제일 빨리!',
+    minPlayers: 2,
+    maxPlayers: 5,
+    ready: true,
+  },
 ]
 
 const MAX_PLAYERS = 5 // 로비 전체 참가 가능 최대 인원
@@ -49,6 +77,7 @@ const MAX_PLAYERS = 5 // 로비 전체 참가 가능 최대 인원
 export default function GameLobby({ roster, setRoster, onPlay }) {
   const [adding, setAdding] = useState(false)
   const [nameInput, setNameInput] = useState('')
+  const [logoOk, setLogoOk] = useState(true) // public/logo.png 있으면 로고, 없으면 텍스트
 
   const taken = new Set(roster.map((p) => p.zodiacId))
   const full = roster.length >= MAX_PLAYERS
@@ -78,8 +107,19 @@ export default function GameLobby({ roster, setRoster, onPlay }) {
     <div className="lobby">
       <header className="lobby__header">
         <div className="lobby__titles">
-          <h1>🎉 보드게임 파티</h1>
-          <p>같이 즐기는 보드/파티게임 모음</p>
+          {logoOk ? (
+            <img
+              className="lobby__logo"
+              src={logoUrl}
+              alt="보드게임 파티"
+              onError={() => setLogoOk(false)}
+            />
+          ) : (
+            <>
+              <h1>🎉 보드게임 파티</h1>
+              <p>같이 즐기는 보드/파티게임 모음</p>
+            </>
+          )}
         </div>
         <FullscreenButton />
       </header>
