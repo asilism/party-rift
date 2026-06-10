@@ -19,8 +19,11 @@ const BOOST_TIME = 1.7
 const STUN_TIME = 1.3
 const KART_RADIUS = 1.2 // 카트끼리 충돌 반경
 const BOX_RESPAWN = 4 // 아이템 박스 리스폰 (초)
-const ROCKET_SPEED = 55 // m/s (센터라인을 따라 날아감)
-const ROCKET_LIFE = 4
+const BOMB_SPEED = 55 // m/s (폭탄: 센터라인을 따라 날아감)
+const BOMB_LIFE = 4
+const ROCKET_GAP = 50 // 1등과 이만큼(샘플) 뒤지면 아이템에 추격 로켓 등장
+const ROCKET_TIME = 3.5 // 로켓 변신 지속 시간 (초)
+const ROCKET_RIDE_SPEED = 58 // 로켓 변신 중 속도 (m/s)
 const END_GRACE = 30 // 1등 골인 후 나머지가 들어올 수 있는 시간 (초)
 
 export function createGame(players, rng = Math.random) {
@@ -42,9 +45,10 @@ export function createGame(players, rng = Math.random) {
       brake: false,
       ci: si, // 가장 가까운 샘플 인덱스
       prog: si - n, // 누적 진행도(샘플 단위). 출발선 통과 시 0을 넘는다.
-      item: null, // null | 'boost' | 'banana' | 'rocket'
+      item: null, // null | 'boost' | 'banana' | 'bomb' | 'rocket'
       itemSeq: 0, // 아이템을 새로 뽑을 때마다 +1 (슬롯머신 연출 트리거)
       boostT: 0,
+      rocketT: 0, // 로켓 변신 남은 시간
       stunT: 0,
       spin: 0, // 스턴 중 회전 연출용 각도
       offroad: false,
@@ -79,7 +83,7 @@ export function setInput(state, id, { steer = 0, brake = false } = {}) {
 export function fireItem(state, id) {
   if (state.status !== 'racing') return state
   const k = state.karts.find((p) => p.id === id)
-  if (!k || !k.item || k.finished || k.stunT > 0) return state
+  if (!k || !k.item || k.finished || k.stunT > 0 || k.rocketT > 0) return state
   const item = k.item
   k.item = null
   if (item === 'boost') {
@@ -92,19 +96,24 @@ export function fireItem(state, id) {
       x: k.x - Math.cos(k.heading) * 3,
       z: k.z - Math.sin(k.heading) * 3,
     })
-  } else if (item === 'rocket') {
-    // 센터라인을 따라 앞으로 날아가는 로켓
+  } else if (item === 'bomb') {
+    // 센터라인을 따라 앞으로 날아가는 폭탄
     const p = samplePoint(TRACK, k.prog + 2)
     state.objects.push({
-      kind: 'rocket',
+      kind: 'bomb',
       id: state.nextObjId++,
       owner: k.id,
       prog: k.prog + 2,
-      life: ROCKET_LIFE,
+      life: BOMB_LIFE,
       x: p.x,
       z: p.z,
       heading: Math.atan2(p.dz, p.dx),
     })
+  } else if (item === 'rocket') {
+    // 카트가 로켓으로 변신해 트랙을 따라 자동으로 질주 (1등 추격)
+    k.rocketT = ROCKET_TIME
+    k.stunT = 0
+    k.spin = 0
   }
   return state
 }
@@ -122,15 +131,34 @@ export function step(state, dt) {
   }
   if (state.status === 'finished') return state
 
-  for (const k of state.karts) stepKart(k, dt)
+  for (const k of state.karts) stepKart(state, k, dt)
   collideKarts(state.karts)
-  stepBoxes(state)
+  stepBoxes(state, dt)
   stepObjects(state, dt)
   checkFinish(state, dt)
   return state
 }
 
-function stepKart(k, dt) {
+function stepKart(state, k, dt) {
+  // 로켓 변신: 센터라인을 따라 자동 질주, 모든 공격에 면역
+  if (k.rocketT > 0) {
+    k.rocketT = Math.max(0, k.rocketT - dt)
+    k.spin = 0
+    k.stunT = 0
+    k.offroad = false
+    const aim = samplePoint(TRACK, k.prog + 10)
+    k.heading = Math.atan2(aim.z - k.z, aim.x - k.x)
+    k.speed = ROCKET_RIDE_SPEED
+    k.x += Math.cos(k.heading) * k.speed * dt
+    k.z += Math.sin(k.heading) * k.speed * dt
+    const rci = nearestSample(TRACK, k.x, k.z, k.ci)
+    k.prog += wrapDelta(rci - k.ci, TRACK.n)
+    k.ci = rci
+    // 1등을 따라잡으면 변신이 일찍 풀린다
+    const others = state.karts.filter((o) => o !== k)
+    if (others.length && k.prog >= Math.max(...others.map((o) => o.prog))) k.rocketT = 0
+    return
+  }
   if (k.stunT > 0) {
     // 스턴: 빙글 돌며 미끄러진다
     k.stunT = Math.max(0, k.stunT - dt)
@@ -179,7 +207,8 @@ function stepKart(k, dt) {
   k.ci = ci
 }
 
-// 카트끼리 가볍게 밀어내기
+// 카트끼리 충돌: 밀어내기 + 박치기(다가오는 속도만큼 서로 주고받음).
+// 로켓 변신 카트는 부딪힌 상대를 스턴시키며 그대로 뚫고 지나간다.
 function collideKarts(karts) {
   const minD = KART_RADIUS * 2
   for (let i = 0; i < karts.length; i++) {
@@ -192,22 +221,46 @@ function collideKarts(karts) {
       if (d >= minD || d === 0) continue
       dx /= d
       dz /= d
+      const aRocket = a.rocketT > 0
+      const bRocket = b.rocketT > 0
+      if (aRocket !== bRocket) {
+        const victim = aRocket ? b : a
+        const out = aRocket ? 1 : -1
+        if (victim.stunT <= 0) stunKart(victim)
+        victim.x += dx * out * (minD - d)
+        victim.z += dz * out * (minD - d)
+        continue
+      }
+      // 위치 분리
       const push = (minD - d) / 2
       a.x -= dx * push
       a.z -= dz * push
       b.x += dx * push
       b.z += dz * push
+      // 속도 전달: 뒤에서 받으면 앞 카트가 튕겨나가고 내가 느려진다
+      const va = a.speed * (Math.cos(a.heading) * dx + Math.sin(a.heading) * dz)
+      const vb = b.speed * (Math.cos(b.heading) * dx + Math.sin(b.heading) * dz)
+      const closing = va - vb
+      if (closing > 0) {
+        const t = closing * 0.4
+        a.speed = Math.max(0, a.speed - t)
+        b.speed = Math.min(MAX_SPEED * BOOST_FACTOR, b.speed + t * 0.8)
+      }
     }
   }
 }
 
-// 아이템 박스: 줍기 + 리스폰. 이미 아이템이 있어도 다시 뽑는다(리셋 후 재추첨).
-function stepBoxes(state) {
+// 아이템 박스: 줍기 + 일정 시간 후 리스폰.
+// 이미 아이템이 있어도 다시 뽑는다(리셋 후 재추첨).
+function stepBoxes(state, dt) {
   state.boxes.forEach((b, i) => {
-    if (b.t > 0) return
+    if (b.t > 0) {
+      b.t = Math.max(0, b.t - dt)
+      return
+    }
     const spot = BOX_SPOTS[i]
     for (const k of state.karts) {
-      if (k.finished || k.stunT > 0) continue
+      if (k.finished || k.stunT > 0 || k.rocketT > 0) continue
       const dx = k.x - spot.x
       const dz = k.z - spot.z
       if (dx * dx + dz * dz < 2 * 2) {
@@ -220,16 +273,21 @@ function stepBoxes(state) {
   })
 }
 
-// 순위에 따라 아이템 확률이 달라진다 (꼴찌는 부스트가 잘 나옴)
+// 순위에 따라 아이템 확률이 달라진다.
+// 1등과 격차가 크게 벌어지면 따라잡기용 로켓 찬스!
 function rollItem(state, k) {
   const order = ranking(state)
   const idx = order.findIndex((o) => o.id === k.id)
+  if (idx > 0 && order[0].prog - k.prog > ROCKET_GAP) {
+    const pool = ['rocket', 'rocket', 'boost']
+    return pool[Math.floor(state.rng() * pool.length)]
+  }
   const pool =
     idx === 0 && order.length > 1
-      ? ['banana', 'banana', 'rocket']
+      ? ['banana', 'banana', 'bomb']
       : idx === order.length - 1 && order.length > 1
-        ? ['boost', 'boost', 'rocket']
-        : ['boost', 'banana', 'rocket']
+        ? ['boost', 'boost', 'bomb']
+        : ['boost', 'banana', 'bomb']
   return pool[Math.floor(state.rng() * pool.length)]
 }
 
@@ -238,12 +296,12 @@ function stunKart(k) {
   k.speed *= 0.25
 }
 
-// 바나나/로켓 이동 + 충돌
+// 바나나/폭탄 이동 + 충돌 (로켓 변신 중인 카트는 면역)
 function stepObjects(state, dt) {
   const remove = new Set()
   for (const o of state.objects) {
-    if (o.kind === 'rocket') {
-      o.prog += (ROCKET_SPEED / TRACK.segLen) * dt
+    if (o.kind === 'bomb') {
+      o.prog += (BOMB_SPEED / TRACK.segLen) * dt
       o.life -= dt
       const p = samplePoint(TRACK, o.prog)
       o.x = p.x
@@ -252,9 +310,9 @@ function stepObjects(state, dt) {
       if (o.life <= 0) remove.add(o.id)
     }
     for (const k of state.karts) {
-      if (k.finished || k.stunT > 0) continue
-      if (o.kind === 'rocket' && k.id === o.owner) continue
-      const r = o.kind === 'rocket' ? 2 : 1.6
+      if (k.finished || k.stunT > 0 || k.rocketT > 0) continue
+      if (o.kind === 'bomb' && k.id === o.owner) continue
+      const r = o.kind === 'bomb' ? 2 : 1.6
       const dx = k.x - o.x
       const dz = k.z - o.z
       if (dx * dx + dz * dz < r * r) {
@@ -332,6 +390,7 @@ export function makeView(state) {
       item: k.item,
       itemSeq: k.itemSeq,
       boostT: r2(k.boostT),
+      rocketT: r2(k.rocketT),
       stunT: r2(k.stunT),
       spin: r3(k.spin),
       offroad: k.offroad,

@@ -69,4 +69,17 @@ export const sound = {
     beep(880, 0.08, 'sine', 0.06)
     setTimeout(() => beep(1175, 0.12, 'sine', 0.06), 90)
   },
+  // 레이스 카운트다운: 도(C5)... 출발은 한 옥타브 위 도(C6)!
+  count() {
+    beep(523, 0.13, 'square', 0.07)
+  },
+  go() {
+    beep(1047, 0.5, 'square', 0.08)
+  },
+  // 로켓 발사 슈웅~
+  rocket() {
+    beep(300, 0.15, 'sawtooth', 0.06)
+    setTimeout(() => beep(520, 0.15, 'sawtooth', 0.06), 120)
+    setTimeout(() => beep(840, 0.3, 'sawtooth', 0.07), 240)
+  },
 }

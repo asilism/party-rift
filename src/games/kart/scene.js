@@ -226,9 +226,11 @@ function buildDecor(track) {
   return { group, clouds, balloons }
 }
 
-// 카트 1대: 색깔 몸체 + 바퀴 + 12지신 이모지 + 부스트 불꽃 (+X 방향이 정면)
+// 카트 1대: 색깔 몸체 + 바퀴 + 12지신 이모지 + 부스트 불꽃 (+X 방향이 정면).
+// 추격 로켓 사용 중엔 카트 몸체 대신 로켓 모형으로 변신한다.
 function buildKart(color, emoji) {
   const g = new THREE.Group()
+  const kartBody = new THREE.Group()
   const body = new THREE.Mesh(
     new THREE.BoxGeometry(2.4, 0.55, 1.5),
     new THREE.MeshLambertMaterial({ color: new THREE.Color(color || '#cccccc') })
@@ -239,14 +241,41 @@ function buildKart(color, emoji) {
     new THREE.MeshLambertMaterial({ color: 0x222a3a })
   )
   cabin.position.set(-0.3, 1.05, 0)
+  kartBody.add(body, cabin)
   const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.32, 10)
   wheelGeo.rotateX(Math.PI / 2)
   const wheelMat = new THREE.MeshLambertMaterial({ color: 0x16181d })
   for (const [wx, wz] of [[0.85, 0.8], [0.85, -0.8], [-0.85, 0.8], [-0.85, -0.8]]) {
     const w = new THREE.Mesh(wheelGeo, wheelMat)
     w.position.set(wx, 0.36, wz)
-    g.add(w)
+    kartBody.add(w)
   }
+
+  // 로켓 변신 모형 (빨간 동체 + 노란 머리)
+  const rocket = new THREE.Group()
+  const tube = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.75, 0.75, 2.6, 12),
+    new THREE.MeshLambertMaterial({ color: 0xe04646 })
+  )
+  tube.geometry.rotateZ(Math.PI / 2) // +X 방향으로 눕힘
+  tube.position.y = 1
+  const nose = new THREE.Mesh(
+    new THREE.ConeGeometry(0.75, 1.3, 12),
+    new THREE.MeshLambertMaterial({ color: 0xffcf4d })
+  )
+  nose.geometry.rotateZ(-Math.PI / 2) // +X로 뾰족
+  nose.position.set(1.95, 1, 0)
+  const finGeo = new THREE.BoxGeometry(0.9, 0.9, 0.12)
+  const finMat = new THREE.MeshLambertMaterial({ color: 0xffcf4d })
+  for (const ry of [0, Math.PI / 2]) {
+    const fin = new THREE.Mesh(finGeo, finMat)
+    fin.position.set(-1.1, 1, 0)
+    fin.rotation.x = ry
+    rocket.add(fin)
+  }
+  rocket.add(tube, nose)
+  rocket.visible = false
+
   const face = emojiSprite(emoji || '🙂', 2.1)
   face.position.y = 2.1
   const flame = new THREE.Mesh(
@@ -256,11 +285,11 @@ function buildKart(color, emoji) {
   flame.geometry.rotateZ(Math.PI / 2) // -X(뒤쪽)을 향하게
   flame.position.set(-1.7, 0.62, 0)
   flame.visible = false
-  g.add(body, cabin, face, flame)
-  return { group: g, flame }
+  g.add(kartBody, rocket, face, flame)
+  return { group: g, kartBody, rocket, flame }
 }
 
-const OBJ_EMOJI = { banana: '🍌', rocket: '🚀' }
+const OBJ_EMOJI = { banana: '🍌', bomb: '💣' }
 
 export function createKartScene(canvas, track) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
@@ -347,9 +376,13 @@ export function createKartScene(canvas, track) {
       }
       node.group.position.set(k.x, 0, k.z)
       node.group.rotation.y = -k.heading - (k.spin || 0)
-      node.flame.visible = k.boostT > 0
+      const riding = k.rocketT > 0 // 로켓 변신 중엔 몸체가 로켓으로
+      node.kartBody.visible = !riding
+      node.rocket.visible = riding
+      node.flame.visible = k.boostT > 0 || riding
       if (node.flame.visible) {
-        node.flame.scale.setScalar(1.1 + Math.sin(now / 35) * 0.35) // 불꽃 펄럭임
+        node.flame.scale.setScalar((riding ? 1.6 : 1.1) + Math.sin(now / 35) * 0.35) // 불꽃 펄럭임
+        node.flame.position.y = riding ? 1 : 0.62
       }
     }
 
@@ -403,8 +436,8 @@ export function createKartScene(canvas, track) {
       camera.lookAt(target.x + fx * 4, 1.1, target.z + fz * 4)
     }
 
-    // 부스트: 스피드라인이 휙휙 지나가고 화각이 넓어져 빨려드는 느낌
-    const boosting = !!(target && target.boostT > 0)
+    // 부스트/로켓: 스피드라인이 휙휙 지나가고 화각이 넓어져 빨려드는 느낌
+    const boosting = !!(target && (target.boostT > 0 || target.rocketT > 0))
     slMat.opacity += ((boosting ? 0.85 : 0) - slMat.opacity) * (1 - Math.exp(-dt * 8))
     speedLines.visible = slMat.opacity > 0.02
     if (speedLines.visible) {

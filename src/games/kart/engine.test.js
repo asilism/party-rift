@@ -159,7 +159,7 @@ test('바나나: 뒤에 떨어지고, 밟은 카트는 스턴', () => {
   assert.equal(g.objects.length, 0, '밟힌 바나나는 제거')
 })
 
-test('로켓: 센터라인을 따라 날아가 앞 카트를 맞춘다', () => {
+test('폭탄: 센터라인을 따라 날아가 앞 카트를 맞춘다', () => {
   const g = createGame(P2)
   startRacing(g)
   const a = g.karts[0]
@@ -171,14 +171,81 @@ test('로켓: 센터라인을 따라 날아가 앞 카트를 맞춘다', () => {
   b.z = s.z
   b.ci = bi
   b.prog = a.prog + 20
-  a.item = 'rocket'
+  a.item = 'bomb'
   fireItem(g, 'a')
-  assert.ok(g.objects.some((o) => o.kind === 'rocket'))
+  assert.ok(g.objects.some((o) => o.kind === 'bomb'))
   for (let i = 0; i < 120 && !(b.stunT > 0); i++) {
     setInput(g, 'b', { steer: 0, brake: true }) // b는 제자리 근처
     step(g, STEP)
   }
-  assert.ok(b.stunT > 0, '로켓 명중 → 스턴')
+  assert.ok(b.stunT > 0, '폭탄 명중 → 스턴')
+})
+
+test('아이템 박스는 먹은 뒤 일정 시간이 지나면 다시 생긴다', () => {
+  const g = createGame(P2, () => 0.1)
+  startRacing(g)
+  const k = g.karts[0]
+  const spot = BOX_SPOTS[0]
+  k.x = spot.x
+  k.z = spot.z
+  k.ci = nearestSample(TRACK, k.x, k.z)
+  step(g, STEP)
+  assert.ok(g.boxes[0].t > 0, '먹은 직후엔 비활성')
+  k.x = 0 // 박스에서 치워둔다
+  k.z = 0
+  for (let i = 0; i < Math.ceil(4.2 / STEP); i++) step(g, STEP)
+  assert.equal(g.boxes[0].t, 0, '리스폰 완료')
+  assert.equal(makeView(g).boxes[0], true)
+})
+
+test('1등과 격차가 크면 아이템에 추격 로켓이 나온다', () => {
+  const g = createGame(P2, () => 0) // rng 0 → pool[0]
+  startRacing(g)
+  const a = g.karts[0]
+  g.karts[1].prog = a.prog + 100 // b가 한참 앞
+  const spot = BOX_SPOTS[0]
+  a.x = spot.x
+  a.z = spot.z
+  a.ci = nearestSample(TRACK, a.x, a.z)
+  step(g, STEP)
+  assert.equal(a.item, 'rocket')
+})
+
+test('추격 로켓: 카트가 변신해 트랙을 따라 질주하고 공격에 면역', () => {
+  const g = createGame(P2)
+  startRacing(g)
+  const a = g.karts[0]
+  g.karts[1].prog = a.prog + 200 // 1등이 멀리 있어 변신이 일찍 안 풀린다
+  a.item = 'rocket'
+  fireItem(g, 'a')
+  assert.ok(a.rocketT > 0, '로켓 변신 시작')
+  // 변신 중엔 바나나를 밟아도 멀쩡
+  g.objects.push({ kind: 'banana', id: 99, x: a.x, z: a.z })
+  const prog0 = a.prog
+  for (let i = 0; i < 60; i++) step(g, STEP) // 1초
+  assert.equal(a.stunT, 0, '공격 면역')
+  const gained = a.prog - prog0
+  assert.ok(gained > 40 / TRACK.segLen, `로켓 속도로 질주 (${gained}샘플 전진)`)
+  for (let i = 0; i < Math.ceil(3 / STEP); i++) step(g, STEP)
+  assert.equal(a.rocketT, 0, '시간이 지나면 변신 해제')
+})
+
+test('카트끼리 충돌: 뒤에서 박으면 앞 카트가 밀려나고 서로 떨어진다', () => {
+  const g = createGame(P2)
+  startRacing(g)
+  const a = g.karts[0]
+  const b = g.karts[1]
+  b.x = a.x + Math.cos(a.heading) * 1.5 // a 바로 앞에 정지한 b
+  b.z = a.z + Math.sin(a.heading) * 1.5
+  b.ci = a.ci
+  b.heading = a.heading
+  b.speed = 0
+  a.speed = 20
+  step(g, STEP)
+  assert.ok(b.speed > 2, `박치기로 앞 카트 가속 (${b.speed})`)
+  assert.ok(a.speed < 20, `박은 카트는 감속 (${a.speed})`)
+  const d = Math.hypot(b.x - a.x, b.z - a.z)
+  assert.ok(d >= 1.5, `밀어내기로 간격 확보 (${d})`)
 })
 
 test('1등 골인 후 제한시간이 지나면 레이스 종료, 순위는 진행도순', () => {

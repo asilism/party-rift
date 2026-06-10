@@ -20,7 +20,8 @@ export default function KartSetup({ racers, benched, onStart, onExit }) {
         <ul className="dobble-rules">
           <li>가속은 <b>자동!</b> 화면을 드래그하면 <b>조이스틱</b>으로 핸들을 꺾어요.</li>
           <li>🛑 <b>브레이크</b>로 코너를 돌고, 🎁 박스에서 아이템을 얻어요.</li>
-          <li>🍄 부스트 · 🍌 바나나 · 🚀 로켓 — 버튼 한 번으로 사용!</li>
+          <li>🍄 부스트 · 🍌 바나나 · 💣 폭탄 — 버튼 한 번으로 사용!</li>
+          <li>많이 뒤처지면 🚀 <b>추격 로켓</b>이 나와요 — 로켓으로 변신해 슝!</li>
           <li>카트는 <b>기기당 1대</b>: 각 기기의 첫 참가자가 달려요.</li>
         </ul>
         <div className="setup__roster">
