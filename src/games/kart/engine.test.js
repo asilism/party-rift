@@ -4,7 +4,7 @@ import {
   createGame, setInput, fireItem, step, makeView, ranking, displayLap,
   STEP, LAPS, COUNTDOWN_TIME,
 } from './engine.js'
-import { TRACK, BOX_SPOTS, nearestSample, wrapDelta } from './track.js'
+import { TRACK, BOX_SPOTS, PAD_ROWS, nearestSample, wrapDelta } from './track.js'
 
 const P2 = [
   { id: 'a', name: 'A', zodiacId: 'rat', color: '#aaa' },
@@ -259,6 +259,36 @@ test('1등 골인 후 제한시간이 지나면 레이스 종료, 순위는 진�
   for (let i = 0; i < Math.ceil(31 / STEP) && g.status !== 'finished'; i++) step(g, STEP)
   assert.equal(g.status, 'finished')
   assert.deepEqual(ranking(g).map((k) => k.id), ['a', 'b'])
+})
+
+test('CPU 카트: 입력 없이 스스로 트랙을 달리고 아이템도 쓴다', () => {
+  const g = createGame(
+    [P2[0], { id: 'cpu', name: '봇', zodiacId: 'ox', color: '#bbb', isBot: true }],
+    () => 0.5
+  )
+  startRacing(g)
+  const bot = g.karts[1]
+  const prog0 = bot.prog
+  for (let i = 0; i < Math.ceil(20 / STEP); i++) step(g, STEP) // 20초 무입력
+  assert.ok(bot.prog - prog0 > 100, `봇 스스로 주행 (${bot.prog - prog0}샘플 전진)`)
+  assert.ok(bot.speedFactor < 1, 'CPU 최고속은 사람보다 낮다')
+  bot.item = 'boost'
+  for (let i = 0; i < Math.ceil(4 / STEP) && bot.item; i++) step(g, STEP)
+  assert.equal(bot.item, null, '봇이 아이템을 사용')
+})
+
+test('가속 발판: 밟으면 버섯처럼 순간 부스트', () => {
+  const g = createGame(P2)
+  startRacing(g)
+  const k = g.karts[0]
+  const s = TRACK.samples[PAD_ROWS[0]]
+  k.x = s.x
+  k.z = s.z
+  k.ci = PAD_ROWS[0]
+  k.heading = Math.atan2(s.dz, s.dx)
+  assert.equal(k.boostT, 0)
+  step(g, STEP)
+  assert.ok(k.boostT > 1, `발판 부스트 발동 (boostT=${k.boostT})`)
 })
 
 test('makeView: JSON 직렬화 가능한 스냅샷', () => {

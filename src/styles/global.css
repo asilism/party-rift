@@ -1738,6 +1738,7 @@ body {
   width: 1.3em; text-align: center; color: var(--accent);
 }
 .kart-ranks__name { max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kart-ranks__bot { font-size: 0.85em; opacity: 0.85; }
 
 /* 좌측 하단: 현재 랩 */
 .kart__lap {

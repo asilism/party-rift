@@ -2,7 +2,7 @@
 // 엔진의 makeView() 스냅샷만 보고 그린다 — 호스트/게스트 공용.
 import * as THREE from 'three'
 import { getZodiac } from '../../shared/zodiac.js'
-import { BOX_SPOTS, BOX_ROWS } from './track.js'
+import { BOX_SPOTS, BOX_ROWS, PAD_ROWS } from './track.js'
 
 const SKY = 0x8ecdf5
 
@@ -58,6 +58,70 @@ function buildRoad(track) {
     geo,
     new THREE.MeshLambertMaterial({ color: 0x474d59, side: THREE.DoubleSide })
   )
+}
+
+// 글자 하나를 캔버스에 그려 스프라이트 텍스처로 (아이템 박스의 '?' 등)
+function textTexture(text, size = 128) {
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d')
+  ctx.font = `900 ${size * 0.72}px system-ui, sans-serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineWidth = size * 0.09
+  ctx.strokeStyle = 'rgba(20, 40, 80, 0.9)'
+  ctx.strokeText(text, size / 2, size / 2 + size * 0.03)
+  ctx.fillStyle = '#ffffff'
+  ctx.fillText(text, size / 2, size / 2 + size * 0.03)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+// 가속 발판: 진행 방향을 가리키는 무지개 그라데이션 화살표(Λ) 2개
+function buildPads(track) {
+  const g = new THREE.Group()
+  const mat = new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.95,
+  })
+  const makeChevron = (pi, fwdOff) => {
+    const s = track.samples[pi]
+    const w = track.halfW * 0.85 // 트랙 폭 대부분을 덮는다
+    const L = 3.4 // 꼭짓점이 앞으로 나오는 길이
+    const T = 1.6 // 띠 두께
+    const steps = 10
+    const pos = []
+    const col = []
+    const idx = []
+    const c = new THREE.Color()
+    for (let i = 0; i <= steps; i++) {
+      const f = (i / steps) * 2 - 1 // -1(왼쪽) ~ 1(오른쪽)
+      const lat = f * w
+      const fwd = (1 - Math.abs(f)) * L + fwdOff
+      const bx = s.x + s.nx * lat + s.dx * fwd
+      const bz = s.z + s.nz * lat + s.dz * fwd
+      pos.push(bx, 0.05, bz, bx + s.dx * T, 0.05, bz + s.dz * T)
+      c.setHSL(((f + 1) / 2) * 0.83, 1, 0.55) // 무지개: 빨강 → 보라
+      col.push(c.r, c.g, c.b, c.r, c.g, c.b)
+      if (i < steps) {
+        const a = i * 2
+        idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2)
+      }
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
+    geo.setIndex(idx)
+    return new THREE.Mesh(geo, mat)
+  }
+  for (const pi of PAD_ROWS) {
+    g.add(makeChevron(pi, 0))
+    g.add(makeChevron(pi, 3))
+  }
+  return g
 }
 
 // 도로 가장자리 빨강/하양 연석
@@ -316,6 +380,7 @@ export function createKartScene(canvas, track) {
   scene.add(buildRoad(track))
   scene.add(buildCurbs(track))
   scene.add(buildStart(track))
+  scene.add(buildPads(track))
   scene.add(buildTrees(track))
   const decor = buildDecor(track)
   scene.add(decor.group)
@@ -342,17 +407,29 @@ export function createKartScene(canvas, track) {
   speedLines.visible = false
   camera.add(speedLines)
 
-  // 아이템 박스 (회전하는 노란 큐브)
-  const boxGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5)
-  const boxMat = new THREE.MeshLambertMaterial({
-    color: 0xffc83d, transparent: true, opacity: 0.92,
+  // 아이템 박스: 유리 질감의 투명 큐브 안에 '?' 글자
+  const boxGeo = new THREE.BoxGeometry(1.6, 1.6, 1.6)
+  const glassMat = new THREE.MeshPhysicalMaterial({
+    color: 0xbfe4ff,
+    transparent: true,
+    opacity: 0.34,
+    roughness: 0.06,
+    metalness: 0,
+    clearcoat: 1,
+    depthWrite: false, // 안의 '?'가 비쳐 보이게
   })
-  const boxMeshes = BOX_SPOTS.map((spot, i) => {
-    const m = new THREE.Mesh(boxGeo, boxMat)
-    m.position.set(spot.x, 1.2, spot.z)
-    m.rotation.y = i
-    scene.add(m)
-    return m
+  const qTex = textTexture('?')
+  const boxNodes = BOX_SPOTS.map((spot, i) => {
+    const grp = new THREE.Group()
+    const glass = new THREE.Mesh(boxGeo, glassMat)
+    glass.rotation.y = i
+    const q = new THREE.Sprite(new THREE.SpriteMaterial({ map: qTex, depthWrite: false }))
+    q.scale.set(1.15, 1.15, 1)
+    q.renderOrder = 2
+    grp.add(glass, q)
+    grp.position.set(spot.x, 1.2, spot.z)
+    scene.add(grp)
+    return { grp, glass }
   })
 
   const kartNodes = new Map() // kartId -> {group, flame}
@@ -406,11 +483,12 @@ export function createKartScene(canvas, track) {
       objNodes.delete(id)
     }
 
-    // 아이템 박스 회전/표시
-    boxMeshes.forEach((m, i) => {
-      m.visible = !view.boxes || view.boxes[i] !== false
-      m.rotation.y += dt * 2
-      m.position.y = 1.2 + Math.sin(now / 320 + i) * 0.15
+    // 아이템 박스 회전/표시 (유리 큐브가 빙글빙글, '?'는 항상 카메라를 본다)
+    boxNodes.forEach(({ grp, glass }, i) => {
+      grp.visible = !view.boxes || view.boxes[i] !== false
+      glass.rotation.y += dt * 1.6
+      glass.rotation.x += dt * 0.8
+      grp.position.y = 1.2 + Math.sin(now / 320 + i) * 0.15
     })
 
     // 구름은 천천히 흐르고, 풍선은 둥실둥실

@@ -6,7 +6,7 @@ import TouchControls from './TouchControls.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import { createGame, setInput, fireItem, step, makeView, STEP, LAPS } from './engine.js'
-import { getZodiac } from '../../shared/zodiac.js'
+import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
 import { useGameNet } from '../../net/useGameNet.js'
 import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
@@ -18,6 +18,7 @@ import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
 const PUBLISH_MS = 50 // 호스트 스냅샷 전파 주기
 const INPUT_MS = 66 // 게스트 입력 전송 주기
 const INTERP_DELAY = 120 // 게스트 렌더 지연(보간용, ms)
+const RACE_SIZE = 4 // 레이스 정원 — 모자라면 CPU가 채운다
 
 export default function KartGame({ roster, onExit, net }) {
   const { online, isHost, remote, publish, sendAction, ownerDevice } = useGameNet(net, handleAction)
@@ -129,14 +130,23 @@ export default function KartGame({ roster, onExit, net }) {
   function startGame() {
     sound.setEnabled(soundOn)
     sound.unlock()
-    stateRef.current = createGame(
-      racers.map((p) => ({
-        id: p.id,
-        name: p.name,
-        zodiacId: p.zodiacId,
-        color: getZodiac(p.zodiacId)?.color,
-      }))
-    )
+    const humans = racers.map((p) => ({
+      id: p.id,
+      name: p.name,
+      zodiacId: p.zodiacId,
+      color: getZodiac(p.zodiacId)?.color,
+    }))
+    // 정원이 안 차면 안 쓰는 12지신 중에서 CPU를 뽑아 채운다
+    const used = new Set(roster.map((p) => p.zodiacId))
+    const free = ZODIAC.filter((z) => !used.has(z.id)).sort(() => Math.random() - 0.5)
+    const bots = free.slice(0, Math.max(0, RACE_SIZE - humans.length)).map((z) => ({
+      id: `bot-${z.id}`,
+      name: `${z.name}봇`,
+      zodiacId: z.id,
+      color: z.color,
+      isBot: true,
+    }))
+    stateRef.current = createGame([...humans, ...bots])
     ctrlRef.current = { steer: 0, brake: false }
     setHud(makeView(stateRef.current))
     setPhase('play')
@@ -343,6 +353,7 @@ function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, sound
                 <span className="kart-ranks__pos">{i + 1}</span>
                 <span>{getZodiac(k.zodiacId)?.emoji}</span>
                 <span className="kart-ranks__name">{k.name}</span>
+                {k.isBot && <span className="kart-ranks__bot">🤖</span>}
                 {k.finished && <span>🏁</span>}
               </div>
             ))}
