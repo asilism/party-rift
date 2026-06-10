@@ -1,14 +1,52 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { sound } from '../../shared/sound.js'
 
 export const ITEM_EMOJI = { boost: '🍄', banana: '🍌', rocket: '🚀' }
 
 const JOY_RADIUS = 60 // px. 이만큼 끌면 풀 조향
+const SLOT_MS = 850 // 아이템 슬롯머신 연출 시간
+const SLOT_TICK = 75
+
+// 아이템을 새로 먹으면 슬롯머신처럼 이모지가 돌아가다 멈춘다.
+// 돌아가는 동안 표시할 이모지를 반환 (멈추면 null → 실제 아이템 표시).
+function useSlotRoll(item) {
+  const [rollEmoji, setRollEmoji] = useState(null)
+  const had = useRef(false)
+  useEffect(() => {
+    const isNew = !!item && !had.current
+    had.current = !!item
+    if (!item) {
+      setRollEmoji(null)
+      return
+    }
+    if (!isNew) return
+    const faces = Object.values(ITEM_EMOJI)
+    let i = 0
+    const t0 = performance.now()
+    setRollEmoji(faces[0])
+    const iv = setInterval(() => {
+      i++
+      if (performance.now() - t0 >= SLOT_MS) {
+        clearInterval(iv)
+        setRollEmoji(null)
+        sound.key() // 당첨!
+      } else {
+        sound.diceTick()
+        setRollEmoji(faces[i % faces.length])
+      }
+    }, SLOT_TICK)
+    return () => clearInterval(iv)
+  }, [item])
+  return rollEmoji
+}
 
 // 주행 조작: 화면 아무 데나 드래그하면 그 자리에 조이스틱이 생기고(조향),
 // 오른쪽 아래에 브레이크/아이템 버튼. 출력(가속)은 자동이라 버튼이 없다.
 export default function TouchControls({ onSteer, onBrake, onItem, item, disabled }) {
   const [joy, setJoy] = useState(null) // {ox, oy, dx, dy}
   const joyPointer = useRef(null)
+  const rollEmoji = useSlotRoll(item)
+  const rolling = !!rollEmoji
 
   function steerFrom(e, origin) {
     let dx = e.clientX - origin.ox
@@ -66,16 +104,20 @@ export default function TouchControls({ onSteer, onBrake, onItem, item, disabled
         onPointerCancel={() => onBrake(false)}
         onContextMenu={(e) => e.preventDefault()}
       >
-        🛑
+        <span className="kart-btn__icon">🛑</span>
         <small>브레이크</small>
       </button>
       <button
-        className={`kart-btn kart-btn--item ${item ? 'kart-btn--item-ready' : ''}`}
+        className={`kart-btn kart-btn--item ${
+          rolling ? 'kart-btn--item-rolling' : item ? 'kart-btn--item-ready' : ''
+        }`}
         disabled={disabled || !item}
-        onPointerDown={() => item && onItem()}
+        onPointerDown={() => item && !rolling && onItem()}
         onContextMenu={(e) => e.preventDefault()}
       >
-        {item ? ITEM_EMOJI[item] : '🎁'}
+        <span className="kart-btn__icon">
+          {rolling ? rollEmoji : item ? ITEM_EMOJI[item] : '🎁'}
+        </span>
         <small>아이템</small>
       </button>
     </>
