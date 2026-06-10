@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import KartSetup from './KartSetup.jsx'
 import Kart3D from './Kart3D.jsx'
+import MiniMap from './MiniMap.jsx'
 import TouchControls from './TouchControls.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
@@ -285,6 +286,7 @@ function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, sound
           onBrake={(v) => (ctrlRef.current.brake = v)}
           onItem={onItem}
           item={me.item}
+          itemSeq={me.itemSeq}
           disabled={hud.status !== 'racing' || me.finished}
         />
       )}
@@ -295,9 +297,7 @@ function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, sound
             ← 나가기
           </button>
           <div className="turn-indicator kart__status">
-            {me
-              ? `🏁 랩 ${me.lap}/${LAPS} · ${me.rank}등`
-              : '👀 관전 중'}
+            {me ? '🏎️ 파티 카트' : '👀 관전 중'}
           </div>
           <div className="topbar__right">
             <button className="btn btn--ghost" onClick={onToggleSound} aria-label="소리">
@@ -306,6 +306,32 @@ function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, sound
             <FullscreenButton />
           </div>
         </div>
+
+        {/* 우측 상단: 미니맵 + 현재 순위 */}
+        <div className="kart__side">
+          <MiniMap karts={hud.karts} myId={myId} />
+          <div className="kart-ranks">
+            {order.map((k, i) => (
+              <div
+                key={k.id}
+                className={`kart-ranks__row ${k.id === myId ? 'kart-ranks__row--me' : ''}`}
+                style={{ '--z-color': k.color }}
+              >
+                <span className="kart-ranks__pos">{i + 1}</span>
+                <span>{getZodiac(k.zodiacId)?.emoji}</span>
+                <span className="kart-ranks__name">{k.name}</span>
+                {k.finished && <span>🏁</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 좌측 하단: 현재 랩 */}
+        {me && (
+          <div className="kart__lap">
+            🏁 <b>{me.lap}</b> <span>/ {LAPS}</span>
+          </div>
+        )}
 
         {hud.status === 'countdown' && hud.countdown > 0 && (
           <div className="kart__count" key={hud.countdown}>

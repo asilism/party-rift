@@ -7,19 +7,20 @@ const JOY_RADIUS = 60 // px. 이만큼 끌면 풀 조향
 const SLOT_MS = 850 // 아이템 슬롯머신 연출 시간
 const SLOT_TICK = 75
 
-// 아이템을 새로 먹으면 슬롯머신처럼 이모지가 돌아가다 멈춘다.
+// 아이템을 새로 뽑을 때마다(seq 증가) 슬롯머신처럼 이모지가 돌아가다 멈춘다.
+// 이미 아이템이 있어도 박스를 다시 먹으면 재추첨되므로 seq로 감지한다.
 // 돌아가는 동안 표시할 이모지를 반환 (멈추면 null → 실제 아이템 표시).
-function useSlotRoll(item) {
+function useSlotRoll(item, seq) {
   const [rollEmoji, setRollEmoji] = useState(null)
-  const had = useRef(false)
+  const lastSeq = useRef(seq) // 마운트 시점의 seq는 연출 없이 그대로 표시
   useEffect(() => {
-    const isNew = !!item && !had.current
-    had.current = !!item
     if (!item) {
+      lastSeq.current = seq
       setRollEmoji(null)
       return
     }
-    if (!isNew) return
+    if (seq === lastSeq.current) return
+    lastSeq.current = seq
     const faces = Object.values(ITEM_EMOJI)
     let i = 0
     const t0 = performance.now()
@@ -36,16 +37,16 @@ function useSlotRoll(item) {
       }
     }, SLOT_TICK)
     return () => clearInterval(iv)
-  }, [item])
+  }, [item, seq])
   return rollEmoji
 }
 
 // 주행 조작: 화면 아무 데나 드래그하면 그 자리에 조이스틱이 생기고(조향),
 // 오른쪽 아래에 브레이크/아이템 버튼. 출력(가속)은 자동이라 버튼이 없다.
-export default function TouchControls({ onSteer, onBrake, onItem, item, disabled }) {
+export default function TouchControls({ onSteer, onBrake, onItem, item, itemSeq, disabled }) {
   const [joy, setJoy] = useState(null) // {ox, oy, dx, dy}
   const joyPointer = useRef(null)
-  const rollEmoji = useSlotRoll(item)
+  const rollEmoji = useSlotRoll(item, itemSeq || 0)
   const rolling = !!rollEmoji
 
   function steerFrom(e, origin) {

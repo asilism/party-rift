@@ -2,7 +2,7 @@
 // 엔진의 makeView() 스냅샷만 보고 그린다 — 호스트/게스트 공용.
 import * as THREE from 'three'
 import { getZodiac } from '../../shared/zodiac.js'
-import { BOX_SPOTS } from './track.js'
+import { BOX_SPOTS, BOX_ROWS } from './track.js'
 
 const SKY = 0x8ecdf5
 
@@ -151,15 +151,15 @@ function buildTrees(track) {
   const leafGeo = new THREE.ConeGeometry(1.8, 4, 8)
   const leafMat = new THREE.MeshLambertMaterial({ color: 0x2e8b46 })
   let placed = 0
-  for (let tries = 0; tries < 600 && placed < 42; tries++) {
-    const x = (rnd() - 0.5) * 190
-    const z = (rnd() - 0.5) * 170 + 6
+  for (let tries = 0; tries < 1200 && placed < 80; tries++) {
+    const x = (rnd() - 0.5) * 380
+    const z = (rnd() - 0.5) * 340 + 12
     let minD = Infinity
     for (let i = 0; i < track.n; i += 4) {
       const s = track.samples[i]
       minD = Math.min(minD, Math.hypot(x - s.x, z - s.z))
     }
-    if (minD < track.halfW + 9 || minD > 55) continue
+    if (minD < track.halfW + 10 || minD > 110) continue
     const tree = new THREE.Group()
     const trunk = new THREE.Mesh(trunkGeo, trunkMat)
     trunk.position.y = 0.8
@@ -173,6 +173,57 @@ function buildTrees(track) {
     placed++
   }
   return g
+}
+
+// 아기자기한 장식: 구름/꽃밭/길가 깃발/아이템 구역 풍선 (이모지 스프라이트)
+function buildDecor(track) {
+  const group = new THREE.Group()
+  const rnd = lcg(777)
+  const clouds = []
+  for (let i = 0; i < 9; i++) {
+    const sp = emojiSprite('☁️', 14 + rnd() * 10)
+    sp.position.set((rnd() - 0.5) * 520, 28 + rnd() * 20, (rnd() - 0.5) * 460)
+    clouds.push(sp)
+    group.add(sp)
+  }
+  const flora = ['🌼', '🌸', '🌷', '🍄', '🌻', '🪨', '🦋']
+  for (let i = 0; i < 80; i++) {
+    const s = track.samples[Math.floor(rnd() * track.n)]
+    const side = rnd() < 0.5 ? 1 : -1
+    const off = track.halfW + 2.5 + rnd() * 6
+    const sp = emojiSprite(flora[Math.floor(rnd() * flora.length)], 1.3 + rnd() * 1.3)
+    sp.position.set(s.x + s.nx * off * side, 0.7, s.z + s.nz * off * side)
+    group.add(sp)
+  }
+  // 길가 깃발: 일정 간격으로 좌우 번갈아
+  for (let i = 0; i < track.n; i += 25) {
+    const s = track.samples[i]
+    const side = (i / 25) % 2 === 0 ? 1 : -1
+    const sp = emojiSprite('🚩', 2.4)
+    sp.position.set(
+      s.x + s.nx * (track.halfW + 1.8) * side,
+      2,
+      s.z + s.nz * (track.halfW + 1.8) * side
+    )
+    group.add(sp)
+  }
+  // 아이템 구역 양옆 풍선
+  const balloons = []
+  for (const ri of BOX_ROWS) {
+    const s = track.samples[ri]
+    for (const side of [1, -1]) {
+      const sp = emojiSprite('🎈', 3.4)
+      sp.position.set(
+        s.x + s.nx * (track.halfW + 2.5) * side,
+        5,
+        s.z + s.nz * (track.halfW + 2.5) * side
+      )
+      sp.userData.baseY = sp.position.y
+      balloons.push(sp)
+      group.add(sp)
+    }
+  }
+  return { group, clouds, balloons }
 }
 
 // 카트 1대: 색깔 몸체 + 바퀴 + 12지신 이모지 + 부스트 불꽃 (+X 방향이 정면)
@@ -216,9 +267,10 @@ export function createKartScene(canvas, track) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(SKY)
-  scene.fog = new THREE.Fog(SKY, 130, 330)
-  const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.1, 600)
+  scene.fog = new THREE.Fog(SKY, 200, 560)
+  const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.1, 1000)
   camera.position.set(0, 40, -80)
+  scene.add(camera) // 카메라에 붙는 자식(스피드라인)을 렌더하기 위해
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x5e8c4f, 1.1))
   const sun = new THREE.DirectionalLight(0xffffff, 1.4)
@@ -226,7 +278,7 @@ export function createKartScene(canvas, track) {
   scene.add(sun)
 
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(900, 900),
+    new THREE.PlaneGeometry(1600, 1600),
     new THREE.MeshLambertMaterial({ color: 0x68b95c })
   )
   ground.geometry.rotateX(-Math.PI / 2)
@@ -236,6 +288,30 @@ export function createKartScene(canvas, track) {
   scene.add(buildCurbs(track))
   scene.add(buildStart(track))
   scene.add(buildTrees(track))
+  const decor = buildDecor(track)
+  scene.add(decor.group)
+
+  // 부스트 스피드라인: 카메라 주변을 휙휙 지나가는 선 (하이퍼스페이스 느낌)
+  const SL_COUNT = 90
+  const slPts = []
+  for (let i = 0; i < SL_COUNT; i++) {
+    const a = Math.random() * Math.PI * 2
+    const r = 1.5 + Math.random() * 5
+    slPts.push({
+      x: Math.cos(a) * r,
+      y: Math.sin(a) * r * 0.6,
+      z: -(4 + Math.random() * 36),
+      len: 2.5 + Math.random() * 3.5,
+    })
+  }
+  const slPos = new Float32Array(SL_COUNT * 6)
+  const slGeo = new THREE.BufferGeometry()
+  slGeo.setAttribute('position', new THREE.BufferAttribute(slPos, 3))
+  const slMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 })
+  const speedLines = new THREE.LineSegments(slGeo, slMat)
+  speedLines.frustumCulled = false
+  speedLines.visible = false
+  camera.add(speedLines)
 
   // 아이템 박스 (회전하는 노란 큐브)
   const boxGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5)
@@ -272,6 +348,9 @@ export function createKartScene(canvas, track) {
       node.group.position.set(k.x, 0, k.z)
       node.group.rotation.y = -k.heading - (k.spin || 0)
       node.flame.visible = k.boostT > 0
+      if (node.flame.visible) {
+        node.flame.scale.setScalar(1.1 + Math.sin(now / 35) * 0.35) // 불꽃 펄럭임
+      }
     }
 
     // 바나나/로켓 스프라이트
@@ -301,6 +380,15 @@ export function createKartScene(canvas, track) {
       m.position.y = 1.2 + Math.sin(now / 320 + i) * 0.15
     })
 
+    // 구름은 천천히 흐르고, 풍선은 둥실둥실
+    for (const c of decor.clouds) {
+      c.position.x += dt * 1.6
+      if (c.position.x > 280) c.position.x = -280
+    }
+    decor.balloons.forEach((b, i) => {
+      b.position.y = b.userData.baseY + Math.sin(now / 600 + i * 1.7) * 0.5
+    })
+
     // 카메라: 내 카트(없으면 1등)를 3인칭으로 따라간다
     const target =
       view.karts.find((k) => k.id === myId) ||
@@ -313,6 +401,31 @@ export function createKartScene(canvas, track) {
       camPos.lerp(want, 1 - Math.exp(-dt * 6))
       camera.position.copy(camPos)
       camera.lookAt(target.x + fx * 4, 1.1, target.z + fz * 4)
+    }
+
+    // 부스트: 스피드라인이 휙휙 지나가고 화각이 넓어져 빨려드는 느낌
+    const boosting = !!(target && target.boostT > 0)
+    slMat.opacity += ((boosting ? 0.85 : 0) - slMat.opacity) * (1 - Math.exp(-dt * 8))
+    speedLines.visible = slMat.opacity > 0.02
+    if (speedLines.visible) {
+      for (let i = 0; i < SL_COUNT; i++) {
+        const p = slPts[i]
+        p.z += dt * 60 // 카메라 쪽으로 돌진
+        if (p.z > -2) p.z = -40 - Math.random() * 5
+        const o = i * 6
+        slPos[o] = p.x
+        slPos[o + 1] = p.y
+        slPos[o + 2] = p.z
+        slPos[o + 3] = p.x
+        slPos[o + 4] = p.y
+        slPos[o + 5] = p.z - p.len
+      }
+      slGeo.attributes.position.needsUpdate = true
+    }
+    const wantFov = boosting ? 76 : 62
+    if (Math.abs(camera.fov - wantFov) > 0.05) {
+      camera.fov += (wantFov - camera.fov) * (1 - Math.exp(-dt * 5))
+      camera.updateProjectionMatrix()
     }
 
     renderer.render(scene, camera)

@@ -43,6 +43,7 @@ export function createGame(players, rng = Math.random) {
       ci: si, // 가장 가까운 샘플 인덱스
       prog: si - n, // 누적 진행도(샘플 단위). 출발선 통과 시 0을 넘는다.
       item: null, // null | 'boost' | 'banana' | 'rocket'
+      itemSeq: 0, // 아이템을 새로 뽑을 때마다 +1 (슬롯머신 연출 트리거)
       boostT: 0,
       stunT: 0,
       spin: 0, // 스턴 중 회전 연출용 각도
@@ -200,17 +201,18 @@ function collideKarts(karts) {
   }
 }
 
-// 아이템 박스: 줍기 + 리스폰
+// 아이템 박스: 줍기 + 리스폰. 이미 아이템이 있어도 다시 뽑는다(리셋 후 재추첨).
 function stepBoxes(state) {
   state.boxes.forEach((b, i) => {
     if (b.t > 0) return
     const spot = BOX_SPOTS[i]
     for (const k of state.karts) {
-      if (k.item || k.finished || k.stunT > 0) continue
+      if (k.finished || k.stunT > 0) continue
       const dx = k.x - spot.x
       const dz = k.z - spot.z
       if (dx * dx + dz * dz < 2 * 2) {
         k.item = rollItem(state, k)
+        k.itemSeq++
         b.t = BOX_RESPAWN
         break
       }
@@ -328,6 +330,7 @@ export function makeView(state) {
       lap: displayLap(k),
       rank: rankOf.get(k.id),
       item: k.item,
+      itemSeq: k.itemSeq,
       boostT: r2(k.boostT),
       stunT: r2(k.stunT),
       spin: r3(k.spin),
