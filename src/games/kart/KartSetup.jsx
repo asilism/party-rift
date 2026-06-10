@@ -6,7 +6,7 @@ import { TRACK_LIST, DEFAULT_TRACK_ID } from './track.js'
 // 맵별 명물 미리보기 (선택 카드에 표시)
 const MAP_FEATURE = {
   meadow: '🐄 소들이 트랙을 건너다녀요',
-  desert: '🌵 선인장 + 🌪️ 회오리 주의!',
+  desert: '유턴 헤어핀×3! 🌪️ 회오리가 하늘로 날려버려요',
   snow: '🧊 빙판에선 핸들이 주르륵, ⛄ 와장창',
 }
 

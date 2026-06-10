@@ -243,6 +243,7 @@ function interpolate(buf) {
       z: lerp(ka.z, kb.z),
       heading: lerp(ka.heading, kb.heading),
       spin: lerp(ka.spin || 0, kb.spin || 0),
+      flyT: lerp(ka.flyT || 0, kb.flyT || 0), // 회오리 비행 포물선을 부드럽게
     }
   })
   const objects = (b.v.objects || []).map((ob) => {
@@ -267,6 +268,7 @@ function useKartSounds(hud, myId) {
     if (me && me.stunT > 0 && !(p.stunT > 0)) sound.chuteDown()
     if (me?.boostT > 0 && !(p.boostT > 0)) sound.ladderUp()
     if (me?.rocketT > 0 && !(p.rocketT > 0)) sound.rocket()
+    if (me?.flyT > 0 && !(p.flyT > 0)) sound.rocket() // 회오리에 붕~ 떠오를 때
     if (hud.lightning && !p.lightning) sound.thunder() // 번개는 모두에게 들린다
     // 소/펭귄/눈사람 등 장애물과 쿵! (스턴형 장애물은 위의 스턴음이 담당)
     if (me && p.bumpSeq != null && me.bumpSeq > p.bumpSeq && !(me.stunT > 0)) sound.bounce()
@@ -277,6 +279,7 @@ function useKartSounds(hud, myId) {
       stunT: me?.stunT,
       boostT: me?.boostT,
       rocketT: me?.rocketT,
+      flyT: me?.flyT,
       bumpSeq: me?.bumpSeq,
       lightning: hud.lightning,
     }
@@ -289,7 +292,7 @@ const BUMP_MSG = {
   penguin: '🐧 펭귄이랑 꽈당!',
   snowman: '⛄ 눈사람 와장창!',
   cactus: '🌵 아야야! 따가워!',
-  tornado: '🌪️ 회오리에 휘말렸다!',
+  tornado: '🌪️ 회오리에 휘말려 붕~!',
 }
 
 // 레이스 드라마 배너: 랩 진입 / 장애물 사고 / 추월·역전 / 슬립스트림 / 번개를
