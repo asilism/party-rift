@@ -3,14 +3,15 @@
 // 물리 엔진과 3D 렌더러가 같은 데이터를 공유한다. (three.js 의존 없음 → node 테스트 가능)
 
 // 컨트롤 포인트 (x, z). 아래쪽 직선(출발선) → 오른쪽 위로 → S자 → 윗변 → 왼쪽 아래로.
+const SCALE = 2 // 서킷 전체 크기 배율
 const CTRL = [
   [6, -40], [34, -40], [54, -28], [58, -6],
   [46, 14], [26, 10], [16, 26], [26, 42],
   [10, 54], [-16, 50], [-40, 44], [-56, 24],
   [-58, -2], [-48, -24], [-26, -38],
-]
+].map(([x, z]) => [x * SCALE, z * SCALE])
 
-const N = 260 // 센터라인 샘플 수 (sample 0 = 출발선)
+const N = 400 // 센터라인 샘플 수 (sample 0 = 출발선)
 
 function catmull(p0, p1, p2, p3, t) {
   const t2 = t * t
@@ -50,15 +51,15 @@ function buildTrack() {
     // 법선 = 진행방향을 왼쪽으로 90도 돌린 벡터
     return { x, z, dx, dz, nx: -dz, nz: dx }
   })
-  return { n: N, samples, halfW: 5, segLen: total / N }
+  return { n: N, samples, halfW: 6, segLen: total / N }
 }
 
 export const TRACK = buildTrack()
 
 // 아이템 박스 위치: 트랙 위 3곳 × 가로 3개
-const BOX_ROWS = [58, 132, 208]
+export const BOX_ROWS = [0.22, 0.5, 0.8].map((f) => Math.round(N * f))
 export const BOX_SPOTS = BOX_ROWS.flatMap((i) =>
-  [-3, 0, 3].map((lat) => {
+  [-3.5, 0, 3.5].map((lat) => {
     const s = TRACK.samples[i]
     return { x: s.x + s.nx * lat, z: s.z + s.nz * lat }
   })
