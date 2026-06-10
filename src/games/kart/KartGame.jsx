@@ -5,7 +5,7 @@ import MiniMap from './MiniMap.jsx'
 import TouchControls from './TouchControls.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
-import { createGame, setInput, fireItem, step, makeView, STEP, LAPS } from './engine.js'
+import { createGame, setInput, fireItem, step, makeView, STEP, LAPS, COUNTDOWN_TIME } from './engine.js'
 import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
 import { useGameNet } from '../../net/useGameNet.js'
@@ -265,6 +265,7 @@ function useKartSounds(hud, myId) {
     if (me && me.stunT > 0 && !(p.stunT > 0)) sound.chuteDown()
     if (me?.boostT > 0 && !(p.boostT > 0)) sound.ladderUp()
     if (me?.rocketT > 0 && !(p.rocketT > 0)) sound.rocket()
+    if (hud.lightning && !p.lightning) sound.thunder() // 번개는 모두에게 들린다
     if (hud.status === 'finished' && p.status && p.status !== 'finished') sound.win()
     prev.current = {
       countdown: hud.countdown,
@@ -272,33 +273,75 @@ function useKartSounds(hud, myId) {
       stunT: me?.stunT,
       boostT: me?.boostT,
       rocketT: me?.rocketT,
+      lightning: hud.lightning,
     }
   }, [hud, myId])
 }
 
-// 랩이 오를 때마다 화면 중앙에 잠깐 보여줄 멘트
-function useLapBanner(lap) {
+// 레이스 드라마 배너: 랩 진입 / 추월·역전 / 슬립스트림 / 번개를
+// 화면 중앙에 잠깐씩 띄운다 (우선순위: 랩 > 번개 > 슬립스트림 > 순위 변동)
+function useRaceBanner(hud, myId) {
   const [msg, setMsg] = useState(null)
-  const prev = useRef(lap ?? 1)
+  const prev = useRef(null)
+  const keyRef = useRef(0)
+  const timerRef = useRef(null)
+  const lastRankMsgAt = useRef(-10)
+  useEffect(() => () => clearTimeout(timerRef.current), [])
   useEffect(() => {
-    if (lap == null || lap < prev.current) {
-      prev.current = lap ?? 1 // 새 레이스 시작 시 리셋
+    if (!hud) return
+    const me = hud.karts?.find((k) => k.id === myId)
+    const cur = {
+      status: hud.status,
+      lightning: !!hud.lightning,
+      lap: me?.lap ?? 1,
+      rank: me?.rank ?? null,
+      draftSeq: me?.draftSeq ?? 0,
+    }
+    const p = prev.current
+    prev.current = cur
+    // 새 레이스 시작/대기 중에는 비교하지 않는다
+    if (!p || p.status !== 'racing' || hud.status !== 'racing') return
+
+    const show = (text) => {
+      setMsg({ text, key: ++keyRef.current })
+      clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => setMsg(null), 2200)
+    }
+    if (me && !me.finished && cur.lap > p.lap) {
+      sound.key()
+      show(cur.lap >= LAPS ? '마지막 바퀴! 전력 질주!! 🔥' : `${cur.lap}바퀴째!`)
       return
     }
-    if (lap === prev.current) return
-    prev.current = lap
-    sound.key()
-    setMsg({ text: lap >= LAPS ? '이제 마지막 바퀴야! 🔥' : `${lap}바퀴째!`, key: lap })
-    const t = setTimeout(() => setMsg(null), 2200)
-    return () => clearTimeout(t)
-  }, [lap])
+    if (cur.lightning && !p.lightning) {
+      show('⚡ 꼴찌의 번개 반격!')
+      return
+    }
+    if (!me || me.finished) return
+    if (cur.draftSeq > p.draftSeq) {
+      show('💨 슬립스트림 부스트!')
+      return
+    }
+    // 순위 변동: 출발 직후의 자리싸움은 빼고, 너무 잦은 배너는 2초에 한 번만
+    if (
+      p.rank != null && cur.rank !== p.rank &&
+      hud.time > COUNTDOWN_TIME + 3 && hud.time - lastRankMsgAt.current > 2
+    ) {
+      lastRankMsgAt.current = hud.time
+      if (cur.rank < p.rank) {
+        sound.key()
+        show(`🔥 추월! 지금 ${cur.rank}등!`)
+      } else {
+        show('😱 추월당했어!')
+      }
+    }
+  }, [hud, myId])
   return msg
 }
 
 // 주행 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, soundOn, onToggleSound }) {
   useKartSounds(hud, myId)
-  const lapMsg = useLapBanner(hud?.karts?.find((k) => k.id === myId)?.lap)
+  const lapMsg = useRaceBanner(hud, myId)
   if (!hud || hud.phase !== 'play') {
     return <NetWaiting text="레이스를 준비하고 있어요... 🏎️" onExit={onExit} />
   }
