@@ -5,16 +5,48 @@ import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import { createGame, tapRun, progress, ranking, winner } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
+import { useGameNet } from '../../net/useGameNet.js'
+import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
 
-export default function RaceGame({ roster, onExit }) {
+// 온라인 동기화(호스트 권위): 게스트의 연타가 action으로 들어오고
+// 호스트가 진행률/순위를 계산해 view를 publish 한다.
+export default function RaceGame({ roster, onExit, net }) {
+  const { online, isHost, remote, publish, sendAction, canControl, ownerDevice } = useGameNet(net, handleAction)
+
   const [phase, setPhase] = useState('setup') // 'setup' | 'play'
   const [roundPhase, setRoundPhase] = useState('ready') // 'ready'(카운트다운) | 'run' | 'done'
   const [count, setCount] = useState(3) // 3,2,1,0(출발)
   const [game, setGame] = useState(null)
   const [soundOn, setSoundOn] = useState(true)
   const timers = useRef([])
+  const roundPhaseRef = useRef('ready')
+  roundPhaseRef.current = roundPhase
 
   useEffect(() => () => timers.current.forEach(clearTimeout), [])
+
+  // 게스트 연타 입력(호스트에서만 호출). 자기 참가자만 인정.
+  function handleAction(a, fromDevice) {
+    if (a.type !== 'tap') return
+    if (ownerDevice(a.playerId) !== fromDevice) return
+    tap(a.playerId)
+  }
+
+  // 호스트 → 게스트 화면 상태 전파
+  useEffect(() => {
+    if (!online || !isHost) return
+    if (phase !== 'play' || !game) {
+      publish({ phase: 'setup' })
+      return
+    }
+    publish({
+      phase: 'play',
+      players: game.players,
+      status: game.status,
+      finishOrder: game.finishOrder,
+      roundPhase,
+      count,
+    })
+  }, [online, isHost, publish, phase, game, roundPhase, count])
 
   function startGame() {
     sound.setEnabled(soundOn)
@@ -47,7 +79,7 @@ export default function RaceGame({ roster, onExit }) {
   }
 
   function tap(id) {
-    if (roundPhase !== 'run') return
+    if (roundPhaseRef.current !== 'run') return
     setGame((g) => {
       const next = tapRun(g, id)
       if (next.status === 'finished' && g.status !== 'finished') {
@@ -65,13 +97,76 @@ export default function RaceGame({ roster, onExit }) {
     if (n) sound.unlock()
   }
 
+  // ── 게스트: 호스트 view 미러링 ──
+  if (online && !isHost) {
+    if (!remote || remote.phase !== 'play') {
+      return <NetWaiting text="호스트가 출발을 준비하고 있어요..." onExit={onExit} />
+    }
+    return (
+      <RaceRemoteView
+        view={remote}
+        canControl={canControl}
+        sendAction={sendAction}
+        onExit={onExit}
+        soundOn={soundOn}
+        onToggleSound={toggleSound}
+      />
+    )
+  }
+
   if (phase === 'setup') {
     return <RaceSetup roster={roster} onStart={startGame} onExit={onExit} />
   }
 
-  const finished = game.status === 'finished'
-  const win = finished ? winner(game) : null
-  const order = finished ? ranking(game) : []
+  const hostView = {
+    players: game.players,
+    status: game.status,
+    finishOrder: game.finishOrder,
+    roundPhase,
+    count,
+  }
+  return (
+    <RacePlay
+      view={hostView}
+      canTap={(id) => !online || canControl(id)}
+      onTap={tap}
+      onRestart={startGame}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={toggleSound}
+    />
+  )
+}
+
+// 게스트 화면: 자기 레인만 두드릴 수 있다. 효과음은 view 변화로 재생.
+function RaceRemoteView({ view, canControl, sendAction, onExit, soundOn, onToggleSound }) {
+  useEffect(() => {
+    if (view.roundPhase === 'ready') sound.step()
+    if (view.roundPhase === 'run') sound.ladderUp()
+  }, [view.roundPhase, view.count])
+  useEffect(() => {
+    if (view.status === 'finished') sound.win()
+  }, [view.status])
+
+  return (
+    <RacePlay
+      view={view}
+      canTap={canControl}
+      onTap={(id) => sendAction({ type: 'tap', playerId: id })}
+      onRestart={null}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={onToggleSound}
+    />
+  )
+}
+
+// 플레이 화면(호스트/게스트 공용). view만 보고 그린다.
+function RacePlay({ view, canTap, onTap, onRestart, onExit, soundOn, onToggleSound }) {
+  const { players, status, roundPhase, count } = view
+  const finished = status === 'finished'
+  const win = finished ? winner(view) : null
+  const order = finished ? ranking(view) : []
 
   return (
     <div className="race">
@@ -81,7 +176,7 @@ export default function RaceGame({ roster, onExit }) {
         </button>
         <div className="turn-indicator">{finished ? '🏁 도착!' : '🏃 달리기 경주'}</div>
         <div className="topbar__right">
-          <button className="btn btn--ghost" onClick={toggleSound} aria-label="소리">
+          <button className="btn btn--ghost" onClick={onToggleSound} aria-label="소리">
             {soundOn ? '🔊' : '🔇'}
           </button>
           <FullscreenButton />
@@ -89,16 +184,17 @@ export default function RaceGame({ roster, onExit }) {
       </div>
 
       <div className="race__track">
-        {game.players.map((p) => {
+        {players.map((p) => {
           const z = getZodiac(p.zodiacId)
           const pr = progress(p)
+          const mine = canTap(p.id)
           return (
             <button
               key={p.id}
-              className="race-lane"
+              className={`race-lane ${!mine ? 'race-lane--other' : ''}`}
               style={{ '--z-color': p.color }}
-              disabled={roundPhase !== 'run'}
-              onPointerDown={() => tap(p.id)}
+              disabled={roundPhase !== 'run' || !mine}
+              onPointerDown={() => mine && onTap(p.id)}
             >
               <span className="race-lane__name">
                 {z?.emoji} {p.name}
@@ -131,12 +227,23 @@ export default function RaceGame({ roster, onExit }) {
               {order.map((p, i) => `${i + 1}등 ${getZodiac(p.zodiacId)?.emoji}${p.name}`).join('  ·  ')}
             </p>
             <div className="win-modal__btns">
-              <button className="btn btn--primary" onClick={startGame}>
-                다시하기
-              </button>
-              <button className="btn btn--ghost" onClick={onExit}>
-                로비로
-              </button>
+              {onRestart ? (
+                <>
+                  <button className="btn btn--primary" onClick={onRestart}>
+                    다시하기
+                  </button>
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    로비로
+                  </button>
+                </>
+              ) : (
+                <>
+                  <GuestRestartNote />
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    방 나가기
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

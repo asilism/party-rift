@@ -2,79 +2,13 @@ import { useState } from 'react'
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
 import { sound } from '../shared/sound.js'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
+import { GAMES, blockedReason } from './games.js'
 import logoUrl from '../resources/logo.png'
 
-// 게임 컬렉션 진입점(로비). 게임이 늘어나면 이 목록에 추가한다.
-// minPlayers/maxPlayers 로 참가 인원에 따라 선택 가능 여부를 결정한다.
-const GAMES = [
-  {
-    id: 'ladder',
-    title: '사다리 게임',
-    emoji: '🎲',
-    desc: '주사위를 굴려 먼저 골인!',
-    minPlayers: 2,
-    maxPlayers: 5,
-    ready: true,
-  },
-  {
-    id: 'memory',
-    title: '12지신 메모리',
-    emoji: '🃏',
-    desc: '같은 동물 짝을 많이 찾아요',
-    minPlayers: 1,
-    maxPlayers: 5,
-    ready: true,
-  },
-  {
-    id: 'dobble',
-    title: '도블',
-    emoji: '🔍',
-    desc: '같은 문양을 먼저 찾아요!',
-    minPlayers: 2,
-    maxPlayers: 4,
-    ready: true,
-  },
-  {
-    id: 'thrillpang',
-    title: '스릴팡',
-    emoji: '💣',
-    desc: '폭탄 터지기 직전 아슬아슬하게!',
-    minPlayers: 2,
-    maxPlayers: 4,
-    ready: true,
-  },
-  {
-    id: 'race',
-    title: '달리기 경주',
-    emoji: '🏁',
-    desc: '버튼을 마구 눌러 1등!',
-    minPlayers: 2,
-    maxPlayers: 5,
-    ready: true,
-  },
-  {
-    id: 'whack',
-    title: '두더지 잡기',
-    emoji: '🔨',
-    desc: '내 칸 두더지를 빨리 톡!',
-    minPlayers: 1,
-    maxPlayers: 5,
-    ready: true,
-  },
-  {
-    id: 'traffic',
-    title: '신호등 반응',
-    emoji: '🚦',
-    desc: '초록불에 제일 빨리!',
-    minPlayers: 2,
-    maxPlayers: 5,
-    ready: true,
-  },
-]
-
+// 한 기기(핫시트) 모드의 로비. 게임 목록은 games.js에서 공유한다.
 const MAX_PLAYERS = 5 // 로비 전체 참가 가능 최대 인원
 
-export default function GameLobby({ roster, setRoster, onPlay }) {
+export default function GameLobby({ roster, setRoster, onPlay, onBack }) {
   const [adding, setAdding] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const [logoOk, setLogoOk] = useState(true) // public/logo.png 있으면 로고, 없으면 텍스트
@@ -96,13 +30,6 @@ export default function GameLobby({ roster, setRoster, onPlay }) {
     setRoster(roster.filter((p) => p.id !== id))
   }
 
-  function reason(g) {
-    if (!g.ready) return '준비 중'
-    if (roster.length < g.minPlayers) return `${g.minPlayers}명 이상 필요`
-    if (g.maxPlayers && roster.length > g.maxPlayers) return `최대 ${g.maxPlayers}명`
-    return null
-  }
-
   return (
     <div className="lobby">
       <header className="lobby__header">
@@ -121,7 +48,14 @@ export default function GameLobby({ roster, setRoster, onPlay }) {
             </>
           )}
         </div>
-        <FullscreenButton />
+        <div className="topbar__right">
+          {onBack && (
+            <button className="btn btn--ghost" onClick={onBack}>
+              ← 처음으로
+            </button>
+          )}
+          <FullscreenButton />
+        </div>
       </header>
 
       {/* 참가자 관리 */}
@@ -200,7 +134,7 @@ export default function GameLobby({ roster, setRoster, onPlay }) {
       {/* 게임 목록 */}
       <div className="lobby__grid">
         {GAMES.map((g, i) => {
-          const blocked = reason(g)
+          const blocked = blockedReason(g, roster.length)
           return (
             <button
               key={i}

@@ -12,6 +12,8 @@ import {
 } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
+import { useGameNet } from '../../net/useGameNet.js'
+import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
 
 const READY_MS = 1000
 const clamp01 = (v) => Math.max(0, Math.min(1, v))
@@ -49,7 +51,13 @@ function bombOrbit(p) {
   return { x: HOLE.x + ORX * k * Math.cos(ang), y: HOLE.y + ORY * k * Math.sin(ang), scale }
 }
 
-export default function ThrillGame({ roster, onExit }) {
+// 온라인 동기화(호스트 권위 + 로컬 시계):
+//  - 호스트가 라운드 진행/채점을 결정하고 view(라운드 단계/폭탄 시각 T/누른 기록)를 publish.
+//  - 폭탄 애니메이션은 각 기기가 "자기 화면에서 라운드가 시작된 순간"부터 자기 시계로 돌리고,
+//    누른 시각(t)도 그 시계로 재서 보낸다 → 네트워크 지연이 있어도 보이는 대로 공평.
+export default function ThrillGame({ roster, onExit, net }) {
+  const { online, isHost, remote, publish, sendAction, canControl, ownerDevice } = useGameNet(net, handleAction)
+
   const [game, setGame] = useState(null)
   const [phase, setPhase] = useState('setup')
   const [roundPhase, setRoundPhase] = useState('ready')
@@ -63,6 +71,8 @@ export default function ThrillGame({ roster, onExit }) {
   const rafRef = useRef(0)
   const droppedRef = useRef(false)
   const readyTimerRef = useRef(null)
+  const roundPhaseRef = useRef('ready')
+  roundPhaseRef.current = roundPhase
 
   useEffect(
     () => () => {
@@ -71,6 +81,33 @@ export default function ThrillGame({ roster, onExit }) {
     },
     []
   )
+
+  // 게스트 입력(호스트에서만 호출). 자기 참가자만, 게스트 시계로 잰 t를 기록.
+  function handleAction(a, fromDevice) {
+    if (a.type !== 'press') return
+    if (ownerDevice(a.id) !== fromDevice) return
+    const t = Math.round(Number(a.t))
+    if (t >= 0) recordPress(a.id, t)
+  }
+
+  // 호스트 → 게스트 상태 전파 (elapsed는 보내지 않는다 — 각자 자기 시계로 돌린다)
+  useEffect(() => {
+    if (!online || !isHost) return
+    if (phase !== 'play' || !game) {
+      publish({ phase: 'setup' })
+      return
+    }
+    publish({
+      phase: 'play',
+      players: game.players,
+      round: game.round,
+      rounds: game.rounds,
+      status: game.status,
+      roundPhase,
+      T: durRef.current || 3000,
+      pressed,
+    })
+  }, [online, isHost, publish, phase, game, roundPhase, pressed])
 
   function startGame() {
     sound.setEnabled(soundOn)
@@ -124,14 +161,18 @@ export default function ThrillGame({ roster, onExit }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roundPhase])
 
-  function press(id) {
-    if (roundPhase !== 'running') return
+  // 누름 기록(호스트 로컬 탭 + 게스트 action 공용)
+  function recordPress(id, t) {
+    if (roundPhaseRef.current !== 'running') return
     if (pressRef.current[id] != null) return
-    const t = Date.now() - startRef.current
     if (t >= durRef.current) return
     pressRef.current[id] = t
     setPressed({ ...pressRef.current })
     sound.step()
+  }
+
+  function press(id) {
+    recordPress(id, Date.now() - startRef.current)
   }
 
   function finalizeRound() {
@@ -150,26 +191,140 @@ export default function ThrillGame({ roster, onExit }) {
     if (nx) sound.unlock()
   }
 
+  // ── 게스트: 호스트 view + 자기 시계로 렌더 ──
+  if (online && !isHost) {
+    if (!remote || remote.phase !== 'play') {
+      return <NetWaiting text="호스트가 폭탄에 불을 붙이고 있어요..." onExit={onExit} />
+    }
+    return (
+      <ThrillRemoteView
+        view={remote}
+        canControl={canControl}
+        sendAction={sendAction}
+        onExit={onExit}
+        soundOn={soundOn}
+        onToggleSound={toggleSound}
+      />
+    )
+  }
+
   if (phase === 'setup') {
     return <ThrillSetup roster={roster} onStart={startGame} onExit={onExit} />
   }
 
-  const T = durRef.current || 3000
-  const finished = game.status === 'finished'
-  const win = finished ? winners(game) : []
-  const seats = SEATS[game.players.length] || SEATS[4]
+  const hostView = {
+    players: game.players,
+    round: game.round,
+    rounds: game.rounds,
+    status: game.status,
+    roundPhase,
+    T: durRef.current || 3000,
+    pressed,
+  }
+  return (
+    <ThrillArena
+      view={hostView}
+      elapsed={elapsed}
+      canPress={(id) => !online || canControl(id)}
+      onPress={press}
+      onNext={beginRound}
+      onRestart={startGame}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={toggleSound}
+    />
+  )
+}
+
+// 게스트 화면: 라운드가 "내 화면"에서 시작된 순간부터 자기 시계로 폭탄을 돌린다.
+function ThrillRemoteView({ view, canControl, sendAction, onExit, soundOn, onToggleSound }) {
+  const [elapsed, setElapsed] = useState(0)
+  const startLocalRef = useRef(0)
+  const droppedRef = useRef(false)
+  const sentRef = useRef({})
+
+  useEffect(() => {
+    if (view.roundPhase === 'ready') {
+      setElapsed(0)
+      sentRef.current = {}
+      droppedRef.current = false
+      return
+    }
+    if (view.roundPhase === 'result') {
+      // 최종 스택이 보이도록 라운드 끝 시점으로 고정
+      setElapsed(view.T + TRAVEL_MS + 1000)
+      return
+    }
+    // running: 자기 시계로 애니메이션
+    startLocalRef.current = Date.now()
+    droppedRef.current = false
+    let active = true
+    const tick = () => {
+      if (!active) return
+      const e = Date.now() - startLocalRef.current
+      setElapsed(e)
+      if (!droppedRef.current && e >= view.T) {
+        droppedRef.current = true
+        sound.chuteDown()
+      }
+      if (e < view.T + TRAVEL_MS + 600) rafRef = requestAnimationFrame(tick)
+    }
+    let rafRef = requestAnimationFrame(tick)
+    return () => {
+      active = false
+      cancelAnimationFrame(rafRef)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.roundPhase, view.round])
+
+  useEffect(() => {
+    if (view.status === 'finished') sound.win()
+  }, [view.status])
+
+  function pressLocal(id) {
+    if (view.roundPhase !== 'running') return
+    if (view.pressed[id] != null || sentRef.current[id]) return
+    const t = Date.now() - startLocalRef.current
+    if (t >= view.T) return
+    sentRef.current[id] = true
+    sound.step()
+    sendAction({ type: 'press', id, t })
+  }
+
+  return (
+    <ThrillArena
+      view={view}
+      elapsed={elapsed}
+      canPress={canControl}
+      onPress={pressLocal}
+      onNext={null}
+      onRestart={null}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={onToggleSound}
+    />
+  )
+}
+
+// 아레나 화면(호스트/게스트 공용). view + elapsed(각자 시계)만 보고 그린다.
+function ThrillArena({ view, elapsed, canPress, onPress, onNext, onRestart, onExit, soundOn, onToggleSound }) {
+  const { players, round, rounds, status, roundPhase, pressed } = view
+  const T = view.T || 3000
+  const finished = status === 'finished'
+  const win = finished ? winners(view) : []
+  const seats = SEATS[players.length] || SEATS[4]
 
   // 도착(파이프 진입) 정보
   const bombDropped = elapsed >= T
   // 폭탄이 떨어진 순간부터는 누름 시각이 확정 → 라운드 점수를 바로 계산해 표시
   const scored = bombDropped
     ? scoreRound(
-        game.players.map((p) => ({ id: p.id, pressAt: pressed[p.id] ?? null })),
+        players.map((p) => ({ id: p.id, pressAt: pressed[p.id] ?? null })),
         T,
         TRAVEL_MS
       )
     : null
-  const items = game.players
+  const items = players
     .filter((p) => pressed[p.id] != null)
     .map((p) => ({ kind: 'player', id: p.id, color: p.color, arrival: pressed[p.id] + TRAVEL_MS }))
   items.push({ kind: 'bomb', id: '__bomb', arrival: T })
@@ -183,10 +338,10 @@ export default function ThrillGame({ roster, onExit }) {
           ← 나가기
         </button>
         <div className="turn-indicator">
-          {finished ? '🏁 게임 끝!' : `💣 ${game.round}/${game.rounds} 라운드`}
+          {finished ? '🏁 게임 끝!' : `💣 ${round}/${rounds} 라운드`}
         </div>
         <div className="topbar__right">
-          <button className="btn btn--ghost" onClick={toggleSound} aria-label="소리">
+          <button className="btn btn--ghost" onClick={onToggleSound} aria-label="소리">
             {soundOn ? '🔊' : '🔇'}
           </button>
           <FullscreenButton />
@@ -196,7 +351,7 @@ export default function ThrillGame({ roster, onExit }) {
       <div className="thrill__arena">
         {/* 각자 파이프(코너 → 튜브 입구) */}
         <svg className="thrill__pipes" viewBox="0 0 100 100" preserveAspectRatio="none">
-          {game.players.map((p, i) => {
+          {players.map((p, i) => {
             const c = CORNERS[seats[i] || 'bl']
             return (
               <line
@@ -248,7 +403,7 @@ export default function ThrillGame({ roster, onExit }) {
           })()}
 
         {/* 파이프로 이동 중인 플레이어 공 */}
-        {game.players.map((p, i) => {
+        {players.map((p, i) => {
           const pa = pressed[p.id]
           if (pa == null) return null
           const tp = (elapsed - pa) / TRAVEL_MS
@@ -291,7 +446,7 @@ export default function ThrillGame({ roster, onExit }) {
             if (it.kind === 'bomb') return null
             const row = scored.rows.find((r) => r.id === it.id)
             const ok = row && !row.busted
-            const pl = game.players.find((p) => p.id === it.id)
+            const pl = players.find((p) => p.id === it.id)
             const z = pl && getZodiac(pl.zodiacId)
             return (
               <div
@@ -308,17 +463,18 @@ export default function ThrillGame({ roster, onExit }) {
           })}
 
         {/* 코너 버튼(스테이션) — 아레나 좌표계 안에서 파이프 시작점과 정렬 */}
-        {game.players.map((p, i) => {
+        {players.map((p, i) => {
           const z = getZodiac(p.zodiacId)
           const c = CORNERS[seats[i] || 'bl']
           const done = pressed[p.id] != null
+          const mine = canPress(p.id)
           return (
             <button
               key={p.id}
-              className={`thrill-station ${done ? 'is-done' : ''}`}
+              className={`thrill-station ${done ? 'is-done' : ''} ${!mine ? 'thrill-station--other' : ''}`}
               style={{ left: `${c.x}%`, top: `${c.y}%`, '--z-color': p.color }}
-              disabled={roundPhase !== 'running' || done}
-              onPointerDown={() => press(p.id)}
+              disabled={roundPhase !== 'running' || done || !mine}
+              onPointerDown={() => mine && onPress(p.id)}
             >
               <span className="thrill-station__emoji">{z?.emoji}</span>
               <span className="thrill-station__name">{p.name}</span>
@@ -335,9 +491,13 @@ export default function ThrillGame({ roster, onExit }) {
       )}
       {roundPhase === 'result' && !finished && (
         <div className="thrill__next">
-          <button className="btn btn--primary" onClick={beginRound}>
-            다음 라운드 →
-          </button>
+          {onNext ? (
+            <button className="btn btn--primary" onClick={onNext}>
+              다음 라운드 →
+            </button>
+          ) : (
+            <p className="net-guest-note">🌐 호스트가 다음 라운드를 시작해요</p>
+          )}
         </div>
       )}
 
@@ -358,12 +518,23 @@ export default function ThrillGame({ roster, onExit }) {
               </>
             )}
             <div className="win-modal__btns">
-              <button className="btn btn--primary" onClick={startGame}>
-                다시하기
-              </button>
-              <button className="btn btn--ghost" onClick={onExit}>
-                로비로
-              </button>
+              {onRestart ? (
+                <>
+                  <button className="btn btn--primary" onClick={onRestart}>
+                    다시하기
+                  </button>
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    로비로
+                  </button>
+                </>
+              ) : (
+                <>
+                  <GuestRestartNote />
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    방 나가기
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -5,11 +5,17 @@ import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import { createGame, whack, winners, DURATION_MS, HOLES } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
+import { useGameNet } from '../../net/useGameNet.js'
+import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
 
 const POP_MIN = 700
 const POP_MAX = 1150
 
-export default function WhackGame({ roster, onExit }) {
+// 온라인 동기화(호스트 권위): 두더지 등장 타이밍/판정은 호스트가 굴리고
+// 90ms 틱마다 view(구멍 상태 + 호스트 시계)를 publish. 게스트는 자기 칸만 두드린다.
+export default function WhackGame({ roster, onExit, net }) {
+  const { online, isHost, remote, publish, sendAction, canControl, ownerDevice } = useGameNet(net, handleAction)
+
   const [phase, setPhase] = useState('setup') // 'setup' | 'play'
   const [game, setGame] = useState(null)
   const [holes, setHoles] = useState({}) // `${pid}-${i}` -> upUntil(ms)
@@ -22,12 +28,31 @@ export default function WhackGame({ roster, onExit }) {
   const holesRef = useRef({})
   const tickRef = useRef(null)
   const spawnRef = useRef(null)
+  const doneRef = useRef(false)
+  doneRef.current = done
 
   function clearLoops() {
     clearInterval(tickRef.current)
     clearInterval(spawnRef.current)
   }
   useEffect(() => clearLoops, [])
+
+  // 게스트 입력(호스트에서만 호출). 자기 참가자 칸만 인정.
+  function handleAction(a, fromDevice) {
+    if (a.type !== 'hit') return
+    if (ownerDevice(a.pid) !== fromDevice) return
+    hit(a.pid, Number(a.i))
+  }
+
+  // 호스트 → 게스트 화면 상태 전파 (now가 90ms마다 갱신되므로 같이 흘러간다)
+  useEffect(() => {
+    if (!online || !isHost) return
+    if (phase !== 'play' || !game) {
+      publish({ phase: 'setup' })
+      return
+    }
+    publish({ phase: 'play', players: game.players, holes, now, timeLeft, done })
+  }, [online, isHost, publish, phase, game, holes, now, timeLeft, done])
 
   function startGame() {
     sound.setEnabled(soundOn)
@@ -77,7 +102,7 @@ export default function WhackGame({ roster, onExit }) {
   }
 
   function hit(pid, i) {
-    if (done) return
+    if (doneRef.current) return
     const key = `${pid}-${i}`
     if (!(holesRef.current[key] > Date.now())) return // 두더지 없음 → 헛스윙
     holesRef.current = { ...holesRef.current, [key]: 0 }
@@ -93,11 +118,68 @@ export default function WhackGame({ roster, onExit }) {
     if (n) sound.unlock()
   }
 
+  // ── 게스트: 호스트 view 미러링 ──
+  if (online && !isHost) {
+    if (!remote || remote.phase !== 'play') {
+      return <NetWaiting text="호스트가 두더지를 깨우고 있어요..." onExit={onExit} />
+    }
+    return (
+      <WhackRemoteView
+        view={remote}
+        canControl={canControl}
+        sendAction={sendAction}
+        onExit={onExit}
+        soundOn={soundOn}
+        onToggleSound={toggleSound}
+      />
+    )
+  }
+
   if (phase === 'setup') {
     return <WhackSetup roster={roster} onStart={startGame} onExit={onExit} />
   }
 
-  const win = done ? winners(game) : []
+  const hostView = { players: game.players, holes, now, timeLeft, done }
+  return (
+    <WhackPlay
+      view={hostView}
+      canHit={(pid) => !online || canControl(pid)}
+      onHit={hit}
+      onRestart={startGame}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={toggleSound}
+    />
+  )
+}
+
+// 게스트 화면: 자기 구역만 두드릴 수 있다.
+function WhackRemoteView({ view, canControl, sendAction, onExit, soundOn, onToggleSound }) {
+  const totalScore = view.players.reduce((s, p) => s + p.score, 0)
+  useEffect(() => {
+    if (totalScore > 0) sound.step()
+  }, [totalScore])
+  useEffect(() => {
+    if (view.done) sound.win()
+  }, [view.done])
+
+  return (
+    <WhackPlay
+      view={view}
+      canHit={canControl}
+      onHit={(pid, i) => sendAction({ type: 'hit', pid, i })}
+      onRestart={null}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={onToggleSound}
+    />
+  )
+}
+
+// 플레이 화면(호스트/게스트 공용). view만 보고 그린다.
+function WhackPlay({ view, canHit, onHit, onRestart, onExit, soundOn, onToggleSound }) {
+  const { players, holes, now, timeLeft, done } = view
+  const win = done ? winners(view) : []
 
   return (
     <div className="whack">
@@ -107,7 +189,7 @@ export default function WhackGame({ roster, onExit }) {
         </button>
         <div className="turn-indicator">{done ? '🏁 끝!' : `⏱️ ${timeLeft}초`}</div>
         <div className="topbar__right">
-          <button className="btn btn--ghost" onClick={toggleSound} aria-label="소리">
+          <button className="btn btn--ghost" onClick={onToggleSound} aria-label="소리">
             {soundOn ? '🔊' : '🔇'}
           </button>
           <FullscreenButton />
@@ -115,10 +197,15 @@ export default function WhackGame({ roster, onExit }) {
       </div>
 
       <div className="whack__zones">
-        {game.players.map((p) => {
+        {players.map((p) => {
           const z = getZodiac(p.zodiacId)
+          const mine = canHit(p.id)
           return (
-            <div className="whack-zone" key={p.id} style={{ '--z-color': p.color }}>
+            <div
+              className={`whack-zone ${!mine ? 'whack-zone--other' : ''}`}
+              key={p.id}
+              style={{ '--z-color': p.color }}
+            >
               <div className="whack-zone__head">
                 <span>{z?.emoji} {p.name}</span>
                 <span className="whack-zone__score">{p.score}</span>
@@ -130,8 +217,8 @@ export default function WhackGame({ roster, onExit }) {
                     <button
                       key={i}
                       className={`whack-hole ${up ? 'is-up' : ''}`}
-                      disabled={done}
-                      onPointerDown={() => hit(p.id, i)}
+                      disabled={done || !mine}
+                      onPointerDown={() => mine && onHit(p.id, i)}
                     >
                       <span className="whack-mole">🐹</span>
                     </button>
@@ -160,12 +247,23 @@ export default function WhackGame({ roster, onExit }) {
               </>
             )}
             <div className="win-modal__btns">
-              <button className="btn btn--primary" onClick={startGame}>
-                다시하기
-              </button>
-              <button className="btn btn--ghost" onClick={onExit}>
-                로비로
-              </button>
+              {onRestart ? (
+                <>
+                  <button className="btn btn--primary" onClick={onRestart}>
+                    다시하기
+                  </button>
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    로비로
+                  </button>
+                </>
+              ) : (
+                <>
+                  <GuestRestartNote />
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    방 나가기
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

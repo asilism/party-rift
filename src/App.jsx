@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import HomeScreen from './lobby/HomeScreen.jsx'
 import GameLobby from './lobby/GameLobby.jsx'
+import OnlineLobby from './lobby/OnlineLobby.jsx'
 import LadderGame from './games/ladder/LadderGame.jsx'
 import MemoryGame from './games/memory/MemoryGame.jsx'
 import DobbleGame from './games/dobble/DobbleGame.jsx'
@@ -8,19 +10,41 @@ import RaceGame from './games/race/RaceGame.jsx'
 import WhackGame from './games/whack/WhackGame.jsx'
 import TrafficGame from './games/traffic/TrafficGame.jsx'
 import ErrorBoundary from './shared/ErrorBoundary.jsx'
+import { RoomProvider, useRoom } from './net/RoomContext.jsx'
 import { loadRoster, saveRoster } from './shared/storage.js'
 
-// 화면 흐름: 로비 → (게임 선택) → 게임
-// 참가자(roster)는 로비에서 관리하고 모든 게임이 공유한다. [{ id, zodiacId, name }]
-// 오프라인 모드: 참가자는 localStorage에 저장돼 새로고침/재방문 시 유지된다.
-export default function App() {
-  const [screen, setScreen] = useState('lobby') // 'lobby' | 'ladder' | 'memory'
-  const [roster, setRoster] = useState(loadRoster) // 저장된 참가자로 초기화
+// 게임 id → 컴포넌트. 모든 게임은 { roster, onExit, net }을 받는다.
+//  net=null 이면 오프라인(핫시트), net이 있으면 온라인 동기화 모드.
+const GAME_COMPONENTS = {
+  ladder: LadderGame,
+  memory: MemoryGame,
+  dobble: DobbleGame,
+  thrillpang: ThrillGame,
+  race: RaceGame,
+  whack: WhackGame,
+  traffic: TrafficGame,
+}
 
-  // 참가자가 바뀔 때마다 로컬에 저장
-  useEffect(() => {
-    saveRoster(roster)
-  }, [roster])
+function renderGame(id, props) {
+  const Game = GAME_COMPONENTS[id]
+  return Game ? <Game {...props} /> : null
+}
+
+// 화면 흐름:
+//  홈(모드 선택) → ① 한 기기 모드: 로비 → 게임 (기존 핫시트, localStorage 저장)
+//               → ② 온라인 모드: 방 생성/참여 → 온라인 로비 → 게임 (서버 동기화)
+export default function App() {
+  // URL에 ?room=CODE 가 있으면 바로 참여 시도 (초대 링크)
+  const [mode, setMode] = useState(() => {
+    const code = new URLSearchParams(location.search).get('room')
+    return code ? { kind: 'online', intent: { kind: 'join', code: code.toUpperCase() } } : { kind: 'home' }
+  })
+
+  // 홈으로 나올 때 초대 코드 쿼리를 지운다 (새로고침 시 재참여 방지)
+  function goHome() {
+    if (location.search) history.replaceState(null, '', location.pathname)
+    setMode({ kind: 'home' })
+  }
 
   return (
     <div className="app">
@@ -31,20 +55,89 @@ export default function App() {
         </div>
       </div>
 
-      {screen === 'lobby' && (
-        <GameLobby roster={roster} setRoster={setRoster} onPlay={(id) => setScreen(id)} />
+      {mode.kind === 'home' && (
+        <HomeScreen
+          onLocal={() => setMode({ kind: 'local' })}
+          onCreate={() => setMode({ kind: 'online', intent: { kind: 'create' } })}
+          onJoin={(code) => setMode({ kind: 'online', intent: { kind: 'join', code } })}
+        />
       )}
-      {screen !== 'lobby' && (
-        <ErrorBoundary key={screen} onExit={() => setScreen('lobby')}>
-          {screen === 'ladder' && <LadderGame roster={roster} onExit={() => setScreen('lobby')} />}
-          {screen === 'memory' && <MemoryGame roster={roster} onExit={() => setScreen('lobby')} />}
-          {screen === 'dobble' && <DobbleGame roster={roster} onExit={() => setScreen('lobby')} />}
-          {screen === 'thrillpang' && <ThrillGame roster={roster} onExit={() => setScreen('lobby')} />}
-          {screen === 'race' && <RaceGame roster={roster} onExit={() => setScreen('lobby')} />}
-          {screen === 'whack' && <WhackGame roster={roster} onExit={() => setScreen('lobby')} />}
-          {screen === 'traffic' && <TrafficGame roster={roster} onExit={() => setScreen('lobby')} />}
-        </ErrorBoundary>
+
+      {mode.kind === 'local' && <LocalFlow onBack={goHome} />}
+
+      {mode.kind === 'online' && (
+        <RoomProvider intent={mode.intent} onLeft={goHome}>
+          <OnlineFlow onHome={goHome} />
+        </RoomProvider>
       )}
     </div>
+  )
+}
+
+// ① 한 기기(핫시트) 모드 — 기존 동작 그대로. 참가자는 localStorage에 유지.
+function LocalFlow({ onBack }) {
+  const [screen, setScreen] = useState('lobby')
+  const [roster, setRoster] = useState(loadRoster)
+
+  useEffect(() => {
+    saveRoster(roster)
+  }, [roster])
+
+  if (screen === 'lobby') {
+    return <GameLobby roster={roster} setRoster={setRoster} onPlay={setScreen} onBack={onBack} />
+  }
+  return (
+    <ErrorBoundary key={screen} onExit={() => setScreen('lobby')}>
+      {renderGame(screen, { roster, onExit: () => setScreen('lobby'), net: null })}
+    </ErrorBoundary>
+  )
+}
+
+// ② 온라인 모드 — 화면(screen)은 방 상태로 서버가 관리하고 호스트가 전환한다.
+function OnlineFlow({ onHome }) {
+  const { status, room, notice, deviceId, isHost, addPlayer, removePlayer, setScreen, leaveRoom, net } = useRoom()
+
+  if (status === 'connecting') {
+    return (
+      <div className="net-screen">
+        <div className="net-screen__icon">🌐</div>
+        <p>서버에 연결하는 중...</p>
+        <button className="btn btn--ghost" onClick={onHome}>← 취소</button>
+      </div>
+    )
+  }
+
+  if (status === 'error' || status === 'closed' || !room) {
+    return (
+      <div className="net-screen">
+        <div className="net-screen__icon">😢</div>
+        <p>{notice || '방에 연결할 수 없어요.'}</p>
+        <button className="btn btn--primary" onClick={onHome}>처음으로</button>
+      </div>
+    )
+  }
+
+  if (room.screen === 'lobby') {
+    return (
+      <OnlineLobby
+        room={room}
+        isHost={isHost}
+        deviceId={deviceId}
+        addPlayer={addPlayer}
+        removePlayer={removePlayer}
+        setScreen={setScreen}
+        onLeave={leaveRoom}
+        notice={notice}
+      />
+    )
+  }
+
+  // 게임 중: 호스트의 나가기 → 방 전체가 로비로, 게스트의 나가기 → 방을 떠남
+  const onExit = isHost ? () => setScreen('lobby') : leaveRoom
+  return (
+    <ErrorBoundary key={room.screen} onExit={onExit}>
+      {notice && <div className="net-toast net-toast--ingame">{notice}</div>}
+      {renderGame(room.screen, { roster: room.players, onExit, net })}
+    </ErrorBoundary>
   )
 }

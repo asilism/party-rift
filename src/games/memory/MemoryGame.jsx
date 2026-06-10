@@ -6,10 +6,16 @@ import TurnOrderRoll from '../../shared/TurnOrderRoll.jsx'
 import { createGame, applyPair, winners } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
+import { useGameNet } from '../../net/useGameNet.js'
+import { NetWaiting, GuestRestartNote, shufflePlayers } from '../../net/NetParts.jsx'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-export default function MemoryGame({ roster, onExit }) {
+// 온라인 동기화(호스트 권위): 호스트가 판정/타이밍을 결정해 view를 publish,
+// 게스트는 자기 차례에만 카드 탭을 action으로 보낸다.
+export default function MemoryGame({ roster, onExit, net }) {
+  const { online, isHost, remote, publish, sendAction, canControl, ownerDevice } = useGameNet(net, handleAction)
+
   const [phase, setPhase] = useState('setup') // 'setup' | 'order' | 'play'
   const [order, setOrder] = useState(roster) // 차례 정하기로 확정된 순서
   const [game, setGame] = useState(null)
@@ -20,8 +26,38 @@ export default function MemoryGame({ roster, onExit }) {
   const [soundOn, setSoundOn] = useState(true)
   const prevTurnRef = useRef(-1)
 
+  // 게스트 입력(호스트에서만 호출). 현재 차례 플레이어의 기기인지 검증.
+  function handleAction(a, fromDevice) {
+    if (phase !== 'play' || !game || game.status !== 'playing') return
+    const cur = game.players[game.currentIndex]
+    if (!cur || ownerDevice(cur.id) !== fromDevice) return
+    if (a.type === 'flip') flip(Number(a.id))
+  }
+
+  // 호스트 → 게스트 화면 상태 전파
+  useEffect(() => {
+    if (!online || !isHost) return
+    if (phase !== 'play' || !game) {
+      publish({ phase: 'setup' })
+      return
+    }
+    publish({
+      phase: 'play',
+      difficulty: game.difficulty,
+      players: game.players,
+      currentIndex: game.currentIndex,
+      cards: game.cards,
+      matched: game.matched,
+      status: game.status,
+      flipped,
+      busy,
+      banner,
+    })
+  }, [online, isHost, publish, phase, game, flipped, busy, banner])
+
   // 턴이 바뀌면 "○○ 차례!" 배너 (혼자 플레이면 생략)
   useEffect(() => {
+    if (online && !isHost) return
     if (!game || game.status !== 'playing' || game.players.length < 2) return
     if (prevTurnRef.current === game.currentIndex) return
     prevTurnRef.current = game.currentIndex
@@ -29,16 +65,17 @@ export default function MemoryGame({ roster, onExit }) {
     setBanner({ text: `${p.name} 차례!`, key: Date.now() })
     const t = setTimeout(() => setBanner(null), 1200)
     return () => clearTimeout(t)
-  }, [game])
+  }, [game, online, isHost])
 
-  // 난이도 선택 → 차례 정하기 (혼자면 건너뛰고 바로 시작)
+  // 난이도 선택 → 차례 정하기 (혼자면 건너뛰고 바로 시작, 온라인은 무작위 순서)
   function chooseDifficulty(diff) {
     setDifficulty(diff)
-    if (roster.length < 2) beginGame(roster, diff)
+    if (online) beginGame(shufflePlayers(roster), diff)
+    else if (roster.length < 2) beginGame(roster, diff)
     else setPhase('order')
   }
 
-  // 게임 시작: players = 차례 정하기로 확정된 순서
+  // 게임 시작: players = 확정된 순서
   function beginGame(players, diff = difficulty) {
     sound.setEnabled(soundOn)
     setOrder(players)
@@ -71,6 +108,7 @@ export default function MemoryGame({ roster, onExit }) {
   async function flip(id) {
     if (!game || busy || game.status === 'finished') return
     if (flipped.includes(id) || game.matched.includes(id) || flipped.length >= 2) return
+    if (!game.cards.some((c) => c.id === id)) return
 
     sound.step()
     const nf = [...flipped, id]
@@ -104,25 +142,97 @@ export default function MemoryGame({ roster, onExit }) {
     setBusy(false)
   }
 
+  // ── 게스트: 호스트 view 미러링 ──
+  if (online && !isHost) {
+    if (!remote || remote.phase !== 'play') {
+      return <NetWaiting text="호스트가 난이도를 고르고 있어요..." onExit={onExit} />
+    }
+    return (
+      <MemoryRemoteView
+        view={remote}
+        canControl={canControl}
+        sendAction={sendAction}
+        onExit={onExit}
+        soundOn={soundOn}
+        onToggleSound={toggleSound}
+      />
+    )
+  }
+
   // 1) 설정 화면 (난이도 선택)
   if (phase === 'setup') {
     return <MemorySetup roster={roster} onStart={chooseDifficulty} onExit={onExit} />
   }
-  // 2) 차례 정하기 (2명 이상)
+  // 2) 차례 정하기 (한 기기 모드, 2명 이상)
   if (phase === 'order') {
     return (
       <TurnOrderRoll players={roster} onComplete={(p) => beginGame(p)} onBack={() => setPhase('setup')} />
     )
   }
 
-  const { difficulty: diff } = game
-  const finished = game.status === 'finished'
-  const activePlayer = game.players[game.currentIndex]
+  const hostView = {
+    difficulty: game.difficulty,
+    players: game.players,
+    currentIndex: game.currentIndex,
+    cards: game.cards,
+    matched: game.matched,
+    status: game.status,
+    flipped,
+    busy,
+    banner,
+  }
+  const activeId = game.players[game.currentIndex]?.id
+  return (
+    <MemoryPlay
+      view={hostView}
+      myTurn={!online || canControl(activeId)}
+      onFlip={flip}
+      onRestart={restart}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={toggleSound}
+    />
+  )
+}
+
+// 게스트 화면: 효과음은 view 변화로 재생
+function MemoryRemoteView({ view, canControl, sendAction, onExit, soundOn, onToggleSound }) {
+  const activeId = view.players[view.currentIndex]?.id
+
+  useEffect(() => {
+    if (view.status === 'finished') sound.win()
+  }, [view.status])
+  useEffect(() => {
+    if (view.flipped.length) sound.step()
+  }, [view.flipped.length])
+  useEffect(() => {
+    if (view.matched.length) sound.ladderUp()
+  }, [view.matched.length])
+
+  return (
+    <MemoryPlay
+      view={view}
+      myTurn={canControl(activeId)}
+      onFlip={(id) => sendAction({ type: 'flip', id })}
+      onRestart={null}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={onToggleSound}
+    />
+  )
+}
+
+// 플레이 화면(호스트/게스트 공용). view만 보고 그린다.
+function MemoryPlay({ view, myTurn, onFlip, onRestart, onExit, soundOn, onToggleSound }) {
+  const { difficulty: diff, players, currentIndex, cards, matched, status, flipped, busy, banner } = view
+  const finished = status === 'finished'
+  const activePlayer = players[currentIndex]
   const activeZodiac = getZodiac(activePlayer.zodiacId)
-  const matchedSet = new Set(game.matched)
+  const matchedSet = new Set(matched)
   const flippedSet = new Set(flipped)
-  const win = finished ? winners(game) : []
-  const solo = game.players.length === 1
+  const win = finished ? winners(view) : []
+  const solo = players.length === 1
+  const canFlip = !finished && !busy && myTurn
 
   return (
     <div className="memory">
@@ -139,7 +249,7 @@ export default function MemoryGame({ roster, onExit }) {
           <div className="turn-indicator">🏁 게임 끝!</div>
         )}
         <div className="topbar__right">
-          <button className="btn btn--ghost" onClick={toggleSound} aria-label="소리">
+          <button className="btn btn--ghost" onClick={onToggleSound} aria-label="소리">
             {soundOn ? '🔊' : '🔇'}
           </button>
           <FullscreenButton />
@@ -149,7 +259,7 @@ export default function MemoryGame({ roster, onExit }) {
       <div className="ladder__main">
         <div className="ladder__board-wrap">
           <div className="mboard" style={{ '--cols': diff.cols, '--rows': diff.rows }}>
-            {game.cards.map((card) => {
+            {cards.map((card) => {
               const isUp = flippedSet.has(card.id) || matchedSet.has(card.id)
               const isMatched = matchedSet.has(card.id)
               const z = getZodiac(card.animalId)
@@ -158,7 +268,7 @@ export default function MemoryGame({ roster, onExit }) {
                   key={card.id}
                   type="button"
                   className={`mcard ${isUp ? 'is-up' : ''} ${isMatched ? 'is-matched' : ''}`}
-                  onClick={() => flip(card.id)}
+                  onClick={() => canFlip && onFlip(card.id)}
                   aria-label={isUp ? z?.name : '뒤집힌 카드'}
                 >
                   <span className="mcard__inner">
@@ -189,13 +299,13 @@ export default function MemoryGame({ roster, onExit }) {
 
         <aside className="ladder__side">
           <div className="players-list">
-            {game.players.map((p, i) => {
+            {players.map((p, i) => {
               const z = getZodiac(p.zodiacId)
               return (
                 <div
                   key={p.id}
                   className={`players-list__item ${
-                    !finished && i === game.currentIndex ? 'is-active' : ''
+                    !finished && i === currentIndex ? 'is-active' : ''
                   }`}
                   style={{ '--z-color': p.color }}
                 >
@@ -208,7 +318,13 @@ export default function MemoryGame({ roster, onExit }) {
           </div>
           <div className="dice-area">
             <p className="dice-area__hint">
-              {finished ? '' : busy ? '확인 중...' : '카드를 두 장 뒤집어요'}
+              {finished
+                ? ''
+                : busy
+                ? '확인 중...'
+                : myTurn
+                ? '카드를 두 장 뒤집어요'
+                : `${activePlayer.name} 차례를 기다려요`}
             </p>
           </div>
         </aside>
@@ -238,12 +354,23 @@ export default function MemoryGame({ roster, onExit }) {
               </>
             )}
             <div className="win-modal__btns">
-              <button className="btn btn--primary" onClick={restart}>
-                다시하기
-              </button>
-              <button className="btn btn--ghost" onClick={onExit}>
-                로비로
-              </button>
+              {onRestart ? (
+                <>
+                  <button className="btn btn--primary" onClick={onRestart}>
+                    다시하기
+                  </button>
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    로비로
+                  </button>
+                </>
+              ) : (
+                <>
+                  <GuestRestartNote />
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    방 나가기
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
