@@ -10,15 +10,22 @@ import { createGame, applyMove, computeMove, rollDice } from './engine.js'
 import { randomCardId, resolveKeyCard, getCard } from './keycards.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
+import { useGameNet } from '../../net/useGameNet.js'
+import { NetWaiting, GuestRestartNote, shufflePlayers } from '../../net/NetParts.jsx'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 // 발판/열쇠칸 하나가 순차 등장하는 간격(ms). Board의 CSS 딜레이와 맞춘다.
 const REVEAL_STEP = 130
 
-export default function LadderGame({ roster, onExit }) {
+// 온라인 동기화(호스트 권위):
+//  - 호스트가 게임 로직/연출 타이밍을 전부 결정하고 view를 publish.
+//  - 게스트는 view를 그대로 그리고, 자기 차례의 주사위/카드 입력만 action으로 보낸다.
+export default function LadderGame({ roster, onExit, net }) {
+  const { online, isHost, remote, publish, sendAction, canControl, ownerDevice } = useGameNet(net, handleAction)
+
   const [phase, setPhase] = useState('setup') // 'setup' | 'order' | 'play'
   const [size, setSize] = useState(BOARD_SIZES[0]) // 선택된 보드 크기(30칸/50칸)
-  const [order, setOrder] = useState(roster) // 차례 정하기로 확정된 플레이어 순서
+  const [order, setOrder] = useState(roster) // 확정된 플레이어 순서
   const [config, setConfig] = useState(() => generateBoard(BOARD_SIZES[0])) // 생성된 맵
   const [game, setGame] = useState(null)
   const [displayPos, setDisplayPos] = useState({}) // id -> tile (애니메이션용)
@@ -33,8 +40,49 @@ export default function LadderGame({ roster, onExit }) {
   const cardBaseRef = useRef(null) // 카드 적용 직전의 게임 상태
   const revealTimerRef = useRef(null)
 
+  // 게스트 입력 처리(호스트에서만 호출됨). 현재 차례 플레이어의 기기인지 검증한다.
+  function handleAction(a, fromDevice) {
+    if (phase !== 'play' || !game || game.status !== 'playing') return
+    const cur = game.players[game.currentIndex]
+    if (!cur || ownerDevice(cur.id) !== fromDevice) return
+    if (a.type === 'roll' && !animating && !revealing && !cardEvent) {
+      const max = config.diceCount * config.diceSides
+      const v = Math.round(Number(a.value))
+      if (v >= 1 && v <= max) handleResult(v)
+    }
+    if (a.type === 'pickCard' && cardEvent && cardEvent.chosen == null) {
+      const i = Math.round(Number(a.index))
+      if (i >= 0 && i < cardEvent.slots.length) handleCardPick(i)
+    }
+  }
+
+  // 호스트 → 게스트 화면 상태 전파
+  useEffect(() => {
+    if (!online || !isHost) return
+    if (phase !== 'play' || !game) {
+      publish({ phase: 'setup' })
+      return
+    }
+    publish({
+      phase: 'play',
+      config,
+      mapKey,
+      players: game.players,
+      currentIndex: game.currentIndex,
+      status: game.status,
+      winnerId: game.winnerId,
+      displayPos,
+      center,
+      banner,
+      cardEvent,
+      revealing,
+      animating,
+    })
+  }, [online, isHost, publish, phase, game, config, mapKey, displayPos, center, banner, cardEvent, revealing, animating])
+
   // 턴이 바뀔 때마다 "○○ 차례!" 배너 표시 (첫 턴 포함)
   useEffect(() => {
+    if (online && !isHost) return
     if (!game || game.status !== 'playing') return
     if (prevTurnRef.current === game.currentIndex) return
     prevTurnRef.current = game.currentIndex
@@ -42,20 +90,21 @@ export default function LadderGame({ roster, onExit }) {
     setBanner({ text: `${p.name} 차례!`, key: Date.now() })
     const t = setTimeout(() => setBanner(null), 1300)
     return () => clearTimeout(t)
-  }, [game])
+  }, [game, online, isHost])
 
-  // 보드 크기 선택 → 차례 정하기 단계로
+  // 보드 크기 선택 → 차례 정하기 단계로 (온라인은 무작위 순서로 바로 시작)
   function chooseSize(boardSize) {
     setSize(boardSize)
-    setPhase('order')
+    if (online) beginGame(shufflePlayers(roster), boardSize)
+    else setPhase('order')
   }
 
   // 게임 시작: 맵을 매번 새로 생성하고, 발판/열쇠칸이 순차 등장하는 동안 입력을 잠근다.
-  // players = 차례 정하기로 확정된 순서
-  function beginGame(players) {
+  // players = 확정된 순서
+  function beginGame(players, boardSize = size) {
     sound.setEnabled(soundOn)
     setOrder(players)
-    const cfg = generateBoard(size)
+    const cfg = generateBoard(boardSize)
     setConfig(cfg)
     prevTurnRef.current = -1
     setCardEvent(null)
@@ -226,25 +275,106 @@ export default function LadderGame({ roster, onExit }) {
     setAnimating(false)
   }
 
-  const activePlayer = game && game.players[game.currentIndex]
-  const activeZodiac = activePlayer && getZodiac(activePlayer.zodiacId)
-  const winner = game && game.winnerId && game.players.find((p) => p.id === game.winnerId)
-  const winnerZodiac = winner && getZodiac(winner.zodiacId)
-
-  const rollFn = useMemo(() => () => rollDice(config), [config])
+  // ── 게스트: 호스트가 보낸 view를 그대로 렌더 ──
+  if (online && !isHost) {
+    if (!remote || remote.phase !== 'play') {
+      return <NetWaiting text="호스트가 보드를 고르고 있어요..." onExit={onExit} />
+    }
+    return (
+      <LadderRemoteView
+        view={remote}
+        canControl={canControl}
+        sendAction={sendAction}
+        onExit={onExit}
+        soundOn={soundOn}
+        onToggleSound={toggleSound}
+      />
+    )
+  }
 
   // 1) 설정 화면 (보드 크기 선택)
   if (phase === 'setup') {
     return <LadderSetup sizes={BOARD_SIZES} roster={roster} onStart={chooseSize} onExit={onExit} />
   }
-  // 2) 차례 정하기
+  // 2) 차례 정하기 (한 기기 모드 전용)
   if (phase === 'order') {
     return (
       <TurnOrderRoll players={roster} onComplete={beginGame} onBack={() => setPhase('setup')} />
     )
   }
 
-  const finished = game.status === 'finished'
+  const hostView = {
+    config,
+    mapKey,
+    players: game.players,
+    currentIndex: game.currentIndex,
+    status: game.status,
+    winnerId: game.winnerId,
+    displayPos,
+    center,
+    banner,
+    cardEvent,
+    revealing,
+    animating,
+  }
+  const activeId = game.players[game.currentIndex]?.id
+  return (
+    <LadderPlay
+      view={hostView}
+      myTurn={!online || canControl(activeId)}
+      onRollResult={handleResult}
+      onPickCard={handleCardPick}
+      onRestart={restart}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={toggleSound}
+    />
+  )
+}
+
+// 게스트 화면: view 미러링 + 내 차례일 때만 입력 → action 전송. 효과음은 상태 변화로 재생.
+function LadderRemoteView({ view, canControl, sendAction, onExit, soundOn, onToggleSound }) {
+  const activeId = view.players[view.currentIndex]?.id
+
+  useEffect(() => {
+    if (view.status === 'finished') sound.win()
+  }, [view.status])
+  useEffect(() => {
+    if (view.center) sound.step()
+  }, [view.center?.key])
+  useEffect(() => {
+    if (view.animating) sound.step()
+  }, [view.displayPos, view.animating])
+  useEffect(() => {
+    if (view.cardEvent) sound.key()
+  }, [view.cardEvent != null])
+
+  return (
+    <LadderPlay
+      view={view}
+      myTurn={canControl(activeId)}
+      onRollResult={(v) => sendAction({ type: 'roll', value: v })}
+      onPickCard={(i) => sendAction({ type: 'pickCard', index: i })}
+      onRestart={null}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={onToggleSound}
+    />
+  )
+}
+
+// 플레이 화면(호스트/게스트 공용 표현 컴포넌트). view만 보고 그린다.
+function LadderPlay({ view, myTurn, onRollResult, onPickCard, onRestart, onExit, soundOn, onToggleSound }) {
+  const { config, players, currentIndex, status, winnerId, displayPos, center, banner, cardEvent, revealing, animating } = view
+  const finished = status === 'finished'
+  const activePlayer = players[currentIndex]
+  const activeZodiac = activePlayer && getZodiac(activePlayer.zodiacId)
+  const winner = winnerId && players.find((p) => p.id === winnerId)
+  const winnerZodiac = winner && getZodiac(winner.zodiacId)
+
+  const rollFn = useMemo(() => () => rollDice(config), [config])
+  const canRoll = !finished && !animating && !revealing && !cardEvent && myTurn
+  const canPick = cardEvent && cardEvent.chosen == null && myTurn
 
   return (
     <div className="ladder">
@@ -261,7 +391,7 @@ export default function LadderGame({ roster, onExit }) {
           <div className="turn-indicator">🏁 게임 끝!</div>
         )}
         <div className="topbar__right">
-          <button className="btn btn--ghost" onClick={toggleSound} aria-label="소리">
+          <button className="btn btn--ghost" onClick={onToggleSound} aria-label="소리">
             {soundOn ? '🔊' : '🔇'}
           </button>
           <FullscreenButton />
@@ -271,11 +401,11 @@ export default function LadderGame({ roster, onExit }) {
       <div className="ladder__main">
         <div className="ladder__board-wrap">
           <Board
-            key={mapKey}
+            key={view.mapKey}
             config={config}
             positions={displayPos}
-            players={game.players}
-            activeId={!finished ? activePlayer.id : null}
+            players={players}
+            activeId={!finished ? activePlayer?.id : null}
           />
           {center && (
             <div key={center.key} className="center-number">
@@ -291,13 +421,13 @@ export default function LadderGame({ roster, onExit }) {
 
         <aside className="ladder__side">
           <div className="players-list">
-            {game.players.map((p, i) => {
+            {players.map((p, i) => {
               const z = getZodiac(p.zodiacId)
               return (
                 <div
                   key={p.id}
                   className={`players-list__item ${
-                    !finished && i === game.currentIndex ? 'is-active' : ''
+                    !finished && i === currentIndex ? 'is-active' : ''
                   }`}
                   style={{ '--z-color': z.color }}
                 >
@@ -310,21 +440,21 @@ export default function LadderGame({ roster, onExit }) {
           </div>
 
           <div className="dice-area">
-            <Dice
-              disabled={finished || animating || revealing}
-              rollFn={rollFn}
-              onResult={handleResult}
-            />
+            <Dice disabled={!canRoll} rollFn={rollFn} onResult={onRollResult} />
             <p className="dice-area__hint">
               {revealing
                 ? '🗺️ 맵 생성 중...'
                 : cardEvent
-                ? '🔑 카드를 골라요'
+                ? myTurn
+                  ? '🔑 카드를 골라요'
+                  : `🔑 ${activePlayer?.name}가 카드를 골라요`
                 : animating
                 ? '이동 중...'
                 : finished
                 ? ''
-                : '주사위를 눌러요'}
+                : myTurn
+                ? '주사위를 눌러요'
+                : `${activePlayer?.name} 차례를 기다려요`}
             </p>
           </div>
         </aside>
@@ -346,8 +476,8 @@ export default function LadderGame({ roster, onExit }) {
                   className={`key-card ${chosen ? 'key-card--face' : 'key-card--back'} ${
                     dim ? 'key-card--dim' : ''
                   }`}
-                  disabled={cardEvent.chosen != null}
-                  onClick={() => handleCardPick(i)}
+                  disabled={!canPick}
+                  onClick={() => canPick && onPickCard(i)}
                 >
                   {chosen ? (
                     <>
@@ -373,12 +503,23 @@ export default function LadderGame({ roster, onExit }) {
             <h2>{winner?.name} 우승! 🎉</h2>
             <p>{winnerZodiac?.name} 골인!</p>
             <div className="win-modal__btns">
-              <button className="btn btn--primary" onClick={restart}>
-                다시하기
-              </button>
-              <button className="btn btn--ghost" onClick={onExit}>
-                로비로
-              </button>
+              {onRestart ? (
+                <>
+                  <button className="btn btn--primary" onClick={onRestart}>
+                    다시하기
+                  </button>
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    로비로
+                  </button>
+                </>
+              ) : (
+                <>
+                  <GuestRestartNote />
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    방 나가기
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

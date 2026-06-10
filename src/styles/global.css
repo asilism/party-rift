@@ -1582,3 +1582,84 @@ body {
 .traffic-btn:disabled { cursor: default; }
 .traffic-btn.is-bad { border-color: #ff7b7b; background: rgba(255, 90, 90, 0.25); }
 .traffic-btn.is-win { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent), 0 0 18px rgba(255, 207, 77, 0.6); }
+
+/* ── 홈(모드 선택) ── */
+.home__modes {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
+  padding: 8px 18px; max-width: 980px; margin: 0 auto; width: 100%;
+}
+.mode-card {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: clamp(16px, 4vh, 30px) 14px; border-radius: 20px;
+  border: 2px solid var(--line); background: var(--panel); color: var(--text);
+  cursor: pointer; transition: transform 0.08s ease, border-color 0.12s ease;
+}
+.mode-card:active { transform: scale(0.97); }
+.mode-card:hover, .mode-card.is-open { border-color: var(--accent); }
+.mode-card__emoji { font-size: clamp(30px, 7vh, 54px); line-height: 1; }
+.mode-card__title { font-weight: 900; font-size: clamp(15px, 2.6vh, 20px); }
+.mode-card__desc { color: var(--muted); font-size: clamp(11px, 1.9vh, 14px); text-align: center; }
+.mode-card__join { display: flex; gap: 8px; align-items: center; cursor: default; }
+.code-input {
+  width: 7.5em; text-align: center; text-transform: uppercase;
+  letter-spacing: 0.25em; font-weight: 900; font-size: clamp(15px, 2.6vh, 20px);
+}
+.home__hint { text-align: center; color: var(--muted); font-size: clamp(11px, 1.9vh, 14px); padding: 6px 16px; }
+
+/* ── 온라인 방 코드/안내 ── */
+.room-code {
+  display: flex; gap: 14px; align-items: center; margin: 0 18px 10px;
+  padding: 10px 14px; border-radius: 16px; border: 2px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+}
+.room-code__box {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 18px; border-radius: 12px; background: var(--bg2); cursor: pointer;
+  border: 1px solid var(--line);
+}
+.room-code__label { color: var(--muted); font-size: 11px; font-weight: 700; }
+.room-code__value {
+  font-weight: 900; font-size: clamp(26px, 5.5vh, 42px); letter-spacing: 0.3em;
+  color: var(--accent); margin-right: -0.3em;
+}
+.room-code__info { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.room-code__info p { margin: 0; font-size: clamp(11px, 1.9vh, 14px); color: var(--text); }
+.room-code__url {
+  color: var(--muted) !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: ui-monospace, monospace; font-size: clamp(10px, 1.7vh, 12px) !important;
+}
+.room-code__devices { color: var(--muted) !important; }
+.online-lobby__wait { text-align: center; color: var(--muted); margin: 2px 0 6px; font-weight: 700; }
+.lobby__grid--readonly .game-card { cursor: default; }
+
+/* 내 기기 참가자 표시 */
+.player-chip--mine { box-shadow: 0 0 0 2px var(--accent2); }
+.player-chip__tag {
+  font-size: 10px; font-weight: 800; color: #0c2b1f; background: var(--accent2);
+  border-radius: 999px; padding: 1px 6px;
+}
+
+/* ── 온라인 공용 화면(연결/대기/안내) ── */
+.net-screen {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 24px; text-align: center;
+}
+.net-screen__icon { font-size: clamp(40px, 10vh, 72px); line-height: 1; }
+.net-screen p { font-size: clamp(15px, 2.8vh, 20px); font-weight: 700; color: var(--text); }
+.net-toast {
+  margin: 0 18px 8px; padding: 8px 14px; border-radius: 12px; text-align: center;
+  background: rgba(255, 120, 120, 0.16); border: 1px solid rgba(255, 120, 120, 0.5);
+  color: #ffd2d2; font-weight: 700; font-size: clamp(12px, 2vh, 15px);
+}
+.net-toast--ingame {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 60; margin: 0;
+}
+.net-guest-note { color: var(--muted); font-weight: 700; font-size: clamp(12px, 2vh, 15px); margin: 4px 0; }
+
+/* 온라인에서 남의 입력 영역(누를 수 없음) 표시 */
+.race-lane--other, .whack-zone--other, .traffic-btn--other, .thrill-station--other { opacity: 0.62; }
+
+@media (max-width: 700px) {
+  .home__modes { grid-template-columns: 1fr; }
+  .room-code { flex-direction: column; align-items: stretch; text-align: center; }
+}

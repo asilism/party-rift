@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import DobbleSetup from './DobbleSetup.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import ShootingStars from '../../shared/ShootingStars.jsx'
@@ -6,6 +6,8 @@ import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import { createGame, tapSymbol, winners } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
+import { useGameNet } from '../../net/useGameNet.js'
+import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
 
 const N = 5 // 보통 난이도: 카드당 6문양
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -31,7 +33,7 @@ const FLY_VEC = {
 }
 const seatOf = (n, idx) => (SEATS[n] || SEATS[4])[idx] || 'bl'
 
-// 문양 배치를 카드 내용으로 결정(같은 카드는 항상 같은 배치).
+// 문양 배치를 카드 내용으로 결정(같은 카드는 항상 같은 배치 → 모든 기기에서 동일).
 // 링(+중앙)에 균등 배치 후, 각 문양의 최대 반지름을 "이웃까지 거리/2"와 "테두리까지"로
 // 제한 → 절대 겹치지 않게. 크기는 그 한도 내에서 랜덤(74~100%)이라 크고 작고 섞이고
 // 카드를 꽉 채운다. (size = 폰트 크기 %)
@@ -99,7 +101,11 @@ function DobbleCard({ symbols, emojiOf, onTap, disabled, highlight }) {
   )
 }
 
-export default function DobbleGame({ roster, onExit }) {
+// 온라인 동기화(호스트 권위): 판정/연출 타이밍은 호스트가 결정해 view를 publish,
+// 게스트는 자기 카드의 문양 탭만 action으로 보낸다.
+export default function DobbleGame({ roster, onExit, net }) {
+  const { online, isHost, remote, publish, sendAction, canControl, ownerDevice } = useGameNet(net, handleAction)
+
   const [phase, setPhase] = useState('setup') // 'setup' | 'play'
   const [game, setGame] = useState(null)
   const [flash, setFlash] = useState(null) // { id, ok, key }
@@ -108,6 +114,35 @@ export default function DobbleGame({ roster, onExit }) {
   const [inputLocked, setInputLocked] = useState(false)
   const [soundOn, setSoundOn] = useState(true)
   const comboRef = useRef({ id: null, n: 0 })
+
+  // 게스트 입력(호스트에서만 호출). 자기 참가자 카드만 인정.
+  function handleAction(a, fromDevice) {
+    if (a.type !== 'tap') return
+    if (ownerDevice(a.playerId) !== fromDevice) return
+    handleTap(a.playerId, Number(a.symbol))
+  }
+
+  // 호스트 → 게스트 화면 상태 전파
+  useEffect(() => {
+    if (!online || !isHost) return
+    if (phase !== 'play' || !game) {
+      publish({ phase: 'setup' })
+      return
+    }
+    publish({
+      phase: 'play',
+      symbols: game.symbols,
+      players: game.players,
+      center: game.center,
+      remaining: game.centerQueue.length - game.centerPos,
+      locked: game.locked,
+      status: game.status,
+      flash,
+      fly,
+      celebrate,
+      inputLocked,
+    })
+  }, [online, isHost, publish, phase, game, flash, fly, celebrate, inputLocked])
 
   function startGame() {
     sound.setEnabled(soundOn)
@@ -177,15 +212,85 @@ export default function DobbleGame({ roster, onExit }) {
     }
   }
 
+  // ── 게스트: 호스트 view 미러링 ──
+  if (online && !isHost) {
+    if (!remote || remote.phase !== 'play') {
+      return <NetWaiting text="호스트가 카드를 섞고 있어요..." onExit={onExit} />
+    }
+    return (
+      <DobbleRemoteView
+        view={remote}
+        canControl={canControl}
+        sendAction={sendAction}
+        onExit={onExit}
+        soundOn={soundOn}
+        onToggleSound={toggleSound}
+      />
+    )
+  }
+
   if (phase === 'setup') {
     return <DobbleSetup roster={roster} onStart={startGame} onExit={onExit} />
   }
 
-  const emojiOf = (idx) => game.symbols[idx]
-  const finished = game.status === 'finished'
-  const seats = SEATS[game.players.length] || SEATS[4]
-  const remaining = game.centerQueue.length - game.centerPos
-  const win = finished ? winners(game) : []
+  const hostView = {
+    symbols: game.symbols,
+    players: game.players,
+    center: game.center,
+    remaining: game.centerQueue.length - game.centerPos,
+    locked: game.locked,
+    status: game.status,
+    flash,
+    fly,
+    celebrate,
+    inputLocked,
+  }
+  return (
+    <DobbleTable
+      view={hostView}
+      canTap={(id) => !online || canControl(id)}
+      onTap={handleTap}
+      onRestart={restart}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={toggleSound}
+    />
+  )
+}
+
+// 게스트 화면: 효과음은 view 변화로 재생
+function DobbleRemoteView({ view, canControl, sendAction, onExit, soundOn, onToggleSound }) {
+  useEffect(() => {
+    if (!view.flash) return
+    view.flash.ok ? sound.ladderUp() : sound.chuteDown()
+  }, [view.flash?.key])
+  useEffect(() => {
+    if (view.celebrate?.combo >= 4) sound.win()
+  }, [view.celebrate?.key])
+  useEffect(() => {
+    if (view.status === 'finished') sound.win()
+  }, [view.status])
+
+  return (
+    <DobbleTable
+      view={view}
+      canTap={canControl}
+      onTap={(id, s) => sendAction({ type: 'tap', playerId: id, symbol: s })}
+      onRestart={null}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={onToggleSound}
+    />
+  )
+}
+
+// 테이블 화면(호스트/게스트 공용). view만 보고 그린다.
+function DobbleTable({ view, canTap, onTap, onRestart, onExit, soundOn, onToggleSound }) {
+  const { symbols, players, center, remaining, locked, status, flash, fly, celebrate, inputLocked } = view
+  const emojiOf = (idx) => symbols[idx]
+  const finished = status === 'finished'
+  const seats = SEATS[players.length] || SEATS[4]
+  const win = finished ? winners(view) : []
 
   return (
     <div className="dobble">
@@ -195,29 +300,30 @@ export default function DobbleGame({ roster, onExit }) {
         </button>
         <div className="turn-indicator">{finished ? '🏁 게임 끝!' : `🔍 남은 카드 ${remaining}`}</div>
         <div className="topbar__right">
-          <button className="btn btn--ghost" onClick={toggleSound} aria-label="소리">
+          <button className="btn btn--ghost" onClick={onToggleSound} aria-label="소리">
             {soundOn ? '🔊' : '🔇'}
           </button>
           <FullscreenButton />
         </div>
       </div>
 
-      <div className={`dobble__table dobble__table--p${game.players.length}`}>
-        {game.players.map((p, i) => {
+      <div className={`dobble__table dobble__table--p${players.length}`}>
+        {players.map((p, i) => {
           const z = getZodiac(p.zodiacId)
-          const locked = game.locked.includes(p.id)
+          const isLocked = locked.includes(p.id)
           const flashing = flash && flash.id === p.id
+          const mine = canTap(p.id)
           return (
             <div key={p.id} className={`dobble-seat seat--${seats[i] || 'bottom'}`}>
               <div className="dobble-seat__label" style={{ '--z-color': p.color }}>
                 <span className="dobble-seat__emoji">{z?.emoji}</span>
                 <span className="dobble-seat__name">{p.name}</span>
                 <span className="dobble-seat__score">{p.score}점</span>
-                {locked && <span className="dobble-seat__lock">🚫</span>}
+                {isLocked && <span className="dobble-seat__lock">🚫</span>}
               </div>
               <div
                 key={flashing ? flash.key : p.id}
-                className={`dobble-card-wrap ${locked ? 'is-locked' : ''} ${
+                className={`dobble-card-wrap ${isLocked ? 'is-locked' : ''} ${
                   flashing ? (flash.ok ? 'flash-ok' : 'flash-bad') : ''
                 }`}
                 style={{ '--z-color': p.color }}
@@ -225,8 +331,8 @@ export default function DobbleGame({ roster, onExit }) {
                 <DobbleCard
                   symbols={p.card}
                   emojiOf={emojiOf}
-                  onTap={(s) => handleTap(p.id, s)}
-                  disabled={finished || locked || inputLocked}
+                  onTap={mine ? (s) => onTap(p.id, s) : null}
+                  disabled={finished || isLocked || inputLocked || !mine}
                 />
               </div>
               {celebrate && (
@@ -246,7 +352,7 @@ export default function DobbleGame({ roster, onExit }) {
 
         <div className="dobble-seat seat--center">
           <div className="dobble-card-wrap dobble-card-wrap--center">
-            {game.center && !fly && <DobbleCard symbols={game.center} emojiOf={emojiOf} />}
+            {center && !fly && <DobbleCard symbols={center} emojiOf={emojiOf} />}
           </div>
         </div>
 
@@ -296,12 +402,23 @@ export default function DobbleGame({ roster, onExit }) {
               </>
             )}
             <div className="win-modal__btns">
-              <button className="btn btn--primary" onClick={restart}>
-                다시하기
-              </button>
-              <button className="btn btn--ghost" onClick={onExit}>
-                로비로
-              </button>
+              {onRestart ? (
+                <>
+                  <button className="btn btn--primary" onClick={onRestart}>
+                    다시하기
+                  </button>
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    로비로
+                  </button>
+                </>
+              ) : (
+                <>
+                  <GuestRestartNote />
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    방 나가기
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

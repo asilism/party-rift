@@ -5,10 +5,17 @@ import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import { createGame, roundWinner, applyRound, winners } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
+import { useGameNet } from '../../net/useGameNet.js'
+import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
 
 const GO_WINDOW = 2500 // 초록불 후 응답 대기
 
-export default function TrafficGame({ roster, onExit }) {
+// 온라인 동기화(호스트 권위): 라운드 타이밍/채점은 호스트가 굴린다.
+// 반응시간(ms)은 각 게스트가 "자기 화면이 초록불로 바뀐 순간"부터 직접 재서 보내므로
+// 네트워크 지연이 있어도 공평하다.
+export default function TrafficGame({ roster, onExit, net }) {
+  const { online, isHost, remote, publish, sendAction, canControl, ownerDevice } = useGameNet(net, handleAction)
+
   const [phase, setPhase] = useState('setup') // 'setup' | 'play'
   const [roundPhase, setRoundPhase] = useState('wait') // 'wait'(빨강) | 'go'(초록) | 'result'
   const [game, setGame] = useState(null)
@@ -20,12 +27,44 @@ export default function TrafficGame({ roster, onExit }) {
   const pressRef = useRef({})
   const timers = useRef([])
   const gameRef = useRef(null)
+  const roundPhaseRef = useRef('wait')
+  roundPhaseRef.current = roundPhase
 
   const clearTimers = () => {
     timers.current.forEach(clearTimeout)
     timers.current = []
   }
   useEffect(() => clearTimers, [])
+
+  // 게스트 입력(호스트에서만 호출). 자기 참가자만, 게스트가 잰 반응시간을 기록.
+  function handleAction(a, fromDevice) {
+    if (a.type !== 'press') return
+    if (ownerDevice(a.id) !== fromDevice) return
+    if (a.falseStart) recordPress(a.id, { falseStart: true })
+    else {
+      const ms = Math.round(Number(a.ms))
+      if (ms >= 0 && ms < 60000) recordPress(a.id, { ms })
+    }
+  }
+
+  // 호스트 → 게스트 화면 상태 전파
+  useEffect(() => {
+    if (!online || !isHost) return
+    if (phase !== 'play' || !game) {
+      publish({ phase: 'setup' })
+      return
+    }
+    publish({
+      phase: 'play',
+      players: game.players,
+      round: game.round,
+      rounds: game.rounds,
+      status: game.status,
+      roundPhase,
+      presses,
+      roundWin,
+    })
+  }, [online, isHost, publish, phase, game, roundPhase, presses, roundWin])
 
   function startGame() {
     sound.setEnabled(soundOn)
@@ -59,23 +98,23 @@ export default function TrafficGame({ roster, onExit }) {
     )
   }
 
-  function press(id) {
-    if (roundPhase === 'result') return
+  // 응답 기록(호스트 로컬 탭 + 게스트 action 공용). 전원 응답 시 즉시 채점.
+  function recordPress(id, entry) {
+    if (roundPhaseRef.current === 'result') return
     if (pressRef.current[id]) return // 이미 응답
-    if (roundPhase === 'wait') {
-      pressRef.current = { ...pressRef.current, [id]: { falseStart: true } }
-      sound.chuteDown()
-    } else {
-      pressRef.current = { ...pressRef.current, [id]: { ms: Date.now() - greenRef.current } }
-      sound.step()
-    }
+    pressRef.current = { ...pressRef.current, [id]: entry }
+    entry.falseStart ? sound.chuteDown() : sound.step()
     setPresses({ ...pressRef.current })
-    // 전원 응답하면 즉시 채점
     if (gameRef.current.players.every((p) => pressRef.current[p.id])) evaluate()
   }
 
+  function press(id) {
+    if (roundPhaseRef.current === 'wait') recordPress(id, { falseStart: true })
+    else if (roundPhaseRef.current === 'go') recordPress(id, { ms: Date.now() - greenRef.current })
+  }
+
   function evaluate() {
-    if (roundPhase === 'result') return
+    if (roundPhaseRef.current === 'result') return
     clearTimers()
     const g = gameRef.current
     const entries = g.players.map((p) => {
@@ -103,12 +142,98 @@ export default function TrafficGame({ roster, onExit }) {
     if (n) sound.unlock()
   }
 
+  // ── 게스트: 호스트 view 미러링 ──
+  if (online && !isHost) {
+    if (!remote || remote.phase !== 'play') {
+      return <NetWaiting text="호스트가 신호등을 켜고 있어요..." onExit={onExit} />
+    }
+    return (
+      <TrafficRemoteView
+        view={remote}
+        canControl={canControl}
+        sendAction={sendAction}
+        onExit={onExit}
+        soundOn={soundOn}
+        onToggleSound={toggleSound}
+      />
+    )
+  }
+
   if (phase === 'setup') {
     return <TrafficSetup roster={roster} onStart={startGame} onExit={onExit} />
   }
 
-  const finished = game.status === 'finished'
-  const win = finished ? winners(game) : []
+  const hostView = {
+    players: game.players,
+    round: game.round,
+    rounds: game.rounds,
+    status: game.status,
+    roundPhase,
+    presses,
+    roundWin,
+  }
+  return (
+    <TrafficPlay
+      view={hostView}
+      canPress={(id) => !online || canControl(id)}
+      onPress={press}
+      onNext={nextRound}
+      onRestart={startGame}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={toggleSound}
+    />
+  )
+}
+
+// 게스트 화면: 초록불이 "내 화면"에 뜬 순간부터 반응시간을 직접 잰다.
+function TrafficRemoteView({ view, canControl, sendAction, onExit, soundOn, onToggleSound }) {
+  const greenAtRef = useRef(0)
+  const sentRef = useRef({}) // 중복 전송 방지 (view 반영 전 연타)
+
+  useEffect(() => {
+    if (view.roundPhase === 'go') {
+      greenAtRef.current = Date.now()
+      sound.ladderUp()
+    }
+    if (view.roundPhase === 'wait') sentRef.current = {}
+  }, [view.roundPhase, view.round])
+  useEffect(() => {
+    if (view.status === 'finished') sound.win()
+  }, [view.status])
+
+  function pressLocal(id) {
+    if (view.roundPhase === 'result') return
+    if (view.presses[id] || sentRef.current[id]) return
+    sentRef.current[id] = true
+    if (view.roundPhase === 'wait') {
+      sound.chuteDown()
+      sendAction({ type: 'press', id, falseStart: true })
+    } else {
+      sound.step()
+      sendAction({ type: 'press', id, ms: Date.now() - greenAtRef.current })
+    }
+  }
+
+  return (
+    <TrafficPlay
+      view={view}
+      canPress={canControl}
+      onPress={pressLocal}
+      onNext={null}
+      onRestart={null}
+      onExit={onExit}
+      soundOn={soundOn}
+      onToggleSound={onToggleSound}
+    />
+  )
+}
+
+// 플레이 화면(호스트/게스트 공용). view만 보고 그린다.
+function TrafficPlay({ view, canPress, onPress, onNext, onRestart, onExit, soundOn, onToggleSound }) {
+  const { players, round, rounds, status, roundPhase, presses, roundWin } = view
+  const finished = status === 'finished'
+  const win = finished ? winners(view) : []
   const lightText =
     roundPhase === 'wait' ? '준비…' : roundPhase === 'go' ? '지금 눌러!' : roundWin ? '🏆' : '아무도!'
 
@@ -118,9 +243,9 @@ export default function TrafficGame({ roster, onExit }) {
         <button className="btn btn--ghost" onClick={onExit}>
           ← 나가기
         </button>
-        <div className="turn-indicator">{finished ? '🏁 게임 끝!' : `🚦 ${game.round}/${game.rounds} 판`}</div>
+        <div className="turn-indicator">{finished ? '🏁 게임 끝!' : `🚦 ${round}/${rounds} 판`}</div>
         <div className="topbar__right">
-          <button className="btn btn--ghost" onClick={toggleSound} aria-label="소리">
+          <button className="btn btn--ghost" onClick={onToggleSound} aria-label="소리">
             {soundOn ? '🔊' : '🔇'}
           </button>
           <FullscreenButton />
@@ -134,10 +259,11 @@ export default function TrafficGame({ roster, onExit }) {
       </div>
 
       <div className="traffic__btns">
-        {game.players.map((p) => {
+        {players.map((p) => {
           const z = getZodiac(p.zodiacId)
           const e = presses[p.id]
           const isWin = roundPhase === 'result' && roundWin === p.id
+          const mine = canPress(p.id)
           let label = `${z?.emoji} ${p.name}`
           if (e?.falseStart) label = '❌ 부정출발'
           else if (e?.ms != null) label = `${e.ms}ms`
@@ -145,10 +271,12 @@ export default function TrafficGame({ roster, onExit }) {
           return (
             <button
               key={p.id}
-              className={`traffic-btn ${e?.falseStart ? 'is-bad' : ''} ${isWin ? 'is-win' : ''}`}
+              className={`traffic-btn ${e?.falseStart ? 'is-bad' : ''} ${isWin ? 'is-win' : ''} ${
+                !mine ? 'traffic-btn--other' : ''
+              }`}
               style={{ '--z-color': p.color }}
-              disabled={roundPhase === 'result' || !!presses[p.id]}
-              onPointerDown={() => press(p.id)}
+              disabled={roundPhase === 'result' || !!presses[p.id] || !mine}
+              onPointerDown={() => mine && onPress(p.id)}
             >
               {label}
             </button>
@@ -158,9 +286,13 @@ export default function TrafficGame({ roster, onExit }) {
 
       {roundPhase === 'result' && !finished && (
         <div className="thrill__next">
-          <button className="btn btn--primary" onClick={nextRound}>
-            다음 판 →
-          </button>
+          {onNext ? (
+            <button className="btn btn--primary" onClick={onNext}>
+              다음 판 →
+            </button>
+          ) : (
+            <p className="net-guest-note">🌐 호스트가 다음 판을 시작해요</p>
+          )}
         </div>
       )}
 
@@ -181,12 +313,23 @@ export default function TrafficGame({ roster, onExit }) {
               </>
             )}
             <div className="win-modal__btns">
-              <button className="btn btn--primary" onClick={startGame}>
-                다시하기
-              </button>
-              <button className="btn btn--ghost" onClick={onExit}>
-                로비로
-              </button>
+              {onRestart ? (
+                <>
+                  <button className="btn btn--primary" onClick={onRestart}>
+                    다시하기
+                  </button>
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    로비로
+                  </button>
+                </>
+              ) : (
+                <>
+                  <GuestRestartNote />
+                  <button className="btn btn--ghost" onClick={onExit}>
+                    방 나가기
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -10,10 +10,17 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     allowedHosts: true, // 공인 IP/도메인으로 들어오는 Host 헤더 허용
+    // 온라인 모드 WebSocket → 룸 서버(node server/index.js, 8787)로 프록시
+    proxy: {
+      '/ws': { target: 'ws://127.0.0.1:8787', ws: true },
+    },
   },
   preview: {
     host: true,
     port: 4173,
     allowedHosts: true,
+    proxy: {
+      '/ws': { target: 'ws://127.0.0.1:8787', ws: true },
+    },
   },
 })
