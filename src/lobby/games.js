@@ -68,8 +68,8 @@ export const GAMES = [
     id: 'kart',
     title: '파티 카트',
     emoji: '🏎️',
-    desc: '3D 서킷 아이템 레이싱!',
-    minPlayers: 2,
+    desc: '3D 서킷 아이템 레이싱! CPU와 4인 경주',
+    minPlayers: 1,
     maxPlayers: 5,
     onlineOnly: true, // 기기마다 조이스틱이 필요 → 온라인 방 전용
     ready: true,

@@ -6,7 +6,7 @@ import TouchControls from './TouchControls.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import { createGame, setInput, fireItem, step, makeView, STEP, LAPS } from './engine.js'
-import { getZodiac } from '../../shared/zodiac.js'
+import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
 import { useGameNet } from '../../net/useGameNet.js'
 import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
@@ -18,6 +18,7 @@ import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
 const PUBLISH_MS = 50 // 호스트 스냅샷 전파 주기
 const INPUT_MS = 66 // 게스트 입력 전송 주기
 const INTERP_DELAY = 120 // 게스트 렌더 지연(보간용, ms)
+const RACE_SIZE = 4 // 레이스 정원 — 모자라면 CPU가 채운다
 
 export default function KartGame({ roster, onExit, net }) {
   const { online, isHost, remote, publish, sendAction, ownerDevice } = useGameNet(net, handleAction)
@@ -129,14 +130,23 @@ export default function KartGame({ roster, onExit, net }) {
   function startGame() {
     sound.setEnabled(soundOn)
     sound.unlock()
-    stateRef.current = createGame(
-      racers.map((p) => ({
-        id: p.id,
-        name: p.name,
-        zodiacId: p.zodiacId,
-        color: getZodiac(p.zodiacId)?.color,
-      }))
-    )
+    const humans = racers.map((p) => ({
+      id: p.id,
+      name: p.name,
+      zodiacId: p.zodiacId,
+      color: getZodiac(p.zodiacId)?.color,
+    }))
+    // 정원이 안 차면 안 쓰는 12지신 중에서 CPU를 뽑아 채운다
+    const used = new Set(roster.map((p) => p.zodiacId))
+    const free = ZODIAC.filter((z) => !used.has(z.id)).sort(() => Math.random() - 0.5)
+    const bots = free.slice(0, Math.max(0, RACE_SIZE - humans.length)).map((z) => ({
+      id: `bot-${z.id}`,
+      name: `${z.name}봇`,
+      zodiacId: z.id,
+      color: z.color,
+      isBot: true,
+    }))
+    stateRef.current = createGame([...humans, ...bots])
     ctrlRef.current = { steer: 0, brake: false }
     setHud(makeView(stateRef.current))
     setPhase('play')
@@ -248,24 +258,47 @@ function useKartSounds(hud, myId) {
     if (!hud) return
     const p = prev.current
     const me = hud.karts?.find((k) => k.id === myId)
-    if (hud.status === 'countdown' && hud.countdown > 0 && hud.countdown !== p.countdown) sound.step()
-    if (hud.status === 'racing' && p.status === 'countdown') sound.ladderUp()
+    // 카운트다운: 도(3) 도(2) 도(1)... 출발은 한 옥타브 위 도!
+    if (hud.status === 'countdown' && hud.countdown > 0 && hud.countdown !== p.countdown) sound.count()
+    if (hud.status === 'racing' && p.status === 'countdown') sound.go()
     // 아이템 획득음은 TouchControls의 슬롯머신 연출이 담당
     if (me && me.stunT > 0 && !(p.stunT > 0)) sound.chuteDown()
     if (me?.boostT > 0 && !(p.boostT > 0)) sound.ladderUp()
+    if (me?.rocketT > 0 && !(p.rocketT > 0)) sound.rocket()
     if (hud.status === 'finished' && p.status && p.status !== 'finished') sound.win()
     prev.current = {
       countdown: hud.countdown,
       status: hud.status,
       stunT: me?.stunT,
       boostT: me?.boostT,
+      rocketT: me?.rocketT,
     }
   }, [hud, myId])
+}
+
+// 랩이 오를 때마다 화면 중앙에 잠깐 보여줄 멘트
+function useLapBanner(lap) {
+  const [msg, setMsg] = useState(null)
+  const prev = useRef(lap ?? 1)
+  useEffect(() => {
+    if (lap == null || lap < prev.current) {
+      prev.current = lap ?? 1 // 새 레이스 시작 시 리셋
+      return
+    }
+    if (lap === prev.current) return
+    prev.current = lap
+    sound.key()
+    setMsg({ text: lap >= LAPS ? '이제 마지막 바퀴야! 🔥' : `${lap}바퀴째!`, key: lap })
+    const t = setTimeout(() => setMsg(null), 2200)
+    return () => clearTimeout(t)
+  }, [lap])
+  return msg
 }
 
 // 주행 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, soundOn, onToggleSound }) {
   useKartSounds(hud, myId)
+  const lapMsg = useLapBanner(hud?.karts?.find((k) => k.id === myId)?.lap)
   if (!hud || hud.phase !== 'play') {
     return <NetWaiting text="레이스를 준비하고 있어요... 🏎️" onExit={onExit} />
   }
@@ -320,6 +353,7 @@ function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, sound
                 <span className="kart-ranks__pos">{i + 1}</span>
                 <span>{getZodiac(k.zodiacId)?.emoji}</span>
                 <span className="kart-ranks__name">{k.name}</span>
+                {k.isBot && <span className="kart-ranks__bot">🤖</span>}
                 {k.finished && <span>🏁</span>}
               </div>
             ))}
@@ -339,6 +373,11 @@ function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, sound
           </div>
         )}
         {hud.go && <div className="kart__count kart__count--go">출발!</div>}
+        {lapMsg && (
+          <div className="kart__lapmsg" key={lapMsg.key}>
+            {lapMsg.text}
+          </div>
+        )}
 
         {me && !me.finished && hud.endTimer != null && !finished && (
           <div className="kart__endtimer">⏱ {hud.endTimer}초 안에 골인!</div>

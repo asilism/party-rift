@@ -1687,6 +1687,20 @@ body {
   animation: race-count 0.8s ease;
 }
 .kart__count--go { color: #5ef08a; }
+.kart__lapmsg {
+  position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
+  font-size: clamp(28px, 8vh, 64px); font-weight: 900; color: #fff;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.6), 0 0 26px rgba(255, 207, 77, 0.55);
+  pointer-events: none; white-space: nowrap;
+  animation: kart-lapmsg 2.2s ease;
+}
+@keyframes kart-lapmsg {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  12% { transform: translate(-50%, -50%) scale(1.12); opacity: 1; }
+  20% { transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
 .kart__endtimer {
   position: absolute; top: 16%; left: 50%; transform: translateX(-50%);
   background: rgba(20, 28, 51, 0.78); border-radius: 999px; padding: 8px 18px;
@@ -1724,6 +1738,7 @@ body {
   width: 1.3em; text-align: center; color: var(--accent);
 }
 .kart-ranks__name { max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kart-ranks__bot { font-size: 0.85em; opacity: 0.85; }
 
 /* 좌측 하단: 현재 랩 */
 .kart__lap {
