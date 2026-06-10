@@ -2,7 +2,8 @@
 // 엔진의 makeView() 스냅샷만 보고 그린다 — 호스트/게스트 공용.
 import * as THREE from 'three'
 import { getZodiac } from '../../shared/zodiac.js'
-import { PAD_HALF_W, obstaclePose } from './track.js'
+import { PAD_HALF_W, obstaclePose, obstacleVisible } from './track.js'
+import { FLY_TIME } from './engine.js'
 
 // 이모지 한 글자를 캔버스에 그려 스프라이트 텍스처로 만든다
 function emojiTexture(emoji, size = 128) {
@@ -58,24 +59,35 @@ function buildRoad(track, color) {
   )
 }
 
-// 빙판 구간: 도로 위에 반짝이는 하늘색 리본 (눈꽃 빙판 전용)
+// 빙판 구간: 도로 전체 폭을 얼음색으로 칠한다 (눈꽃 빙판 전용).
+// 도로 면에 딱 붙도록 폴리곤 오프셋으로 z-파이팅만 피하고(불투명),
+// 입구/출구는 도로색과 섞어 자연스럽게 이어 붙인다.
 function buildIce(track) {
   const g = new THREE.Group()
   const mat = new THREE.MeshLambertMaterial({
-    color: 0xbfe8ff,
-    transparent: true,
-    opacity: 0.75,
+    vertexColors: true,
     side: THREE.DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -2,
   })
+  const iceCol = new THREE.Color(0xb8e2f5)
+  const roadCol = new THREE.Color(track.theme.road)
+  const FADE = 6 // 입구/출구에서 도로색 → 얼음색으로 섞이는 샘플 수
   for (const zn of track.ice || []) {
     const pos = []
+    const col = []
     const idx = []
+    const c = new THREE.Color()
     let v = 0
     for (let i = zn.from; i <= zn.to; i++) {
       const s = track.samples[i % track.n]
-      const w = track.halfW - 0.2
-      pos.push(s.x + s.nx * w, 0.035, s.z + s.nz * w)
-      pos.push(s.x - s.nx * w, 0.035, s.z - s.nz * w)
+      const w = track.halfW
+      const into = Math.min(i - zn.from, zn.to - i) // 구간 끝에서의 거리
+      c.copy(roadCol).lerp(iceCol, Math.min(1, into / FADE))
+      pos.push(s.x + s.nx * w, 0.025, s.z + s.nz * w)
+      pos.push(s.x - s.nx * w, 0.025, s.z - s.nz * w)
+      col.push(c.r, c.g, c.b, c.r, c.g, c.b)
       if (i < zn.to) {
         idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2)
       }
@@ -83,6 +95,7 @@ function buildIce(track) {
     }
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
     geo.setIndex(idx)
     geo.computeVertexNormals()
     g.add(new THREE.Mesh(geo, mat))
@@ -380,8 +393,16 @@ function buildKart(color, emoji) {
   flame.geometry.rotateZ(Math.PI / 2) // -X(뒤쪽)을 향하게
   flame.position.set(-1.7, 0.62, 0)
   flame.visible = false
-  g.add(kartBody, rocket, face, flame)
-  return { group: g, kartBody, rocket, flame }
+
+  // 바닥 그림자: 회오리에 날아올라도 그림자는 땅에 남아 높이가 보인다
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(1.5, 16),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22, depthWrite: false })
+  )
+  shadow.geometry.rotateX(-Math.PI / 2)
+  shadow.position.y = 0.045
+  g.add(kartBody, rocket, face, flame, shadow)
+  return { group: g, kartBody, rocket, flame, shadow }
 }
 
 const OBJ_EMOJI = { banana: '🍌', bomb: '💣' }
@@ -599,8 +620,18 @@ export function createKartScene(canvas, track) {
         kartNodes.set(k.id, node)
         scene.add(node.group)
       }
-      node.group.position.set(k.x, 0, k.z)
+      // 회오리에 휘말리면 포물선을 그리며 하늘로 붕 떴다 떨어진다
+      const flying = k.flyT > 0
+      const airY = flying ? Math.sin(Math.PI * (1 - k.flyT / FLY_TIME)) * 5 : 0
+      node.group.position.set(k.x, airY, k.z)
       node.group.rotation.y = -k.heading - (k.spin || 0)
+      // 그림자는 땅에 남아 높이를 보여준다
+      node.shadow.position.y = 0.045 - airY
+      const shScale = Math.max(0.45, 1 - airY * 0.1)
+      node.shadow.scale.setScalar(shScale)
+      // 패널티 후 무적: 카트가 반투명하게 깜빡인다
+      const blinking = k.invT > 0 && !flying && !(k.stunT > 0)
+      node.group.visible = !blinking || Math.floor(now / 90) % 2 === 0
       const riding = k.rocketT > 0 // 로켓 변신 중엔 몸체가 로켓으로
       node.kartBody.visible = !riding
       node.rocket.visible = riding
@@ -667,32 +698,45 @@ export function createKartScene(canvas, track) {
     }
 
     // 맵 명물 장애물: 시간의 순수 함수로 움직인다 (엔진 충돌 판정과 동일 위치).
-    // 부서진 눈사람은 잠시 사라졌다 복구 — 부서지는 순간 눈보라가 펑!
+    // 눈사람은 부서지는 순간 눈보라가 펑! → 잠시 후 반짝이며 재생성.
+    // 건너가던 소는 코스 밖으로 나가면 사라졌다 반대편에서 다시 나타난다.
     for (let idx = 0; idx < obstacleNodes.length; idx++) {
       const node = obstacleNodes[idx]
       const alive = !view.obs || view.obs[idx] !== false
-      if (!alive && node.prevAlive) {
-        spawnParts(36, () => {
+      const burst = (n, color, vy) =>
+        spawnParts(n, () => {
           const a = Math.random() * Math.PI * 2
           const r = 2 + Math.random() * 6
           return {
             x: node.sp.position.x, y: 1 + Math.random() * 1.5, z: node.sp.position.z,
-            vx: Math.cos(a) * r, vy: 3 + Math.random() * 6, vz: Math.sin(a) * r,
+            vx: Math.cos(a) * r, vy: vy + Math.random() * 5, vz: Math.sin(a) * r,
             life: 0.7 + Math.random() * 0.5, grav: 10,
-            r: 1, g: 1, b: 1,
+            ...color,
           }
         })
-      }
+      if (!alive && node.prevAlive) burst(36, { r: 1, g: 1, b: 1 }, 3) // 와장창!
+      if (alive && !node.prevAlive) burst(20, { r: 0.75, g: 0.95, b: 1 }, 4) // 재생성 반짝
       node.prevAlive = alive
-      node.sp.visible = alive
-      if (!alive) continue
+      const shown = alive && obstacleVisible(track, node.ob, view.time)
+      node.sp.visible = shown
+      if (!shown) continue
       const pos = obstaclePose(track, node.ob, view.time)
-      // 소는 느긋하게 끄덕, 펭귄은 배 깔고 통통, 회오리는 빙글빙글
+      // 소는 느긋하게 끄덕끄덕, 펭귄은 배 깔고 통통
       let y = node.look.y
+      let sx = node.look.scale
+      let sy = node.look.scale
       if (node.ob.kind === 'cow') y += Math.sin(view.time * 2.2 + idx) * 0.12
       if (node.ob.kind === 'penguin') y += Math.abs(Math.sin(view.time * 5 + idx)) * 0.35
-      if (node.ob.kind === 'tornado') node.sp.material.rotation += dt * 7
-      node.sp.position.set(pos.x, y, pos.z)
+      if (node.ob.kind === 'tornado') {
+        // 회오리는 굴러가지 않는다 — 부르르 흔들리고 들썩이며 출렁인다
+        node.sp.material.rotation = Math.sin(now / 110 + idx * 2) * 0.18
+        y += Math.abs(Math.sin(now / 160 + idx)) * 0.5
+        const pulse = 1 + Math.sin(now / 130 + idx) * 0.08
+        sx = node.look.scale * pulse
+        sy = node.look.scale * (2 - pulse)
+      }
+      node.sp.scale.set(sx, sy, 1)
+      node.sp.position.set(pos.x + (node.ob.kind === 'tornado' ? Math.sin(now / 70 + idx) * 0.25 : 0), y, pos.z)
     }
 
     // 아이템 박스 회전/표시 (유리 큐브가 빙글빙글, '?'는 항상 카메라를 본다)

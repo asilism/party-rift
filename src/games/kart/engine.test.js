@@ -6,7 +6,7 @@ import {
 } from './engine.js'
 import {
   TRACK, TRACKS, TRACK_LIST, BOX_SPOTS, PADS, PAD_HALF_W,
-  nearestSample, wrapDelta, obstaclePose, onIce,
+  nearestSample, wrapDelta, obstaclePose, obstacleTrackPos, obstacleVisible, onIce,
 } from './track.js'
 
 const P2 = [
@@ -367,6 +367,69 @@ test('초원의 소: 부딪히면 튕겨나며 감속하지만 스턴은 없다'
   const d = Math.hypot(k.x - pos.x, k.z - pos.z)
   assert.ok(d >= cow.r + 1 - 0.01, `밀려남 (d=${d})`)
 })
+
+test('소는 한 방향으로만 건너가고, 코스 밖에선 사라진다 (반대편 리스폰)', () => {
+  const t = TRACKS.meadow
+  const cow = t.obstacles[0]
+  // 한 주기 동안 lat이 단조 증가(dir=1): 뒷걸음질 없음
+  const t0 = cow.period * (1 - cow.phase) + 0.5 // 주기 시작 직후
+  const lats = [0, 0.2, 0.4, 0.6, 0.8].map(
+    (f) => obstacleTrackPos(t, cow, t0 + f * cow.period * 0.9).lat
+  )
+  for (let i = 1; i < lats.length; i++) {
+    assert.ok(lats[i] > lats[i - 1], `한 방향 진행 (${lats.join(', ')})`)
+  }
+  // 주기 시작/끝(코스 밖)에선 안 보이고, 중간(트랙 위)에선 보인다
+  assert.equal(obstacleVisible(t, cow, t0), false, '코스 밖에선 숨김')
+  assert.equal(obstacleVisible(t, cow, t0 + cow.period / 2), true, '트랙 위에선 표시')
+})
+
+test('회오리: 부딪히면 하늘로 붕 날아가고(조향 불가), 착지 후 무적', () => {
+  const g = createGame(P2, Math.random, 'desert')
+  startRacing(g)
+  const k = g.karts[0]
+  const tornado = g.track.obstacles.find((o) => o.kind === 'tornado')
+  const pos = obstaclePose(g.track, tornado, g.time + STEP)
+  k.x = pos.x
+  k.z = pos.z
+  k.ci = nearestSample(g.track, k.x, k.z)
+  k.speed = 20
+  step(g, STEP)
+  assert.equal(k.bumpKind, 'tornado')
+  assert.ok(k.flyT > 0, '하늘로 붕!')
+  assert.equal(k.stunT, 0, '스턴이 아니라 비행')
+  // 비행 중엔 바나나도 무시
+  g.objects.push({ kind: 'banana', id: 99, x: k.x, z: k.z })
+  step(g, STEP)
+  assert.equal(k.stunT, 0, '비행 중 면역')
+  // 착지 후에도 잠시 무적(깜빡임)
+  for (let i = 0; i < Math.ceil(1.4 / STEP) && k.flyT > 0; i++) step(g, STEP)
+  assert.equal(k.flyT, 0, '착지')
+  assert.ok(k.invT > 0, '착지 후 무적 시간')
+})
+
+test('패널티 후 무적: 스턴이 풀린 직후엔 연달아 당하지 않는다', () => {
+  const g = createGame(P2)
+  startRacing(g)
+  const k = g.karts[0]
+  stunKartViaBanana(g, k)
+  assert.ok(k.stunT > 0, '첫 바나나 스턴')
+  for (let i = 0; i < Math.ceil(2 / STEP) && k.stunT > 0; i++) step(g, STEP)
+  assert.equal(k.stunT, 0, '스턴 종료')
+  assert.ok(k.invT > 0, '무적 시간 시작')
+  stunKartViaBanana(g, k)
+  assert.equal(k.stunT, 0, '무적 중엔 다시 안 당함')
+  for (let i = 0; i < Math.ceil(2 / STEP) && k.invT > 0; i++) step(g, STEP)
+  assert.equal(k.invT, 0, '무적 종료')
+  stunKartViaBanana(g, k)
+  assert.ok(k.stunT > 0, '무적이 끝나면 다시 당한다')
+})
+
+function stunKartViaBanana(g, k) {
+  g.objects.push({ kind: 'banana', id: g.nextObjId++, x: k.x, z: k.z })
+  step(g, STEP)
+  g.objects = g.objects.filter((o) => o.kind !== 'banana')
+}
 
 test('사막의 선인장: 박으면 따가워서 스턴', () => {
   const g = createGame(P2, Math.random, 'desert')

@@ -3,7 +3,7 @@
 //  - 호스트가 step()을 60Hz로 돌리고 makeView()로 직렬화 스냅샷을 전파한다.
 import {
   TRACK, TRACKS, DEFAULT_TRACK_ID, PAD_HALF_W,
-  nearestSample, wrapDelta, samplePoint, obstaclePose, obstacleTrackPos, onIce,
+  nearestSample, wrapDelta, samplePoint, obstaclePose, obstacleTrackPos, obstacleVisible, onIce,
 } from './track.js'
 
 export const STEP = 1 / 60 // 물리 틱 (초)
@@ -39,6 +39,8 @@ const DRAFT_MIN_SPEED = 18 // 슬립스트림이 차오르는 최소 속도 (m/s
 const ICE_STEER = 0.45 // 빙판 위 조향 효율 (핸들이 주르륵~)
 const SNOWMAN_RESPAWN = 7 // 부서진 눈사람이 다시 만들어지는 시간 (초)
 const OB_BOUNCE_SLOW = 0.7 // 소/펭귄에 부딪혔을 때 속도 배율
+export const FLY_TIME = 1.3 // 회오리에 휘말려 하늘로 붕 떠 있는 시간 (초, 렌더러 공유)
+const INV_TIME = 1.6 // 패널티가 끝난 뒤 무적(깜빡임) 시간 (초)
 
 export function createGame(players, rng = Math.random, trackId = DEFAULT_TRACK_ID) {
   const track = TRACKS[trackId] || TRACK
@@ -77,6 +79,8 @@ export function createGame(players, rng = Math.random, trackId = DEFAULT_TRACK_I
       rocketT: 0, // 로켓 변신 남은 시간
       rocketGoal: null, // 로켓 변신이 끝나는 목표 진행도
       stunT: 0,
+      flyT: 0, // 회오리에 휘말려 공중에 떠 있는 남은 시간
+      invT: 0, // 패널티 후 무적(깜빡임) 남은 시간
       spin: 0, // 스턴 중 회전 연출용 각도
       offroad: false,
       finished: false,
@@ -114,7 +118,7 @@ export function setInput(state, id, { steer = 0, brake = false } = {}) {
 export function fireItem(state, id) {
   if (state.status !== 'racing') return state
   const k = state.karts.find((p) => p.id === id)
-  if (!k || !k.item || k.finished || k.stunT > 0 || k.rocketT > 0) return state
+  if (!k || !k.item || k.finished || k.stunT > 0 || k.flyT > 0 || k.rocketT > 0) return state
   const item = k.item
   k.item = null
   if (item === 'boost') {
@@ -144,7 +148,7 @@ export function fireItem(state, id) {
     // 꼴찌의 대역전 카드: 내 앞의 모든 카트가 번개에 맞아 잠깐 스턴!
     state.lightningT = LIGHTNING_FLASH
     for (const o of state.karts) {
-      if (o === k || o.finished || o.rocketT > 0) continue
+      if (o === k || o.finished || o.rocketT > 0 || o.invT > 0 || o.flyT > 0) continue
       if (o.prog > k.prog) {
         stunKart(o, LIGHTNING_STUN)
         o.boostT = 0
@@ -238,7 +242,7 @@ function stepBots(state, dt) {
 // 가속 발판: 카트 한 대 폭, 트랙 안 무작위 위치 — 밟으면 버섯처럼 순간 부스트
 function stepPads(state) {
   for (const k of state.karts) {
-    if (k.finished || k.stunT > 0 || k.rocketT > 0) continue
+    if (k.finished || k.stunT > 0 || k.flyT > 0 || k.rocketT > 0) continue
     for (const pad of state.track.pads) {
       const d = wrapDelta(k.ci - pad.i, state.track.n)
       if (d >= -1 && d <= 3 && Math.abs(k.lat - pad.lat) <= PAD_HALF_W) {
@@ -252,7 +256,7 @@ function stepPads(state) {
 // 다 차면 부스트가 터지며 추월 찬스! (봇도 동일하게 적용)
 function stepDraft(state, dt) {
   for (const k of state.karts) {
-    if (k.finished || k.stunT > 0 || k.rocketT > 0 || k.boostT > 0 || k.speed < DRAFT_MIN_SPEED) {
+    if (k.finished || k.stunT > 0 || k.flyT > 0 || k.rocketT > 0 || k.boostT > 0 || k.speed < DRAFT_MIN_SPEED) {
       k.draftT = 0
       continue
     }
@@ -283,12 +287,13 @@ function stepObstacles(state, dt) {
   if (!track.obstacles?.length) return
   track.obstacles.forEach((ob, idx) => {
     if (ob.kind === 'snowman' && state.obsT[idx] > 0) {
-      state.obsT[idx] = Math.max(0, state.obsT[idx] - dt) // 부서짐 → 리스폰 대기
+      state.obsT[idx] = Math.max(0, state.obsT[idx] - dt) // 부서짐 → 리스폰 대기 후 재생성
       return
     }
+    if (!obstacleVisible(track, ob, state.time)) return // 코스 밖으로 나간 소
     const pos = obstaclePose(track, ob, state.time)
     for (const k of state.karts) {
-      if (k.finished || k.rocketT > 0 || k.stunT > 0) continue
+      if (k.finished || k.rocketT > 0 || k.stunT > 0 || k.flyT > 0 || k.invT > 0) continue
       const r = ob.r + 1 // 카트 반경 고려
       let dx = k.x - pos.x
       let dz = k.z - pos.z
@@ -319,7 +324,10 @@ function stepObstacles(state, dt) {
       if (ob.kind === 'cactus') {
         stunKart(k, 1.0)
       } else if (ob.kind === 'tornado') {
-        stunKart(k, 0.9)
+        // 토네이도처럼 카트를 하늘로 붕! 날려버린다 (착지 후 잠시 무적)
+        k.flyT = FLY_TIME
+        k.invT = Math.max(k.invT, FLY_TIME + INV_TIME)
+        k.speed *= 0.6
       } else if (ob.kind === 'snowman') {
         k.speed *= 0.45
         state.obsT[idx] = SNOWMAN_RESPAWN
@@ -353,7 +361,12 @@ function stepKart(state, k, dt) {
     if (k.rocketT === 0) k.speed = MAX_SPEED // 변신 해제 → 카트 속도로 복귀
     return
   }
-  if (k.stunT > 0) {
+  if (k.flyT > 0) {
+    // 회오리에 휘말려 공중에! 조향 불가, 빙글 돌며 관성으로 날아간다
+    k.flyT = Math.max(0, k.flyT - dt)
+    k.spin += dt * 7
+    k.speed = Math.max(6, k.speed - 8 * dt)
+  } else if (k.stunT > 0) {
     // 스턴: 빙글 돌며 미끄러진다
     k.stunT = Math.max(0, k.stunT - dt)
     k.spin += dt * 9
@@ -378,6 +391,7 @@ function stepKart(state, k, dt) {
   }
   k.boostT = Math.max(0, k.boostT - dt)
   k.bumpCool = Math.max(0, k.bumpCool - dt)
+  k.invT = Math.max(0, k.invT - dt)
 
   k.x += Math.cos(k.heading) * k.speed * dt
   k.z += Math.sin(k.heading) * k.speed * dt
@@ -418,12 +432,13 @@ function collideKarts(karts) {
       if (d >= minD || d === 0) continue
       dx /= d
       dz /= d
+      if (a.flyT > 0 || b.flyT > 0) continue // 공중에 뜬 카트는 부딪히지 않는다
       const aRocket = a.rocketT > 0
       const bRocket = b.rocketT > 0
       if (aRocket !== bRocket) {
         const victim = aRocket ? b : a
         const out = aRocket ? 1 : -1
-        if (victim.stunT <= 0) stunKart(victim)
+        if (victim.stunT <= 0 && victim.invT <= 0) stunKart(victim)
         victim.x += dx * out * (minD - d)
         victim.z += dz * out * (minD - d)
         continue
@@ -457,7 +472,7 @@ function stepBoxes(state, dt) {
     }
     const spot = state.track.boxSpots[i]
     for (const k of state.karts) {
-      if (k.finished || k.stunT > 0 || k.rocketT > 0) continue
+      if (k.finished || k.stunT > 0 || k.flyT > 0 || k.rocketT > 0) continue
       const dx = k.x - spot.x
       const dz = k.z - spot.z
       if (dx * dx + dz * dz < 2 * 2) {
@@ -491,6 +506,8 @@ function rollItem(state, k) {
 function stunKart(k, t = STUN_TIME) {
   k.stunT = Math.max(k.stunT, t)
   k.speed *= 0.25
+  // 스턴이 풀린 뒤 잠깐 무적(깜빡임) — 연속 패널티로 게임이 끊기지 않게
+  k.invT = Math.max(k.invT, t + INV_TIME)
 }
 
 // 바나나/폭탄 이동 + 충돌 (로켓 변신 중인 카트는 면역)
@@ -507,7 +524,7 @@ function stepObjects(state, dt) {
       if (o.life <= 0) remove.add(o.id)
     }
     for (const k of state.karts) {
-      if (k.finished || k.stunT > 0 || k.rocketT > 0) continue
+      if (k.finished || k.stunT > 0 || k.flyT > 0 || k.invT > 0 || k.rocketT > 0) continue
       if (o.kind === 'bomb' && k.id === o.owner) continue
       const r = o.kind === 'bomb' ? 2 : 1.6
       const dx = k.x - o.x
@@ -597,6 +614,8 @@ export function makeView(state) {
       boostT: r2(k.boostT),
       rocketT: r2(k.rocketT),
       stunT: r2(k.stunT),
+      flyT: r2(k.flyT),
+      invT: r2(k.invT),
       spin: r3(k.spin),
       offroad: k.offroad,
       finished: k.finished,

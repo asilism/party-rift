@@ -89,21 +89,27 @@ const MEADOW_CTRL = [
   [-58, -2], [-48, -24], [-26, -38],
 ]
 
-// 🏜️ 사막 협곡 — 헤어핀과 S자가 이어지는 고난도 코스.
+// 🏜️ 사막 협곡 — 유턴 헤어핀 3개 + S자/시케인이 이어지는 최고난도 코스.
 const DESERT_CTRL = [
-  [-8, -46], [20, -48], [42, -42], [52, -26],
-  [44, -10], [26, -14], [18, 2], [30, 14],
-  [46, 12], [54, 26], [40, 38], [18, 34],
-  [2, 44], [-20, 48], [-38, 38], [-32, 20],
-  [-48, 12], [-58, -6], [-46, -28], [-22, -36],
+  [-6, -48], [18, -50], [38, -46], [52, -34],
+  [56, -18], [44, -12], [34, -22], [24, -32], // 헤어핀1 (오른쪽 아래 유턴)
+  [12, -26], [14, -12], [28, -4], [44, 0],
+  [54, 10], [48, 24], [34, 28], [28, 16], // 헤어핀2 (오른쪽 위 유턴)
+  [16, 8], [4, 16], [8, 30], [18, 40], // S자 상승
+  [8, 50], [-10, 46], [-16, 32], [-28, 24], // 시케인
+  [-44, 30], [-56, 20], [-54, 2], [-40, -6], // 헤어핀3 (왼쪽 유턴)
+  [-30, -18], [-44, -28], [-34, -42],
 ]
 
-// ❄️ 눈꽃 빙판 — 시원하게 도는 코스지만 빙판 구간에선 핸들이 미끄러진다!
+// ❄️ 눈꽃 빙판 — 큰 스윕 사이사이 유턴 헤어핀 2개 + 시케인.
 const SNOW_CTRL = [
-  [0, -48], [28, -44], [48, -28], [56, -4],
-  [46, 22], [24, 38], [-2, 44], [-20, 32],
-  [-38, 44], [-54, 28], [-58, 2], [-48, -22],
-  [-26, -40],
+  [0, -50], [26, -46], [46, -34], [56, -16],
+  [50, 4], [36, 12], [30, 0], [20, -10], // 헤어핀1 (오른쪽 중앙 유턴)
+  [8, -2], [12, 14], [24, 26], [36, 34],
+  [28, 46], [10, 48], [-2, 38], [-14, 28], // 내려오는 시케인
+  [-28, 36], [-44, 42], [-56, 30], [-52, 12],
+  [-36, 8], [-46, -6], [-54, -20], // 헤어핀2 (왼쪽 유턴)
+  [-42, -34], [-22, -44],
 ]
 
 const fi = (f) => Math.round(N * f) // 트랙 비율 → 샘플 인덱스
@@ -121,10 +127,12 @@ export const TRACKS = {
     desc: '한가로운 초원 코스. 단, 소들이 트랙을 건너다닌다?!',
     difficulty: '쉬움',
     padSeed: 311.7,
+    // 소는 한 방향으로만 건너간다 (cross): 코스 밖으로 나가면 사라졌다가
+    // 반대편에서 다시 나타난다 — 뒷걸음질 없음!
     obstacles: [
-      { kind: 'cow', i: fi(0.3), period: 9, phase: 0.4, span: 6.5, r: 1.6 },
-      { kind: 'cow', i: fi(0.58), period: 7, phase: 2.6, span: 6.5, r: 1.6 },
-      { kind: 'cow', i: fi(0.86), period: 11, phase: 4.4, span: 6.5, r: 1.6 },
+      { kind: 'cow', i: fi(0.3), cross: true, period: 11, phase: 0.2, dir: 1, span: 9.5, r: 1.6 },
+      { kind: 'cow', i: fi(0.58), cross: true, period: 9, phase: 0.55, dir: -1, span: 9.5, r: 1.6 },
+      { kind: 'cow', i: fi(0.86), cross: true, period: 13, phase: 0.8, dir: 1, span: 9.5, r: 1.6 },
     ],
     theme: {
       sky: 0x8ecdf5, dusk: 0xff9e6b, ground: 0x68b95c, road: 0x474d59,
@@ -136,7 +144,7 @@ export const TRACKS = {
     id: 'desert',
     name: '사막 협곡',
     emoji: '🏜️',
-    desc: '헤어핀 가득 고난도 코스. 선인장은 따갑고 회오리는 빙글빙글!',
+    desc: '유턴 헤어핀 3개의 최고난도 코스. 선인장은 따갑고 회오리는 하늘로 붕!',
     difficulty: '어려움',
     padSeed: 73.3,
     obstacles: [
@@ -192,14 +200,29 @@ export const BOX_SPOTS = TRACKS.meadow.boxSpots
 export const PADS = TRACKS.meadow.pads
 
 // 장애물의 현재 위치 — 시간의 순수 함수라 엔진(충돌)과 렌더러(그리기)가
-// 같은 결과를 얻는다. 움직이는 장애물은 좌우 사인 진동(+선택적 전진 drift).
-// 트랙 좌표(진행도 + 좌우 offset). 봇의 회피 조향에도 쓰인다.
+// 같은 결과를 얻는다. 트랙 좌표(진행도 + 좌우 offset). 봇의 회피 조향에도 쓰인다.
+//  - cross: 한 방향으로 건너가고(소), 끝에 닿으면 반대편에서 다시 시작
+//  - period(cross 아님): 좌우 사인 진동(펭귄/회오리) + 선택적 전진 drift
 export function obstacleTrackPos(track, ob, time) {
   const prog = ob.drift ? (ob.i + time * ob.drift) % track.n : ob.i
-  const lat = ob.period
-    ? Math.sin((time * Math.PI * 2) / ob.period + (ob.phase || 0)) * ob.span
-    : ob.lat
+  let lat
+  if (ob.cross) {
+    const f = (((time / ob.period + ob.phase) % 1) + 1) % 1
+    lat = (f * 2 - 1) * ob.span * (ob.dir || 1)
+  } else if (ob.period) {
+    lat = Math.sin((time * Math.PI * 2) / ob.period + (ob.phase || 0)) * ob.span
+  } else {
+    lat = ob.lat
+  }
   return { prog, lat }
+}
+
+// 건너가는 장애물(소)이 코스 밖으로 나가 있는 동안은 보이지도 않고
+// 부딪히지도 않는다 (사라졌다 반대편 리스폰 연출)
+export function obstacleVisible(track, ob, time) {
+  if (!ob.cross) return true
+  const { lat } = obstacleTrackPos(track, ob, time)
+  return Math.abs(lat) <= track.halfW + 1.5
 }
 
 export function obstaclePose(track, ob, time) {
