@@ -127,7 +127,7 @@ export default function KartGame({ roster, onExit, net }) {
   const sampleHost = useCallback(() => (stateRef.current ? makeView(stateRef.current) : null), [])
   const sampleGuest = useCallback(() => interpolate(bufRef.current), [])
 
-  function startGame() {
+  function startGame(trackId) {
     sound.setEnabled(soundOn)
     sound.unlock()
     const humans = racers.map((p) => ({
@@ -146,7 +146,7 @@ export default function KartGame({ roster, onExit, net }) {
       color: z.color,
       isBot: true,
     }))
-    stateRef.current = createGame([...humans, ...bots])
+    stateRef.current = createGame([...humans, ...bots], Math.random, trackId)
     ctrlRef.current = { steer: 0, brake: false }
     setHud(makeView(stateRef.current))
     setPhase('play')
@@ -208,7 +208,7 @@ export default function KartGame({ roster, onExit, net }) {
       myId={myId}
       ctrlRef={ctrlRef}
       onItem={onItem}
-      onRestart={startGame}
+      onRestart={() => setPhase('setup')} // 다시하기 = 맵 선택부터
       onExit={onExit}
       soundOn={soundOn}
       onToggleSound={toggleSound}
@@ -232,6 +232,8 @@ function interpolate(buf) {
   if (!a || a === b || b.at <= a.at) return b.v
   const f = Math.min(1, (t - a.at) / (b.at - a.at))
   const lerp = (x, y) => x + (y - x) * f
+  // 장애물은 시간의 함수로 그려지므로 time도 보간해 부드럽게
+  const time = lerp(a.v.time ?? 0, b.v.time ?? 0)
   const karts = b.v.karts.map((kb) => {
     const ka = a.v.karts.find((k) => k.id === kb.id)
     if (!ka) return kb
@@ -248,7 +250,7 @@ function interpolate(buf) {
     if (!oa) return ob
     return { ...ob, x: lerp(oa.x, ob.x), z: lerp(oa.z, ob.z) }
   })
-  return { ...b.v, karts, objects }
+  return { ...b.v, time, karts, objects }
 }
 
 // HUD 효과음: 스냅샷 변화를 보고 호스트/게스트 동일하게 재생
@@ -266,6 +268,8 @@ function useKartSounds(hud, myId) {
     if (me?.boostT > 0 && !(p.boostT > 0)) sound.ladderUp()
     if (me?.rocketT > 0 && !(p.rocketT > 0)) sound.rocket()
     if (hud.lightning && !p.lightning) sound.thunder() // 번개는 모두에게 들린다
+    // 소/펭귄/눈사람 등 장애물과 쿵! (스턴형 장애물은 위의 스턴음이 담당)
+    if (me && p.bumpSeq != null && me.bumpSeq > p.bumpSeq && !(me.stunT > 0)) sound.bounce()
     if (hud.status === 'finished' && p.status && p.status !== 'finished') sound.win()
     prev.current = {
       countdown: hud.countdown,
@@ -273,13 +277,23 @@ function useKartSounds(hud, myId) {
       stunT: me?.stunT,
       boostT: me?.boostT,
       rocketT: me?.rocketT,
+      bumpSeq: me?.bumpSeq,
       lightning: hud.lightning,
     }
   }, [hud, myId])
 }
 
-// 레이스 드라마 배너: 랩 진입 / 추월·역전 / 슬립스트림 / 번개를
-// 화면 중앙에 잠깐씩 띄운다 (우선순위: 랩 > 번개 > 슬립스트림 > 순위 변동)
+// 맵 명물 장애물에 부딪혔을 때의 한 마디
+const BUMP_MSG = {
+  cow: '🐄 음머~! 소를 들이받았어!',
+  penguin: '🐧 펭귄이랑 꽈당!',
+  snowman: '⛄ 눈사람 와장창!',
+  cactus: '🌵 아야야! 따가워!',
+  tornado: '🌪️ 회오리에 휘말렸다!',
+}
+
+// 레이스 드라마 배너: 랩 진입 / 장애물 사고 / 추월·역전 / 슬립스트림 / 번개를
+// 화면 중앙에 잠깐씩 띄운다 (우선순위: 랩 > 번개 > 장애물 > 슬립스트림 > 순위 변동)
 function useRaceBanner(hud, myId) {
   const [msg, setMsg] = useState(null)
   const prev = useRef(null)
@@ -296,6 +310,8 @@ function useRaceBanner(hud, myId) {
       lap: me?.lap ?? 1,
       rank: me?.rank ?? null,
       draftSeq: me?.draftSeq ?? 0,
+      bumpSeq: me?.bumpSeq ?? 0,
+      bumpKind: me?.bumpKind ?? null,
     }
     const p = prev.current
     prev.current = cur
@@ -317,6 +333,10 @@ function useRaceBanner(hud, myId) {
       return
     }
     if (!me || me.finished) return
+    if (cur.bumpSeq > p.bumpSeq && BUMP_MSG[cur.bumpKind]) {
+      show(BUMP_MSG[cur.bumpKind])
+      return
+    }
     if (cur.draftSeq > p.draftSeq) {
       show('💨 슬립스트림 부스트!')
       return
@@ -354,7 +374,7 @@ function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, sound
 
   return (
     <div className="kart">
-      <Kart3D sample={sample} myId={myId} />
+      <Kart3D sample={sample} myId={myId} trackId={hud.trackId} />
 
       {me && !finished && (
         <TouchControls
@@ -385,7 +405,7 @@ function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, sound
 
         {/* 우측 상단: 미니맵 + 현재 순위 */}
         <div className="kart__side">
-          <MiniMap karts={hud.karts} myId={myId} />
+          <MiniMap karts={hud.karts} myId={myId} trackId={hud.trackId} />
           <div className="kart-ranks">
             {order.map((k, i) => (
               <div

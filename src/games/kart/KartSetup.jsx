@@ -1,9 +1,19 @@
+import { useState } from 'react'
 import { getZodiac } from '../../shared/zodiac.js'
 import { LAPS } from './engine.js'
+import { TRACK_LIST, DEFAULT_TRACK_ID } from './track.js'
+
+// 맵별 명물 미리보기 (선택 카드에 표시)
+const MAP_FEATURE = {
+  meadow: '🐄 소들이 트랙을 건너다녀요',
+  desert: '🌵 선인장 + 🌪️ 회오리 주의!',
+  snow: '🧊 빙판에선 핸들이 주르륵, ⛄ 와장창',
+}
 
 // 호스트 전용 시작 화면. 카트는 기기당 1대 — 각 기기의 첫 참가자가 달린다.
 // 4명이 안 되면 CPU가 빈자리를 채워서 혼자서도 즐길 수 있다.
 export default function KartSetup({ racers, benched, onStart, onExit }) {
+  const [trackId, setTrackId] = useState(DEFAULT_TRACK_ID)
   const canStart = racers.length >= 1
   const cpuCount = Math.max(0, 4 - racers.length)
 
@@ -22,12 +32,28 @@ export default function KartSetup({ racers, benched, onStart, onExit }) {
         <ul className="dobble-rules">
           <li>가속은 <b>자동!</b> 화면을 드래그하면 <b>조이스틱</b>으로 핸들을 꺾어요. (키보드 ←/→ 또는 A/D도 OK)</li>
           <li>🛑 <b>브레이크</b>로 코너를 돌고, 🎁 박스에서 아이템을 얻어요.</li>
-          <li>🍄 부스트 · 🍌 바나나 · 💣 폭탄 — 버튼 한 번으로 사용!</li>
+          <li>🍄 부스트 · 🍌 바나나 · 💣 폭탄 · ⚡ 번개 — 버튼 한 번으로 사용!</li>
+          <li>앞 카트 뒤에 붙어 달리면 💨 <b>슬립스트림</b> 부스트!</li>
           <li>많이 뒤처지면 🚀 <b>추격 로켓</b>이 나와요 — 로켓으로 변신해 슝!</li>
-          <li>무지개 <b>가속 발판</b>을 밟으면 순간 가속!</li>
-          <li>카트는 <b>기기당 1대</b>: 각 기기의 첫 참가자가 달려요.</li>
-          <li>4명이 안 되면 🤖 <b>CPU</b>가 빈자리를 채워요 — 혼자서도 OK!</li>
+          <li>카트는 <b>기기당 1대</b> · 4명이 안 되면 🤖 CPU가 채워요.</li>
         </ul>
+
+        <p className="setup__label">맵을 골라요 🗺️</p>
+        <div className="kart-maps">
+          {TRACK_LIST.map((t) => (
+            <button
+              key={t.id}
+              className={`kart-map ${trackId === t.id ? 'kart-map--on' : ''}`}
+              onClick={() => setTrackId(t.id)}
+            >
+              <span className="kart-map__emoji">{t.emoji}</span>
+              <span className="kart-map__name">{t.name}</span>
+              <span className="kart-map__diff">{t.difficulty}</span>
+              <span className="kart-map__desc">{MAP_FEATURE[t.id] || t.desc}</span>
+            </button>
+          ))}
+        </div>
+
         <div className="setup__roster">
           {racers.map((p) => {
             const z = getZodiac(p.zodiacId)
@@ -57,7 +83,7 @@ export default function KartSetup({ racers, benched, onStart, onExit }) {
         {!canStart && (
           <p className="setup__hint">⚠️ 참가자가 1명 이상 있어야 출발할 수 있어요</p>
         )}
-        <button className="btn btn--primary" disabled={!canStart} onClick={onStart}>
+        <button className="btn btn--primary" disabled={!canStart} onClick={() => onStart(trackId)}>
           출발! 🏎️
         </button>
       </div>
