@@ -2,7 +2,7 @@
 // 엔진의 makeView() 스냅샷만 보고 그린다 — 호스트/게스트 공용.
 import * as THREE from 'three'
 import { getZodiac } from '../../shared/zodiac.js'
-import { BOX_SPOTS, BOX_ROWS, PAD_ROWS } from './track.js'
+import { BOX_SPOTS, BOX_ROWS, PADS, PAD_HALF_W } from './track.js'
 
 const SKY = 0x8ecdf5
 
@@ -78,7 +78,8 @@ function textTexture(text, size = 128) {
   return tex
 }
 
-// 가속 발판: 진행 방향을 가리키는 무지개 그라데이션 화살표(Λ) 2개
+// 가속 발판: 진행 방향을 가리키는 무지개 그라데이션 화살표(Λ) 2개.
+// 폭은 카트 한 대 크기 (판정과 동일한 PAD_HALF_W).
 function buildPads(track) {
   const g = new THREE.Group()
   const mat = new THREE.MeshBasicMaterial({
@@ -87,11 +88,11 @@ function buildPads(track) {
     transparent: true,
     opacity: 0.95,
   })
-  const makeChevron = (pi, fwdOff) => {
-    const s = track.samples[pi]
-    const w = track.halfW * 0.85 // 트랙 폭 대부분을 덮는다
-    const L = 3.4 // 꼭짓점이 앞으로 나오는 길이
-    const T = 1.6 // 띠 두께
+  const makeChevron = (pad, fwdOff) => {
+    const s = track.samples[pad.i]
+    const w = PAD_HALF_W
+    const L = 2.2 // 꼭짓점이 앞으로 나오는 길이
+    const T = 1.3 // 띠 두께
     const steps = 10
     const pos = []
     const col = []
@@ -99,7 +100,7 @@ function buildPads(track) {
     const c = new THREE.Color()
     for (let i = 0; i <= steps; i++) {
       const f = (i / steps) * 2 - 1 // -1(왼쪽) ~ 1(오른쪽)
-      const lat = f * w
+      const lat = pad.lat + f * w
       const fwd = (1 - Math.abs(f)) * L + fwdOff
       const bx = s.x + s.nx * lat + s.dx * fwd
       const bz = s.z + s.nz * lat + s.dz * fwd
@@ -117,9 +118,9 @@ function buildPads(track) {
     geo.setIndex(idx)
     return new THREE.Mesh(geo, mat)
   }
-  for (const pi of PAD_ROWS) {
-    g.add(makeChevron(pi, 0))
-    g.add(makeChevron(pi, 3))
+  for (const pad of PADS) {
+    g.add(makeChevron(pad, 0))
+    g.add(makeChevron(pad, 3))
   }
   return g
 }
@@ -461,6 +462,20 @@ export function createKartScene(canvas, track) {
         node.flame.scale.setScalar((riding ? 1.6 : 1.1) + Math.sin(now / 35) * 0.35) // 불꽃 펄럭임
         node.flame.position.y = riding ? 1 : 0.62
       }
+    }
+    // 지난 판 카트(다시하기로 멤버가 바뀐 경우) 정리
+    for (const [id, node] of kartNodes) {
+      if (view.karts.some((k) => k.id === id)) continue
+      scene.remove(node.group)
+      node.group.traverse((o) => {
+        o.geometry?.dispose?.()
+        const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []
+        mats.forEach((m) => {
+          m.map?.dispose?.()
+          m.dispose?.()
+        })
+      })
+      kartNodes.delete(id)
     }
 
     // 바나나/로켓 스프라이트

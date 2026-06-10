@@ -1,7 +1,9 @@
 // 파티 카트 순수 게임 로직 (호스트 권위).
 //  - 자동 가속: 출력은 자동, 입력은 조향(steer) / 브레이크(brake) / 아이템 사용뿐.
 //  - 호스트가 step()을 60Hz로 돌리고 makeView()로 직렬화 스냅샷을 전파한다.
-import { TRACK, BOX_SPOTS, PAD_ROWS, nearestSample, wrapDelta, samplePoint } from './track.js'
+import {
+  TRACK, BOX_SPOTS, PADS, PAD_HALF_W, nearestSample, wrapDelta, samplePoint,
+} from './track.js'
 
 export const STEP = 1 / 60 // 물리 틱 (초)
 export const LAPS = 3
@@ -23,8 +25,8 @@ const KART_RADIUS = 1.2 // 카트끼리 충돌 반경
 const BOX_RESPAWN = 4 // 아이템 박스 리스폰 (초)
 const BOMB_SPEED = 55 // m/s (폭탄: 센터라인을 따라 날아감)
 const BOMB_LIFE = 4
-const ROCKET_GAP = 50 // 1등과 이만큼(샘플) 뒤지면 아이템에 추격 로켓 등장
-const ROCKET_TIME = 3.5 // 로켓 변신 지속 시간 (초)
+const ROCKET_GAP = TRACK.n / 2 // 1등과 반 바퀴 이상 차이 나면 아이템에 추격 로켓 등장
+const ROCKET_TIME_MAX = 8 // 로켓 변신 최대 지속 시간 (초)
 const ROCKET_RIDE_SPEED = 58 // 로켓 변신 중 속도 (m/s)
 const END_GRACE = 30 // 1등 골인 후 나머지가 들어올 수 있는 시간 (초)
 
@@ -57,6 +59,7 @@ export function createGame(players, rng = Math.random) {
       itemSeq: 0, // 아이템을 새로 뽑을 때마다 +1 (슬롯머신 연출 트리거)
       boostT: 0,
       rocketT: 0, // 로켓 변신 남은 시간
+      rocketGoal: null, // 로켓 변신이 끝나는 목표 진행도
       stunT: 0,
       spin: 0, // 스턴 중 회전 연출용 각도
       offroad: false,
@@ -118,8 +121,13 @@ export function fireItem(state, id) {
       heading: Math.atan2(p.dz, p.dx),
     })
   } else if (item === 'rocket') {
-    // 카트가 로켓으로 변신해 트랙을 따라 자동으로 질주 (1등 추격)
-    k.rocketT = ROCKET_TIME
+    // 카트가 로켓으로 변신해 트랙을 따라 자동 질주.
+    // 1등이 억울하지 않게 "격차의 절반"까지만 따라잡는다.
+    const others = state.karts.filter((o) => o !== k)
+    const leaderProg = others.length ? Math.max(...others.map((o) => o.prog)) : k.prog
+    const gain = Math.max(20, (leaderProg - k.prog) / 2)
+    k.rocketGoal = k.prog + gain
+    k.rocketT = Math.min(ROCKET_TIME_MAX, (gain * TRACK.segLen) / ROCKET_RIDE_SPEED + 0.3)
     k.stunT = 0
     k.spin = 0
   }
@@ -179,13 +187,13 @@ function stepBots(state, dt) {
   }
 }
 
-// 가속 발판: 트랙 폭 전체, 밟으면 버섯처럼 순간 부스트
+// 가속 발판: 카트 한 대 폭, 트랙 안 무작위 위치 — 밟으면 버섯처럼 순간 부스트
 function stepPads(state) {
   for (const k of state.karts) {
     if (k.finished || k.stunT > 0 || k.rocketT > 0) continue
-    for (const pi of PAD_ROWS) {
-      const d = wrapDelta(k.ci - pi, TRACK.n)
-      if (d >= -1 && d <= 2 && Math.abs(k.lat) <= TRACK.halfW) {
+    for (const pad of PADS) {
+      const d = wrapDelta(k.ci - pad.i, TRACK.n)
+      if (d >= -1 && d <= 3 && Math.abs(k.lat - pad.lat) <= PAD_HALF_W) {
         k.boostT = Math.max(k.boostT, PAD_BOOST)
       }
     }
@@ -193,7 +201,8 @@ function stepPads(state) {
 }
 
 function stepKart(state, k, dt) {
-  // 로켓 변신: 센터라인을 따라 자동 질주, 모든 공격에 면역
+  // 로켓 변신: 센터라인을 따라 자동 질주, 모든 공격에 면역.
+  // 목표(격차의 절반)에 닿거나 시간이 다 되면 변신이 풀린다.
   if (k.rocketT > 0) {
     k.rocketT = Math.max(0, k.rocketT - dt)
     k.spin = 0
@@ -208,9 +217,8 @@ function stepKart(state, k, dt) {
     const rci = nearestSample(TRACK, k.x, k.z, k.ci)
     k.prog += wrapDelta(rci - k.ci, TRACK.n)
     k.ci = rci
-    // 1등을 따라잡으면 변신이 일찍 풀린다
-    const others = state.karts.filter((o) => o !== k)
-    if (others.length && k.prog >= Math.max(...others.map((o) => o.prog))) k.rocketT = 0
+    if (k.rocketGoal != null && k.prog >= k.rocketGoal) k.rocketT = 0
+    if (k.rocketT === 0) k.speed = MAX_SPEED // 변신 해제 → 카트 속도로 복귀
     return
   }
   if (k.stunT > 0) {
