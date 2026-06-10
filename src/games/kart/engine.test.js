@@ -198,24 +198,32 @@ test('아이템 박스는 먹은 뒤 일정 시간이 지나면 다시 생긴다
   assert.equal(makeView(g).boxes[0], true)
 })
 
-test('1등과 격차가 크면 아이템에 추격 로켓이 나온다', () => {
+test('1등과 반 바퀴 이상 차이 나야 추격 로켓이 나온다', () => {
   const g = createGame(P2, () => 0) // rng 0 → pool[0]
   startRacing(g)
   const a = g.karts[0]
-  g.karts[1].prog = a.prog + 100 // b가 한참 앞
   const spot = BOX_SPOTS[0]
+  // 반 바퀴 미만 격차 → 로켓 없음
+  g.karts[1].prog = a.prog + TRACK.n / 2 - 30
   a.x = spot.x
   a.z = spot.z
   a.ci = nearestSample(TRACK, a.x, a.z)
   step(g, STEP)
+  assert.notEqual(a.item, 'rocket', '격차가 작으면 로켓 없음')
+  // 반 바퀴 초과 → 로켓
+  a.item = null
+  g.boxes[0].t = 0
+  g.karts[1].prog = a.prog + TRACK.n / 2 + 30
+  step(g, STEP)
   assert.equal(a.item, 'rocket')
 })
 
-test('추격 로켓: 카트가 변신해 트랙을 따라 질주하고 공격에 면역', () => {
+test('추격 로켓: 변신해 질주하되 격차의 절반까지만 따라잡고 풀린다', () => {
   const g = createGame(P2)
   startRacing(g)
   const a = g.karts[0]
-  g.karts[1].prog = a.prog + 200 // 1등이 멀리 있어 변신이 일찍 안 풀린다
+  const b = g.karts[1]
+  b.prog = a.prog + 300 // 1등이 멀리
   a.item = 'rocket'
   fireItem(g, 'a')
   assert.ok(a.rocketT > 0, '로켓 변신 시작')
@@ -224,10 +232,13 @@ test('추격 로켓: 카트가 변신해 트랙을 따라 질주하고 공격에
   const prog0 = a.prog
   for (let i = 0; i < 60; i++) step(g, STEP) // 1초
   assert.equal(a.stunT, 0, '공격 면역')
+  assert.ok(a.prog - prog0 > 40 / TRACK.segLen, '로켓 속도로 질주')
+  for (let i = 0; i < Math.ceil(12 / STEP) && a.rocketT > 0; i++) step(g, STEP)
+  assert.equal(a.rocketT, 0, '변신 해제')
   const gained = a.prog - prog0
-  assert.ok(gained > 40 / TRACK.segLen, `로켓 속도로 질주 (${gained}샘플 전진)`)
-  for (let i = 0; i < Math.ceil(3 / STEP); i++) step(g, STEP)
-  assert.equal(a.rocketT, 0, '시간이 지나면 변신 해제')
+  assert.ok(Math.abs(gained - 150) < 15, `격차(300)의 절반만 회복 (${gained}샘플)`)
+  assert.ok(a.prog < b.prog, '1등을 역전하지 않는다')
+  assert.ok(a.speed <= 26.01, `해제 후 카트 속도로 복귀 (${a.speed})`)
 })
 
 test('카트끼리 충돌: 뒤에서 박으면 앞 카트가 밀려나고 서로 떨어진다', () => {
