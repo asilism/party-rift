@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import HomeScreen from './lobby/HomeScreen.jsx'
 import GameLobby from './lobby/GameLobby.jsx'
 import OnlineLobby from './lobby/OnlineLobby.jsx'
@@ -9,6 +9,9 @@ import ThrillGame from './games/thrillpang/ThrillGame.jsx'
 import RaceGame from './games/race/RaceGame.jsx'
 import WhackGame from './games/whack/WhackGame.jsx'
 import TrafficGame from './games/traffic/TrafficGame.jsx'
+
+// 파티 카트는 three.js(3D)를 쓰므로 선택할 때만 내려받는다 (번들 분리)
+const KartGame = lazy(() => import('./games/kart/KartGame.jsx'))
 import ErrorBoundary from './shared/ErrorBoundary.jsx'
 import { RoomProvider, useRoom } from './net/RoomContext.jsx'
 import { loadRoster, saveRoster } from './shared/storage.js'
@@ -23,11 +26,24 @@ const GAME_COMPONENTS = {
   race: RaceGame,
   whack: WhackGame,
   traffic: TrafficGame,
+  kart: KartGame,
 }
 
 function renderGame(id, props) {
   const Game = GAME_COMPONENTS[id]
-  return Game ? <Game {...props} /> : null
+  if (!Game) return null
+  return (
+    <Suspense
+      fallback={
+        <div className="net-screen">
+          <div className="net-screen__icon">⏳</div>
+          <p>게임을 불러오는 중...</p>
+        </div>
+      }
+    >
+      <Game {...props} />
+    </Suspense>
+  )
 }
 
 // 화면 흐름:

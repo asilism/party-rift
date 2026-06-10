@@ -1,0 +1,341 @@
+// 파티 카트 3D 렌더러 (three.js).
+// 엔진의 makeView() 스냅샷만 보고 그린다 — 호스트/게스트 공용.
+import * as THREE from 'three'
+import { getZodiac } from '../../shared/zodiac.js'
+import { BOX_SPOTS } from './track.js'
+
+const SKY = 0x8ecdf5
+
+// 이모지 한 글자를 캔버스에 그려 스프라이트 텍스처로 만든다
+function emojiTexture(emoji, size = 128) {
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d')
+  ctx.font = `${size * 0.78}px serif`
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(emoji, size / 2, size / 2 + size * 0.04)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+function emojiSprite(emoji, scale = 2) {
+  const sp = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: emojiTexture(emoji), depthWrite: false })
+  )
+  sp.scale.set(scale, scale, 1)
+  return sp
+}
+
+// 시드 고정 난수 (나무 배치가 모든 기기에서 동일하게)
+function lcg(seed) {
+  let s = seed
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0
+    return s / 4294967296
+  }
+}
+
+// 도로 리본 (센터라인 ± halfW)
+function buildRoad(track) {
+  const { samples, n, halfW } = track
+  const pos = []
+  const idx = []
+  for (let i = 0; i < n; i++) {
+    const s = samples[i]
+    pos.push(s.x + s.nx * halfW, 0.02, s.z + s.nz * halfW)
+    pos.push(s.x - s.nx * halfW, 0.02, s.z - s.nz * halfW)
+    const a = i * 2
+    const b = ((i + 1) % n) * 2
+    idx.push(a, a + 1, b, a + 1, b + 1, b)
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  geo.setIndex(idx)
+  geo.computeVertexNormals()
+  return new THREE.Mesh(
+    geo,
+    new THREE.MeshLambertMaterial({ color: 0x474d59, side: THREE.DoubleSide })
+  )
+}
+
+// 도로 가장자리 빨강/하양 연석
+function buildCurbs(track) {
+  const { samples, n, halfW } = track
+  const pos = []
+  const col = []
+  const idx = []
+  const red = new THREE.Color(0xe04646)
+  const white = new THREE.Color(0xf2f2f2)
+  let v = 0
+  for (const side of [1, -1]) {
+    for (let i = 0; i < n; i++) {
+      const s = samples[i]
+      const t = samples[(i + 1) % n]
+      const c = Math.floor(i / 3) % 2 === 0 ? red : white
+      for (const [p, off] of [
+        [s, halfW], [s, halfW + 0.8], [t, halfW], [t, halfW + 0.8],
+      ]) {
+        pos.push(p.x + p.nx * off * side, 0.03, p.z + p.nz * off * side)
+        col.push(c.r, c.g, c.b)
+      }
+      idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2)
+      v += 4
+    }
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
+  geo.setIndex(idx)
+  geo.computeVertexNormals()
+  return new THREE.Mesh(
+    geo,
+    new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide })
+  )
+}
+
+// 체크무늬 출발선 + 게이트
+function buildStart(track) {
+  const g = new THREE.Group()
+  const s = track.samples[0]
+  const angle = Math.atan2(s.nz, s.nx)
+
+  const c = document.createElement('canvas')
+  c.width = 64
+  c.height = 16
+  const ctx = c.getContext('2d')
+  for (let x = 0; x < 8; x++) {
+    for (let y = 0; y < 2; y++) {
+      ctx.fillStyle = (x + y) % 2 ? '#111' : '#fff'
+      ctx.fillRect(x * 8, y * 8, 8, 8)
+    }
+  }
+  const tex = new THREE.CanvasTexture(c)
+  const line = new THREE.Mesh(
+    new THREE.PlaneGeometry(track.halfW * 2, 2.4),
+    new THREE.MeshLambertMaterial({ map: tex })
+  )
+  line.geometry.rotateX(-Math.PI / 2)
+  line.position.set(s.x, 0.04, s.z)
+  line.rotation.y = -angle
+  g.add(line)
+
+  const poleGeo = new THREE.CylinderGeometry(0.25, 0.25, 7, 8)
+  const poleMat = new THREE.MeshLambertMaterial({ color: 0xdddddd })
+  for (const side of [1, -1]) {
+    const pole = new THREE.Mesh(poleGeo, poleMat)
+    pole.position.set(
+      s.x + s.nx * (track.halfW + 1) * side,
+      3.5,
+      s.z + s.nz * (track.halfW + 1) * side
+    )
+    g.add(pole)
+  }
+  const bar = new THREE.Mesh(
+    new THREE.BoxGeometry((track.halfW + 1) * 2, 1.4, 0.6),
+    new THREE.MeshLambertMaterial({ color: 0xffcf4d })
+  )
+  bar.position.set(s.x, 6.6, s.z)
+  bar.rotation.y = -angle
+  g.add(bar)
+  return g
+}
+
+// 트랙 바깥 나무들
+function buildTrees(track) {
+  const g = new THREE.Group()
+  const rnd = lcg(20260610)
+  const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, 1.6, 6)
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x7a5230 })
+  const leafGeo = new THREE.ConeGeometry(1.8, 4, 8)
+  const leafMat = new THREE.MeshLambertMaterial({ color: 0x2e8b46 })
+  let placed = 0
+  for (let tries = 0; tries < 600 && placed < 42; tries++) {
+    const x = (rnd() - 0.5) * 190
+    const z = (rnd() - 0.5) * 170 + 6
+    let minD = Infinity
+    for (let i = 0; i < track.n; i += 4) {
+      const s = track.samples[i]
+      minD = Math.min(minD, Math.hypot(x - s.x, z - s.z))
+    }
+    if (minD < track.halfW + 9 || minD > 55) continue
+    const tree = new THREE.Group()
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat)
+    trunk.position.y = 0.8
+    const leaf = new THREE.Mesh(leafGeo, leafMat)
+    leaf.position.y = 3.4
+    const sc = 0.7 + rnd() * 0.9
+    tree.add(trunk, leaf)
+    tree.scale.setScalar(sc)
+    tree.position.set(x, 0, z)
+    g.add(tree)
+    placed++
+  }
+  return g
+}
+
+// 카트 1대: 색깔 몸체 + 바퀴 + 12지신 이모지 + 부스트 불꽃 (+X 방향이 정면)
+function buildKart(color, emoji) {
+  const g = new THREE.Group()
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(2.4, 0.55, 1.5),
+    new THREE.MeshLambertMaterial({ color: new THREE.Color(color || '#cccccc') })
+  )
+  body.position.y = 0.62
+  const cabin = new THREE.Mesh(
+    new THREE.BoxGeometry(1.1, 0.5, 1.1),
+    new THREE.MeshLambertMaterial({ color: 0x222a3a })
+  )
+  cabin.position.set(-0.3, 1.05, 0)
+  const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.32, 10)
+  wheelGeo.rotateX(Math.PI / 2)
+  const wheelMat = new THREE.MeshLambertMaterial({ color: 0x16181d })
+  for (const [wx, wz] of [[0.85, 0.8], [0.85, -0.8], [-0.85, 0.8], [-0.85, -0.8]]) {
+    const w = new THREE.Mesh(wheelGeo, wheelMat)
+    w.position.set(wx, 0.36, wz)
+    g.add(w)
+  }
+  const face = emojiSprite(emoji || '🙂', 2.1)
+  face.position.y = 2.1
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.34, 1.2, 8),
+    new THREE.MeshBasicMaterial({ color: 0xff9a2e })
+  )
+  flame.geometry.rotateZ(Math.PI / 2) // -X(뒤쪽)을 향하게
+  flame.position.set(-1.7, 0.62, 0)
+  flame.visible = false
+  g.add(body, cabin, face, flame)
+  return { group: g, flame }
+}
+
+const OBJ_EMOJI = { banana: '🍌', rocket: '🚀' }
+
+export function createKartScene(canvas, track) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
+  const scene = new THREE.Scene()
+  scene.background = new THREE.Color(SKY)
+  scene.fog = new THREE.Fog(SKY, 130, 330)
+  const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.1, 600)
+  camera.position.set(0, 40, -80)
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x5e8c4f, 1.1))
+  const sun = new THREE.DirectionalLight(0xffffff, 1.4)
+  sun.position.set(60, 110, 40)
+  scene.add(sun)
+
+  const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(900, 900),
+    new THREE.MeshLambertMaterial({ color: 0x68b95c })
+  )
+  ground.geometry.rotateX(-Math.PI / 2)
+  scene.add(ground)
+
+  scene.add(buildRoad(track))
+  scene.add(buildCurbs(track))
+  scene.add(buildStart(track))
+  scene.add(buildTrees(track))
+
+  // 아이템 박스 (회전하는 노란 큐브)
+  const boxGeo = new THREE.BoxGeometry(1.5, 1.5, 1.5)
+  const boxMat = new THREE.MeshLambertMaterial({
+    color: 0xffc83d, transparent: true, opacity: 0.92,
+  })
+  const boxMeshes = BOX_SPOTS.map((spot, i) => {
+    const m = new THREE.Mesh(boxGeo, boxMat)
+    m.position.set(spot.x, 1.2, spot.z)
+    m.rotation.y = i
+    scene.add(m)
+    return m
+  })
+
+  const kartNodes = new Map() // kartId -> {group, flame}
+  const objNodes = new Map() // objectId -> Sprite
+
+  const camPos = new THREE.Vector3(0, 40, -80)
+  let lastT = performance.now()
+
+  function render(view, myId) {
+    const now = performance.now()
+    const dt = Math.min(0.1, (now - lastT) / 1000)
+    lastT = now
+
+    // 카트
+    for (const k of view.karts) {
+      let node = kartNodes.get(k.id)
+      if (!node) {
+        node = buildKart(k.color, getZodiac(k.zodiacId)?.emoji)
+        kartNodes.set(k.id, node)
+        scene.add(node.group)
+      }
+      node.group.position.set(k.x, 0, k.z)
+      node.group.rotation.y = -k.heading - (k.spin || 0)
+      node.flame.visible = k.boostT > 0
+    }
+
+    // 바나나/로켓 스프라이트
+    const alive = new Set()
+    for (const o of view.objects || []) {
+      alive.add(o.id)
+      let sp = objNodes.get(o.id)
+      if (!sp) {
+        sp = emojiSprite(OBJ_EMOJI[o.kind] || '❓', o.kind === 'rocket' ? 2.2 : 1.7)
+        objNodes.set(o.id, sp)
+        scene.add(sp)
+      }
+      sp.position.set(o.x, o.kind === 'rocket' ? 1.2 : 0.8, o.z)
+    }
+    for (const [id, sp] of objNodes) {
+      if (alive.has(id)) continue
+      scene.remove(sp)
+      sp.material.map?.dispose()
+      sp.material.dispose()
+      objNodes.delete(id)
+    }
+
+    // 아이템 박스 회전/표시
+    boxMeshes.forEach((m, i) => {
+      m.visible = !view.boxes || view.boxes[i] !== false
+      m.rotation.y += dt * 2
+      m.position.y = 1.2 + Math.sin(now / 320 + i) * 0.15
+    })
+
+    // 카메라: 내 카트(없으면 1등)를 3인칭으로 따라간다
+    const target =
+      view.karts.find((k) => k.id === myId) ||
+      view.karts.find((k) => k.rank === 1) ||
+      view.karts[0]
+    if (target) {
+      const fx = Math.cos(target.heading)
+      const fz = Math.sin(target.heading)
+      const want = new THREE.Vector3(target.x - fx * 7.5, 3.6, target.z - fz * 7.5)
+      camPos.lerp(want, 1 - Math.exp(-dt * 6))
+      camera.position.copy(camPos)
+      camera.lookAt(target.x + fx * 4, 1.1, target.z + fz * 4)
+    }
+
+    renderer.render(scene, camera)
+  }
+
+  function resize(w, h) {
+    if (!w || !h) return
+    renderer.setSize(w, h, false)
+    camera.aspect = w / h
+    camera.updateProjectionMatrix()
+  }
+
+  function dispose() {
+    scene.traverse((o) => {
+      o.geometry?.dispose?.()
+      const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []
+      mats.forEach((m) => {
+        m.map?.dispose?.()
+        m.dispose?.()
+      })
+    })
+    renderer.dispose()
+  }
+
+  return { render, resize, dispose }
+}
