@@ -386,7 +386,7 @@ function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, sound
           <div className="kart__endtimer">🏁 골인! 친구들을 기다려요...</div>
         )}
         {me && hud.status === 'racing' && hud.go && (
-          <div className="kart__hint">화면을 드래그해서 핸들을 꺾어요 🕹️</div>
+          <div className="kart__hint">드래그 조이스틱 🕹️ 또는 키보드 ←/→ 로 핸들을 꺾어요</div>
         )}
       </div>
 

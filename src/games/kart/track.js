@@ -65,10 +65,16 @@ export const BOX_SPOTS = BOX_ROWS.flatMap((i) =>
   })
 )
 
-// 가속 발판 위치 (밟으면 부스트). 아이템 박스 구역과 겹치지 않게 배치.
-// 폭은 딱 카트 한 대 크기 — 잘 조준해서 밟아야 한다.
-export const PAD_ROWS = [0.1, 0.42, 0.68, 0.92].map((f) => Math.round(N * f))
+// 가속 발판 (밟으면 부스트). 아이템 박스 구역과 겹치지 않게 배치.
+// 폭은 딱 카트 한 대 크기, 좌우 위치는 트랙 안에서 무작위 —
+// 고정 시드 의사난수라 모든 기기에서 같은 자리에 보인다.
 export const PAD_HALF_W = 1.2 // 발판 절반 폭 (전체 약 2.4 ≈ 카트 한 대)
+export const PADS = [0.1, 0.42, 0.68, 0.92].map((f, idx) => {
+  const r = Math.sin(idx * 127.1 + 311.7) * 43758.5453
+  const frac = r - Math.floor(r) // 0..1 결정적 난수
+  const maxLat = TRACK.halfW - PAD_HALF_W - 0.8 // 트랙 밖으로 안 나가게
+  return { i: Math.round(N * f), lat: (frac * 2 - 1) * maxLat }
+})
 
 // 가장 가까운 센터라인 샘플 인덱스. hint가 있으면 그 주변만 탐색(프레임당 비용 절감).
 export function nearestSample(track, x, z, hint = -1) {

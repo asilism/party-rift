@@ -2,7 +2,7 @@
 //  - 자동 가속: 출력은 자동, 입력은 조향(steer) / 브레이크(brake) / 아이템 사용뿐.
 //  - 호스트가 step()을 60Hz로 돌리고 makeView()로 직렬화 스냅샷을 전파한다.
 import {
-  TRACK, BOX_SPOTS, PAD_ROWS, PAD_HALF_W, nearestSample, wrapDelta, samplePoint,
+  TRACK, BOX_SPOTS, PADS, PAD_HALF_W, nearestSample, wrapDelta, samplePoint,
 } from './track.js'
 
 export const STEP = 1 / 60 // 물리 틱 (초)
@@ -187,13 +187,13 @@ function stepBots(state, dt) {
   }
 }
 
-// 가속 발판: 트랙 가운데, 카트 한 대 폭 — 위를 지나가면 버섯처럼 순간 부스트
+// 가속 발판: 카트 한 대 폭, 트랙 안 무작위 위치 — 밟으면 버섯처럼 순간 부스트
 function stepPads(state) {
   for (const k of state.karts) {
     if (k.finished || k.stunT > 0 || k.rocketT > 0) continue
-    for (const pi of PAD_ROWS) {
-      const d = wrapDelta(k.ci - pi, TRACK.n)
-      if (d >= -1 && d <= 3 && Math.abs(k.lat) <= PAD_HALF_W) {
+    for (const pad of PADS) {
+      const d = wrapDelta(k.ci - pad.i, TRACK.n)
+      if (d >= -1 && d <= 3 && Math.abs(k.lat - pad.lat) <= PAD_HALF_W) {
         k.boostT = Math.max(k.boostT, PAD_BOOST)
       }
     }

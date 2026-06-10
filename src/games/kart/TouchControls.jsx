@@ -43,11 +43,43 @@ function useSlotRoll(item, seq) {
 
 // 주행 조작: 화면 아무 데나 드래그하면 그 자리에 조이스틱이 생기고(조향),
 // 오른쪽 아래에 브레이크/아이템 버튼. 출력(가속)은 자동이라 버튼이 없다.
+const KEY_LEFT = new Set(['ArrowLeft', 'a', 'A'])
+const KEY_RIGHT = new Set(['ArrowRight', 'd', 'D'])
+
 export default function TouchControls({ onSteer, onBrake, onItem, item, itemSeq, disabled }) {
   const [joy, setJoy] = useState(null) // {ox, oy, dx, dy}
   const joyPointer = useRef(null)
   const rollEmoji = useSlotRoll(item, itemSeq || 0)
   const rolling = !!rollEmoji
+  const onSteerRef = useRef(onSteer)
+  onSteerRef.current = onSteer
+
+  // 키보드 조향: ←/→ 또는 A/D. 조이스틱을 잡고 있으면 조이스틱이 우선.
+  useEffect(() => {
+    const held = new Set()
+    const apply = () => {
+      if (joyPointer.current != null) return
+      const left = [...held].some((k) => KEY_LEFT.has(k))
+      const right = [...held].some((k) => KEY_RIGHT.has(k))
+      onSteerRef.current((right ? 1 : 0) - (left ? 1 : 0))
+    }
+    const down = (e) => {
+      if (!KEY_LEFT.has(e.key) && !KEY_RIGHT.has(e.key)) return
+      e.preventDefault()
+      if (held.has(e.key)) return
+      held.add(e.key)
+      apply()
+    }
+    const up = (e) => {
+      if (held.delete(e.key)) apply()
+    }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+    }
+  }, [])
 
   function steerFrom(e, origin) {
     let dx = e.clientX - origin.ox

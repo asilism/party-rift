@@ -2,7 +2,7 @@
 // 엔진의 makeView() 스냅샷만 보고 그린다 — 호스트/게스트 공용.
 import * as THREE from 'three'
 import { getZodiac } from '../../shared/zodiac.js'
-import { BOX_SPOTS, BOX_ROWS, PAD_ROWS, PAD_HALF_W } from './track.js'
+import { BOX_SPOTS, BOX_ROWS, PADS, PAD_HALF_W } from './track.js'
 
 const SKY = 0x8ecdf5
 
@@ -88,8 +88,8 @@ function buildPads(track) {
     transparent: true,
     opacity: 0.95,
   })
-  const makeChevron = (pi, fwdOff) => {
-    const s = track.samples[pi]
+  const makeChevron = (pad, fwdOff) => {
+    const s = track.samples[pad.i]
     const w = PAD_HALF_W
     const L = 2.2 // 꼭짓점이 앞으로 나오는 길이
     const T = 1.3 // 띠 두께
@@ -100,7 +100,7 @@ function buildPads(track) {
     const c = new THREE.Color()
     for (let i = 0; i <= steps; i++) {
       const f = (i / steps) * 2 - 1 // -1(왼쪽) ~ 1(오른쪽)
-      const lat = f * w
+      const lat = pad.lat + f * w
       const fwd = (1 - Math.abs(f)) * L + fwdOff
       const bx = s.x + s.nx * lat + s.dx * fwd
       const bz = s.z + s.nz * lat + s.dz * fwd
@@ -118,9 +118,9 @@ function buildPads(track) {
     geo.setIndex(idx)
     return new THREE.Mesh(geo, mat)
   }
-  for (const pi of PAD_ROWS) {
-    g.add(makeChevron(pi, 0))
-    g.add(makeChevron(pi, 3))
+  for (const pad of PADS) {
+    g.add(makeChevron(pad, 0))
+    g.add(makeChevron(pad, 3))
   }
   return g
 }
