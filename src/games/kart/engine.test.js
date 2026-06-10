@@ -79,6 +79,25 @@ test('자동 주행으로 3랩 완주 → 골인 처리', () => {
   assert.ok(g.karts[0].prog >= TRACK.n * LAPS)
 })
 
+test('트랙 가장자리: 밖으로 못 나가고, 감속되며, 트랙 방향으로 되돌려준다', () => {
+  const g = createGame([P2[0]])
+  startRacing(g)
+  const k = g.karts[0]
+  const s = TRACK.samples[k.ci]
+  // 가장자리 바로 안쪽에서 트랙 바깥(법선 방향)을 향해 전속으로 돌진
+  k.x = s.x + s.nx * (TRACK.halfW - 1)
+  k.z = s.z + s.nz * (TRACK.halfW - 1)
+  k.heading = Math.atan2(s.nz, s.nx)
+  k.speed = 26
+  for (let i = 0; i < 120; i++) step(g, STEP) // 2초
+  const s2 = TRACK.samples[k.ci]
+  const lat = (k.x - s2.x) * s2.nx + (k.z - s2.z) * s2.nz
+  assert.ok(Math.abs(lat) <= TRACK.halfW, `트랙 안에 머무름 (lat=${lat})`)
+  // 진행 방향이 트랙 탄젠트 쪽으로 복귀했는지 (전방 성분이 양수)
+  const fwd = Math.cos(k.heading) * s2.dx + Math.sin(k.heading) * s2.dz
+  assert.ok(fwd > 0.5, `트랙 방향으로 복귀 (fwd=${fwd})`)
+})
+
 test('아이템 박스를 지나가면 아이템 획득 + 박스 리스폰 대기', () => {
   const g = createGame(P2, () => 0.1)
   startRacing(g)

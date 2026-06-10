@@ -10,9 +10,10 @@ export const COUNTDOWN_TIME = 3 // 출발 카운트다운 (초)
 const MAX_SPEED = 26 // m/s
 const ACCEL = 16
 const BRAKE_DECEL = 34
-const TURN_RATE = 2.4 // rad/s (풀 조향)
-const OFFROAD_FACTOR = 0.45 // 잔디에서 최고속 비율
-const FENCE_MARGIN = 7 // 트랙 밖 펜스까지 여유
+const TURN_RATE = 1.7 // rad/s (풀 조향). 아이들이 몰기 쉽게 완만하게.
+const EDGE_FACTOR = 0.45 // 트랙 가장자리에 닿았을 때 최고속 비율 (잔디 수준)
+const EDGE_ASSIST = 2.4 // 가장자리에서 트랙 방향으로 되돌려주는 회전 속도 (rad/s)
+const EDGE_IN_ANGLE = 0.3 // 되돌릴 때 트랙 안쪽으로 트는 각도
 const BOOST_FACTOR = 1.5
 const BOOST_TIME = 1.7
 const STUN_TIME = 1.3
@@ -136,36 +137,42 @@ function stepKart(k, dt) {
     k.speed = Math.max(0, k.speed - 26 * dt)
   } else {
     k.spin = 0
-    const off = k.offroad ? OFFROAD_FACTOR : 1
+    const edge = k.offroad ? EDGE_FACTOR : 1
     const boost = k.boostT > 0 ? BOOST_FACTOR : 1
-    const target = k.finished ? 0 : MAX_SPEED * off * boost
+    const target = k.finished ? 0 : MAX_SPEED * edge * boost
     if (k.brake && !k.finished) {
       k.speed = Math.max(0, k.speed - BRAKE_DECEL * dt)
     } else if (k.speed < target) {
       k.speed = Math.min(target, k.speed + ACCEL * boost * dt)
     } else {
-      k.speed = Math.max(target, k.speed - 14 * dt) // 잔디/부스트 종료 시 감속
+      k.speed = Math.max(target, k.speed - 14 * dt) // 가장자리/부스트 종료 시 감속
     }
-    // 저속에선 조향이 덜 듣고, 브레이크 중엔 코너링이 좋아진다
+    // 조이스틱 중앙 부근은 미세 조향(제곱 커브), 저속에선 덜 돌고,
+    // 브레이크 중엔 코너링이 좋아진다
     const steerEff = Math.min(1, k.speed / 8) * (k.brake ? 1.3 : 1)
-    k.heading += k.steer * TURN_RATE * steerEff * dt
+    k.heading += k.steer * Math.abs(k.steer) * TURN_RATE * steerEff * dt
   }
   k.boostT = Math.max(0, k.boostT - dt)
 
   k.x += Math.cos(k.heading) * k.speed * dt
   k.z += Math.sin(k.heading) * k.speed * dt
 
-  // 트랙 기준 위치: 오프로드 판정 + 펜스(밖으로 못 나감) + 진행도 갱신
+  // 트랙 기준 위치: 가장자리에 닿으면 잔디만큼 감속 + 트랙을 벗어나지 않게
+  // 위치를 잡아주고, 진행 방향(살짝 안쪽)으로 부드럽게 되돌려준다
   const ci = nearestSample(TRACK, k.x, k.z, k.ci)
   const s = TRACK.samples[ci]
   const lat = (k.x - s.x) * s.nx + (k.z - s.z) * s.nz
-  k.offroad = Math.abs(lat) > TRACK.halfW
-  const fence = TRACK.halfW + FENCE_MARGIN
-  if (Math.abs(lat) > fence) {
-    const cl = Math.sign(lat) * fence
+  const edge = TRACK.halfW - 0.6 // 카트 폭 고려
+  k.offroad = Math.abs(lat) >= edge // 가장자리 접촉 (감속용 플래그)
+  if (Math.abs(lat) > edge) {
+    const cl = Math.sign(lat) * edge
     k.x -= s.nx * (lat - cl)
     k.z -= s.nz * (lat - cl)
-    k.speed *= 0.94
+    const desired = Math.atan2(s.dz, s.dx) - Math.sign(lat) * EDGE_IN_ANGLE
+    let d = desired - k.heading
+    while (d > Math.PI) d -= 2 * Math.PI
+    while (d < -Math.PI) d += 2 * Math.PI
+    k.heading += Math.max(-EDGE_ASSIST * dt, Math.min(EDGE_ASSIST * dt, d))
   }
   k.prog += wrapDelta(ci - k.ci, TRACK.n)
   k.ci = ci

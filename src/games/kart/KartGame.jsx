@@ -249,14 +249,13 @@ function useKartSounds(hud, myId) {
     const me = hud.karts?.find((k) => k.id === myId)
     if (hud.status === 'countdown' && hud.countdown > 0 && hud.countdown !== p.countdown) sound.step()
     if (hud.status === 'racing' && p.status === 'countdown') sound.ladderUp()
-    if (me?.item && !p.item) sound.key()
+    // 아이템 획득음은 TouchControls의 슬롯머신 연출이 담당
     if (me && me.stunT > 0 && !(p.stunT > 0)) sound.chuteDown()
     if (me?.boostT > 0 && !(p.boostT > 0)) sound.ladderUp()
     if (hud.status === 'finished' && p.status && p.status !== 'finished') sound.win()
     prev.current = {
       countdown: hud.countdown,
       status: hud.status,
-      item: me?.item,
       stunT: me?.stunT,
       boostT: me?.boostT,
     }
