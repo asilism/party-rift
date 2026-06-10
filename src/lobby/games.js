@@ -64,11 +64,22 @@ export const GAMES = [
     maxPlayers: 5,
     ready: true,
   },
+  {
+    id: 'kart',
+    title: '파티 카트',
+    emoji: '🏎️',
+    desc: '3D 서킷 아이템 레이싱!',
+    minPlayers: 2,
+    maxPlayers: 5,
+    onlineOnly: true, // 기기마다 조이스틱이 필요 → 온라인 방 전용
+    ready: true,
+  },
 ]
 
 // 참가 인원으로 게임 선택 가능 여부 판단. 가능하면 null, 불가면 사유 문자열.
-export function blockedReason(game, playerCount) {
+export function blockedReason(game, playerCount, online = false) {
   if (!game.ready) return '준비 중'
+  if (game.onlineOnly && !online) return '온라인 방 전용'
   if (playerCount < game.minPlayers) return `${game.minPlayers}명 이상 필요`
   if (game.maxPlayers && playerCount > game.maxPlayers) return `최대 ${game.maxPlayers}명`
   return null

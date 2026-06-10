@@ -154,7 +154,7 @@ export default function OnlineLobby({ room, isHost, deviceId, addPlayer, removeP
       {!isHost && <p className="online-lobby__wait">⏳ 호스트가 게임을 고르는 중이에요...</p>}
       <div className={`lobby__grid ${!isHost ? 'lobby__grid--readonly' : ''}`}>
         {GAMES.map((g) => {
-          const blocked = blockedReason(g, players.length)
+          const blocked = blockedReason(g, players.length, true)
           return (
             <button
               key={g.id}
