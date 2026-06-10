@@ -356,6 +356,11 @@ function buildKart(color, emoji) {
 
 const OBJ_EMOJI = { banana: '🍌', bomb: '💣' }
 
+// 마지막 바퀴엔 하늘이 노을빛으로 물든다 (드라마 연출)
+const DUSK = 0xff9e6b
+const SUN_DAY = 0xffffff
+const SUN_DUSK = 0xffb27a
+
 export function createKartScene(canvas, track) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
@@ -408,6 +413,87 @@ export function createKartScene(canvas, track) {
   speedLines.visible = false
   camera.add(speedLines)
 
+  // 파티클 풀 (부스트 불꽃 트레일 / 스턴 충격 / 골인 색종이 공용)
+  const P_MAX = 600
+  const pPos = new Float32Array(P_MAX * 3)
+  const pCol = new Float32Array(P_MAX * 3)
+  const parts = [] // {x,y,z,vx,vy,vz,life,grav,r,g,b}
+  const pGeo = new THREE.BufferGeometry()
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3))
+  pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3))
+  const points = new THREE.Points(
+    pGeo,
+    new THREE.PointsMaterial({ size: 0.45, vertexColors: true, transparent: true, depthWrite: false })
+  )
+  points.frustumCulled = false
+  scene.add(points)
+
+  function spawnParts(n, make) {
+    for (let i = 0; i < n; i++) {
+      if (parts.length >= P_MAX) parts.shift()
+      parts.push(make(i))
+    }
+  }
+  // 골인 색종이: 카트 위로 알록달록 펑!
+  function confettiBurst(x, z) {
+    spawnParts(90, () => {
+      const a = Math.random() * Math.PI * 2
+      const r = 2 + Math.random() * 7
+      const c = new THREE.Color().setHSL(Math.random(), 0.95, 0.6)
+      return {
+        x, y: 1 + Math.random(), z,
+        vx: Math.cos(a) * r, vy: 7 + Math.random() * 8, vz: Math.sin(a) * r,
+        life: 1.4 + Math.random() * 0.8, grav: 11,
+        r: c.r, g: c.g, b: c.b,
+      }
+    })
+  }
+  // 스턴 충격: 노랑/하양 불꽃이 사방으로 튄다
+  function stunBurst(x, z) {
+    spawnParts(26, () => {
+      const a = Math.random() * Math.PI * 2
+      const r = 3 + Math.random() * 6
+      const yellow = Math.random() < 0.6
+      return {
+        x, y: 0.8, z,
+        vx: Math.cos(a) * r, vy: 2 + Math.random() * 5, vz: Math.sin(a) * r,
+        life: 0.5 + Math.random() * 0.3, grav: 9,
+        r: 1, g: yellow ? 0.85 : 1, b: yellow ? 0.2 : 1,
+      }
+    })
+  }
+  function updateParts(dt) {
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i]
+      p.life -= dt
+      if (p.life <= 0) {
+        parts.splice(i, 1)
+        continue
+      }
+      p.vy -= (p.grav || 0) * dt
+      p.x += p.vx * dt
+      p.y += p.vy * dt
+      p.z += p.vz * dt
+      if (p.y < 0.06 && p.grav) {
+        p.y = 0.06 // 색종이는 바닥에 깔렸다가 사라진다
+        p.vy = 0
+        p.vx *= 0.9
+        p.vz *= 0.9
+      }
+    }
+    parts.forEach((p, i) => {
+      pPos[i * 3] = p.x
+      pPos[i * 3 + 1] = p.y
+      pPos[i * 3 + 2] = p.z
+      pCol[i * 3] = p.r
+      pCol[i * 3 + 1] = p.g
+      pCol[i * 3 + 2] = p.b
+    })
+    pGeo.setDrawRange(0, parts.length)
+    pGeo.attributes.position.needsUpdate = true
+    pGeo.attributes.color.needsUpdate = true
+  }
+
   // 아이템 박스: 유리 질감의 투명 큐브 안에 '?' 글자
   const boxGeo = new THREE.BoxGeometry(1.6, 1.6, 1.6)
   const glassMat = new THREE.MeshPhysicalMaterial({
@@ -433,11 +519,21 @@ export function createKartScene(canvas, track) {
     return { grp, glass }
   })
 
-  const kartNodes = new Map() // kartId -> {group, flame}
+  const kartNodes = new Map() // kartId -> {group, flame, prevStun, prevFin}
   const objNodes = new Map() // objectId -> Sprite
 
   const camPos = new THREE.Vector3(0, 40, -80)
   let lastT = performance.now()
+  // 하늘 연출 상태: 노을 전환 정도(0~1) + 번개 플래시 남은 시간
+  let duskMix = 0
+  let flashT = 0
+  let prevLightning = false
+  const dayCol = new THREE.Color(SKY)
+  const duskCol = new THREE.Color(DUSK)
+  const whiteCol = new THREE.Color(0xffffff)
+  const skyCol = new THREE.Color()
+  const sunDay = new THREE.Color(SUN_DAY)
+  const sunDusk = new THREE.Color(SUN_DUSK)
 
   function render(view, myId) {
     const now = performance.now()
@@ -449,6 +545,8 @@ export function createKartScene(canvas, track) {
       let node = kartNodes.get(k.id)
       if (!node) {
         node = buildKart(k.color, getZodiac(k.zodiacId)?.emoji)
+        node.prevStun = false
+        node.prevFin = k.finished // 중간 합류 시 이미 골인한 카트엔 색종이 생략
         kartNodes.set(k.id, node)
         scene.add(node.group)
       }
@@ -461,7 +559,28 @@ export function createKartScene(canvas, track) {
       if (node.flame.visible) {
         node.flame.scale.setScalar((riding ? 1.6 : 1.1) + Math.sin(now / 35) * 0.35) // 불꽃 펄럭임
         node.flame.position.y = riding ? 1 : 0.62
+
+        // 부스트 불꽃 트레일: 꽁무니에서 불티가 흩날린다
+        const fx = Math.cos(k.heading)
+        const fz = Math.sin(k.heading)
+        spawnParts(2, () => ({
+          x: k.x - fx * 1.8 + (Math.random() - 0.5) * 0.8,
+          y: 0.5 + Math.random() * 0.5,
+          z: k.z - fz * 1.8 + (Math.random() - 0.5) * 0.8,
+          vx: -fx * (6 + Math.random() * 5),
+          vy: 1.5 + Math.random() * 2,
+          vz: -fz * (6 + Math.random() * 5),
+          life: 0.3 + Math.random() * 0.25,
+          grav: 4,
+          r: 1, g: 0.45 + Math.random() * 0.45, b: 0.1,
+        }))
       }
+      // 스턴 순간: 충격 불꽃 / 골인 순간: 색종이 폭발
+      const stunned = k.stunT > 0
+      if (stunned && !node.prevStun) stunBurst(k.x, k.z)
+      node.prevStun = stunned
+      if (k.finished && !node.prevFin) confettiBurst(k.x, k.z)
+      node.prevFin = k.finished
     }
     // 지난 판 카트(다시하기로 멤버가 바뀐 경우) 정리
     for (const [id, node] of kartNodes) {
@@ -526,6 +645,13 @@ export function createKartScene(canvas, track) {
       const want = new THREE.Vector3(target.x - fx * 7.5, 3.6, target.z - fz * 7.5)
       camPos.lerp(want, 1 - Math.exp(-dt * 6))
       camera.position.copy(camPos)
+      // 스턴당하면 화면이 덜덜 흔들린다 (충돌의 임팩트)
+      const shake = target.stunT > 0 ? Math.min(0.45, target.stunT * 0.45) : 0
+      if (shake > 0) {
+        camera.position.x += (Math.random() - 0.5) * shake
+        camera.position.y += (Math.random() - 0.5) * shake
+        camera.position.z += (Math.random() - 0.5) * shake
+      }
       camera.lookAt(target.x + fx * 4, 1.1, target.z + fz * 4)
     }
 
@@ -553,6 +679,19 @@ export function createKartScene(canvas, track) {
       camera.fov += (wantFov - camera.fov) * (1 - Math.exp(-dt * 5))
       camera.updateProjectionMatrix()
     }
+
+    // 하늘 드라마: 마지막 바퀴엔 노을, 번개 아이템이 터지면 하늘이 번쩍!
+    if (view.lightning && !prevLightning) flashT = 0.4
+    prevLightning = !!view.lightning
+    flashT = Math.max(0, flashT - dt)
+    duskMix += ((view.finalLap ? 1 : 0) - duskMix) * (1 - Math.exp(-dt * 1.2))
+    skyCol.copy(dayCol).lerp(duskCol, duskMix)
+    if (flashT > 0) skyCol.lerp(whiteCol, Math.min(1, flashT * 2.6))
+    scene.background.copy(skyCol)
+    scene.fog.color.copy(skyCol)
+    sun.color.copy(sunDay).lerp(sunDusk, duskMix)
+
+    updateParts(dt)
 
     renderer.render(scene, camera)
   }

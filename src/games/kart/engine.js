@@ -29,6 +29,13 @@ const ROCKET_GAP = TRACK.n / 2 // 1등과 반 바퀴 이상 차이 나면 아이
 const ROCKET_TIME_MAX = 8 // 로켓 변신 최대 지속 시간 (초)
 const ROCKET_RIDE_SPEED = 58 // 로켓 변신 중 속도 (m/s)
 const END_GRACE = 30 // 1등 골인 후 나머지가 들어올 수 있는 시간 (초)
+const LIGHTNING_STUN = 1.1 // 번개에 맞은 카트의 스턴 시간 (초)
+const LIGHTNING_FLASH = 0.6 // 번개 발동 시 하늘이 번쩍이는 시간 (초)
+const DRAFT_DIST = 8 // 슬립스트림: 앞 카트와 이 거리(m) 안에서
+const DRAFT_LAT = 1.8 // 좌우로 이만큼 가까이 따라붙으면
+const DRAFT_TIME = 1.0 // 이 시간(초)만큼 유지 시 부스트 발동
+const DRAFT_BOOST = 0.9 // 슬립스트림 부스트 지속 시간 (초)
+const DRAFT_MIN_SPEED = 18 // 슬립스트림이 차오르는 최소 속도 (m/s)
 
 export function createGame(players, rng = Math.random) {
   const n = TRACK.n
@@ -55,9 +62,11 @@ export function createGame(players, rng = Math.random) {
       brake: false,
       ci: si, // 가장 가까운 샘플 인덱스
       prog: si - n, // 누적 진행도(샘플 단위). 출발선 통과 시 0을 넘는다.
-      item: null, // null | 'boost' | 'banana' | 'bomb' | 'rocket'
+      item: null, // null | 'boost' | 'banana' | 'bomb' | 'rocket' | 'lightning'
       itemSeq: 0, // 아이템을 새로 뽑을 때마다 +1 (슬롯머신 연출 트리거)
       boostT: 0,
+      draftT: 0, // 슬립스트림 게이지 (앞 카트 뒤에 붙은 누적 시간)
+      draftSeq: 0, // 슬립스트림 부스트 발동 횟수 (HUD 배너 트리거)
       rocketT: 0, // 로켓 변신 남은 시간
       rocketGoal: null, // 로켓 변신이 끝나는 목표 진행도
       stunT: 0,
@@ -77,6 +86,7 @@ export function createGame(players, rng = Math.random) {
     finishOrder: [],
     endTimer: null,
     nextObjId: 1,
+    lightningT: 0, // 번개 발동 후 하늘이 번쩍이는 남은 시간
     rng,
   }
 }
@@ -120,6 +130,16 @@ export function fireItem(state, id) {
       z: p.z,
       heading: Math.atan2(p.dz, p.dx),
     })
+  } else if (item === 'lightning') {
+    // 꼴찌의 대역전 카드: 내 앞의 모든 카트가 번개에 맞아 잠깐 스턴!
+    state.lightningT = LIGHTNING_FLASH
+    for (const o of state.karts) {
+      if (o === k || o.finished || o.rocketT > 0) continue
+      if (o.prog > k.prog) {
+        stunKart(o, LIGHTNING_STUN)
+        o.boostT = 0
+      }
+    }
   } else if (item === 'rocket') {
     // 카트가 로켓으로 변신해 트랙을 따라 자동 질주.
     // 1등이 억울하지 않게 "격차의 절반"까지만 따라잡는다.
@@ -151,9 +171,11 @@ export function step(state, dt) {
   for (const k of state.karts) stepKart(state, k, dt)
   collideKarts(state.karts)
   stepPads(state)
+  stepDraft(state, dt)
   stepBoxes(state, dt)
   stepObjects(state, dt)
   checkFinish(state, dt)
+  state.lightningT = Math.max(0, state.lightningT - dt)
   return state
 }
 
@@ -196,6 +218,32 @@ function stepPads(state) {
       if (d >= -1 && d <= 3 && Math.abs(k.lat - pad.lat) <= PAD_HALF_W) {
         k.boostT = Math.max(k.boostT, PAD_BOOST)
       }
+    }
+  }
+}
+
+// 슬립스트림: 앞 카트 꽁무니에 바짝 붙어 달리면 게이지가 차고,
+// 다 차면 부스트가 터지며 추월 찬스! (봇도 동일하게 적용)
+function stepDraft(state, dt) {
+  for (const k of state.karts) {
+    if (k.finished || k.stunT > 0 || k.rocketT > 0 || k.boostT > 0 || k.speed < DRAFT_MIN_SPEED) {
+      k.draftT = 0
+      continue
+    }
+    const tail = state.karts.some((o) => {
+      if (o === k || o.finished) return false
+      const gap = wrapDelta(o.ci - k.ci, TRACK.n) * TRACK.segLen
+      return gap > 1 && gap < DRAFT_DIST && Math.abs(o.lat - k.lat) < DRAFT_LAT
+    })
+    if (!tail) {
+      k.draftT = Math.max(0, k.draftT - dt * 2) // 떨어지면 게이지가 빠르게 줄어든다
+      continue
+    }
+    k.draftT += dt
+    if (k.draftT >= DRAFT_TIME) {
+      k.draftT = 0
+      k.draftSeq++
+      k.boostT = Math.max(k.boostT, DRAFT_BOOST)
     }
   }
 }
@@ -349,13 +397,13 @@ function rollItem(state, k) {
     idx === 0 && order.length > 1
       ? ['banana', 'banana', 'bomb']
       : idx === order.length - 1 && order.length > 1
-        ? ['boost', 'boost', 'bomb']
+        ? ['boost', 'lightning', 'bomb'] // 꼴찌에겐 대역전 번개 찬스
         : ['boost', 'banana', 'bomb']
   return pool[Math.floor(state.rng() * pool.length)]
 }
 
-function stunKart(k) {
-  k.stunT = STUN_TIME
+function stunKart(k, t = STUN_TIME) {
+  k.stunT = Math.max(k.stunT, t)
   k.speed *= 0.25
 }
 
@@ -439,6 +487,9 @@ export function makeView(state) {
     countdown: Math.ceil(state.countdown),
     go: state.status === 'racing' && state.time < COUNTDOWN_TIME + 1,
     endTimer: state.endTimer == null ? null : Math.max(0, Math.ceil(state.endTimer)),
+    // 선두가 마지막 바퀴에 들어서면 하늘이 노을빛으로 (연출용)
+    finalLap: state.karts.some((k) => k.prog >= TRACK.n * (LAPS - 1)),
+    lightning: state.lightningT > 0, // 번개 발동 중 (하늘 번쩍 연출)
     karts: state.karts.map((k) => ({
       id: k.id,
       name: k.name,
@@ -453,6 +504,7 @@ export function makeView(state) {
       rank: rankOf.get(k.id),
       item: k.item,
       itemSeq: k.itemSeq,
+      draftSeq: k.draftSeq,
       boostT: r2(k.boostT),
       rocketT: r2(k.rocketT),
       stunT: r2(k.stunT),

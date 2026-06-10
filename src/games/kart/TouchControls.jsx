@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { sound } from '../../shared/sound.js'
 
-export const ITEM_EMOJI = { boost: '🍄', banana: '🍌', bomb: '💣', rocket: '🚀' }
+export const ITEM_EMOJI = { boost: '🍄', banana: '🍌', bomb: '💣', rocket: '🚀', lightning: '⚡' }
 
 const JOY_RADIUS = 60 // px. 이만큼 끌면 풀 조향
 const SLOT_MS = 850 // 아이템 슬롯머신 연출 시간

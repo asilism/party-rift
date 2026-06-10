@@ -76,6 +76,12 @@ export const sound = {
   go() {
     beep(1047, 0.5, 'square', 0.08)
   },
+  // 번개 우르릉 쾅!
+  thunder() {
+    beep(110, 0.4, 'sawtooth', 0.09)
+    setTimeout(() => beep(70, 0.5, 'sawtooth', 0.08), 110)
+    setTimeout(() => beep(50, 0.6, 'sawtooth', 0.06), 260)
+  },
   // 로켓 발사 슈웅~
   rocket() {
     beep(300, 0.15, 'sawtooth', 0.06)
