@@ -2,7 +2,8 @@
 //  - 자동 가속: 출력은 자동, 입력은 조향(steer) / 브레이크(brake) / 아이템 사용뿐.
 //  - 호스트가 step()을 60Hz로 돌리고 makeView()로 직렬화 스냅샷을 전파한다.
 import {
-  TRACK, BOX_SPOTS, PADS, PAD_HALF_W, nearestSample, wrapDelta, samplePoint,
+  TRACK, TRACKS, DEFAULT_TRACK_ID, PAD_HALF_W,
+  nearestSample, wrapDelta, samplePoint, obstaclePose, obstacleTrackPos, onIce,
 } from './track.js'
 
 export const STEP = 1 / 60 // 물리 틱 (초)
@@ -25,7 +26,6 @@ const KART_RADIUS = 1.2 // 카트끼리 충돌 반경
 const BOX_RESPAWN = 4 // 아이템 박스 리스폰 (초)
 const BOMB_SPEED = 55 // m/s (폭탄: 센터라인을 따라 날아감)
 const BOMB_LIFE = 4
-const ROCKET_GAP = TRACK.n / 2 // 1등과 반 바퀴 이상 차이 나면 아이템에 추격 로켓 등장
 const ROCKET_TIME_MAX = 8 // 로켓 변신 최대 지속 시간 (초)
 const ROCKET_RIDE_SPEED = 58 // 로켓 변신 중 속도 (m/s)
 const END_GRACE = 30 // 1등 골인 후 나머지가 들어올 수 있는 시간 (초)
@@ -36,12 +36,16 @@ const DRAFT_LAT = 1.8 // 좌우로 이만큼 가까이 따라붙으면
 const DRAFT_TIME = 1.0 // 이 시간(초)만큼 유지 시 부스트 발동
 const DRAFT_BOOST = 0.9 // 슬립스트림 부스트 지속 시간 (초)
 const DRAFT_MIN_SPEED = 18 // 슬립스트림이 차오르는 최소 속도 (m/s)
+const ICE_STEER = 0.45 // 빙판 위 조향 효율 (핸들이 주르륵~)
+const SNOWMAN_RESPAWN = 7 // 부서진 눈사람이 다시 만들어지는 시간 (초)
+const OB_BOUNCE_SLOW = 0.7 // 소/펭귄에 부딪혔을 때 속도 배율
 
-export function createGame(players, rng = Math.random) {
-  const n = TRACK.n
+export function createGame(players, rng = Math.random, trackId = DEFAULT_TRACK_ID) {
+  const track = TRACKS[trackId] || TRACK
+  const n = track.n
   const karts = players.map((p, i) => {
     const si = (n - 5 - i * 3 + n) % n // 출발선 뒤로 줄지어 배치
-    const s = TRACK.samples[si]
+    const s = track.samples[si]
     const lat = (i % 2 === 0 ? -1 : 1) * 2.2
     return {
       id: p.id,
@@ -67,6 +71,9 @@ export function createGame(players, rng = Math.random) {
       boostT: 0,
       draftT: 0, // 슬립스트림 게이지 (앞 카트 뒤에 붙은 누적 시간)
       draftSeq: 0, // 슬립스트림 부스트 발동 횟수 (HUD 배너 트리거)
+      bumpSeq: 0, // 장애물에 부딪힌 횟수 (HUD 배너/효과음 트리거)
+      bumpKind: null, // 마지막으로 부딪힌 장애물 종류
+      bumpCool: 0, // 장애물 연속 충돌 방지 쿨다운 (밀고 들어오는 소 대응)
       rocketT: 0, // 로켓 변신 남은 시간
       rocketGoal: null, // 로켓 변신이 끝나는 목표 진행도
       stunT: 0,
@@ -80,8 +87,11 @@ export function createGame(players, rng = Math.random) {
     status: 'countdown', // 'countdown' | 'racing' | 'finished'
     time: 0,
     countdown: COUNTDOWN_TIME,
+    track,
+    trackId: track.id,
     karts,
-    boxes: BOX_SPOTS.map(() => ({ t: 0 })), // t>0이면 리스폰 대기
+    boxes: track.boxSpots.map(() => ({ t: 0 })), // t>0이면 리스폰 대기
+    obsT: (track.obstacles || []).map(() => 0), // 부서진 눈사람 리스폰 타이머
     objects: [], // {kind:'banana'|'rocket', id, x, z, ...}
     finishOrder: [],
     endTimer: null,
@@ -119,7 +129,7 @@ export function fireItem(state, id) {
     })
   } else if (item === 'bomb') {
     // 센터라인을 따라 앞으로 날아가는 폭탄
-    const p = samplePoint(TRACK, k.prog + 2)
+    const p = samplePoint(state.track, k.prog + 2)
     state.objects.push({
       kind: 'bomb',
       id: state.nextObjId++,
@@ -147,7 +157,7 @@ export function fireItem(state, id) {
     const leaderProg = others.length ? Math.max(...others.map((o) => o.prog)) : k.prog
     const gain = Math.max(20, (leaderProg - k.prog) / 2)
     k.rocketGoal = k.prog + gain
-    k.rocketT = Math.min(ROCKET_TIME_MAX, (gain * TRACK.segLen) / ROCKET_RIDE_SPEED + 0.3)
+    k.rocketT = Math.min(ROCKET_TIME_MAX, (gain * state.track.segLen) / ROCKET_RIDE_SPEED + 0.3)
     k.stunT = 0
     k.spin = 0
   }
@@ -172,6 +182,7 @@ export function step(state, dt) {
   collideKarts(state.karts)
   stepPads(state)
   stepDraft(state, dt)
+  stepObstacles(state, dt)
   stepBoxes(state, dt)
   stepObjects(state, dt)
   checkFinish(state, dt)
@@ -182,10 +193,25 @@ export function step(state, dt) {
 // CPU 카트 운전 (아이 수준: 흔들리는 조향 + 낮은 최고속 + 가벼운 고무줄)
 function stepBots(state, dt) {
   const leader = Math.max(...state.karts.map((o) => o.prog))
+  const track = state.track
   for (const k of state.karts) {
     if (!k.isBot || k.finished || k.rocketT > 0) continue
-    // 트랙 앞쪽 샘플을 향해 조향
-    const t = TRACK.samples[(k.ci + 10) % TRACK.n]
+    // 트랙 앞쪽 샘플을 향해 조향. 앞에 장애물이 보이면 "내가 도착할 시점"의
+    // 장애물 위치를 예측해 반대쪽으로 비켜 간다 (움직이는 소/펭귄 대응).
+    let aimLat = 0
+    for (const ob of track.obstacles || []) {
+      const now = obstacleTrackPos(track, ob, state.time)
+      const ahead = wrapDelta(Math.round(now.prog) - k.ci, track.n)
+      if (ahead < 0 || ahead > 26) continue
+      const eta = (ahead * track.segLen) / Math.max(10, k.speed)
+      const op = obstacleTrackPos(track, ob, state.time + eta)
+      if (Math.abs(op.lat - k.lat) > 4.5) continue
+      const side = op.lat > 0 ? -1 : 1 // 장애물이 오른쪽이면 왼쪽으로
+      aimLat = Math.max(-track.halfW + 1.6, Math.min(track.halfW - 1.6, op.lat + side * 5))
+      break
+    }
+    const s = track.samples[(k.ci + 10) % track.n]
+    const t = { x: s.x + s.nx * aimLat, z: s.z + s.nz * aimLat }
     const desired = Math.atan2(t.z - k.z, t.x - k.x)
     let d = desired - k.heading
     while (d > Math.PI) d -= 2 * Math.PI
@@ -213,8 +239,8 @@ function stepBots(state, dt) {
 function stepPads(state) {
   for (const k of state.karts) {
     if (k.finished || k.stunT > 0 || k.rocketT > 0) continue
-    for (const pad of PADS) {
-      const d = wrapDelta(k.ci - pad.i, TRACK.n)
+    for (const pad of state.track.pads) {
+      const d = wrapDelta(k.ci - pad.i, state.track.n)
       if (d >= -1 && d <= 3 && Math.abs(k.lat - pad.lat) <= PAD_HALF_W) {
         k.boostT = Math.max(k.boostT, PAD_BOOST)
       }
@@ -232,7 +258,7 @@ function stepDraft(state, dt) {
     }
     const tail = state.karts.some((o) => {
       if (o === k || o.finished) return false
-      const gap = wrapDelta(o.ci - k.ci, TRACK.n) * TRACK.segLen
+      const gap = wrapDelta(o.ci - k.ci, state.track.n) * state.track.segLen
       return gap > 1 && gap < DRAFT_DIST && Math.abs(o.lat - k.lat) < DRAFT_LAT
     })
     if (!tail) {
@@ -248,7 +274,65 @@ function stepDraft(state, dt) {
   }
 }
 
+// 맵별 명물 장애물 (위치는 시간의 순수 함수 → obstaclePose).
+//  - 🐄 소 / 🐧 펭귄: 부딪히면 통! 튕겨나며 감속 (스턴 없음, 웃긴 사고)
+//  - 🌵 선인장: 따가워서 스턴 / 🌪️ 회오리: 휘말려서 빙글빙글 스턴
+//  - ⛄ 눈사람: 박으면 와장창 부서지고(잠시 후 복구) 속도가 뚝
+function stepObstacles(state, dt) {
+  const track = state.track
+  if (!track.obstacles?.length) return
+  track.obstacles.forEach((ob, idx) => {
+    if (ob.kind === 'snowman' && state.obsT[idx] > 0) {
+      state.obsT[idx] = Math.max(0, state.obsT[idx] - dt) // 부서짐 → 리스폰 대기
+      return
+    }
+    const pos = obstaclePose(track, ob, state.time)
+    for (const k of state.karts) {
+      if (k.finished || k.rocketT > 0 || k.stunT > 0) continue
+      const r = ob.r + 1 // 카트 반경 고려
+      let dx = k.x - pos.x
+      let dz = k.z - pos.z
+      const d2 = dx * dx + dz * dz
+      if (d2 >= r * r) continue
+      // 장애물 밖으로 밀어내기
+      const d = Math.sqrt(d2) || 0.001
+      dx /= d
+      dz /= d
+      k.x = pos.x + dx * r
+      k.z = pos.z + dz * r
+      // 소가 옆에서 밀고 들어오면 닿아 있는 동안 틱마다 충돌이 나므로
+      // 효과(감속/카운트)는 쿨다운 한 번에 한 번만
+      if (k.bumpCool > 0) continue
+      k.bumpCool = 0.8
+      k.bumpSeq++
+      k.bumpKind = ob.kind
+      if (ob.kind === 'cactus' || ob.kind === 'snowman') {
+        // 고정 장애물에 정면으로 박으면 옆으로 튕겨낸다 —
+        // 저속에선 조향이 약해 같은 자리로 재돌진(무한 스턴)하기 때문
+        const s = track.samples[ob.i]
+        const side = Math.sign(k.lat - ob.lat) || (ob.lat > 0 ? -1 : 1)
+        const maxLat = track.halfW - 0.8
+        const tl = Math.max(-maxLat, Math.min(maxLat, ob.lat + side * (ob.r + 1.6)))
+        k.x = s.x + s.nx * tl
+        k.z = s.z + s.nz * tl
+      }
+      if (ob.kind === 'cactus') {
+        stunKart(k, 1.0)
+      } else if (ob.kind === 'tornado') {
+        stunKart(k, 0.9)
+      } else if (ob.kind === 'snowman') {
+        k.speed *= 0.45
+        state.obsT[idx] = SNOWMAN_RESPAWN
+        break // 부서졌으니 이번 틱은 끝
+      } else {
+        k.speed *= OB_BOUNCE_SLOW // 소/펭귄: 통통 바운스
+      }
+    }
+  })
+}
+
 function stepKart(state, k, dt) {
+  const track = state.track
   // 로켓 변신: 센터라인을 따라 자동 질주, 모든 공격에 면역.
   // 목표(격차의 절반)에 닿거나 시간이 다 되면 변신이 풀린다.
   if (k.rocketT > 0) {
@@ -257,13 +341,13 @@ function stepKart(state, k, dt) {
     k.stunT = 0
     k.offroad = false
     k.lat = 0
-    const aim = samplePoint(TRACK, k.prog + 10)
+    const aim = samplePoint(track, k.prog + 10)
     k.heading = Math.atan2(aim.z - k.z, aim.x - k.x)
     k.speed = ROCKET_RIDE_SPEED
     k.x += Math.cos(k.heading) * k.speed * dt
     k.z += Math.sin(k.heading) * k.speed * dt
-    const rci = nearestSample(TRACK, k.x, k.z, k.ci)
-    k.prog += wrapDelta(rci - k.ci, TRACK.n)
+    const rci = nearestSample(track, k.x, k.z, k.ci)
+    k.prog += wrapDelta(rci - k.ci, track.n)
     k.ci = rci
     if (k.rocketGoal != null && k.prog >= k.rocketGoal) k.rocketT = 0
     if (k.rocketT === 0) k.speed = MAX_SPEED // 변신 해제 → 카트 속도로 복귀
@@ -287,22 +371,24 @@ function stepKart(state, k, dt) {
       k.speed = Math.max(target, k.speed - 14 * dt) // 가장자리/부스트 종료 시 감속
     }
     // 조이스틱 중앙 부근은 미세 조향(제곱 커브), 저속에선 덜 돌고,
-    // 브레이크 중엔 코너링이 좋아진다
-    const steerEff = Math.min(1, k.speed / 8) * (k.brake ? 1.3 : 1)
+    // 브레이크 중엔 코너링이 좋아진다. 빙판 위에선 핸들이 주르륵~
+    const ice = onIce(track, k.ci) ? ICE_STEER : 1
+    const steerEff = Math.min(1, k.speed / 8) * (k.brake ? 1.3 : 1) * ice
     k.heading += k.steer * Math.abs(k.steer) * TURN_RATE * steerEff * dt
   }
   k.boostT = Math.max(0, k.boostT - dt)
+  k.bumpCool = Math.max(0, k.bumpCool - dt)
 
   k.x += Math.cos(k.heading) * k.speed * dt
   k.z += Math.sin(k.heading) * k.speed * dt
 
   // 트랙 기준 위치: 가장자리에 닿으면 잔디만큼 감속 + 트랙을 벗어나지 않게
   // 위치를 잡아주고, 진행 방향(살짝 안쪽)으로 부드럽게 되돌려준다
-  const ci = nearestSample(TRACK, k.x, k.z, k.ci)
-  const s = TRACK.samples[ci]
+  const ci = nearestSample(track, k.x, k.z, k.ci)
+  const s = track.samples[ci]
   const lat = (k.x - s.x) * s.nx + (k.z - s.z) * s.nz
   k.lat = lat // 가속 발판 판정 등에서 재사용
-  const edge = TRACK.halfW - 0.6 // 카트 폭 고려
+  const edge = track.halfW - 0.6 // 카트 폭 고려
   k.offroad = Math.abs(lat) >= edge // 가장자리 접촉 (감속용 플래그)
   if (Math.abs(lat) > edge) {
     const cl = Math.sign(lat) * edge
@@ -314,7 +400,7 @@ function stepKart(state, k, dt) {
     while (d < -Math.PI) d += 2 * Math.PI
     k.heading += Math.max(-EDGE_ASSIST * dt, Math.min(EDGE_ASSIST * dt, d))
   }
-  k.prog += wrapDelta(ci - k.ci, TRACK.n)
+  k.prog += wrapDelta(ci - k.ci, track.n)
   k.ci = ci
 }
 
@@ -369,7 +455,7 @@ function stepBoxes(state, dt) {
       b.t = Math.max(0, b.t - dt)
       return
     }
-    const spot = BOX_SPOTS[i]
+    const spot = state.track.boxSpots[i]
     for (const k of state.karts) {
       if (k.finished || k.stunT > 0 || k.rocketT > 0) continue
       const dx = k.x - spot.x
@@ -389,7 +475,7 @@ function stepBoxes(state, dt) {
 function rollItem(state, k) {
   const order = ranking(state)
   const idx = order.findIndex((o) => o.id === k.id)
-  if (idx > 0 && order[0].prog - k.prog > ROCKET_GAP) {
+  if (idx > 0 && order[0].prog - k.prog > state.track.n / 2) {
     const pool = ['rocket', 'rocket', 'boost']
     return pool[Math.floor(state.rng() * pool.length)]
   }
@@ -412,9 +498,9 @@ function stepObjects(state, dt) {
   const remove = new Set()
   for (const o of state.objects) {
     if (o.kind === 'bomb') {
-      o.prog += (BOMB_SPEED / TRACK.segLen) * dt
+      o.prog += (BOMB_SPEED / state.track.segLen) * dt
       o.life -= dt
-      const p = samplePoint(TRACK, o.prog)
+      const p = samplePoint(state.track, o.prog)
       o.x = p.x
       o.z = p.z
       o.heading = Math.atan2(p.dz, p.dx)
@@ -438,7 +524,7 @@ function stepObjects(state, dt) {
 
 // 골인 판정 + 1등 골인 후 제한시간
 function checkFinish(state, dt) {
-  const goal = TRACK.n * LAPS
+  const goal = state.track.n * LAPS
   for (const k of state.karts) {
     if (!k.finished && k.prog >= goal) {
       k.finished = true
@@ -469,8 +555,8 @@ export function ranking(state) {
 }
 
 // 표시용 랩 (1 ~ LAPS)
-export function displayLap(k) {
-  return Math.max(1, Math.min(LAPS, Math.floor(k.prog / TRACK.n) + 1))
+export function displayLap(k, n = TRACK.n) {
+  return Math.max(1, Math.min(LAPS, Math.floor(k.prog / n) + 1))
 }
 
 const r2 = (v) => Math.round(v * 100) / 100
@@ -483,12 +569,13 @@ export function makeView(state) {
   return {
     phase: 'play',
     status: state.status,
+    trackId: state.trackId, // 게스트가 어떤 트랙을 그릴지
     time: r2(state.time),
     countdown: Math.ceil(state.countdown),
     go: state.status === 'racing' && state.time < COUNTDOWN_TIME + 1,
     endTimer: state.endTimer == null ? null : Math.max(0, Math.ceil(state.endTimer)),
     // 선두가 마지막 바퀴에 들어서면 하늘이 노을빛으로 (연출용)
-    finalLap: state.karts.some((k) => k.prog >= TRACK.n * (LAPS - 1)),
+    finalLap: state.karts.some((k) => k.prog >= state.track.n * (LAPS - 1)),
     lightning: state.lightningT > 0, // 번개 발동 중 (하늘 번쩍 연출)
     karts: state.karts.map((k) => ({
       id: k.id,
@@ -500,11 +587,13 @@ export function makeView(state) {
       z: r2(k.z),
       heading: r3(k.heading),
       speed: r2(k.speed),
-      lap: displayLap(k),
+      lap: displayLap(k, state.track.n),
       rank: rankOf.get(k.id),
       item: k.item,
       itemSeq: k.itemSeq,
       draftSeq: k.draftSeq,
+      bumpSeq: k.bumpSeq,
+      bumpKind: k.bumpKind,
       boostT: r2(k.boostT),
       rocketT: r2(k.rocketT),
       stunT: r2(k.stunT),
@@ -520,6 +609,7 @@ export function makeView(state) {
       heading: o.heading ? r3(o.heading) : 0,
     })),
     boxes: state.boxes.map((b) => b.t <= 0),
+    obs: state.obsT.map((t) => t <= 0), // 장애물 표시 여부 (부서진 눈사람은 false)
     finishOrder: [...state.finishOrder],
   }
 }

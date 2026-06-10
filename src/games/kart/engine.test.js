@@ -4,7 +4,10 @@ import {
   createGame, setInput, fireItem, step, makeView, ranking, displayLap,
   STEP, LAPS, COUNTDOWN_TIME,
 } from './engine.js'
-import { TRACK, BOX_SPOTS, PADS, PAD_HALF_W, nearestSample, wrapDelta } from './track.js'
+import {
+  TRACK, TRACKS, TRACK_LIST, BOX_SPOTS, PADS, PAD_HALF_W,
+  nearestSample, wrapDelta, obstaclePose, onIce,
+} from './track.js'
 
 const P2 = [
   { id: 'a', name: 'A', zodiacId: 'rat', color: '#aaa' },
@@ -313,6 +316,116 @@ test('마지막 바퀴에 들어서면 finalLap 플래그가 켜진다', () => {
   assert.equal(makeView(g).finalLap, false)
   g.karts[0].prog = TRACK.n * (LAPS - 1) + 1
   assert.equal(makeView(g).finalLap, true)
+})
+
+test('트랙 3종: 자기교차 없음 + 장애물/발판/박스가 모두 정의됨', () => {
+  assert.equal(TRACK_LIST.length, 3)
+  for (const t of TRACK_LIST) {
+    // 자기교차 검사: 인덱스가 멀리 떨어진 샘플끼리는 도로 두 폭보다 멀어야 함
+    for (let i = 0; i < t.n; i += 2) {
+      for (let j = i + 2; j < t.n; j += 2) {
+        if (Math.abs(wrapDelta(j - i, t.n)) < 30) continue
+        const d = Math.hypot(t.samples[i].x - t.samples[j].x, t.samples[i].z - t.samples[j].z)
+        assert.ok(d > t.halfW * 2 + 1, `${t.id}: 트랙 겹침 없음 (i=${i}, j=${j}, d=${d})`)
+      }
+    }
+    assert.ok(t.obstacles.length >= 3, `${t.id}: 명물 장애물 존재`)
+    assert.equal(t.pads.length, 4)
+    assert.equal(t.boxSpots.length, 9)
+    // 고정 장애물은 트랙 안에 있어야 함
+    for (const ob of t.obstacles) {
+      if (ob.lat != null) assert.ok(Math.abs(ob.lat) < t.halfW, `${t.id}: ${ob.kind} 트랙 안`)
+    }
+  }
+})
+
+test('트랙 선택: createGame(trackId)로 트랙이 정해지고 뷰에 전파된다', () => {
+  const g = createGame(P2, Math.random, 'desert')
+  assert.equal(g.track.id, 'desert')
+  const v = makeView(g)
+  assert.equal(v.trackId, 'desert')
+  assert.equal(v.obs.length, TRACKS.desert.obstacles.length)
+  // 모르는 trackId는 기본 트랙으로
+  assert.equal(createGame(P2, Math.random, 'nope').track.id, 'meadow')
+})
+
+test('초원의 소: 부딪히면 튕겨나며 감속하지만 스턴은 없다', () => {
+  const g = createGame(P2, Math.random, 'meadow')
+  startRacing(g)
+  const k = g.karts[0]
+  const cow = g.track.obstacles[0]
+  const pos = obstaclePose(g.track, cow, g.time + STEP) // 다음 틱의 소 위치에 세워둔다
+  k.x = pos.x
+  k.z = pos.z
+  k.ci = nearestSample(g.track, k.x, k.z)
+  k.speed = 20
+  step(g, STEP)
+  assert.equal(k.bumpSeq, 1, '소와 충돌')
+  assert.equal(k.bumpKind, 'cow')
+  assert.equal(k.stunT, 0, '스턴 없음 (웃긴 사고)')
+  assert.ok(k.speed < 20, `감속 (${k.speed})`)
+  const d = Math.hypot(k.x - pos.x, k.z - pos.z)
+  assert.ok(d >= cow.r + 1 - 0.01, `밀려남 (d=${d})`)
+})
+
+test('사막의 선인장: 박으면 따가워서 스턴', () => {
+  const g = createGame(P2, Math.random, 'desert')
+  startRacing(g)
+  const k = g.karts[0]
+  const cactus = g.track.obstacles.find((o) => o.kind === 'cactus')
+  const pos = obstaclePose(g.track, cactus, 0) // 고정 장애물 (시간 무관)
+  k.x = pos.x
+  k.z = pos.z
+  k.ci = nearestSample(g.track, k.x, k.z)
+  step(g, STEP)
+  assert.equal(k.bumpKind, 'cactus')
+  assert.ok(k.stunT > 0, '선인장 스턴')
+})
+
+test('눈사람: 박으면 와장창 부서지고 일정 시간 뒤 복구된다', () => {
+  const g = createGame(P2, Math.random, 'snow')
+  startRacing(g)
+  const k = g.karts[0]
+  const idx = g.track.obstacles.findIndex((o) => o.kind === 'snowman')
+  const pos = obstaclePose(g.track, g.track.obstacles[idx], 0)
+  k.x = pos.x
+  k.z = pos.z
+  k.ci = nearestSample(g.track, k.x, k.z)
+  k.speed = 20
+  step(g, STEP)
+  assert.equal(k.bumpKind, 'snowman')
+  assert.ok(k.speed < 12, `속도가 뚝 (${k.speed})`)
+  assert.equal(makeView(g).obs[idx], false, '부서진 동안엔 숨김')
+  k.x = 0 // 카트를 치워두고 리스폰을 기다린다
+  k.z = 0
+  k.ci = nearestSample(g.track, 0, 0)
+  for (let i = 0; i < Math.ceil(7.2 / STEP); i++) step(g, STEP)
+  assert.equal(makeView(g).obs[idx], true, '눈사람 복구')
+})
+
+test('빙판: 같은 조향이라도 빙판 위에선 핸들이 덜 듣는다', () => {
+  const t = TRACKS.snow
+  const iceI = t.ice[0].from + 5
+  const dryI = Math.round(t.n * 0.3)
+  assert.ok(onIce(t, iceI) && !onIce(t, dryI), '빙판/일반 구간 구분')
+  const turnAt = (si) => {
+    const g = createGame([P2[0]], Math.random, 'snow')
+    startRacing(g)
+    const k = g.karts[0]
+    const s = t.samples[si]
+    k.x = s.x
+    k.z = s.z
+    k.ci = si
+    k.heading = Math.atan2(s.dz, s.dx)
+    k.speed = 20
+    const h0 = k.heading
+    setInput(g, 'a', { steer: 1, brake: false })
+    step(g, STEP)
+    return Math.abs(k.heading - h0)
+  }
+  const dry = turnAt(dryI)
+  const ice = turnAt(iceI)
+  assert.ok(ice < dry * 0.6, `빙판 조향 감소 (dry=${dry}, ice=${ice})`)
 })
 
 test('카트끼리 충돌: 뒤에서 박으면 앞 카트가 밀려나고 서로 떨어진다', () => {

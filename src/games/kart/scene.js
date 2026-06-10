@@ -2,9 +2,7 @@
 // 엔진의 makeView() 스냅샷만 보고 그린다 — 호스트/게스트 공용.
 import * as THREE from 'three'
 import { getZodiac } from '../../shared/zodiac.js'
-import { BOX_SPOTS, BOX_ROWS, PADS, PAD_HALF_W } from './track.js'
-
-const SKY = 0x8ecdf5
+import { PAD_HALF_W, obstaclePose } from './track.js'
 
 // 이모지 한 글자를 캔버스에 그려 스프라이트 텍스처로 만든다
 function emojiTexture(emoji, size = 128) {
@@ -38,7 +36,7 @@ function lcg(seed) {
 }
 
 // 도로 리본 (센터라인 ± halfW)
-function buildRoad(track) {
+function buildRoad(track, color) {
   const { samples, n, halfW } = track
   const pos = []
   const idx = []
@@ -56,8 +54,40 @@ function buildRoad(track) {
   geo.computeVertexNormals()
   return new THREE.Mesh(
     geo,
-    new THREE.MeshLambertMaterial({ color: 0x474d59, side: THREE.DoubleSide })
+    new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide })
   )
+}
+
+// 빙판 구간: 도로 위에 반짝이는 하늘색 리본 (눈꽃 빙판 전용)
+function buildIce(track) {
+  const g = new THREE.Group()
+  const mat = new THREE.MeshLambertMaterial({
+    color: 0xbfe8ff,
+    transparent: true,
+    opacity: 0.75,
+    side: THREE.DoubleSide,
+  })
+  for (const zn of track.ice || []) {
+    const pos = []
+    const idx = []
+    let v = 0
+    for (let i = zn.from; i <= zn.to; i++) {
+      const s = track.samples[i % track.n]
+      const w = track.halfW - 0.2
+      pos.push(s.x + s.nx * w, 0.035, s.z + s.nz * w)
+      pos.push(s.x - s.nx * w, 0.035, s.z - s.nz * w)
+      if (i < zn.to) {
+        idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2)
+      }
+      v += 2
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    geo.setIndex(idx)
+    geo.computeVertexNormals()
+    g.add(new THREE.Mesh(geo, mat))
+  }
+  return g
 }
 
 // 글자 하나를 캔버스에 그려 스프라이트 텍스처로 (아이템 박스의 '?' 등)
@@ -118,7 +148,7 @@ function buildPads(track) {
     geo.setIndex(idx)
     return new THREE.Mesh(geo, mat)
   }
-  for (const pad of PADS) {
+  for (const pad of track.pads) {
     g.add(makeChevron(pad, 0))
     g.add(makeChevron(pad, 3))
   }
@@ -207,16 +237,16 @@ function buildStart(track) {
   return g
 }
 
-// 트랙 바깥 나무들
-function buildTrees(track) {
+// 트랙 바깥 나무들 (테마별 색/개수: 초원 침엽수, 사막 관목, 눈 덮인 나무)
+function buildTrees(track, theme) {
   const g = new THREE.Group()
   const rnd = lcg(20260610)
   const trunkGeo = new THREE.CylinderGeometry(0.3, 0.4, 1.6, 6)
-  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x7a5230 })
+  const trunkMat = new THREE.MeshLambertMaterial({ color: theme.treeTrunk })
   const leafGeo = new THREE.ConeGeometry(1.8, 4, 8)
-  const leafMat = new THREE.MeshLambertMaterial({ color: 0x2e8b46 })
+  const leafMat = new THREE.MeshLambertMaterial({ color: theme.treeLeaf })
   let placed = 0
-  for (let tries = 0; tries < 1200 && placed < 80; tries++) {
+  for (let tries = 0; tries < 1200 && placed < theme.treeCount; tries++) {
     const x = (rnd() - 0.5) * 380
     const z = (rnd() - 0.5) * 340 + 12
     let minD = Infinity
@@ -240,8 +270,8 @@ function buildTrees(track) {
   return g
 }
 
-// 아기자기한 장식: 구름/꽃밭/길가 깃발/아이템 구역 풍선 (이모지 스프라이트)
-function buildDecor(track) {
+// 아기자기한 장식: 구름/테마 소품/길가 깃발/아이템 구역 풍선 (이모지 스프라이트)
+function buildDecor(track, theme) {
   const group = new THREE.Group()
   const rnd = lcg(777)
   const clouds = []
@@ -251,7 +281,7 @@ function buildDecor(track) {
     clouds.push(sp)
     group.add(sp)
   }
-  const flora = ['🌼', '🌸', '🌷', '🍄', '🌻', '🪨', '🦋']
+  const flora = theme.flora
   for (let i = 0; i < 80; i++) {
     const s = track.samples[Math.floor(rnd() * track.n)]
     const side = rnd() < 0.5 ? 1 : -1
@@ -274,7 +304,7 @@ function buildDecor(track) {
   }
   // 아이템 구역 양옆 풍선
   const balloons = []
-  for (const ri of BOX_ROWS) {
+  for (const ri of track.boxRows) {
     const s = track.samples[ri]
     for (const side of [1, -1]) {
       const sp = emojiSprite('🎈', 3.4)
@@ -356,17 +386,26 @@ function buildKart(color, emoji) {
 
 const OBJ_EMOJI = { banana: '🍌', bomb: '💣' }
 
+// 맵별 명물 장애물 (이모지 스프라이트 + 크기/높이)
+const OBSTACLE_LOOK = {
+  cow: { emoji: '🐄', scale: 3.2, y: 1.4 },
+  tornado: { emoji: '🌪️', scale: 4, y: 1.9 },
+  cactus: { emoji: '🌵', scale: 3, y: 1.4 },
+  snowman: { emoji: '⛄', scale: 3.2, y: 1.5 },
+  penguin: { emoji: '🐧', scale: 2.4, y: 1 },
+}
+
 // 마지막 바퀴엔 하늘이 노을빛으로 물든다 (드라마 연출)
-const DUSK = 0xff9e6b
 const SUN_DAY = 0xffffff
 const SUN_DUSK = 0xffb27a
 
 export function createKartScene(canvas, track) {
+  const theme = track.theme
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(SKY)
-  scene.fog = new THREE.Fog(SKY, 200, 560)
+  scene.background = new THREE.Color(theme.sky)
+  scene.fog = new THREE.Fog(theme.sky, 200, 560)
   const camera = new THREE.PerspectiveCamera(62, 16 / 9, 0.1, 1000)
   camera.position.set(0, 40, -80)
   scene.add(camera) // 카메라에 붙는 자식(스피드라인)을 렌더하기 위해
@@ -378,18 +417,28 @@ export function createKartScene(canvas, track) {
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(1600, 1600),
-    new THREE.MeshLambertMaterial({ color: 0x68b95c })
+    new THREE.MeshLambertMaterial({ color: theme.ground })
   )
   ground.geometry.rotateX(-Math.PI / 2)
   scene.add(ground)
 
-  scene.add(buildRoad(track))
+  scene.add(buildRoad(track, theme.road))
+  if (track.ice) scene.add(buildIce(track))
   scene.add(buildCurbs(track))
   scene.add(buildStart(track))
   scene.add(buildPads(track))
-  scene.add(buildTrees(track))
-  const decor = buildDecor(track)
+  scene.add(buildTrees(track, theme))
+  const decor = buildDecor(track, theme)
   scene.add(decor.group)
+
+  // 맵별 명물 장애물 (위치는 매 프레임 obstaclePose로 갱신)
+  const obstacleNodes = (track.obstacles || []).map((ob) => {
+    const look = OBSTACLE_LOOK[ob.kind] || { emoji: '❓', scale: 2.4, y: 1.2 }
+    const sp = emojiSprite(look.emoji, look.scale)
+    sp.position.y = look.y
+    scene.add(sp)
+    return { sp, ob, look, prevAlive: true }
+  })
 
   // 부스트 스피드라인: 카메라 주변을 휙휙 지나가는 선 (하이퍼스페이스 느낌)
   const SL_COUNT = 90
@@ -506,7 +555,7 @@ export function createKartScene(canvas, track) {
     depthWrite: false, // 안의 '?'가 비쳐 보이게
   })
   const qTex = textTexture('?')
-  const boxNodes = BOX_SPOTS.map((spot, i) => {
+  const boxNodes = track.boxSpots.map((spot, i) => {
     const grp = new THREE.Group()
     const glass = new THREE.Mesh(boxGeo, glassMat)
     glass.rotation.y = i
@@ -528,8 +577,8 @@ export function createKartScene(canvas, track) {
   let duskMix = 0
   let flashT = 0
   let prevLightning = false
-  const dayCol = new THREE.Color(SKY)
-  const duskCol = new THREE.Color(DUSK)
+  const dayCol = new THREE.Color(theme.sky)
+  const duskCol = new THREE.Color(theme.dusk)
   const whiteCol = new THREE.Color(0xffffff)
   const skyCol = new THREE.Color()
   const sunDay = new THREE.Color(SUN_DAY)
@@ -615,6 +664,35 @@ export function createKartScene(canvas, track) {
       sp.material.map?.dispose()
       sp.material.dispose()
       objNodes.delete(id)
+    }
+
+    // 맵 명물 장애물: 시간의 순수 함수로 움직인다 (엔진 충돌 판정과 동일 위치).
+    // 부서진 눈사람은 잠시 사라졌다 복구 — 부서지는 순간 눈보라가 펑!
+    for (let idx = 0; idx < obstacleNodes.length; idx++) {
+      const node = obstacleNodes[idx]
+      const alive = !view.obs || view.obs[idx] !== false
+      if (!alive && node.prevAlive) {
+        spawnParts(36, () => {
+          const a = Math.random() * Math.PI * 2
+          const r = 2 + Math.random() * 6
+          return {
+            x: node.sp.position.x, y: 1 + Math.random() * 1.5, z: node.sp.position.z,
+            vx: Math.cos(a) * r, vy: 3 + Math.random() * 6, vz: Math.sin(a) * r,
+            life: 0.7 + Math.random() * 0.5, grav: 10,
+            r: 1, g: 1, b: 1,
+          }
+        })
+      }
+      node.prevAlive = alive
+      node.sp.visible = alive
+      if (!alive) continue
+      const pos = obstaclePose(track, node.ob, view.time)
+      // 소는 느긋하게 끄덕, 펭귄은 배 깔고 통통, 회오리는 빙글빙글
+      let y = node.look.y
+      if (node.ob.kind === 'cow') y += Math.sin(view.time * 2.2 + idx) * 0.12
+      if (node.ob.kind === 'penguin') y += Math.abs(Math.sin(view.time * 5 + idx)) * 0.35
+      if (node.ob.kind === 'tornado') node.sp.material.rotation += dt * 7
+      node.sp.position.set(pos.x, y, pos.z)
     }
 
     // 아이템 박스 회전/표시 (유리 큐브가 빙글빙글, '?'는 항상 카메라를 본다)

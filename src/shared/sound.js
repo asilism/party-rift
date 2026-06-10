@@ -76,6 +76,11 @@ export const sound = {
   go() {
     beep(1047, 0.5, 'square', 0.08)
   },
+  // 장애물에 쿵 — 통! 하고 튕기는 소리
+  bounce() {
+    beep(180, 0.07, 'square', 0.07)
+    setTimeout(() => beep(320, 0.1, 'square', 0.06), 60)
+  },
   // 번개 우르릉 쾅!
   thunder() {
     beep(110, 0.4, 'sawtooth', 0.09)
