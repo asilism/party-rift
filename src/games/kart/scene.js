@@ -772,7 +772,7 @@ export function createKartScene(canvas, track) {
       rail.add(rm)
     }
     scene.add(rail)
-    // 건널목 경고등: 건널목 직전 도로 양옆 기둥 + 🚨 (기차가 오면 깜빡)
+    // 건널목 경고등: 건널목 직전 도로 양옆 기둥 + 빨간 경광등 (기차가 오면 깜빡)
     const ps = track.samples[(tr.i - 3 + track.n) % track.n]
     for (const side of [1, -1]) {
       const px = ps.x + ps.nx * (track.halfW + 1.4) * side
@@ -782,12 +782,20 @@ export function createKartScene(canvas, track) {
         new THREE.MeshLambertMaterial({ color: 0xd8d8d8 })
       )
       pole.position.set(px, (ps.y || 0) + 1.3, pz)
-      scene.add(pole)
-      const light = emojiSprite('🚨', 1.9)
-      light.material.transparent = true
-      light.position.set(px, (ps.y || 0) + 3.1, pz)
-      crossingLights.push({ sp: light, tr })
-      scene.add(light)
+      const bulb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.36, 10, 10),
+        new THREE.MeshBasicMaterial({ color: 0x7a1f1f })
+      )
+      bulb.position.set(px, (ps.y || 0) + 2.85, pz)
+      const halo = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: glowTex, color: 0xff4444, transparent: true, opacity: 0.1, depthWrite: false,
+        })
+      )
+      halo.scale.set(3, 3, 1)
+      halo.position.copy(bulb.position)
+      crossingLights.push({ bulb, halo, tr })
+      scene.add(pole, bulb, halo)
     }
     // 기차: 기관차(빨강 + 굴뚝) + 객차들
     const cars = []
@@ -867,7 +875,7 @@ export function createKartScene(canvas, track) {
 
   // 맵별 명물 장애물 (위치는 매 프레임 obstaclePose로 갱신)
   const obstacleNodes = (track.obstacles || []).map((ob) => {
-    const look = OBSTACLE_LOOK[ob.kind] || { emoji: '❓', scale: 2.4, y: 1.2 }
+    const look = OBSTACLE_LOOK[ob.kind] || { emoji: '🎁', scale: 2.4, y: 1.2 }
     const sp = emojiSprite(look.emoji, look.scale)
     sp.position.y = look.y
     scene.add(sp)
@@ -1054,22 +1062,25 @@ export function createKartScene(canvas, track) {
     if (dirty) skidGeo.attributes.color.needsUpdate = true
   }
 
-  // 아이템 박스: 유리 질감의 투명 큐브 안에 '?' 글자
+  // 아이템 박스: 무지개색으로 빛나는 반투명 큐브 + 흰 모서리 + '?'.
+  // (유리 재질은 환경맵 없는 실기기에서 칙칙한 회색으로 보여서 → 어디서든 똑같은 카툰 재질)
   const boxGeo = new THREE.BoxGeometry(1.6, 1.6, 1.6)
-  const glassMat = new THREE.MeshPhysicalMaterial({
-    color: 0xbfe4ff,
-    transparent: true,
-    opacity: 0.34,
-    roughness: 0.06,
-    metalness: 0,
-    clearcoat: 1,
-    depthWrite: false, // 안의 '?'가 비쳐 보이게
-  })
   const qTex = textTexture('?')
   const boxNodes = track.boxSpots.map((spot, i) => {
     const grp = new THREE.Group()
-    const glass = new THREE.Mesh(boxGeo, glassMat)
+    const mat = new THREE.MeshLambertMaterial({
+      color: 0x55b9ff,
+      emissive: 0x2277cc, // 역광/어두운 기기에서도 색이 살아 있게
+      transparent: true,
+      opacity: 0.6,
+    })
+    const glass = new THREE.Mesh(boxGeo, mat)
     glass.rotation.y = i
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(boxGeo),
+      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85 })
+    )
+    glass.add(edges)
     const q = new THREE.Sprite(new THREE.SpriteMaterial({ map: qTex, depthWrite: false }))
     q.scale.set(1.15, 1.15, 1)
     q.renderOrder = 2
@@ -1077,7 +1088,7 @@ export function createKartScene(canvas, track) {
     const baseY = (spot.y || 0) + 1.2
     grp.position.set(spot.x, baseY, spot.z)
     scene.add(grp)
-    return { grp, glass, baseY }
+    return { grp, glass, mat, baseY }
   })
 
   const kartNodes = new Map() // kartId -> {group, flame, prevStun, prevFin}
@@ -1318,7 +1329,7 @@ export function createKartScene(canvas, track) {
       alive.add(o.id)
       let sp = objNodes.get(o.id)
       if (!sp) {
-        sp = emojiSprite(OBJ_EMOJI[o.kind] || '❓', o.kind === 'rocket' ? 2.2 : 1.7)
+        sp = emojiSprite(OBJ_EMOJI[o.kind] || '🎁', o.kind === 'rocket' ? 2.2 : 1.7)
         objNodes.set(o.id, sp)
         scene.add(sp)
       }
@@ -1404,18 +1415,23 @@ export function createKartScene(canvas, track) {
       }
       // 건널목 경고등: 기차가 가까우면 빨갛게 깜빡!
       const warn = cars.some((c) => Math.abs(c.lat) < track.halfW + 30)
+      const lit = warn && Math.floor(now / 220) % 2 === 0
       for (const cl of crossingLights) {
         if (cl.tr !== tn.tr) continue
-        cl.sp.material.opacity = warn ? (Math.floor(now / 220) % 2 ? 1 : 0.2) : 0.35
+        cl.bulb.material.color.setHex(lit ? 0xff2d2d : 0x7a1f1f)
+        cl.halo.material.opacity = lit ? 0.9 : 0.1
       }
     }
 
     // 아이템 박스 회전/표시 (유리 큐브가 빙글빙글, '?'는 항상 카메라를 본다)
-    boxNodes.forEach(({ grp, glass, baseY }, i) => {
+    boxNodes.forEach(({ grp, glass, mat, baseY }, i) => {
       grp.visible = !view.boxes || view.boxes[i] !== false
       glass.rotation.y += dt * 1.6
       glass.rotation.x += dt * 0.8
       grp.position.y = baseY + Math.sin(now / 320 + i) * 0.15
+      // 무지개색으로 천천히 변하며 빛난다
+      mat.color.setHSL((now / 2600 + i * 0.13) % 1, 0.85, 0.62)
+      mat.emissive.copy(mat.color).multiplyScalar(0.55)
     })
 
     // 구름은 천천히 흐르고, 풍선은 둥실둥실
