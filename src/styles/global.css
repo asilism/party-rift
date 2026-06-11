@@ -1790,6 +1790,28 @@ body {
   animation: kart-drift-max 0.45s ease-in-out infinite;
 }
 @keyframes kart-drift-spin { to { transform: rotate(360deg); } }
+
+/* 결과 시상대: 1·2·3등 단상 + 폴짝폴짝 뛰는 캐릭터 */
+.kart-podium { display: flex; align-items: flex-end; justify-content: center; gap: 12px; margin: 12px 0 4px; }
+.kart-podium__col { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 88px; }
+.kart-podium__char { font-size: 44px; line-height: 1.1; animation: kart-pod-hop 0.9s ease-in-out infinite; }
+.kart-podium__col--p1 .kart-podium__char { font-size: 58px; animation-duration: 0.65s; }
+.kart-podium__col--p2 .kart-podium__char { animation-delay: 0.15s; }
+.kart-podium__col--p3 .kart-podium__char { animation-delay: 0.3s; }
+.kart-podium__name { font-weight: 800; font-size: 14px; }
+.kart-podium__block {
+  width: 100%; border-radius: 10px 10px 4px 4px;
+  background: linear-gradient(180deg, var(--z-color, #8a93ad), rgba(10, 14, 28, 0.55));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; animation: kart-pod-rise 0.5s ease-out backwards;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.kart-podium__col--p1 .kart-podium__block { height: 92px; animation-delay: 0.25s; }
+.kart-podium__col--p2 .kart-podium__block { height: 62px; animation-delay: 0.1s; }
+.kart-podium__col--p3 .kart-podium__block { height: 44px; }
+.kart-podium__rest { opacity: 0.85; font-size: 14px; margin: 6px 0 0; }
+@keyframes kart-pod-hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+@keyframes kart-pod-rise { from { transform: scaleY(0); transform-origin: bottom; } }
 @keyframes kart-drift-max {
   0%, 100% { box-shadow: 0 0 24px rgba(217, 123, 255, 0.8); }
   50% { box-shadow: 0 0 44px rgba(217, 123, 255, 1); }

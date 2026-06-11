@@ -33,9 +33,86 @@ function beep(freq, duration = 0.08, type = 'square', gain = 0.06) {
   osc.stop(now + duration)
 }
 
+// ── 프로시저럴 BGM: 경쾌한 칩튠 루프 (에셋 없이 오실레이터 스케줄링) ──
+// 32스텝(8분음표) 루프를 lookahead 스케줄러로 깔아준다. 마지막 바퀴엔 빨라진다!
+const NOTE = {
+  C3: 130.8, F3: 174.6, G3: 196.0, A3: 220.0,
+  C5: 523.3, D5: 587.3, E5: 659.3, G5: 784.0, A5: 880.0, C6: 1046.5,
+}
+const MELODY = [
+  'C5', 'E5', 'G5', null, 'E5', 'G5', 'A5', null,
+  'G5', 'E5', 'C5', null, 'D5', 'E5', 'D5', null,
+  'C5', 'E5', 'G5', null, 'A5', 'G5', 'E5', 'G5',
+  'A5', null, 'G5', null, 'E5', 'D5', 'C5', null,
+]
+const BASS = ['C3', 'C3', 'A3', 'A3', 'F3', 'F3', 'G3', 'G3'] // 4스텝(4분음표)마다
+let mTimer = null
+let mStep = 0
+let mNext = 0
+let mFast = false
+
+function playNote(ac, freq, t, dur, type, vol) {
+  const osc = ac.createOscillator()
+  const g = ac.createGain()
+  osc.type = type
+  osc.frequency.value = freq
+  osc.connect(g)
+  g.connect(ac.destination)
+  g.gain.setValueAtTime(vol, t)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+  osc.start(t)
+  osc.stop(t + dur)
+}
+
+function scheduleStep(ac, i, t, dur) {
+  const m = MELODY[i]
+  if (m) playNote(ac, NOTE[m], t, dur * 0.95, 'square', 0.022)
+  if (i % 4 === 0) playNote(ac, NOTE[BASS[(i / 4) % BASS.length]], t, dur * 3.6, 'triangle', 0.045)
+  if (i % 8 === 0) {
+    // 킥: 낮은 사인이 뚝 떨어진다
+    const osc = ac.createOscillator()
+    const g = ac.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(150, t)
+    osc.frequency.exponentialRampToValueAtTime(50, t + 0.1)
+    osc.connect(g)
+    g.connect(ac.destination)
+    g.gain.setValueAtTime(0.06, t)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12)
+    osc.start(t)
+    osc.stop(t + 0.12)
+  }
+}
+
 export const sound = {
   setEnabled(v) {
     enabled = v
+    if (!v) this.musicStop()
+  },
+  // 레이스 BGM 시작/정지. 이미 흐르는 중이면 무시.
+  musicStart() {
+    if (mTimer || !enabled) return
+    const ac = getCtx()
+    if (!ac) return
+    mStep = 0
+    mNext = ac.currentTime + 0.06
+    mTimer = setInterval(() => {
+      const a = getCtx()
+      if (!a) return
+      const dur = mFast ? 0.198 : 0.225 // 마지막 바퀴엔 템포 업!
+      while (mNext < a.currentTime + 0.35) {
+        scheduleStep(a, mStep, mNext, dur)
+        mNext += dur
+        mStep = (mStep + 1) % MELODY.length
+      }
+    }, 120)
+  },
+  musicStop() {
+    if (mTimer) clearInterval(mTimer)
+    mTimer = null
+  },
+  musicSetFast(v) {
+    mFast = !!v
   },
   isEnabled() {
     return enabled
@@ -92,5 +169,17 @@ export const sound = {
     beep(300, 0.15, 'sawtooth', 0.06)
     setTimeout(() => beep(520, 0.15, 'sawtooth', 0.06), 120)
     setTimeout(() => beep(840, 0.3, 'sawtooth', 0.07), 240)
+  },
+  // 점프대 발사 — 휘리릭 위로!
+  jump() {
+    beep(420, 0.08, 'square', 0.06)
+    setTimeout(() => beep(640, 0.09, 'square', 0.06), 70)
+    setTimeout(() => beep(900, 0.14, 'square', 0.06), 140)
+  },
+  // 용암/낭떠러지에 풍덩~
+  splash() {
+    beep(520, 0.1, 'sawtooth', 0.06)
+    setTimeout(() => beep(280, 0.14, 'sawtooth', 0.06), 90)
+    setTimeout(() => beep(120, 0.3, 'sawtooth', 0.07), 200)
   },
 }

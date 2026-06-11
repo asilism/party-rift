@@ -259,6 +259,7 @@ function interpolate(buf) {
       ...kb,
       x: lerp(ka.x, kb.x),
       z: lerp(ka.z, kb.z),
+      y: lerp(ka.y || 0, kb.y || 0), // 언덕/점프/추락 높이를 부드럽게
       heading: lerp(ka.heading, kb.heading),
       spin: lerp(ka.spin || 0, kb.spin || 0),
       flyT: lerp(ka.flyT || 0, kb.flyT || 0), // 회오리 비행 포물선을 부드럽게
@@ -287,6 +288,8 @@ function useKartSounds(hud, myId) {
     if (me?.boostT > 0 && !(p.boostT > 0)) sound.ladderUp()
     if (me?.rocketT > 0 && !(p.rocketT > 0)) sound.rocket()
     if (me?.flyT > 0 && !(p.flyT > 0)) sound.rocket() // 회오리에 붕~ 떠오를 때
+    if (me && p.jumpSeq != null && me.jumpSeq > p.jumpSeq) sound.jump() // 점프대 발사!
+    if (me && p.fallSeq != null && me.fallSeq > p.fallSeq) sound.splash() // 용암 풍덩~
     if (hud.lightning && !p.lightning) sound.thunder() // 번개는 모두에게 들린다
     // 소/펭귄/눈사람 등 장애물과 쿵! (스턴형 장애물은 위의 스턴음이 담당)
     if (me && p.bumpSeq != null && me.bumpSeq > p.bumpSeq && !(me.stunT > 0)) sound.bounce()
@@ -298,6 +301,8 @@ function useKartSounds(hud, myId) {
       boostT: me?.boostT,
       rocketT: me?.rocketT,
       flyT: me?.flyT,
+      jumpSeq: me?.jumpSeq,
+      fallSeq: me?.fallSeq,
       bumpSeq: me?.bumpSeq,
       lightning: hud.lightning,
     }
@@ -311,6 +316,7 @@ const BUMP_MSG = {
   snowman: '⛄ 눈사람 와장창!',
   cactus: '🌵 아야야! 따가워!',
   tornado: '🌪️ 회오리에 휘말려 붕~!',
+  magma: '🔥 용암 불덩이! 앗 뜨거!',
 }
 
 // 레이스 드라마 배너: 랩 진입 / 장애물 사고 / 추월·역전 / 슬립스트림 / 번개를
@@ -332,6 +338,8 @@ function useRaceBanner(hud, myId) {
       rank: me?.rank ?? null,
       draftSeq: me?.draftSeq ?? 0,
       turboSeq: me?.turboSeq ?? 0,
+      jumpSeq: me?.jumpSeq ?? 0,
+      fallSeq: me?.fallSeq ?? 0,
       bumpSeq: me?.bumpSeq ?? 0,
       bumpKind: me?.bumpKind ?? null,
       botIds: hud.karts.filter((k) => k.isBot).map((k) => k.id).sort().join(','),
@@ -370,6 +378,14 @@ function useRaceBanner(hud, myId) {
       }
     }
     if (!me || me.finished) return
+    if (cur.fallSeq > p.fallSeq) {
+      show('😱 풍덩~! 낭떠러지 앞에서 재출발!')
+      return
+    }
+    if (cur.jumpSeq > p.jumpSeq) {
+      show('🛫 점프~!')
+      return
+    }
     if (cur.bumpSeq > p.bumpSeq && BUMP_MSG[cur.bumpKind]) {
       show(BUMP_MSG[cur.bumpKind])
       return
@@ -400,12 +416,60 @@ function useRaceBanner(hud, myId) {
   return msg
 }
 
+// 결과 시상대: 1·2·3등이 색깔 단상 위에서 폴짝폴짝 (가운데가 1등)
+function KartPodium({ order }) {
+  const cols = [
+    { k: order[1], cls: 'p2', medal: '🥈' },
+    { k: order[0], cls: 'p1', medal: '🥇' },
+    { k: order[2], cls: 'p3', medal: '🥉' },
+  ]
+  return (
+    <>
+      <div className="kart-podium">
+        {cols.map(({ k, cls, medal }) =>
+          k ? (
+            <div key={k.id} className={`kart-podium__col kart-podium__col--${cls}`}>
+              <span className="kart-podium__char">{getZodiac(k.zodiacId)?.emoji}</span>
+              <span className="kart-podium__name">
+                {k.name}
+                {k.isBot ? ' 🤖' : ''}
+              </span>
+              <div className="kart-podium__block" style={{ '--z-color': k.color }}>
+                <span>{medal}</span>
+              </div>
+            </div>
+          ) : (
+            <div key={cls} className="kart-podium__col" />
+          )
+        )}
+      </div>
+      {order.length > 3 && (
+        <p className="kart-podium__rest">
+          {order
+            .slice(3)
+            .map((k, i) => `${i + 4}등 ${getZodiac(k.zodiacId)?.emoji}${k.name}`)
+            .join(' · ')}
+        </p>
+      )}
+    </>
+  )
+}
+
 // 주행 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function KartPlay({
   hud, sample, myId, ctrlRef, onItem, onRematch, onRestart, onExit, soundOn, onToggleSound,
 }) {
   useKartSounds(hud, myId)
   const lapMsg = useRaceBanner(hud, myId)
+  // BGM: 레이스 중에만 흐르고, 마지막 바퀴엔 템포가 빨라진다
+  const status = hud?.status
+  const finalLap = !!hud?.finalLap
+  useEffect(() => {
+    if (status === 'racing' && soundOn) sound.musicStart()
+    else sound.musicStop()
+    sound.musicSetFast(finalLap)
+  }, [status, finalLap, soundOn])
+  useEffect(() => () => sound.musicStop(), [])
   if (!hud || hud.phase !== 'play') {
     return <NetWaiting text="레이스를 준비하고 있어요... 🏎️" onExit={onExit} />
   }
@@ -414,7 +478,6 @@ function KartPlay({
   const finished = hud.status === 'finished'
   const order = [...hud.karts].sort((a, b) => a.rank - b.rank)
   const win = order[0]
-  const medals = ['🥇', '🥈', '🥉', '4등', '5등']
 
   return (
     <div className="kart">
@@ -509,11 +572,7 @@ function KartPlay({
           <div className="win-modal__card" style={{ '--z-color': win?.color }}>
             <div className="win-modal__emoji">🏆</div>
             <h2>{win?.name} 우승! 🎉</h2>
-            <p>
-              {order
-                .map((k, i) => `${medals[i] || `${i + 1}등`} ${getZodiac(k.zodiacId)?.emoji}${k.name}`)
-                .join('  ·  ')}
-            </p>
+            <KartPodium order={order} />
             <div className="win-modal__btns">
               {onRestart ? (
                 <>

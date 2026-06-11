@@ -2,7 +2,7 @@
 // 엔진의 makeView() 스냅샷만 보고 그린다 — 호스트/게스트 공용.
 import * as THREE from 'three'
 import { getZodiac } from '../../shared/zodiac.js'
-import { PAD_HALF_W, obstaclePose, obstacleVisible } from './track.js'
+import { PAD_HALF_W, obstaclePose, obstacleVisible, inGap, samplePoint, nearestSample } from './track.js'
 import { FLY_TIME } from './engine.js'
 
 // 이모지 한 글자를 캔버스에 그려 스프라이트 텍스처로 만든다
@@ -36,15 +36,16 @@ function lcg(seed) {
   }
 }
 
-// 도로 리본 (센터라인 ± halfW)
+// 도로 리본 (센터라인 ± halfW). 고도(y)를 따르고, 협곡(gap) 구간은 끊긴다.
 function buildRoad(track, color) {
   const { samples, n, halfW } = track
   const pos = []
   const idx = []
   for (let i = 0; i < n; i++) {
     const s = samples[i]
-    pos.push(s.x + s.nx * halfW, 0.02, s.z + s.nz * halfW)
-    pos.push(s.x - s.nx * halfW, 0.02, s.z - s.nz * halfW)
+    pos.push(s.x + s.nx * halfW, (s.y || 0) + 0.02, s.z + s.nz * halfW)
+    pos.push(s.x - s.nx * halfW, (s.y || 0) + 0.02, s.z - s.nz * halfW)
+    if (inGap(track, i)) continue // 용암 협곡: 도로 없음!
     const a = i * 2
     const b = ((i + 1) % n) * 2
     idx.push(a, a + 1, b, a + 1, b + 1, b)
@@ -57,6 +58,71 @@ function buildRoad(track, color) {
     geo,
     new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide })
   )
+}
+
+// 높은 도로 아래를 받치는 절벽(스커트): 도로 양옆에서 땅까지 수직 벽을 내린다.
+// 화산 오르막이 공중에 뜬 종이가 아니라 단단한 능선처럼 보이게.
+function buildSkirt(track, color) {
+  const { samples, n, halfW } = track
+  const pos = []
+  const idx = []
+  let v = 0
+  for (const side of [1, -1]) {
+    for (let i = 0; i < n; i++) {
+      const s = samples[i]
+      const t = samples[(i + 1) % n]
+      if (((s.y || 0) < 0.05 && (t.y || 0) < 0.05) || inGap(track, i)) continue
+      for (const [p, py] of [[s, s.y || 0], [t, t.y || 0]]) {
+        pos.push(p.x + p.nx * halfW * side, py + 0.02, p.z + p.nz * halfW * side)
+        pos.push(p.x + p.nx * halfW * side, 0, p.z + p.nz * halfW * side)
+      }
+      idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2)
+      v += 4
+    }
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  geo.setIndex(idx)
+  geo.computeVertexNormals()
+  const c = new THREE.Color(color)
+  return new THREE.Mesh(
+    geo,
+    // 수직 벽이라 빛을 못 받아 시커멓게 나온다 → 자체 발광으로 보정
+    new THREE.MeshLambertMaterial({
+      color: c, emissive: c.clone().multiplyScalar(0.4), side: THREE.DoubleSide,
+    })
+  )
+}
+
+// 점프대 표면 하이라이트: 쐐기 위를 노랑→주황 그라데이션으로 칠해 눈에 띄게
+function buildRampOverlays(track) {
+  const g = new THREE.Group()
+  const mat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })
+  const lo = new THREE.Color(0xffd34d)
+  const hi = new THREE.Color(0xff7a2e)
+  for (const j of track.jumps || []) {
+    const pos = []
+    const col = []
+    const idx = []
+    const c = new THREE.Color()
+    let v = 0
+    for (let k = 0; k <= 3; k++) {
+      const s = track.samples[(j.i - 3 + k + track.n) % track.n]
+      const w = track.halfW - 0.4
+      c.copy(lo).lerp(hi, k / 3)
+      pos.push(s.x + s.nx * w, (s.y || 0) + 0.05, s.z + s.nz * w)
+      pos.push(s.x - s.nx * w, (s.y || 0) + 0.05, s.z - s.nz * w)
+      col.push(c.r, c.g, c.b, c.r, c.g, c.b)
+      if (k < 3) idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2)
+      v += 2
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3))
+    geo.setIndex(idx)
+    g.add(new THREE.Mesh(geo, mat))
+  }
+  return g
 }
 
 // 빙판 구간: 도로 전체 폭을 얼음색으로 칠한다 (눈꽃 빙판 전용).
@@ -85,8 +151,8 @@ function buildIce(track) {
       const w = track.halfW
       const into = Math.min(i - zn.from, zn.to - i) // 구간 끝에서의 거리
       c.copy(roadCol).lerp(iceCol, Math.min(1, into / FADE))
-      pos.push(s.x + s.nx * w, 0.025, s.z + s.nz * w)
-      pos.push(s.x - s.nx * w, 0.025, s.z - s.nz * w)
+      pos.push(s.x + s.nx * w, (s.y || 0) + 0.025, s.z + s.nz * w)
+      pos.push(s.x - s.nx * w, (s.y || 0) + 0.025, s.z - s.nz * w)
       col.push(c.r, c.g, c.b, c.r, c.g, c.b)
       if (i < zn.to) {
         idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2)
@@ -147,7 +213,8 @@ function buildPads(track) {
       const fwd = (1 - Math.abs(f)) * L + fwdOff
       const bx = s.x + s.nx * lat + s.dx * fwd
       const bz = s.z + s.nz * lat + s.dz * fwd
-      pos.push(bx, 0.05, bz, bx + s.dx * T, 0.05, bz + s.dz * T)
+      const by = (s.y || 0) + 0.05
+      pos.push(bx, by, bz, bx + s.dx * T, by, bz + s.dz * T)
       c.setHSL(((f + 1) / 2) * 0.83, 1, 0.55) // 무지개: 빨강 → 보라
       col.push(c.r, c.g, c.b, c.r, c.g, c.b)
       if (i < steps) {
@@ -179,13 +246,14 @@ function buildCurbs(track) {
   let v = 0
   for (const side of [1, -1]) {
     for (let i = 0; i < n; i++) {
+      if (inGap(track, i)) continue // 협곡 구간은 연석도 없다
       const s = samples[i]
       const t = samples[(i + 1) % n]
       const c = Math.floor(i / 3) % 2 === 0 ? red : white
       for (const [p, off] of [
         [s, halfW], [s, halfW + 0.8], [t, halfW], [t, halfW + 0.8],
       ]) {
-        pos.push(p.x + p.nx * off * side, 0.03, p.z + p.nz * off * side)
+        pos.push(p.x + p.nx * off * side, (p.y || 0) + 0.03, p.z + p.nz * off * side)
         col.push(c.r, c.g, c.b)
       }
       idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2)
@@ -348,7 +416,7 @@ function buildDecor(track, theme) {
     const sp = emojiSprite('🚩', 2.4)
     sp.position.set(
       s.x + s.nx * (track.halfW + 1.8) * side,
-      2,
+      (s.y || 0) + 2,
       s.z + s.nz * (track.halfW + 1.8) * side
     )
     group.add(sp)
@@ -361,7 +429,7 @@ function buildDecor(track, theme) {
       const sp = emojiSprite('🎈', 3.4)
       sp.position.set(
         s.x + s.nx * (track.halfW + 2.5) * side,
-        5,
+        (s.y || 0) + 5,
         s.z + s.nz * (track.halfW + 2.5) * side
       )
       sp.userData.baseY = sp.position.y
@@ -496,13 +564,14 @@ function buildCenterline(track) {
   const W = 0.16
   let v = 0
   for (let i = 0; i < track.n; i += 8) {
+    if (inGap(track, i) || inGap(track, (i + 4) % track.n)) continue
     const a = track.samples[i]
     const b = track.samples[(i + 4) % track.n]
     pos.push(
-      a.x - a.nx * W, 0.028, a.z - a.nz * W,
-      a.x + a.nx * W, 0.028, a.z + a.nz * W,
-      b.x - b.nx * W, 0.028, b.z - b.nz * W,
-      b.x + b.nx * W, 0.028, b.z + b.nz * W
+      a.x - a.nx * W, (a.y || 0) + 0.028, a.z - a.nz * W,
+      a.x + a.nx * W, (a.y || 0) + 0.028, a.z + a.nz * W,
+      b.x - b.nx * W, (b.y || 0) + 0.028, b.z - b.nz * W,
+      b.x + b.nx * W, (b.y || 0) + 0.028, b.z + b.nz * W
     )
     idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2)
     v += 4
@@ -527,11 +596,11 @@ function buildHills(theme) {
     const a = (i / 14) * Math.PI * 2 + rnd() * 0.4
     const r = 250 + rnd() * 130
     const h = 22 + rnd() * 34
+    const c = base.clone().offsetHSL(0, -0.04, -0.03 - rnd() * 0.05)
     const m = new THREE.Mesh(
       new THREE.ConeGeometry(45 + rnd() * 55, h, 7),
-      new THREE.MeshLambertMaterial({
-        color: base.clone().offsetHSL(0, -0.04, -0.05 - rnd() * 0.07),
-      })
+      // 역광 면이 시커멓지 않게 약한 자체 발광을 섞는다
+      new THREE.MeshLambertMaterial({ color: c, emissive: c.clone().multiplyScalar(0.3) })
     )
     m.position.set(Math.cos(a) * r, h / 2 - 2, Math.sin(a) * r)
     m.rotation.y = rnd() * Math.PI
@@ -612,11 +681,62 @@ export function createKartScene(canvas, track) {
 
   scene.add(buildRoad(track, theme.road))
   scene.add(buildCenterline(track))
+  if (track.samples.some((s) => s.y > 0.05)) {
+    scene.add(buildSkirt(track, new THREE.Color(theme.ground).offsetHSL(0, 0, -0.08)))
+  }
+  if (track.jumps?.length) scene.add(buildRampOverlays(track))
   if (track.ice) scene.add(buildIce(track))
   scene.add(buildCurbs(track))
   const startGate = buildStart(track)
   scene.add(startGate.group)
   scene.add(buildPads(track))
+
+  // 용암 협곡: 끊긴 도로 아래에 이글거리는 용암 웅덩이 (render에서 색이 출렁인다)
+  const lavaPools = []
+  if (theme.lava) {
+    for (const gap of track.gaps || []) {
+      const mid = samplePoint(track, (gap.from + gap.to) / 2)
+      const r = ((gap.to - gap.from + 1) * track.segLen) / 2 + track.halfW + 3
+      const pool = new THREE.Mesh(
+        new THREE.CircleGeometry(r, 24),
+        new THREE.MeshBasicMaterial({ color: 0xe8420c })
+      )
+      pool.geometry.rotateX(-Math.PI / 2)
+      pool.position.set(mid.x, 0.08, mid.z)
+      // 안쪽은 더 밝게 이글이글 (render에서 맥동)
+      const core = new THREE.Mesh(
+        new THREE.CircleGeometry(r * 0.55, 20),
+        new THREE.MeshBasicMaterial({ color: 0xffa64d })
+      )
+      core.geometry.rotateX(-Math.PI / 2)
+      core.position.set(mid.x, 0.1, mid.z)
+      lavaPools.push({ mesh: pool, core, x: mid.x, z: mid.z, r })
+      scene.add(pool, core)
+    }
+    // 멀리서 연기를 뿜는 화산 본체
+    const volC = new THREE.Color(0x5e4640)
+    const vol = new THREE.Mesh(
+      new THREE.ConeGeometry(60, 80, 8),
+      new THREE.MeshLambertMaterial({ color: volC, emissive: volC.clone().multiplyScalar(0.35) })
+    )
+    vol.position.set(185, 38, -135)
+    scene.add(vol)
+    const crater = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: glowTex, color: theme.lava, depthWrite: false, fog: false })
+    )
+    crater.scale.set(46, 46, 1)
+    crater.position.set(185, 80, -135)
+    scene.add(crater)
+    lavaPools.craterSmoke = []
+    for (let i = 0; i < 3; i++) {
+      const puff = emojiSprite('💨', 16)
+      puff.material.transparent = true // 연기가 위로 가며 옅어진다
+      puff.position.set(185, 86, -135)
+      puff.userData.phase = i / 3
+      lavaPools.craterSmoke.push(puff)
+      scene.add(puff)
+    }
+  }
 
   // 빙판 반짝임: 얼음 위 여기저기서 별처럼 반짝 (render에서 트윙클)
   const iceSparkles = []
@@ -710,29 +830,29 @@ export function createKartScene(canvas, track) {
     }
   }
   // 골인 색종이: 카트 위로 알록달록 펑!
-  function confettiBurst(x, z) {
+  function confettiBurst(x, z, baseY = 0) {
     spawnParts(90, () => {
       const a = Math.random() * Math.PI * 2
       const r = 2 + Math.random() * 7
       const c = new THREE.Color().setHSL(Math.random(), 0.95, 0.6)
       return {
-        x, y: 1 + Math.random(), z,
+        x, y: baseY + 1 + Math.random(), z,
         vx: Math.cos(a) * r, vy: 7 + Math.random() * 8, vz: Math.sin(a) * r,
-        life: 1.4 + Math.random() * 0.8, grav: 11,
+        life: 1.4 + Math.random() * 0.8, grav: 11, floor: baseY + 0.06,
         r: c.r, g: c.g, b: c.b,
       }
     })
   }
   // 스턴 충격: 노랑/하양 불꽃이 사방으로 튄다
-  function stunBurst(x, z) {
+  function stunBurst(x, z, baseY = 0) {
     spawnParts(26, () => {
       const a = Math.random() * Math.PI * 2
       const r = 3 + Math.random() * 6
       const yellow = Math.random() < 0.6
       return {
-        x, y: 0.8, z,
+        x, y: baseY + 0.8, z,
         vx: Math.cos(a) * r, vy: 2 + Math.random() * 5, vz: Math.sin(a) * r,
-        life: 0.5 + Math.random() * 0.3, grav: 9,
+        life: 0.5 + Math.random() * 0.3, grav: 9, floor: baseY + 0.06,
         r: 1, g: yellow ? 0.85 : 1, b: yellow ? 0.2 : 1,
       }
     })
@@ -749,8 +869,9 @@ export function createKartScene(canvas, track) {
       p.x += p.vx * dt
       p.y += p.vy * dt
       p.z += p.vz * dt
-      if (p.y < 0.06 && p.grav) {
-        p.y = 0.06 // 색종이는 바닥에 깔렸다가 사라진다
+      const floor = p.floor ?? 0.06
+      if (p.y < floor && p.grav) {
+        p.y = floor // 색종이는 바닥(높은 도로 포함)에 깔렸다가 사라진다
         p.vy = 0
         p.vx *= 0.9
         p.vz *= 0.9
@@ -803,20 +924,20 @@ export function createKartScene(canvas, track) {
   scene.add(skidMesh)
   let skidHead = 0
 
-  // 이전 지점 → 현재 지점으로 좌우 바퀴 자국 한 칸을 찍는다
-  function dropSkid(x1, z1, x2, z2, latX, latZ) {
+  // 이전 지점 → 현재 지점으로 좌우 바퀴 자국 한 칸을 찍는다 (도로 고도를 따라)
+  function dropSkid(x1, z1, y1, x2, z2, y2, latX, latZ) {
     const HW = 0.17 // 자국 반폭
     const o = skidHead * 24
     let j = o
     for (const side of [0.8, -0.8]) {
-      for (const [px, pz] of [[x1, z1], [x2, z2]]) {
+      for (const [px, pz, py] of [[x1, z1, y1], [x2, z2, y2]]) {
         const cx = px + latX * side
         const cz = pz + latZ * side
         skidPos[j] = cx - latX * HW
-        skidPos[j + 1] = 0.034
+        skidPos[j + 1] = (py || 0) + 0.034
         skidPos[j + 2] = cz - latZ * HW
         skidPos[j + 3] = cx + latX * HW
-        skidPos[j + 4] = 0.034
+        skidPos[j + 4] = (py || 0) + 0.034
         skidPos[j + 5] = cz + latZ * HW
         j += 6
       }
@@ -859,9 +980,10 @@ export function createKartScene(canvas, track) {
     q.scale.set(1.15, 1.15, 1)
     q.renderOrder = 2
     grp.add(glass, q)
-    grp.position.set(spot.x, 1.2, spot.z)
+    const baseY = (spot.y || 0) + 1.2
+    grp.position.set(spot.x, baseY, spot.z)
     scene.add(grp)
-    return { grp, glass }
+    return { grp, glass, baseY }
   })
 
   const kartNodes = new Map() // kartId -> {group, flame, prevStun, prevFin}
@@ -901,14 +1023,20 @@ export function createKartScene(canvas, track) {
         kartNodes.set(k.id, node)
         scene.add(node.group)
       }
-      // 회오리에 휘말리면 포물선을 그리며 하늘로 붕 떴다 떨어진다
+      // 회오리에 휘말리면 포물선을 그리며 하늘로 붕 떴다 떨어진다.
+      // 언덕/점프 높이(k.y)는 엔진이, 회오리 비행 높이는 렌더러가 그린다.
       const flying = k.flyT > 0
       const airY = flying ? Math.sin(Math.PI * (1 - k.flyT / FLY_TIME)) * 5 : 0
-      node.group.position.set(k.x, airY, k.z)
+      const worldY = (k.y || 0) + airY
+      node.group.position.set(k.x, worldY, k.z)
       node.group.rotation.y = -k.heading - (k.spin || 0)
-      // 그림자는 땅에 남아 높이를 보여준다
-      node.shadow.position.y = 0.045 - airY
-      const shScale = Math.max(0.45, 1 - airY * 0.1)
+      // 그림자는 발밑 도로에 남아 높이를 보여준다
+      node.gci = nearestSample(track, k.x, k.z, node.gci ?? -1)
+      const gy = track.samples[node.gci].y || 0
+      const relH = Math.max(0, worldY - gy)
+      node.shadow.visible = !(k.fallT > 0) // 용암에 빠지는 중엔 그림자도 없다
+      node.shadow.position.y = gy - worldY + 0.045
+      const shScale = Math.max(0.45, 1 - relH * 0.1)
       node.shadow.scale.setScalar(shScale)
       // 바퀴는 속도만큼 구르고 앞바퀴는 코너 방향으로 꺾인다.
       // 차체는 코너 안쪽으로 기울고(드리프트는 더 깊게) 부스트 땐 앞이 살짝 들린다.
@@ -928,21 +1056,52 @@ export function createKartScene(canvas, track) {
       node.pitch = (node.pitch || 0) + (wantPitch - (node.pitch || 0)) * Math.min(1, dt * 7)
       node.kartBody.rotation.x = node.roll
       node.kartBody.rotation.z = node.pitch
-      // 회오리에서 착지하는 순간: 찌부~ 됐다가 통! 하고 돌아온다 + 먼지 폭풍
-      if (!flying && node.prevFly) {
+      // 회오리/점프대에서 착지하는 순간: 찌부~ 됐다가 통! 하고 돌아온다 + 먼지 폭풍
+      const landed = (!flying && node.prevFly) || (node.prevAir && !k.air && !(k.fallT > 0))
+      if (landed) {
         node.squashT = 0.45
         spawnParts(14, () => {
           const a = Math.random() * Math.PI * 2
           const r = 3 + Math.random() * 5
           return {
-            x: k.x, y: 0.3, z: k.z,
+            x: k.x, y: worldY + 0.3, z: k.z,
             vx: Math.cos(a) * r, vy: 1 + Math.random() * 3, vz: Math.sin(a) * r,
-            life: 0.4 + Math.random() * 0.3, grav: 6,
+            life: 0.4 + Math.random() * 0.3, grav: 6, floor: gy + 0.06,
             r: dustCol.r, g: dustCol.g, b: dustCol.b,
           }
         })
       }
       node.prevFly = flying
+      node.prevAir = k.air
+      // 점프대 발사 순간: 하얀 바람 가르기
+      if (k.jumpSeq > (node.prevJumpSeq || 0)) {
+        spawnParts(8, () => ({
+          x: k.x + (Math.random() - 0.5) * 1.5,
+          y: worldY + 0.4,
+          z: k.z + (Math.random() - 0.5) * 1.5,
+          vx: (Math.random() - 0.5) * 4, vy: 4 + Math.random() * 4, vz: (Math.random() - 0.5) * 4,
+          life: 0.35 + Math.random() * 0.2, grav: 3,
+          r: 1, g: 1, b: 1,
+        }))
+      }
+      node.prevJumpSeq = k.jumpSeq
+      // 추락 순간: 용암(또는 협곡 바닥) 풍덩 스플래시!
+      if (k.fallSeq > (node.prevFallSeq || 0)) {
+        const lava = !!theme.lava
+        spawnParts(36, () => {
+          const a = Math.random() * Math.PI * 2
+          const r = 2 + Math.random() * 6
+          return {
+            x: k.x, y: Math.max(0.4, worldY), z: k.z,
+            vx: Math.cos(a) * r, vy: 6 + Math.random() * 7, vz: Math.sin(a) * r,
+            life: 0.7 + Math.random() * 0.5, grav: 12,
+            r: lava ? 1 : dustCol.r,
+            g: lava ? 0.35 + Math.random() * 0.3 : dustCol.g,
+            b: lava ? 0.08 : dustCol.b,
+          }
+        })
+      }
+      node.prevFallSeq = k.fallSeq
       if (node.squashT > 0) {
         node.squashT = Math.max(0, node.squashT - dt)
         const amt = 0.4 * (node.squashT / 0.45)
@@ -966,13 +1125,13 @@ export function createKartScene(canvas, track) {
         const fz = Math.sin(k.heading)
         spawnParts(2, () => ({
           x: k.x - fx * 1.8 + (Math.random() - 0.5) * 0.8,
-          y: 0.5 + Math.random() * 0.5,
+          y: worldY + 0.5 + Math.random() * 0.5,
           z: k.z - fz * 1.8 + (Math.random() - 0.5) * 0.8,
           vx: -fx * (6 + Math.random() * 5),
           vy: 1.5 + Math.random() * 2,
           vz: -fz * (6 + Math.random() * 5),
           life: 0.3 + Math.random() * 0.25,
-          grav: 4,
+          grav: 4, floor: gy + 0.06,
           r: 1, g: 0.45 + Math.random() * 0.45, b: 0.1,
         }))
       }
@@ -985,32 +1144,32 @@ export function createKartScene(canvas, track) {
         const pz = -fx * k.drift
         spawnParts(2, () => ({
           x: k.x - fx * 1.4 + px * 0.8 + (Math.random() - 0.5) * 0.5,
-          y: 0.18,
+          y: worldY + 0.18,
           z: k.z - fz * 1.4 + pz * 0.8 + (Math.random() - 0.5) * 0.5,
           vx: -fx * 4 + px * (3 + Math.random() * 3),
           vy: 2 + Math.random() * 2.5,
           vz: -fz * 4 + pz * (3 + Math.random() * 3),
           life: 0.22 + Math.random() * 0.2,
-          grav: 9,
+          grav: 9, floor: gy + 0.06,
           r: c.r, g: c.g, b: c.b,
         }))
       }
       // 드리프트 타이어 자국: 뒷바퀴 위치를 이전 프레임과 이어 quad를 찍는다
-      if (k.drift && !flying) {
+      if (k.drift && !flying && !k.air) {
         const fx = Math.cos(k.heading)
         const fz = Math.sin(k.heading)
         const rx = k.x - fx * 0.9
         const rz = k.z - fz * 0.9
         const last = node.lastSkid
         if (!last) {
-          node.lastSkid = { x: rx, z: rz }
+          node.lastSkid = { x: rx, z: rz, y: worldY }
         } else {
           const d = Math.hypot(rx - last.x, rz - last.z)
           if (d > 6) {
-            node.lastSkid = { x: rx, z: rz } // 순간이동(리스폰 등)은 잇지 않는다
+            node.lastSkid = { x: rx, z: rz, y: worldY } // 순간이동(리스폰 등)은 잇지 않는다
           } else if (d > 0.45) {
-            dropSkid(last.x, last.z, rx, rz, -fz, fx)
-            node.lastSkid = { x: rx, z: rz }
+            dropSkid(last.x, last.z, last.y, rx, rz, worldY, -fz, fx)
+            node.lastSkid = { x: rx, z: rz, y: worldY }
           }
         }
       } else {
@@ -1022,7 +1181,7 @@ export function createKartScene(canvas, track) {
         const fz = Math.sin(k.heading)
         spawnParts(1, () => ({
           x: k.x - fx * 1.2 + (Math.random() - 0.5) * 1.4,
-          y: 0.25,
+          y: worldY + 0.25,
           z: k.z - fz * 1.2 + (Math.random() - 0.5) * 1.4,
           vx: -fx * 2 + (Math.random() - 0.5) * 2,
           vy: 1.2 + Math.random() * 1.6,
@@ -1034,9 +1193,9 @@ export function createKartScene(canvas, track) {
       }
       // 스턴 순간: 충격 불꽃 / 골인 순간: 색종이 폭발
       const stunned = k.stunT > 0
-      if (stunned && !node.prevStun) stunBurst(k.x, k.z)
+      if (stunned && !node.prevStun) stunBurst(k.x, k.z, worldY)
       node.prevStun = stunned
-      if (k.finished && !node.prevFin) confettiBurst(k.x, k.z)
+      if (k.finished && !node.prevFin) confettiBurst(k.x, k.z, worldY)
       node.prevFin = k.finished
     }
     // 지난 판 카트(다시하기로 멤버가 바뀐 경우) 정리
@@ -1113,15 +1272,19 @@ export function createKartScene(canvas, track) {
         sy = node.look.scale * (2 - pulse)
       }
       node.sp.scale.set(sx, sy, 1)
-      node.sp.position.set(pos.x + (node.ob.kind === 'tornado' ? Math.sin(now / 70 + idx) * 0.25 : 0), y, pos.z)
+      node.sp.position.set(
+        pos.x + (node.ob.kind === 'tornado' ? Math.sin(now / 70 + idx) * 0.25 : 0),
+        (pos.y || 0) + y,
+        pos.z
+      )
     }
 
     // 아이템 박스 회전/표시 (유리 큐브가 빙글빙글, '?'는 항상 카메라를 본다)
-    boxNodes.forEach(({ grp, glass }, i) => {
+    boxNodes.forEach(({ grp, glass, baseY }, i) => {
       grp.visible = !view.boxes || view.boxes[i] !== false
       glass.rotation.y += dt * 1.6
       glass.rotation.x += dt * 0.8
-      grp.position.y = 1.2 + Math.sin(now / 320 + i) * 0.15
+      grp.position.y = baseY + Math.sin(now / 320 + i) * 0.15
     })
 
     // 구름은 천천히 흐르고, 풍선은 둥실둥실
@@ -1145,6 +1308,31 @@ export function createKartScene(canvas, track) {
       const sc = 0.7 + tw * 0.7
       sp.scale.set(sc, sc, 1)
     }
+    // 용암: 이글이글 색이 출렁이고, 불티가 떠오르고, 화산은 연기를 뿜는다
+    if (lavaPools.length) {
+      const pulse = 0.5 + 0.5 * Math.sin(now / 260)
+      for (const pool of lavaPools) {
+        pool.core.material.color.setHex(0xffa64d).offsetHSL(0, 0, pulse * 0.06)
+        pool.core.scale.setScalar(0.9 + pulse * 0.18)
+        if (Math.random() < 0.25) {
+          const a = Math.random() * Math.PI * 2
+          const rr = Math.random() * pool.r * 0.8
+          spawnParts(1, () => ({
+            x: pool.x + Math.cos(a) * rr, y: 0.3, z: pool.z + Math.sin(a) * rr,
+            vx: (Math.random() - 0.5) * 1.5, vy: 3 + Math.random() * 4, vz: (Math.random() - 0.5) * 1.5,
+            life: 0.6 + Math.random() * 0.5, grav: 2,
+            r: 1, g: 0.4 + Math.random() * 0.35, b: 0.08,
+          }))
+        }
+      }
+      ;(lavaPools.craterSmoke || []).forEach((puff, i) => {
+        const f = ((now / 4200 + puff.userData.phase) % 1 + 1) % 1
+        puff.position.y = 86 + f * 34
+        puff.material.opacity = 0.55 * (1 - f)
+        const sc = 10 + f * 16
+        puff.scale.set(sc, sc, 1)
+      })
+    }
 
     // 카메라: 내 카트(없으면 1등)를 3인칭으로 따라간다
     const target =
@@ -1154,7 +1342,8 @@ export function createKartScene(canvas, track) {
     if (target) {
       const fx = Math.cos(target.heading)
       const fz = Math.sin(target.heading)
-      const want = new THREE.Vector3(target.x - fx * 7.5, 3.6, target.z - fz * 7.5)
+      const ty = target.y || 0 // 언덕/점프/추락 높이를 따라간다
+      const want = new THREE.Vector3(target.x - fx * 7.5, ty + 3.6, target.z - fz * 7.5)
       camPos.lerp(want, 1 - Math.exp(-dt * 6))
       camera.position.copy(camPos)
       // 스턴당하면 화면이 덜덜 흔들린다 (충돌의 임팩트)
@@ -1164,7 +1353,7 @@ export function createKartScene(canvas, track) {
         camera.position.y += (Math.random() - 0.5) * shake
         camera.position.z += (Math.random() - 0.5) * shake
       }
-      camera.lookAt(target.x + fx * 4, 1.1, target.z + fz * 4)
+      camera.lookAt(target.x + fx * 4, ty + 1.1, target.z + fz * 4)
     }
 
     // 부스트/로켓: 스피드라인이 휙휙 지나가고 화각이 넓어져 빨려드는 느낌
