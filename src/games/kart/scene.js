@@ -334,7 +334,8 @@ function buildDecor(track, theme) {
   return { group, clouds, balloons }
 }
 
-// 카트 1대: 색깔 몸체 + 바퀴 + 12지신 이모지 + 부스트 불꽃 (+X 방향이 정면).
+// 카트 1대: 색깔 몸체 + 스포일러/범퍼 + 바퀴 + 12지신 이모지 + 부스트 불꽃 (+X 방향이 정면).
+// 바퀴는 속도만큼 구르고 앞바퀴는 코너 방향으로 꺾인다 (render 루프에서 갱신).
 // 추격 로켓 사용 중엔 카트 몸체 대신 로켓 모형으로 변신한다.
 function buildKart(color, emoji) {
   const g = new THREE.Group()
@@ -350,13 +351,34 @@ function buildKart(color, emoji) {
   )
   cabin.position.set(-0.3, 1.05, 0)
   kartBody.add(body, cabin)
+  // 뒤 스포일러 + 앞 범퍼 (몸체보다 살짝 어두운 포인트색)
+  const accentMat = new THREE.MeshLambertMaterial({
+    color: new THREE.Color(color || '#cccccc').offsetHSL(0, 0.05, -0.13),
+  })
+  const wing = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.13, 1.8), accentMat)
+  wing.position.set(-1.2, 1.22, 0)
+  kartBody.add(wing)
+  for (const wz of [0.6, -0.6]) {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.5, 0.12), accentMat)
+    post.position.set(-1.2, 0.95, wz)
+    kartBody.add(post)
+  }
+  const bumper = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.32, 1.0), accentMat)
+  bumper.position.set(1.3, 0.56, 0)
+  kartBody.add(bumper)
+
   const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.32, 10)
-  wheelGeo.rotateX(Math.PI / 2)
+  wheelGeo.rotateX(Math.PI / 2) // 축이 Z 방향 (rotation.z = 굴러가기, rotation.y = 조향)
   const wheelMat = new THREE.MeshLambertMaterial({ color: 0x16181d })
+  const wheels = []
+  const frontWheels = []
   for (const [wx, wz] of [[0.85, 0.8], [0.85, -0.8], [-0.85, 0.8], [-0.85, -0.8]]) {
     const w = new THREE.Mesh(wheelGeo, wheelMat)
+    w.rotation.order = 'YZX' // 조향(Y)을 먼저, 그 다음 굴러가기(Z)
     w.position.set(wx, 0.36, wz)
     kartBody.add(w)
+    wheels.push(w)
+    if (wx > 0) frontWheels.push(w)
   }
 
   // 로켓 변신 모형 (빨간 동체 + 노란 머리)
@@ -402,7 +424,98 @@ function buildKart(color, emoji) {
   shadow.geometry.rotateX(-Math.PI / 2)
   shadow.position.y = 0.045
   g.add(kartBody, rocket, face, flame, shadow)
-  return { group: g, kartBody, rocket, flame, shadow }
+  return { group: g, kartBody, rocket, flame, shadow, wheels, frontWheels }
+}
+
+// 지면: 단색 대신 테마색 기반의 얼룩덜룩한 패치 텍스처 (풀밭/모래/눈의 질감)
+function groundTexture(color) {
+  const c = document.createElement('canvas')
+  c.width = c.height = 256
+  const ctx = c.getContext('2d')
+  const base = new THREE.Color(color)
+  ctx.fillStyle = `#${base.getHexString()}`
+  ctx.fillRect(0, 0, 256, 256)
+  const rnd = lcg(99)
+  const p = new THREE.Color()
+  for (let i = 0; i < 240; i++) {
+    p.copy(base).offsetHSL(0, 0, (rnd() - 0.5) * 0.07)
+    ctx.fillStyle = `#${p.getHexString()}`
+    ctx.beginPath()
+    ctx.arc(rnd() * 256, rnd() * 256, 4 + rnd() * 14, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  const tex = new THREE.CanvasTexture(c)
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  tex.repeat.set(14, 14)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+// 도로 중앙 점선 (하양 반투명)
+function buildCenterline(track) {
+  const pos = []
+  const idx = []
+  const W = 0.16
+  let v = 0
+  for (let i = 0; i < track.n; i += 8) {
+    const a = track.samples[i]
+    const b = track.samples[(i + 4) % track.n]
+    pos.push(
+      a.x - a.nx * W, 0.028, a.z - a.nz * W,
+      a.x + a.nx * W, 0.028, a.z + a.nz * W,
+      b.x - b.nx * W, 0.028, b.z - b.nz * W,
+      b.x + b.nx * W, 0.028, b.z + b.nz * W
+    )
+    idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2)
+    v += 4
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  geo.setIndex(idx)
+  return new THREE.Mesh(
+    geo,
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide,
+    })
+  )
+}
+
+// 멀리 보이는 low-poly 언덕 — 지평선이 심심하지 않게 (안개에 살짝 잠긴다)
+function buildHills(theme) {
+  const g = new THREE.Group()
+  const rnd = lcg(4242)
+  const base = new THREE.Color(theme.ground)
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2 + rnd() * 0.4
+    const r = 250 + rnd() * 130
+    const h = 22 + rnd() * 34
+    const m = new THREE.Mesh(
+      new THREE.ConeGeometry(45 + rnd() * 55, h, 7),
+      new THREE.MeshLambertMaterial({
+        color: base.clone().offsetHSL(0, -0.04, -0.05 - rnd() * 0.07),
+      })
+    )
+    m.position.set(Math.cos(a) * r, h / 2 - 2, Math.sin(a) * r)
+    m.rotation.y = rnd() * Math.PI
+    g.add(m)
+  }
+  return g
+}
+
+// 빛나는 태양 (캔버스 radial gradient 스프라이트). 노을 때 함께 물든다.
+function glowTexture(size = 128) {
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d')
+  const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  grad.addColorStop(0, 'rgba(255,255,255,1)')
+  grad.addColorStop(0.25, 'rgba(255,255,240,0.9)')
+  grad.addColorStop(1, 'rgba(255,255,220,0)')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, size, size)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
 }
 
 const OBJ_EMOJI = { banana: '🍌', bomb: '💣' }
@@ -439,24 +552,33 @@ export function createKartScene(canvas, track) {
   camera.position.set(0, 40, -80)
   scene.add(camera) // 카메라에 붙는 자식(스피드라인)을 렌더하기 위해
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x5e8c4f, 1.1))
+  scene.add(new THREE.HemisphereLight(0xffffff, theme.ground, 1.1)) // 지면 반사광은 테마색
   const sun = new THREE.DirectionalLight(0xffffff, 1.4)
   sun.position.set(60, 110, 40)
   scene.add(sun)
+  // 하늘에 떠 있는 빛나는 태양 (노을 때 같이 물든다)
+  const sunSprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff2b8, depthWrite: false, fog: false })
+  )
+  sunSprite.scale.set(70, 70, 1)
+  sunSprite.position.set(260, 170, 175)
+  scene.add(sunSprite)
 
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(1600, 1600),
-    new THREE.MeshLambertMaterial({ color: theme.ground })
+    new THREE.MeshLambertMaterial({ map: groundTexture(theme.ground) })
   )
   ground.geometry.rotateX(-Math.PI / 2)
   scene.add(ground)
 
   scene.add(buildRoad(track, theme.road))
+  scene.add(buildCenterline(track))
   if (track.ice) scene.add(buildIce(track))
   scene.add(buildCurbs(track))
   scene.add(buildStart(track))
   scene.add(buildPads(track))
   scene.add(buildTrees(track, theme))
+  scene.add(buildHills(theme))
   const decor = buildDecor(track, theme)
   scene.add(decor.group)
 
@@ -501,7 +623,13 @@ export function createKartScene(canvas, track) {
   pGeo.setAttribute('color', new THREE.BufferAttribute(pCol, 3))
   const points = new THREE.Points(
     pGeo,
-    new THREE.PointsMaterial({ size: 0.45, vertexColors: true, transparent: true, depthWrite: false })
+    new THREE.PointsMaterial({
+      size: 0.55,
+      map: glowTexture(64), // 거친 사각형 대신 부드러운 원형 입자
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+    })
   )
   points.frustumCulled = false
   scene.add(points)
@@ -572,6 +700,76 @@ export function createKartScene(canvas, track) {
     pGeo.attributes.color.needsUpdate = true
   }
 
+  // 드리프트 스키드 마크: 뒷바퀴 두 줄의 타이어 자국이 남았다 서서히 사라진다.
+  // 곱셈 블렌딩이라 도로/빙판/연석 어디서든 자연스럽게 어두워진다 (흰색 = 흔적 없음).
+  const SKID_MAX = 480 // 세그먼트 풀 (세그먼트 = 좌우 바퀴 quad 한 쌍)
+  const SKID_LIFE = 5 // 자국이 사라지기까지 (초)
+  const SKID_DARK = 0.62 // 갓 생긴 자국의 밝기 (0=검정, 1=안 보임)
+  const skidPos = new Float32Array(SKID_MAX * 8 * 3)
+  const skidCol = new Float32Array(SKID_MAX * 8 * 3).fill(1)
+  const skidAge = new Float32Array(SKID_MAX).fill(SKID_LIFE)
+  const skidIdx = []
+  for (let s = 0; s < SKID_MAX; s++) {
+    for (const b of [s * 8, s * 8 + 4]) {
+      skidIdx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2)
+    }
+  }
+  const skidGeo = new THREE.BufferGeometry()
+  skidGeo.setAttribute('position', new THREE.BufferAttribute(skidPos, 3))
+  skidGeo.setAttribute('color', new THREE.BufferAttribute(skidCol, 3))
+  skidGeo.setIndex(skidIdx)
+  const skidMesh = new THREE.Mesh(
+    skidGeo,
+    new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      blending: THREE.MultiplyBlending,
+      premultipliedAlpha: true, // 곱셈 블렌딩 필수 (없으면 일반 블렌딩으로 떨어진다)
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    })
+  )
+  skidMesh.renderOrder = 1
+  skidMesh.frustumCulled = false
+  scene.add(skidMesh)
+  let skidHead = 0
+
+  // 이전 지점 → 현재 지점으로 좌우 바퀴 자국 한 칸을 찍는다
+  function dropSkid(x1, z1, x2, z2, latX, latZ) {
+    const HW = 0.17 // 자국 반폭
+    const o = skidHead * 24
+    let j = o
+    for (const side of [0.8, -0.8]) {
+      for (const [px, pz] of [[x1, z1], [x2, z2]]) {
+        const cx = px + latX * side
+        const cz = pz + latZ * side
+        skidPos[j] = cx - latX * HW
+        skidPos[j + 1] = 0.034
+        skidPos[j + 2] = cz - latZ * HW
+        skidPos[j + 3] = cx + latX * HW
+        skidPos[j + 4] = 0.034
+        skidPos[j + 5] = cz + latZ * HW
+        j += 6
+      }
+    }
+    skidAge[skidHead] = 0
+    skidHead = (skidHead + 1) % SKID_MAX
+    skidGeo.attributes.position.needsUpdate = true
+  }
+
+  function updateSkids(dt) {
+    let dirty = false
+    for (let s = 0; s < SKID_MAX; s++) {
+      if (skidAge[s] >= SKID_LIFE) continue
+      skidAge[s] += dt
+      const v = Math.min(1, SKID_DARK + (1 - SKID_DARK) * (skidAge[s] / SKID_LIFE))
+      const o = s * 24
+      for (let i = 0; i < 24; i++) skidCol[o + i] = v
+      dirty = true
+    }
+    if (dirty) skidGeo.attributes.color.needsUpdate = true
+  }
+
   // 아이템 박스: 유리 질감의 투명 큐브 안에 '?' 글자
   const boxGeo = new THREE.BoxGeometry(1.6, 1.6, 1.6)
   const glassMat = new THREE.MeshPhysicalMaterial({
@@ -612,6 +810,9 @@ export function createKartScene(canvas, track) {
   const skyCol = new THREE.Color()
   const sunDay = new THREE.Color(SUN_DAY)
   const sunDusk = new THREE.Color(SUN_DUSK)
+  const glowDay = new THREE.Color(0xfff2b8)
+  const glowDusk = new THREE.Color(0xff9a5e)
+  const dustCol = new THREE.Color(theme.ground).lerp(whiteCol, 0.35) // 오프로드 먼지색
 
   function render(view, myId) {
     const now = performance.now()
@@ -637,6 +838,24 @@ export function createKartScene(canvas, track) {
       node.shadow.position.y = 0.045 - airY
       const shScale = Math.max(0.45, 1 - airY * 0.1)
       node.shadow.scale.setScalar(shScale)
+      // 바퀴는 속도만큼 구르고 앞바퀴는 코너 방향으로 꺾인다.
+      // 차체는 코너 안쪽으로 기울고(드리프트는 더 깊게) 부스트 땐 앞이 살짝 들린다.
+      let dh = k.heading - (node.prevHeading ?? k.heading)
+      while (dh > Math.PI) dh -= 2 * Math.PI
+      while (dh < -Math.PI) dh += 2 * Math.PI
+      node.prevHeading = k.heading
+      const turn = dt > 0 ? Math.max(-1, Math.min(1, dh / dt / 2.6)) : 0
+      node.wheelSpin = (node.wheelSpin || 0) - (k.speed * dt) / 0.36
+      for (const w of node.wheels) w.rotation.z = node.wheelSpin
+      for (const w of node.frontWheels) {
+        w.rotation.y += (-turn * 0.45 - w.rotation.y) * Math.min(1, dt * 12)
+      }
+      const wantRoll = turn * (k.drift ? 0.34 : 0.13)
+      const wantPitch = k.boostT > 0 ? 0.1 : 0
+      node.roll = (node.roll || 0) + (wantRoll - (node.roll || 0)) * Math.min(1, dt * 10)
+      node.pitch = (node.pitch || 0) + (wantPitch - (node.pitch || 0)) * Math.min(1, dt * 7)
+      node.kartBody.rotation.x = node.roll
+      node.kartBody.rotation.z = node.pitch
       // 패널티 후 무적: 카트가 반투명하게 깜빡인다
       const blinking = k.invT > 0 && !flying && !(k.stunT > 0)
       node.group.visible = !blinking || Math.floor(now / 90) % 2 === 0
@@ -680,6 +899,43 @@ export function createKartScene(canvas, track) {
           life: 0.22 + Math.random() * 0.2,
           grav: 9,
           r: c.r, g: c.g, b: c.b,
+        }))
+      }
+      // 드리프트 타이어 자국: 뒷바퀴 위치를 이전 프레임과 이어 quad를 찍는다
+      if (k.drift && !flying) {
+        const fx = Math.cos(k.heading)
+        const fz = Math.sin(k.heading)
+        const rx = k.x - fx * 0.9
+        const rz = k.z - fz * 0.9
+        const last = node.lastSkid
+        if (!last) {
+          node.lastSkid = { x: rx, z: rz }
+        } else {
+          const d = Math.hypot(rx - last.x, rz - last.z)
+          if (d > 6) {
+            node.lastSkid = { x: rx, z: rz } // 순간이동(리스폰 등)은 잇지 않는다
+          } else if (d > 0.45) {
+            dropSkid(last.x, last.z, rx, rz, -fz, fx)
+            node.lastSkid = { x: rx, z: rz }
+          }
+        }
+      } else {
+        node.lastSkid = null
+      }
+      // 잔디/모래/눈밭을 달리면 먼지가 풀풀
+      if (k.offroad && k.speed > 8 && !flying && Math.random() < 0.6) {
+        const fx = Math.cos(k.heading)
+        const fz = Math.sin(k.heading)
+        spawnParts(1, () => ({
+          x: k.x - fx * 1.2 + (Math.random() - 0.5) * 1.4,
+          y: 0.25,
+          z: k.z - fz * 1.2 + (Math.random() - 0.5) * 1.4,
+          vx: -fx * 2 + (Math.random() - 0.5) * 2,
+          vy: 1.2 + Math.random() * 1.6,
+          vz: -fz * 2 + (Math.random() - 0.5) * 2,
+          life: 0.45 + Math.random() * 0.3,
+          grav: 2,
+          r: dustCol.r, g: dustCol.g, b: dustCol.b,
         }))
       }
       // 스턴 순간: 충격 불꽃 / 골인 순간: 색종이 폭발
@@ -839,8 +1095,10 @@ export function createKartScene(canvas, track) {
     scene.background.copy(skyCol)
     scene.fog.color.copy(skyCol)
     sun.color.copy(sunDay).lerp(sunDusk, duskMix)
+    sunSprite.material.color.copy(glowDay).lerp(glowDusk, duskMix)
 
     updateParts(dt)
+    updateSkids(dt)
 
     renderer.render(scene, camera)
   }

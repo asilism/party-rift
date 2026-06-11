@@ -1,0 +1,51 @@
+<!doctype html>
+<!-- 카트 렌더러 미리보기: 방/로비 없이 createKartScene만 띄워 그래픽 작업을 확인한다.
+     사용법: npm run dev:web 후 http://localhost:5173/scripts/kart-scene-preview.html?track=meadow|desert|snow -->
+<html>
+  <body style="margin:0">
+    <canvas id="c" width="1280" height="720"></canvas>
+    <script type="module">
+      import { createKartScene } from '/src/games/kart/scene.js'
+      import { TRACKS } from '/src/games/kart/track.js'
+      import { createGame, makeView, setInput, step, STEP } from '/src/games/kart/engine.js'
+
+      const params = new URLSearchParams(location.search)
+      const trackId = params.get('track') || 'meadow'
+      const track = TRACKS[trackId]
+      const players = [
+        { id: 'a', name: 'A', zodiacId: 'rat', color: '#e05252' },
+        { id: 'b', name: 'B', zodiacId: 'ox', color: '#4f8fe0', isBot: true },
+        { id: 'c', name: 'C', zodiacId: 'tiger', color: '#e0a52e', isBot: true },
+        { id: 'd', name: 'D', zodiacId: 'rabbit', color: '#52b06a', isBot: true },
+      ]
+      const g = createGame(players, Math.random, trackId)
+      const auto = (k) => {
+        const t = track.samples[(k.ci + 6) % track.n]
+        let d = Math.atan2(t.z - k.z, t.x - k.x) - k.heading
+        while (d > Math.PI) d -= 2 * Math.PI
+        while (d < -Math.PI) d += 2 * Math.PI
+        return Math.max(-1, Math.min(1, d * 2))
+      }
+      while (g.status === 'countdown') step(g, STEP)
+      for (let i = 0; i < 60 * 6; i++) {
+        setInput(g, 'a', { steer: auto(g.karts[0]) })
+        step(g, STEP)
+      }
+      g.karts[0].boostT = 2 // 부스트 불꽃/스피드라인 확인용
+
+      const sc = createKartScene(document.getElementById('c'), track)
+      sc.resize(1280, 720)
+      let n = 0
+      const iv = setInterval(() => {
+        // 드리프트 스파크/스키드 확인: 내 카트가 드리프트 중
+        setInput(g, 'a', { steer: auto(g.karts[0]) < 0 ? -1 : 1, drift: true })
+        for (let s = 0; s < 3; s++) step(g, STEP)
+        sc.render(makeView(g), 'a')
+        if (++n > 80) {
+          clearInterval(iv)
+          window.__done = true
+        }
+      }, 16)
+    </script>
+  </body>
+</html>
