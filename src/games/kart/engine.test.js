@@ -1,8 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  createGame, setInput, fireItem, step, makeView, ranking, displayLap,
-  STEP, LAPS, COUNTDOWN_TIME,
+  createGame, setInput, fireItem, step, makeView, makeBot, ranking, displayLap, driftLevel,
+  STEP, LAPS, COUNTDOWN_TIME, DRIFT_TIERS,
 } from './engine.js'
 import {
   TRACK, TRACKS, TRACK_LIST, BOX_SPOTS, PADS, PAD_HALF_W,
@@ -580,4 +580,154 @@ test('makeView: JSON 직렬화 가능한 스냅샷', () => {
   assert.equal(round.boxes.length, BOX_SPOTS.length)
   assert.equal(round.objects.length, 1)
   assert.ok(round.karts.every((k) => typeof k.rank === 'number'))
+})
+
+// ── 드리프트 & 미니터보 ──
+
+// 전속으로 가속시키고 트랙 중앙에 세워두는 헬퍼
+function speedUp(g, id, secs = 2) {
+  const k = g.karts.find((p) => p.id === id)
+  for (let i = 0; i < Math.round(secs / STEP); i++) {
+    step(g, STEP)
+    recenter(k)
+  }
+  return k
+}
+
+// 코너가 짧은 트랙에서 드리프트 충전만 검증할 수 있게,
+// 매 틱 카트를 트랙 중앙선 위(진행 방향 정렬)로 되돌린다
+function recenter(k) {
+  const s = TRACK.samples[k.ci]
+  k.x = s.x
+  k.z = s.z
+  k.heading = Math.atan2(s.dz, s.dx)
+}
+
+// 드리프트를 유지하며 secs초 충전
+function chargeDrift(g, id, secs) {
+  const k = g.karts.find((p) => p.id === id)
+  setInput(g, id, { steer: 1, drift: true })
+  for (let i = 0; i < Math.round(secs / STEP); i++) {
+    step(g, STEP)
+    recenter(k)
+  }
+  return k
+}
+
+test('드리프트: 버튼+조향으로 시작되고 차체가 바깥쪽으로 미끄러진다', () => {
+  const g = createGame([P2[0]])
+  startRacing(g)
+  const k = speedUp(g, 'a')
+  setInput(g, 'a', { steer: 1, drift: true })
+  step(g, STEP)
+  assert.equal(k.driftDir, 1, '오른쪽 드리프트 시작')
+  const x0 = k.x
+  const z0 = k.z
+  step(g, STEP)
+  // 이동 방향이 차체가 향한 방향(heading)보다 바깥쪽(왼쪽)
+  const mv = Math.atan2(k.z - z0, k.x - x0)
+  let d = mv - k.heading
+  while (d > Math.PI) d -= 2 * Math.PI
+  while (d < -Math.PI) d += 2 * Math.PI
+  assert.ok(d < -0.1, `미끄러짐 각도 d=${d}`)
+})
+
+test('드리프트 없이는 시작되지 않는다 (저속/조향 없음/버튼 없음)', () => {
+  const g = createGame([P2[0]])
+  startRacing(g)
+  const k = speedUp(g, 'a')
+  setInput(g, 'a', { steer: 1, drift: false }) // 버튼 없음
+  step(g, STEP)
+  assert.equal(k.driftDir, 0)
+  setInput(g, 'a', { steer: 0.1, drift: true }) // 조향 부족
+  step(g, STEP)
+  assert.equal(k.driftDir, 0)
+  k.speed = 5 // 저속
+  setInput(g, 'a', { steer: 1, drift: true })
+  step(g, STEP)
+  assert.equal(k.driftDir, 0)
+})
+
+test('미니터보: 오래 유지할수록 더 긴 부스트 (1단계 < 3단계)', () => {
+  const g = createGame([P2[0]])
+  startRacing(g)
+  speedUp(g, 'a')
+  const k = chargeDrift(g, 'a', DRIFT_TIERS[0] + 0.2)
+  assert.equal(driftLevel(k.driftT), 1)
+  setInput(g, 'a', { steer: 0, drift: false })
+  step(g, STEP)
+  assert.equal(k.driftDir, 0)
+  assert.equal(k.turboSeq, 1)
+  const boost1 = k.boostT
+  assert.ok(boost1 > 0.4, `1단계 터보 boostT=${boost1}`)
+
+  const g2 = createGame([P2[0]])
+  startRacing(g2)
+  speedUp(g2, 'a')
+  const k2 = chargeDrift(g2, 'a', DRIFT_TIERS[2] + 0.2)
+  assert.equal(driftLevel(k2.driftT), 3)
+  setInput(g2, 'a', { steer: 0, drift: false })
+  step(g2, STEP)
+  assert.ok(k2.boostT > boost1, `3단계가 더 길다 (${k2.boostT} > ${boost1})`)
+})
+
+test('충전이 부족하면 터보 없이 드리프트만 풀린다', () => {
+  const g = createGame([P2[0]])
+  startRacing(g)
+  speedUp(g, 'a')
+  const k = chargeDrift(g, 'a', DRIFT_TIERS[0] * 0.5)
+  setInput(g, 'a', { steer: 0, drift: false })
+  step(g, STEP)
+  assert.equal(k.driftDir, 0)
+  assert.equal(k.boostT, 0)
+  assert.equal(k.turboSeq, 0)
+})
+
+test('스턴되면 충전 중이던 미니터보를 잃는다', () => {
+  const g = createGame([P2[0]])
+  startRacing(g)
+  speedUp(g, 'a')
+  const k = chargeDrift(g, 'a', DRIFT_TIERS[1] + 0.2)
+  k.stunT = 1 // 폭탄에 맞은 상황
+  step(g, STEP)
+  assert.equal(k.driftDir, 0)
+  assert.equal(k.driftT, 0)
+  assert.equal(k.boostT, 0, '터보 보상 없음')
+  assert.equal(k.turboSeq, 0)
+})
+
+test('makeView에 드리프트 상태가 들어간다', () => {
+  const g = createGame([P2[0]])
+  startRacing(g)
+  speedUp(g, 'a')
+  chargeDrift(g, 'a', DRIFT_TIERS[0] + 0.2)
+  const v = makeView(g)
+  assert.equal(v.karts[0].drift, 1)
+  assert.equal(v.karts[0].driftLvl, 1)
+  assert.equal(typeof v.karts[0].turboSeq, 'number')
+})
+
+// ── 중도 이탈 → 봇 전환 ──
+
+test('makeBot: 연결이 끊긴 카트를 봇이 이어받아 스스로 달린다', () => {
+  const g = createGame(P2)
+  startRacing(g)
+  assert.ok(makeBot(g, 'b'), '사람 카트는 봇으로 전환')
+  const k = g.karts[1]
+  assert.equal(k.isBot, true)
+  assert.equal(makeBot(g, 'b'), null, '이미 봇이면 무시')
+  assert.equal(makeBot(g, 'no-such'), null, '없는 카트는 무시')
+  const p0 = k.prog
+  for (let i = 0; i < 60 * 5; i++) step(g, STEP)
+  assert.ok(k.prog > p0 + 30, `봇이 스스로 전진 (${p0} → ${k.prog})`)
+  assert.ok(k.speedFactor <= 0.97, 'CPU 속도 상한 적용')
+})
+
+test('스타트 대시: 출발 직전 드리프트를 누르고 있으면 출발 부스트', () => {
+  const g = createGame(P2)
+  setInput(g, 'a', { steer: 0, drift: true }) // 미리 눌러둬도 OK
+  startRacing(g)
+  assert.ok(g.karts[0].boostT > 0, '눌렀던 카트는 부스트')
+  assert.equal(g.karts[1].boostT, 0, '안 누른 카트는 그대로')
+  assert.equal(makeView(g).karts[0].startDash, true)
 })
