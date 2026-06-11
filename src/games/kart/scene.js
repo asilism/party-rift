@@ -203,7 +203,7 @@ function buildCurbs(track) {
   )
 }
 
-// 체크무늬 출발선 + 게이트
+// 체크무늬 출발선 + 골인 게이트 (체커 배너 + 펄럭이는 깃발은 render에서 애니메이션)
 function buildStart(track) {
   const g = new THREE.Group()
   const s = track.samples[0]
@@ -229,25 +229,63 @@ function buildStart(track) {
   line.rotation.y = -angle
   g.add(line)
 
+  const flags = []
   const poleGeo = new THREE.CylinderGeometry(0.25, 0.25, 7, 8)
   const poleMat = new THREE.MeshLambertMaterial({ color: 0xdddddd })
   for (const side of [1, -1]) {
+    const px = s.x + s.nx * (track.halfW + 1) * side
+    const pz = s.z + s.nz * (track.halfW + 1) * side
     const pole = new THREE.Mesh(poleGeo, poleMat)
-    pole.position.set(
-      s.x + s.nx * (track.halfW + 1) * side,
-      3.5,
-      s.z + s.nz * (track.halfW + 1) * side
-    )
+    pole.position.set(px, 3.5, pz)
     g.add(pole)
+    // 기둥 꼭대기에서 펄럭이는 체커 깃발
+    const flag = emojiSprite('🏁', 2.3)
+    flag.position.set(px, 7.6, pz)
+    flags.push(flag)
+    g.add(flag)
   }
+  // 상단 바: 체커 무늬로
+  const barTex = new THREE.CanvasTexture(c)
+  barTex.wrapS = THREE.RepeatWrapping
+  barTex.repeat.set(3, 1)
   const bar = new THREE.Mesh(
     new THREE.BoxGeometry((track.halfW + 1) * 2, 1.4, 0.6),
-    new THREE.MeshLambertMaterial({ color: 0xffcf4d })
+    new THREE.MeshLambertMaterial({ map: barTex })
   )
   bar.position.set(s.x, 6.6, s.z)
   bar.rotation.y = -angle
   g.add(bar)
-  return g
+
+  // 바 아래에 매달린 "GOAL" 현수막 (render에서 살랑살랑)
+  const bc = document.createElement('canvas')
+  bc.width = 512
+  bc.height = 112
+  const bctx = bc.getContext('2d')
+  bctx.fillStyle = '#fff'
+  bctx.fillRect(0, 0, 512, 112)
+  for (let x = 0; x < 32; x++) {
+    for (const y of [0, 6]) {
+      if ((x + y / 6) % 2 === 0) continue
+      bctx.fillStyle = '#111'
+      bctx.fillRect(x * 16, y * 16, 16, 16)
+    }
+  }
+  bctx.font = '900 64px system-ui, sans-serif'
+  bctx.textAlign = 'center'
+  bctx.textBaseline = 'middle'
+  bctx.fillStyle = '#d6452f'
+  bctx.fillText('G O A L', 256, 56)
+  const bannerTex = new THREE.CanvasTexture(bc)
+  bannerTex.colorSpace = THREE.SRGBColorSpace
+  const banner = new THREE.Mesh(
+    new THREE.PlaneGeometry(track.halfW * 1.5, 1.5),
+    new THREE.MeshLambertMaterial({ map: bannerTex, side: THREE.DoubleSide })
+  )
+  banner.position.set(s.x, 5.1, s.z)
+  banner.rotation.y = -angle
+  g.add(banner)
+
+  return { group: g, flags, banner }
 }
 
 // 트랙 바깥 나무들 (테마별 색/개수: 초원 침엽수, 사막 관목, 눈 덮인 나무)
@@ -556,9 +594,10 @@ export function createKartScene(canvas, track) {
   const sun = new THREE.DirectionalLight(0xffffff, 1.4)
   sun.position.set(60, 110, 40)
   scene.add(sun)
+  const glowTex = glowTexture() // 태양/파티클/빙판 반짝임이 공유하는 발광 텍스처
   // 하늘에 떠 있는 빛나는 태양 (노을 때 같이 물든다)
   const sunSprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff2b8, depthWrite: false, fog: false })
+    new THREE.SpriteMaterial({ map: glowTex, color: 0xfff2b8, depthWrite: false, fog: false })
   )
   sunSprite.scale.set(70, 70, 1)
   sunSprite.position.set(260, 170, 175)
@@ -575,8 +614,38 @@ export function createKartScene(canvas, track) {
   scene.add(buildCenterline(track))
   if (track.ice) scene.add(buildIce(track))
   scene.add(buildCurbs(track))
-  scene.add(buildStart(track))
+  const startGate = buildStart(track)
+  scene.add(startGate.group)
   scene.add(buildPads(track))
+
+  // 빙판 반짝임: 얼음 위 여기저기서 별처럼 반짝 (render에서 트윙클)
+  const iceSparkles = []
+  if (track.ice) {
+    const rnd = lcg(31337)
+    for (const zn of track.ice) {
+      const count = Math.min(16, Math.max(6, Math.round((zn.to - zn.from) / 5)))
+      for (let i = 0; i < count; i++) {
+        const s = track.samples[(zn.from + Math.floor(rnd() * (zn.to - zn.from))) % track.n]
+        const lat = (rnd() - 0.5) * 2 * (track.halfW - 1)
+        const sp = new THREE.Sprite(
+          new THREE.SpriteMaterial({
+            map: glowTex,
+            color: 0xeaf8ff,
+            transparent: true,
+            opacity: 0.4,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          })
+        )
+        sp.scale.set(1.1, 1.1, 1)
+        sp.position.set(s.x + s.nx * lat, 0.18, s.z + s.nz * lat)
+        sp.userData.phase = rnd() * Math.PI * 2
+        sp.userData.speed = 2 + rnd() * 3
+        iceSparkles.push(sp)
+        scene.add(sp)
+      }
+    }
+  }
   scene.add(buildTrees(track, theme))
   scene.add(buildHills(theme))
   const decor = buildDecor(track, theme)
@@ -625,7 +694,7 @@ export function createKartScene(canvas, track) {
     pGeo,
     new THREE.PointsMaterial({
       size: 0.55,
-      map: glowTexture(64), // 거친 사각형 대신 부드러운 원형 입자
+      map: glowTex, // 거친 사각형 대신 부드러운 원형 입자
       vertexColors: true,
       transparent: true,
       depthWrite: false,
@@ -800,6 +869,9 @@ export function createKartScene(canvas, track) {
 
   const camPos = new THREE.Vector3(0, 40, -80)
   let lastT = performance.now()
+  // 부스트가 터지는 순간 화각이 확 꺾였다 돌아오는 줌 펀치
+  let boostPunch = 0
+  let prevBoosting = false
   // 하늘 연출 상태: 노을 전환 정도(0~1) + 번개 플래시 남은 시간
   let duskMix = 0
   let flashT = 0
@@ -856,6 +928,28 @@ export function createKartScene(canvas, track) {
       node.pitch = (node.pitch || 0) + (wantPitch - (node.pitch || 0)) * Math.min(1, dt * 7)
       node.kartBody.rotation.x = node.roll
       node.kartBody.rotation.z = node.pitch
+      // 회오리에서 착지하는 순간: 찌부~ 됐다가 통! 하고 돌아온다 + 먼지 폭풍
+      if (!flying && node.prevFly) {
+        node.squashT = 0.45
+        spawnParts(14, () => {
+          const a = Math.random() * Math.PI * 2
+          const r = 3 + Math.random() * 5
+          return {
+            x: k.x, y: 0.3, z: k.z,
+            vx: Math.cos(a) * r, vy: 1 + Math.random() * 3, vz: Math.sin(a) * r,
+            life: 0.4 + Math.random() * 0.3, grav: 6,
+            r: dustCol.r, g: dustCol.g, b: dustCol.b,
+          }
+        })
+      }
+      node.prevFly = flying
+      if (node.squashT > 0) {
+        node.squashT = Math.max(0, node.squashT - dt)
+        const amt = 0.4 * (node.squashT / 0.45)
+        node.kartBody.scale.set(1 + amt * 0.5, 1 - amt, 1 + amt * 0.5)
+      } else if (node.kartBody.scale.y !== 1) {
+        node.kartBody.scale.set(1, 1, 1)
+      }
       // 패널티 후 무적: 카트가 반투명하게 깜빡인다
       const blinking = k.invT > 0 && !flying && !(k.stunT > 0)
       node.group.visible = !blinking || Math.floor(now / 90) % 2 === 0
@@ -1038,6 +1132,19 @@ export function createKartScene(canvas, track) {
     decor.balloons.forEach((b, i) => {
       b.position.y = b.userData.baseY + Math.sin(now / 600 + i * 1.7) * 0.5
     })
+    // 골인 게이트: 깃발이 펄럭이고 현수막이 살랑살랑
+    startGate.flags.forEach((f, i) => {
+      f.material.rotation = Math.sin(now / 240 + i * 2.1) * 0.22
+      f.scale.x = 2.3 * (0.92 + Math.sin(now / 150 + i) * 0.08)
+    })
+    startGate.banner.rotation.x = Math.sin(now / 480) * 0.1
+    // 빙판 반짝임: 별처럼 트윙클
+    for (const sp of iceSparkles) {
+      const tw = 0.5 + 0.5 * Math.sin((now / 1000) * sp.userData.speed + sp.userData.phase)
+      sp.material.opacity = 0.12 + tw * 0.55
+      const sc = 0.7 + tw * 0.7
+      sp.scale.set(sc, sc, 1)
+    }
 
     // 카메라: 내 카트(없으면 1등)를 3인칭으로 따라간다
     const target =
@@ -1079,9 +1186,14 @@ export function createKartScene(canvas, track) {
       }
       slGeo.attributes.position.needsUpdate = true
     }
-    const wantFov = boosting ? 76 : 62
+    // 화각: 속도가 붙을수록 살짝 넓어지고(속도감), 부스트가 터지는 순간 펀치!
+    if (boosting && !prevBoosting) boostPunch = 1
+    prevBoosting = boosting
+    boostPunch = Math.max(0, boostPunch - dt * 2.4)
+    const speedFov = target ? Math.min(5, Math.max(0, target.speed / 26) * 5) : 0
+    const wantFov = (boosting ? 74 : 62) + speedFov + boostPunch * 10
     if (Math.abs(camera.fov - wantFov) > 0.05) {
-      camera.fov += (wantFov - camera.fov) * (1 - Math.exp(-dt * 5))
+      camera.fov += (wantFov - camera.fov) * (1 - Math.exp(-dt * 6))
       camera.updateProjectionMatrix()
     }
 
