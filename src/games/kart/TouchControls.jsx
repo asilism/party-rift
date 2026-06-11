@@ -42,19 +42,24 @@ function useSlotRoll(item, seq) {
 }
 
 // 주행 조작: 화면 아무 데나 드래그하면 그 자리에 조이스틱이 생기고(조향),
-// 오른쪽 아래에 브레이크/아이템 버튼. 출력(가속)은 자동이라 버튼이 없다.
+// 오른쪽 아래에 드리프트/브레이크/아이템 버튼. 출력(가속)은 자동이라 버튼이 없다.
 const KEY_LEFT = new Set(['ArrowLeft', 'a', 'A'])
 const KEY_RIGHT = new Set(['ArrowRight', 'd', 'D'])
+const KEY_DRIFT = new Set([' ', 'Shift'])
 
-export default function TouchControls({ onSteer, onBrake, onItem, item, itemSeq, disabled }) {
+export default function TouchControls({
+  onSteer, onBrake, onDrift, onItem, item, itemSeq, drifting, driftLvl, disabled,
+}) {
   const [joy, setJoy] = useState(null) // {ox, oy, dx, dy}
   const joyPointer = useRef(null)
   const rollEmoji = useSlotRoll(item, itemSeq || 0)
   const rolling = !!rollEmoji
   const onSteerRef = useRef(onSteer)
   onSteerRef.current = onSteer
+  const onDriftRef = useRef(onDrift)
+  onDriftRef.current = onDrift
 
-  // 키보드 조향: ←/→ 또는 A/D. 조이스틱을 잡고 있으면 조이스틱이 우선.
+  // 키보드: ←/→ 또는 A/D 조향, Space/Shift 드리프트. 조이스틱을 잡고 있으면 조이스틱이 우선.
   useEffect(() => {
     const held = new Set()
     const apply = () => {
@@ -64,6 +69,11 @@ export default function TouchControls({ onSteer, onBrake, onItem, item, itemSeq,
       onSteerRef.current((right ? 1 : 0) - (left ? 1 : 0))
     }
     const down = (e) => {
+      if (KEY_DRIFT.has(e.key)) {
+        e.preventDefault()
+        onDriftRef.current?.(true)
+        return
+      }
       if (!KEY_LEFT.has(e.key) && !KEY_RIGHT.has(e.key)) return
       e.preventDefault()
       if (held.has(e.key)) return
@@ -71,6 +81,10 @@ export default function TouchControls({ onSteer, onBrake, onItem, item, itemSeq,
       apply()
     }
     const up = (e) => {
+      if (KEY_DRIFT.has(e.key)) {
+        onDriftRef.current?.(false)
+        return
+      }
       if (held.delete(e.key)) apply()
     }
     window.addEventListener('keydown', down)
@@ -128,7 +142,20 @@ export default function TouchControls({ onSteer, onBrake, onItem, item, itemSeq,
         </div>
       )}
       {/* disabled 속성을 쓰면 누른 채 비활성화될 때 release가 막혀
-          브레이크가 고착될 수 있다 → 누르기만 막고 떼기는 항상 처리 */}
+          버튼이 고착될 수 있다 → 누르기만 막고 떼기는 항상 처리 */}
+      <button
+        className={`kart-btn kart-btn--drift ${
+          drifting ? `kart-btn--drift-on kart-btn--drift-l${driftLvl || 0}` : ''
+        }`}
+        onPointerDown={() => !disabled && onDrift(true)}
+        onPointerUp={() => onDrift(false)}
+        onPointerLeave={() => onDrift(false)}
+        onPointerCancel={() => onDrift(false)}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <span className="kart-btn__icon">🌀</span>
+        <small>드리프트</small>
+      </button>
       <button
         className="kart-btn kart-btn--brake"
         onPointerDown={() => !disabled && onBrake(true)}

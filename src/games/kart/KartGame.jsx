@@ -5,7 +5,9 @@ import MiniMap from './MiniMap.jsx'
 import TouchControls from './TouchControls.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
-import { createGame, setInput, fireItem, step, makeView, STEP, LAPS, COUNTDOWN_TIME } from './engine.js'
+import {
+  createGame, setInput, fireItem, step, makeView, makeBot, STEP, LAPS, COUNTDOWN_TIME,
+} from './engine.js'
 import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
 import { useGameNet } from '../../net/useGameNet.js'
@@ -39,7 +41,8 @@ export default function KartGame({ roster, onExit, net }) {
   const [hud, setHud] = useState(null) // 20Hz로 갱신되는 HUD용 뷰
   const [soundOn, setSoundOn] = useState(true)
   const stateRef = useRef(null) // 호스트 권위 게임 상태 (렌더 루프가 직접 읽음)
-  const ctrlRef = useRef({ steer: 0, brake: false })
+  const ctrlRef = useRef({ steer: 0, brake: false, drift: false })
+  const lastTrackRef = useRef(null) // "한판 더!" 즉시 리매치용
   const bufRef = useRef([]) // 게스트: 스냅샷 보간 버퍼
   const lastSentRef = useRef('')
 
@@ -105,7 +108,7 @@ export default function KartGame({ roster, onExit, net }) {
   const lastStatusRef = useRef(null)
   useEffect(() => {
     if (hud?.status === 'countdown' && lastStatusRef.current !== 'countdown') {
-      ctrlRef.current = { steer: 0, brake: false }
+      ctrlRef.current = { steer: 0, brake: false, drift: false }
       lastSentRef.current = ''
     }
     lastStatusRef.current = hud?.status ?? null
@@ -116,18 +119,31 @@ export default function KartGame({ roster, onExit, net }) {
     if (!online || isHost || !myId) return
     const t = setInterval(() => {
       const c = ctrlRef.current
-      const sig = `${c.steer.toFixed(2)}|${c.brake}`
+      const sig = `${c.steer.toFixed(2)}|${c.brake}|${c.drift}`
       if (sig === lastSentRef.current) return
       lastSentRef.current = sig
-      sendAction({ type: 'input', playerId: myId, steer: c.steer, brake: c.brake })
+      sendAction({ type: 'input', playerId: myId, steer: c.steer, brake: c.brake, drift: c.drift })
     }, INPUT_MS)
     return () => clearInterval(t)
   }, [online, isHost, myId, sendAction])
+
+  // 게스트가 레이스 도중 방을 나가거나 연결이 끊기면 그 카트는 봇이 이어받는다
+  // (서버가 이탈한 기기의 참가자를 명단에서 빼므로 roster 변화로 감지)
+  useEffect(() => {
+    if (!online || !isHost || phase !== 'play') return
+    const st = stateRef.current
+    if (!st) return
+    const ids = new Set(roster.map((p) => p.id))
+    for (const k of st.karts) {
+      if (!k.isBot && !ids.has(k.id)) makeBot(st, k.id)
+    }
+  }, [online, isHost, phase, roster])
 
   const sampleHost = useCallback(() => (stateRef.current ? makeView(stateRef.current) : null), [])
   const sampleGuest = useCallback(() => interpolate(bufRef.current), [])
 
   function startGame(trackId) {
+    lastTrackRef.current = trackId
     sound.setEnabled(soundOn)
     sound.unlock()
     const humans = racers.map((p) => ({
@@ -147,7 +163,7 @@ export default function KartGame({ roster, onExit, net }) {
       isBot: true,
     }))
     stateRef.current = createGame([...humans, ...bots], Math.random, trackId)
-    ctrlRef.current = { steer: 0, brake: false }
+    ctrlRef.current = { steer: 0, brake: false, drift: false }
     setHud(makeView(stateRef.current))
     setPhase('play')
   }
@@ -188,6 +204,7 @@ export default function KartGame({ roster, onExit, net }) {
         myId={myId}
         ctrlRef={ctrlRef}
         onItem={onItem}
+        onRematch={null}
         onRestart={null}
         onExit={onExit}
         soundOn={soundOn}
@@ -208,7 +225,8 @@ export default function KartGame({ roster, onExit, net }) {
       myId={myId}
       ctrlRef={ctrlRef}
       onItem={onItem}
-      onRestart={() => setPhase('setup')} // 다시하기 = 맵 선택부터
+      onRematch={() => startGame(lastTrackRef.current)} // 같은 맵으로 즉시 한판 더!
+      onRestart={() => setPhase('setup')} // 맵 바꾸기 = 맵 선택부터
       onExit={onExit}
       soundOn={soundOn}
       onToggleSound={toggleSound}
@@ -313,8 +331,10 @@ function useRaceBanner(hud, myId) {
       lap: me?.lap ?? 1,
       rank: me?.rank ?? null,
       draftSeq: me?.draftSeq ?? 0,
+      turboSeq: me?.turboSeq ?? 0,
       bumpSeq: me?.bumpSeq ?? 0,
       bumpKind: me?.bumpKind ?? null,
+      botIds: hud.karts.filter((k) => k.isBot).map((k) => k.id).sort().join(','),
     }
     const p = prev.current
     prev.current = cur
@@ -335,9 +355,23 @@ function useRaceBanner(hud, myId) {
       show('⚡ 꼴찌의 번개 반격!')
       return
     }
+    // 도중에 연결이 끊긴 친구의 카트는 봇이 이어받는다 — 모두에게 알려준다
+    if (cur.botIds !== p.botIds) {
+      const before = new Set(p.botIds.split(','))
+      const nb = hud.karts.find((k) => k.isBot && !before.has(k.id))
+      if (nb) {
+        show(`🤖 ${nb.name} 자리는 봇이 이어 달려요!`)
+        return
+      }
+    }
     if (!me || me.finished) return
     if (cur.bumpSeq > p.bumpSeq && BUMP_MSG[cur.bumpKind]) {
       show(BUMP_MSG[cur.bumpKind])
+      return
+    }
+    if (cur.turboSeq > p.turboSeq) {
+      sound.key()
+      show('🌀 드리프트 미니터보!')
       return
     }
     if (cur.draftSeq > p.draftSeq) {
@@ -362,7 +396,9 @@ function useRaceBanner(hud, myId) {
 }
 
 // 주행 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
-function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, soundOn, onToggleSound }) {
+function KartPlay({
+  hud, sample, myId, ctrlRef, onItem, onRematch, onRestart, onExit, soundOn, onToggleSound,
+}) {
   useKartSounds(hud, myId)
   const lapMsg = useRaceBanner(hud, myId)
   if (!hud || hud.phase !== 'play') {
@@ -383,9 +419,12 @@ function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, sound
         <TouchControls
           onSteer={(v) => (ctrlRef.current.steer = v)}
           onBrake={(v) => (ctrlRef.current.brake = v)}
+          onDrift={(v) => (ctrlRef.current.drift = v)}
           onItem={onItem}
           item={me.item}
           itemSeq={me.itemSeq}
+          drifting={!!me.drift}
+          driftLvl={me.driftLvl}
           disabled={hud.status !== 'racing' || me.finished}
         />
       )}
@@ -452,7 +491,7 @@ function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, sound
           <div className="kart__endtimer">🏁 골인! 친구들을 기다려요...</div>
         )}
         {me && hud.status === 'racing' && hud.go && (
-          <div className="kart__hint">드래그 조이스틱 🕹️ 또는 키보드 ←/→ 로 핸들을 꺾어요</div>
+          <div className="kart__hint">🕹️ 드래그로 핸들 · 코너에서 🌀 누르고 있으면 미니터보!</div>
         )}
       </div>
 
@@ -470,8 +509,11 @@ function KartPlay({ hud, sample, myId, ctrlRef, onItem, onRestart, onExit, sound
             <div className="win-modal__btns">
               {onRestart ? (
                 <>
-                  <button className="btn btn--primary" onClick={onRestart}>
-                    다시하기
+                  <button className="btn btn--primary" onClick={onRematch}>
+                    🔁 한판 더!
+                  </button>
+                  <button className="btn btn--ghost" onClick={onRestart}>
+                    🗺️ 맵 바꾸기
                   </button>
                   <button className="btn btn--ghost" onClick={onExit}>
                     로비로

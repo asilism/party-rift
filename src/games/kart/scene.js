@@ -407,6 +407,14 @@ function buildKart(color, emoji) {
 
 const OBJ_EMOJI = { banana: '🍌', bomb: '💣' }
 
+// 드리프트 스파크 색: 충전 전(하양) → 1단계 파랑 → 2단계 주황 → 3단계 보라
+const DRIFT_SPARK = [
+  { r: 0.92, g: 0.92, b: 0.92 },
+  { r: 0.35, g: 0.65, b: 1 },
+  { r: 1, g: 0.62, b: 0.18 },
+  { r: 0.85, g: 0.45, b: 1 },
+]
+
 // 맵별 명물 장애물 (이모지 스프라이트 + 크기/높이)
 const OBSTACLE_LOOK = {
   cow: { emoji: '🐄', scale: 3.2, y: 1.4 },
@@ -653,6 +661,25 @@ export function createKartScene(canvas, track) {
           life: 0.3 + Math.random() * 0.25,
           grav: 4,
           r: 1, g: 0.45 + Math.random() * 0.45, b: 0.1,
+        }))
+      }
+      // 드리프트 스파크: 미끄러지는 바깥쪽 뒷바퀴에서 충전 단계 색의 불티가 튄다
+      if (k.drift) {
+        const c = DRIFT_SPARK[Math.min(k.driftLvl || 0, DRIFT_SPARK.length - 1)]
+        const fx = Math.cos(k.heading)
+        const fz = Math.sin(k.heading)
+        const px = fz * k.drift // 드리프트 반대쪽(바깥) 법선
+        const pz = -fx * k.drift
+        spawnParts(2, () => ({
+          x: k.x - fx * 1.4 + px * 0.8 + (Math.random() - 0.5) * 0.5,
+          y: 0.18,
+          z: k.z - fz * 1.4 + pz * 0.8 + (Math.random() - 0.5) * 0.5,
+          vx: -fx * 4 + px * (3 + Math.random() * 3),
+          vy: 2 + Math.random() * 2.5,
+          vz: -fz * 4 + pz * (3 + Math.random() * 3),
+          life: 0.22 + Math.random() * 0.2,
+          grav: 9,
+          r: c.r, g: c.g, b: c.b,
         }))
       }
       // 스턴 순간: 충격 불꽃 / 골인 순간: 색종이 폭발

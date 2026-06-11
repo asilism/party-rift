@@ -37,6 +37,13 @@ const DRAFT_TIME = 1.0 // 이 시간(초)만큼 유지 시 부스트 발동
 const DRAFT_BOOST = 0.9 // 슬립스트림 부스트 지속 시간 (초)
 const DRAFT_MIN_SPEED = 18 // 슬립스트림이 차오르는 최소 속도 (m/s)
 const ICE_STEER = 0.45 // 빙판 위 조향 효율 (핸들이 주르륵~)
+const DRIFT_MIN_SPEED = 13 // 드리프트 유지에 필요한 최소 속도 (m/s)
+const DRIFT_START_STEER = 0.3 // 드리프트 시작에 필요한 조향량
+const DRIFT_SLIP = 0.3 // 드리프트 중 차체가 옆으로 미끄러지는 각도 (rad)
+const DRIFT_TURN_BASE = 1.0 // 드리프트 기본 회전 배율 (조향으로 깊이 조절)
+const DRIFT_TURN_LEAN = 0.55
+export const DRIFT_TIERS = [0.7, 1.5, 2.5] // 미니터보 충전 단계 (초) — 아이들도 금방 차게
+const DRIFT_BOOSTS = [0.6, 1.0, 1.5] // 단계별 미니터보 지속 시간 (초)
 const SNOWMAN_RESPAWN = 7 // 부서진 눈사람이 다시 만들어지는 시간 (초)
 const OB_BOUNCE_SLOW = 0.7 // 소/펭귄에 부딪혔을 때 속도 배율
 export const FLY_TIME = 1.3 // 회오리에 휘말려 하늘로 붕 떠 있는 시간 (초, 렌더러 공유)
@@ -66,6 +73,10 @@ export function createGame(players, rng = Math.random, trackId = DEFAULT_TRACK_I
       speed: 0,
       steer: 0,
       brake: false,
+      drift: false, // 드리프트 버튼 입력
+      driftDir: 0, // 드리프트 중인 방향 (-1 | 0 | 1)
+      driftT: 0, // 미니터보 충전 시간 (드리프트 유지 누적)
+      turboSeq: 0, // 미니터보 발동 횟수 (HUD 배너 트리거)
       ci: si, // 가장 가까운 샘플 인덱스
       prog: si - n, // 누적 진행도(샘플 단위). 출발선 통과 시 0을 넘는다.
       item: null, // null | 'boost' | 'banana' | 'bomb' | 'rocket' | 'lightning'
@@ -105,13 +116,46 @@ export function createGame(players, rng = Math.random, trackId = DEFAULT_TRACK_I
   }
 }
 
-// 조향/브레이크 입력 (호스트 자신 + 게스트 action 양쪽에서 호출)
-export function setInput(state, id, { steer = 0, brake = false } = {}) {
+// 조향/브레이크/드리프트 입력 (호스트 자신 + 게스트 action 양쪽에서 호출)
+export function setInput(state, id, { steer = 0, brake = false, drift = false } = {}) {
   const k = state.karts.find((p) => p.id === id)
   if (!k) return state
   k.steer = Math.max(-1, Math.min(1, Number(steer) || 0))
   k.brake = !!brake
+  k.drift = !!drift
   return state
+}
+
+// 미니터보 충전 단계 (0 = 아직, 1~3 = 파랑/주황/보라)
+export function driftLevel(t) {
+  let lvl = 0
+  for (let i = 0; i < DRIFT_TIERS.length; i++) if (t >= DRIFT_TIERS[i]) lvl = i + 1
+  return lvl
+}
+
+// 드리프트 종료. reward면 충전된 단계만큼 미니터보가 터진다.
+function releaseDrift(k, reward = true) {
+  const lvl = reward ? driftLevel(k.driftT) : 0
+  k.driftDir = 0
+  k.driftT = 0
+  if (lvl > 0) {
+    k.boostT = Math.max(k.boostT, DRIFT_BOOSTS[lvl - 1])
+    k.turboSeq++
+  }
+}
+
+// 연결이 끊긴 참가자의 카트를 CPU가 이어받는다 (레이스는 멈추지 않는다)
+export function makeBot(state, id) {
+  const k = state.karts.find((p) => p.id === id)
+  if (!k || k.isBot) return null
+  k.isBot = true
+  k.botSpeed = 0.85 + state.rng() * 0.07
+  k.botPhase = state.rng() * Math.PI * 2
+  k.botItemT = null
+  k.drift = false
+  k.brake = false
+  releaseDrift(k, false)
+  return k
 }
 
 // 갖고 있는 아이템 사용
@@ -344,6 +388,7 @@ function stepKart(state, k, dt) {
   // 로켓 변신: 센터라인을 따라 자동 질주, 모든 공격에 면역.
   // 목표(격차의 절반)에 닿거나 시간이 다 되면 변신이 풀린다.
   if (k.rocketT > 0) {
+    releaseDrift(k, false)
     k.rocketT = Math.max(0, k.rocketT - dt)
     k.spin = 0
     k.stunT = 0
@@ -363,16 +408,33 @@ function stepKart(state, k, dt) {
   }
   if (k.flyT > 0) {
     // 회오리에 휘말려 공중에! 조향 불가, 빙글 돌며 관성으로 날아간다
+    releaseDrift(k, false)
     k.flyT = Math.max(0, k.flyT - dt)
     k.spin += dt * 7
     k.speed = Math.max(6, k.speed - 8 * dt)
   } else if (k.stunT > 0) {
-    // 스턴: 빙글 돌며 미끄러진다
+    // 스턴: 빙글 돌며 미끄러진다 (충전 중이던 미니터보도 날아간다)
+    releaseDrift(k, false)
     k.stunT = Math.max(0, k.stunT - dt)
     k.spin += dt * 9
     k.speed = Math.max(0, k.speed - 26 * dt)
   } else {
     k.spin = 0
+    // 드리프트: 버튼을 누른 채 조향하면 옆으로 미끄러지며 돌고, 유지한 만큼
+    // 미니터보가 충전된다(파랑→주황→보라). 버튼을 떼는 순간 부스트!
+    // 저연령 배려: 잔디에 닿거나 속도가 떨어져도 그동안 모은 터보는 터뜨려 준다.
+    if (k.driftDir === 0) {
+      if (
+        k.drift && !k.finished && !k.offroad &&
+        k.speed >= DRIFT_MIN_SPEED && Math.abs(k.steer) >= DRIFT_START_STEER
+      ) {
+        k.driftDir = Math.sign(k.steer)
+      }
+    } else if (!k.drift || k.finished || k.offroad || k.speed < DRIFT_MIN_SPEED * 0.75) {
+      releaseDrift(k, !k.finished)
+    } else {
+      k.driftT += dt
+    }
     const edge = k.offroad ? EDGE_FACTOR : 1
     const boost = k.boostT > 0 ? BOOST_FACTOR : 1
     const target = k.finished ? 0 : MAX_SPEED * edge * boost * (k.speedFactor || 1)
@@ -387,14 +449,22 @@ function stepKart(state, k, dt) {
     // 브레이크 중엔 코너링이 좋아진다. 빙판 위에선 핸들이 주르륵~
     const ice = onIce(track, k.ci) ? ICE_STEER : 1
     const steerEff = Math.min(1, k.speed / 8) * (k.brake ? 1.3 : 1) * ice
-    k.heading += k.steer * Math.abs(k.steer) * TURN_RATE * steerEff * dt
+    if (k.driftDir) {
+      // 드리프트 중엔 도는 방향이 유지되고, 조향은 깊이만 조절한다
+      const lean = Math.max(-1, Math.min(1, k.steer * k.driftDir))
+      k.heading += k.driftDir * (DRIFT_TURN_BASE + lean * DRIFT_TURN_LEAN) * TURN_RATE * steerEff * dt
+    } else {
+      k.heading += k.steer * Math.abs(k.steer) * TURN_RATE * steerEff * dt
+    }
   }
   k.boostT = Math.max(0, k.boostT - dt)
   k.bumpCool = Math.max(0, k.bumpCool - dt)
   k.invT = Math.max(0, k.invT - dt)
 
-  k.x += Math.cos(k.heading) * k.speed * dt
-  k.z += Math.sin(k.heading) * k.speed * dt
+  // 드리프트 중엔 차체가 향한 곳보다 살짝 바깥쪽으로 미끄러진다
+  const mh = k.heading - k.driftDir * DRIFT_SLIP
+  k.x += Math.cos(mh) * k.speed * dt
+  k.z += Math.sin(mh) * k.speed * dt
 
   // 트랙 기준 위치: 가장자리에 닿으면 잔디만큼 감속 + 트랙을 벗어나지 않게
   // 위치를 잡아주고, 진행 방향(살짝 안쪽)으로 부드럽게 되돌려준다
@@ -504,6 +574,7 @@ function rollItem(state, k) {
 }
 
 function stunKart(k, t = STUN_TIME) {
+  releaseDrift(k, false)
   k.stunT = Math.max(k.stunT, t)
   k.speed *= 0.25
   // 스턴이 풀린 뒤 잠깐 무적(깜빡임) — 연속 패널티로 게임이 끊기지 않게
@@ -611,6 +682,9 @@ export function makeView(state) {
       draftSeq: k.draftSeq,
       bumpSeq: k.bumpSeq,
       bumpKind: k.bumpKind,
+      drift: k.driftDir, // 드리프트 중인 방향 (-1 | 0 | 1)
+      driftLvl: driftLevel(k.driftT), // 미니터보 충전 단계 (0~3)
+      turboSeq: k.turboSeq,
       boostT: r2(k.boostT),
       rocketT: r2(k.rocketT),
       stunT: r2(k.stunT),
