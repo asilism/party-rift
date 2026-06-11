@@ -338,14 +338,19 @@ function useRaceBanner(hud, myId) {
     }
     const p = prev.current
     prev.current = cur
-    // 새 레이스 시작/대기 중에는 비교하지 않는다
-    if (!p || p.status !== 'racing' || hud.status !== 'racing') return
-
+    if (!p) return
     const show = (text) => {
       setMsg({ text, key: ++keyRef.current })
       clearTimeout(timerRef.current)
       timerRef.current = setTimeout(() => setMsg(null), 2200)
     }
+    // 출발 직전 🌀을 누르고 있었다면 출발과 동시에 부스트!
+    if (p.status === 'countdown' && hud.status === 'racing' && me?.startDash) {
+      show('🚀 스타트 대시!')
+      return
+    }
+    // 새 레이스 시작/대기 중에는 비교하지 않는다
+    if (p.status !== 'racing' || hud.status !== 'racing') return
     if (me && !me.finished && cur.lap > p.lap) {
       sound.key()
       show(cur.lap >= LAPS ? '마지막 바퀴! 전력 질주!! 🔥' : `${cur.lap}바퀴째!`)
@@ -425,7 +430,7 @@ function KartPlay({
           itemSeq={me.itemSeq}
           drifting={!!me.drift}
           driftLvl={me.driftLvl}
-          disabled={hud.status !== 'racing' || me.finished}
+          disabled={me.finished} // 카운트다운 중에도 눌러둘 수 있다 (스타트 대시)
         />
       )}
 
@@ -489,6 +494,9 @@ function KartPlay({
         )}
         {me?.finished && !finished && (
           <div className="kart__endtimer">🏁 골인! 친구들을 기다려요...</div>
+        )}
+        {me && hud.status === 'countdown' && (
+          <div className="kart__hint">🌀 버튼을 꾹 누른 채 출발하면 스타트 대시!</div>
         )}
         {me && hud.status === 'racing' && hud.go && (
           <div className="kart__hint">🕹️ 드래그로 핸들 · 코너에서 🌀 누르고 있으면 미니터보!</div>
