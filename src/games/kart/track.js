@@ -45,9 +45,41 @@ function buildGeom(ctrl, scale, halfW) {
     dz /= len
     total += Math.hypot(qx - x, qz - z)
     // 법선 = 진행방향을 왼쪽으로 90도 돌린 벡터
-    return { x, z, dx, dz, nx: -dz, nz: dx }
+    return { x, y: 0, z, dx, dz, nx: -dz, nz: dx }
   })
   return { n: N, samples, halfW, segLen: total / N }
+}
+
+// 고도 프로필: [트랙 비율, 높이] 제어점을 코사인 보간해 샘플마다 y를 채운다.
+// 점프대(jumps)는 도약 지점 앞 몇 샘플이 쐐기처럼 솟아오른다.
+const JUMP_RAMP_H = 1.2 // 점프대 쐐기 높이
+const JUMP_RAMP_LEN = 3 // 쐐기 길이 (샘플)
+function applyElevation(track, elev, jumps = []) {
+  for (let i = 0; i < track.n; i++) {
+    const f = i / track.n
+    let a = elev[0]
+    let b = elev[elev.length - 1]
+    for (let p = 0; p < elev.length - 1; p++) {
+      if (f >= elev[p][0] && f <= elev[p + 1][0]) {
+        a = elev[p]
+        b = elev[p + 1]
+        break
+      }
+    }
+    const t = Math.min(1, Math.max(0, (f - a[0]) / Math.max(1e-6, b[0] - a[0])))
+    track.samples[i].y = a[1] + (b[1] - a[1]) * (0.5 - Math.cos(Math.PI * t) * 0.5)
+  }
+  for (const j of jumps) {
+    for (let k = 0; k <= JUMP_RAMP_LEN; k++) {
+      const idx = (j.i - JUMP_RAMP_LEN + k + track.n) % track.n
+      track.samples[idx].y += (k / JUMP_RAMP_LEN) * JUMP_RAMP_H
+    }
+  }
+}
+
+// 샘플 인덱스가 낭떠러지(도로 끊김) 구간 안인지
+export function inGap(track, ci) {
+  return (track.gaps || []).some((g) => ci >= g.from && ci <= g.to)
 }
 
 // 아이템 박스 위치: 트랙 위 3곳 × 가로 3개 (모든 트랙 공통 비율)
@@ -57,7 +89,7 @@ function makeBoxes(track) {
   const spots = rows.flatMap((i) =>
     [-3.5, 0, 3.5].map((lat) => {
       const s = track.samples[i]
-      return { x: s.x + s.nx * lat, z: s.z + s.nz * lat }
+      return { x: s.x + s.nx * lat, y: s.y || 0, z: s.z + s.nz * lat }
     })
   )
   return { rows, spots }
@@ -112,9 +144,22 @@ const SNOW_CTRL = [
   [-42, -34], [-22, -44],
 ]
 
+// 🌋 화산 협곡 — 시리즈 첫 입체 코스! 오르막으로 산허리에 올라
+// 점프대로 용암 협곡을 건너뛴다. 느리면 풍덩~ (리스폰), 내리막 언덕에선 신나는 점프!
+const VOLCANO_CTRL = [
+  [4, -46], [26, -48], [46, -40], [56, -22],
+  [52, -2], [40, 14], [30, 28], // 오르막
+  [16, 38], [0, 46], // 협곡 점프 직선
+  [-18, 48], [-34, 42], [-44, 30], [-56, 18],
+  [-56, 0], [-46, -12], // 언덕 점프 진입
+  [-50, -26], [-40, -38], // 내리막
+  [-26, -44], [-14, -47], [-6, -40], // 가벼운 S
+]
+
 const fi = (f) => Math.round(N * f) // 트랙 비율 → 샘플 인덱스
 
 function finishTrack(track, def) {
+  if (def.elev) applyElevation(track, def.elev, def.jumps) // 고도는 박스 배치 전에
   const { rows, spots } = makeBoxes(track)
   return { ...track, ...def, boxRows: rows, boxSpots: spots, pads: makePads(track, def.padSeed) }
 }
@@ -188,9 +233,37 @@ export const TRACKS = {
       flora: ['❄️', '🧊', '🪨', '🌨️'],
     },
   }),
+  volcano: finishTrack(buildGeom(VOLCANO_CTRL, 2, 6), {
+    id: 'volcano',
+    name: '화산 협곡',
+    emoji: '🌋',
+    desc: '오르막을 달려 용암 협곡을 점프! 느리면 풍덩~ 불덩이는 앗 뜨거!',
+    difficulty: '보통',
+    padSeed: 911.3,
+    // 고도 프로필: 오르막 → 산허리 평지(협곡 점프) → 내리막 → 점프 언덕
+    elev: [
+      [0, 0], [0.16, 0], [0.26, 6], [0.5, 6], [0.6, 0],
+      [0.66, 0], [0.715, 2.5], [0.78, 0], [1, 0],
+    ],
+    // 점프대: 협곡 직전 + 내리막 언덕 꼭대기 (재미 점프)
+    jumps: [{ i: fi(0.36) }, { i: fi(0.715) }],
+    // 용암 협곡: 도로가 끊겨 있다 — 점프로 건너야 한다!
+    gaps: [{ from: fi(0.36) + 1, to: fi(0.36) + 5 }],
+    obstacles: [
+      { kind: 'magma', i: fi(0.08), period: 5, phase: 0.6, span: 5, r: 1.3 },
+      { kind: 'magma', i: fi(0.55), period: 6, phase: 2.2, span: 5.5, r: 1.3 },
+      { kind: 'magma', i: fi(0.88), period: 4.5, phase: 4.0, span: 5, r: 1.3 },
+    ],
+    theme: {
+      sky: 0xe5b48a, dusk: 0xb3543f, ground: 0x8a6852, road: 0x3a363f,
+      treeLeaf: 0x9a5a34, treeTrunk: 0x4a3328, treeCount: 26,
+      flora: ['🪨', '🔥', '🌶️', '🦴', '🌋'],
+      lava: 0xff5a1f, // 협곡 아래 용암 / 화산 분화구 색
+    },
+  }),
 }
 
-export const TRACK_LIST = [TRACKS.meadow, TRACKS.desert, TRACKS.snow]
+export const TRACK_LIST = [TRACKS.meadow, TRACKS.desert, TRACKS.snow, TRACKS.volcano]
 export const DEFAULT_TRACK_ID = 'meadow'
 
 // 이전 호환(테스트 등): 기본 트랙과 그 배치
@@ -228,7 +301,7 @@ export function obstacleVisible(track, ob, time) {
 export function obstaclePose(track, ob, time) {
   const { prog, lat } = obstacleTrackPos(track, ob, time)
   const p = samplePoint(track, prog)
-  return { x: p.x + p.nx * lat, z: p.z + p.nz * lat }
+  return { x: p.x + p.nx * lat, y: p.y, z: p.z + p.nz * lat }
 }
 
 // 샘플 인덱스가 빙판 구간 안인지 (눈꽃 빙판 전용)
@@ -274,6 +347,7 @@ export function samplePoint(track, prog) {
   const b = samples[(i + 1) % n]
   return {
     x: a.x + (b.x - a.x) * f,
+    y: (a.y || 0) + ((b.y || 0) - (a.y || 0)) * f,
     z: a.z + (b.z - a.z) * f,
     dx: a.dx,
     dz: a.dz,

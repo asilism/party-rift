@@ -319,7 +319,7 @@ test('마지막 바퀴에 들어서면 finalLap 플래그가 켜진다', () => {
 })
 
 test('트랙 3종: 자기교차 없음 + 장애물/발판/박스가 모두 정의됨', () => {
-  assert.equal(TRACK_LIST.length, 3)
+  assert.equal(TRACK_LIST.length, 4)
   for (const t of TRACK_LIST) {
     // 자기교차 검사: 인덱스가 멀리 떨어진 샘플끼리는 도로 두 폭보다 멀어야 함
     for (let i = 0; i < t.n; i += 2) {
@@ -730,4 +730,109 @@ test('스타트 대시: 출발 직전 드리프트를 누르고 있으면 출발
   assert.ok(g.karts[0].boostT > 0, '눌렀던 카트는 부스트')
   assert.equal(g.karts[1].boostT, 0, '안 누른 카트는 그대로')
   assert.equal(makeView(g).karts[0].startDash, true)
+})
+
+// ── 화산 협곡: 고도 / 점프대 / 용암 추락 ──
+
+// 트랙을 지정해 다음 샘플을 향해 조향하는 자동 주행 (autopilot의 일반화)
+function autopilotOn(track, k) {
+  const t = track.samples[(k.ci + 6) % track.n]
+  const desired = Math.atan2(t.z - k.z, t.x - k.x)
+  let d = desired - k.heading
+  while (d > Math.PI) d -= 2 * Math.PI
+  while (d < -Math.PI) d += 2 * Math.PI
+  return Math.max(-1, Math.min(1, d * 2))
+}
+
+// 카트를 특정 샘플 위에 진행 방향으로 정렬해 세워두는 헬퍼
+function placeAt(track, k, si, speed) {
+  const s = track.samples[si]
+  k.x = s.x
+  k.z = s.z
+  k.ci = si
+  k.prog = si
+  k.heading = Math.atan2(s.dz, s.dx)
+  k.speed = speed
+  k.ky = s.y || 0
+}
+
+test('화산: 고도 프로필 — 언덕/협곡이 있고 기존 트랙은 평지 그대로', () => {
+  const v = TRACKS.volcano
+  assert.ok(Math.max(...v.samples.map((s) => s.y)) > 5, '오르막 존재')
+  assert.ok(Math.min(...v.samples.map((s) => s.y)) >= 0)
+  assert.ok(v.gaps.length >= 1, '용암 협곡 존재')
+  assert.ok(v.jumps.length >= 2, '점프대 존재')
+  for (const id of ['meadow', 'desert', 'snow']) {
+    assert.ok(TRACKS[id].samples.every((s) => s.y === 0), `${id}는 평지`)
+  }
+  const g = createGame(P2, Math.random, 'volcano')
+  const view = makeView(g)
+  assert.equal(typeof view.karts[0].y, 'number')
+  assert.equal(view.karts[0].air, false)
+})
+
+test('화산: 점프대를 빠르게 밟으면 날아서 협곡을 건넌다', () => {
+  const g = createGame([P2[0]], Math.random, 'volcano')
+  startRacing(g)
+  const t = g.track
+  const k = g.karts[0]
+  placeAt(t, k, (t.jumps[0].i - 4 + t.n) % t.n, 26)
+  let flew = false
+  for (let i = 0; i < 60 * 4 && !(flew && !k.air); i++) {
+    if (k.air) flew = true
+    setInput(g, 'a', { steer: autopilotOn(t, k) })
+    step(g, STEP)
+  }
+  assert.equal(k.jumpSeq, 1, '점프대 발사')
+  assert.ok(flew, '공중에 떴다')
+  assert.equal(k.fallSeq, 0, '추락 없이')
+  assert.ok(wrapDelta(k.ci - t.gaps[0].to, t.n) > 0, `협곡 너머 착지 (ci=${k.ci})`)
+})
+
+test('화산: 느린 카트는 협곡에 풍덩 — 연출 후 낭떠러지 앞 리스폰', () => {
+  const g = createGame([P2[0]], Math.random, 'volcano')
+  startRacing(g)
+  const t = g.track
+  const k = g.karts[0]
+  const gap = t.gaps[0]
+  placeAt(t, k, gap.from + 2, 4) // 도로가 없는 곳에서 저속
+  for (let i = 0; i < 60 * 3 && k.fallSeq === 0; i++) step(g, STEP)
+  assert.equal(k.fallSeq, 1, '추락 발생')
+  assert.ok(k.fallT > 0)
+  for (let i = 0; i < 60 * 3 && k.fallT > 0; i++) step(g, STEP)
+  assert.equal(k.ci, (gap.from - 8 + t.n) % t.n, '낭떠러지 앞 리스폰')
+  assert.ok(k.invT > 0, '리스폰 직후 무적')
+  assert.ok(!k.air)
+  assert.ok(k.speed < 10)
+})
+
+test('화산: 공중에선 아이템 박스/장애물/충돌을 그냥 지나친다', () => {
+  const g = createGame(P2, Math.random, 'volcano')
+  startRacing(g)
+  const k = g.karts[0]
+  k.air = true
+  k.vy = 5
+  k.ky = (g.track.samples[k.ci].y || 0) + 3
+  const spot = g.track.boxSpots[0]
+  k.x = spot.x
+  k.z = spot.z
+  k.ci = nearestSample(g.track, k.x, k.z)
+  step(g, STEP)
+  assert.equal(k.item, null, '공중에선 박스를 못 먹는다')
+})
+
+test('화산: 용암 불덩이에 닿으면 앗 뜨거 스턴', () => {
+  const g = createGame(P2, Math.random, 'volcano')
+  startRacing(g)
+  const t = g.track
+  const k = g.karts[0]
+  const ob = t.obstacles[0]
+  const pos = obstaclePose(t, ob, g.time + STEP)
+  k.x = pos.x
+  k.z = pos.z
+  k.ci = nearestSample(t, k.x, k.z)
+  k.ky = pos.y || 0
+  step(g, STEP)
+  assert.ok(k.stunT > 0, '용암 스턴')
+  assert.equal(k.bumpKind, 'magma')
 })
