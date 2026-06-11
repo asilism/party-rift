@@ -6,7 +6,7 @@ import {
 } from './engine.js'
 import {
   TRACK, TRACKS, TRACK_LIST, BOX_SPOTS, PADS, PAD_HALF_W,
-  nearestSample, wrapDelta, obstaclePose, obstacleTrackPos, obstacleVisible, onIce,
+  nearestSample, wrapDelta, obstaclePose, obstacleTrackPos, obstacleVisible, onIce, trainCars,
 } from './track.js'
 
 const P2 = [
@@ -319,7 +319,7 @@ test('마지막 바퀴에 들어서면 finalLap 플래그가 켜진다', () => {
 })
 
 test('트랙 3종: 자기교차 없음 + 장애물/발판/박스가 모두 정의됨', () => {
-  assert.equal(TRACK_LIST.length, 4)
+  assert.equal(TRACK_LIST.length, 5)
   for (const t of TRACK_LIST) {
     // 자기교차 검사: 인덱스가 멀리 떨어진 샘플끼리는 도로 두 폭보다 멀어야 함
     for (let i = 0; i < t.n; i += 2) {
@@ -835,4 +835,89 @@ test('화산: 용암 불덩이에 닿으면 앗 뜨거 스턴', () => {
   step(g, STEP)
   assert.ok(k.stunT > 0, '용암 스턴')
   assert.equal(k.bumpKind, 'magma')
+})
+
+// ── 철길: 기차 건널목 ──
+
+test('철길: 기차에 치이면 하늘로 펑 날아갔다 건널목 앞 리스폰', () => {
+  const g = createGame([P2[0]], Math.random, 'rails')
+  startRacing(g)
+  const t = g.track
+  const k = g.karts[0]
+  const tr = t.trains[0]
+  k.invT = 0
+  let maxY = 0
+  // 건널목 한가운데 서서 기차를 기다린다 (한 주기 안에 반드시 치인다)
+  for (let i = 0; i < Math.ceil(tr.period * 1.2 / STEP) && k.fallSeq === 0; i++) {
+    placeAt(t, k, tr.i, 0)
+    k.invT = 0
+    step(g, STEP)
+  }
+  assert.equal(k.fallSeq, 1, '기차에 치였다')
+  assert.equal(k.fallKind, 'train')
+  for (let i = 0; i < 60 * 3 && k.fallT > 0; i++) {
+    maxY = Math.max(maxY, k.ky)
+    step(g, STEP)
+  }
+  assert.ok(maxY > 2, `하늘로 날아갔다 (maxY=${maxY.toFixed(1)})`)
+  assert.equal(k.ci, (tr.i - 8 + t.n) % t.n, '건널목 앞 리스폰')
+  assert.ok(k.invT > 0, '리스폰 무적')
+  assert.equal(k.fallKind, null)
+})
+
+test('철길: 무적/공중/로켓 카트는 기차를 그냥 지나친다', () => {
+  const g = createGame([P2[0]], Math.random, 'rails')
+  startRacing(g)
+  const t = g.track
+  const k = g.karts[0]
+  const tr = t.trains[0]
+  for (let i = 0; i < Math.ceil(tr.period * 1.2 / STEP); i++) {
+    placeAt(t, k, tr.i, 0)
+    k.invT = 1 // 계속 무적
+    step(g, STEP)
+  }
+  assert.equal(k.fallSeq, 0, '무적이라 안 치인다')
+})
+
+test('철길: 봇은 기차가 보이면 건널목 앞에서 브레이크를 밟는다', () => {
+  const g = createGame(
+    [{ id: 'bot1', name: '봇', zodiacId: 'rat', color: '#aaa', isBot: true }],
+    Math.random,
+    'rails'
+  )
+  startRacing(g)
+  const t = g.track
+  const tr = t.trains[0]
+  const k = g.karts[0]
+  // 기차가 도로 위에 있는 시각을 찾는다
+  let tHit = null
+  for (let tm = 0; tm < tr.period; tm += 0.05) {
+    if (trainCars(t, tr, tm).some((c) => Math.abs(c.lat) < t.halfW)) {
+      tHit = tm
+      break
+    }
+  }
+  assert.ok(tHit != null, '기차가 주기 안에 도로를 지난다')
+  g.time = tHit - STEP
+  placeAt(t, k, (tr.i - 15 + t.n) % t.n, 20) // 건널목 15샘플 앞
+  step(g, STEP)
+  assert.equal(k.brake, true, '봇이 건널목 앞에서 정지')
+})
+
+test('철길: 뷰에 기차 접근(trainNear)과 fallKind가 실린다', () => {
+  const g = createGame(P2, Math.random, 'rails')
+  startRacing(g)
+  const t = g.track
+  const tr = t.trains[0]
+  let tNear = null
+  for (let tm = 0; tm < tr.period; tm += 0.05) {
+    if (trainCars(t, tr, tm).some((c) => Math.abs(c.lat) < t.halfW + 24)) {
+      tNear = tm
+      break
+    }
+  }
+  g.time = tNear
+  const v = makeView(g)
+  assert.equal(v.trainNear, true)
+  assert.ok('fallKind' in v.karts[0])
 })

@@ -176,6 +176,15 @@ export const sound = {
     setTimeout(() => beep(640, 0.09, 'square', 0.06), 70)
     setTimeout(() => beep(900, 0.14, 'square', 0.06), 140)
   },
+  // 기차 경적 빵~ 빵~!
+  train() {
+    beep(311, 0.3, 'square', 0.07)
+    beep(415, 0.3, 'square', 0.05)
+    setTimeout(() => {
+      beep(311, 0.45, 'square', 0.07)
+      beep(415, 0.45, 'square', 0.05)
+    }, 420)
+  },
   // 용암/낭떠러지에 풍덩~
   splash() {
     beep(520, 0.1, 'sawtooth', 0.06)

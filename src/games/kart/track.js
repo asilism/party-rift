@@ -156,6 +156,19 @@ const VOLCANO_CTRL = [
   [-26, -44], [-14, -47], [-6, -40], // 가벼운 S
 ]
 
+// 🚂 칙칙폭폭 철길 — 시리즈 최대·최고난도 코스.
+// 기차가 트랙을 가로지르는 건널목 2곳(치이면 하늘로 펑!), 강 위 끊어진 다리 점프,
+// 공사 구간 바리케이드, 건너다니는 트랙터, 증기 분출구까지.
+const RAIL_CTRL = [
+  [0, -44], [22, -46], [40, -42], [52, -30], // 출발 직선 → 우상향
+  [56, -14], [48, -2], [36, -8], [30, 2], // 헤어핀 A (S자 유턴)
+  [38, 14], [50, 22], [48, 36], [34, 44], // 오른쪽 위 스윕
+  [16, 46], [-2, 44], [-20, 46], [-38, 42], // 윗쪽 직선 (다리 점프)
+  [-50, 30], [-44, 16], [-56, 6], [-54, -10], // 왼쪽 내리막 + 헤어핀 B
+  [-42, -20], [-50, -32], [-34, -42], // 헤어핀 C
+  [-16, -38], [-8, -46], // 마지막 시케인
+]
+
 const fi = (f) => Math.round(N * f) // 트랙 비율 → 샘플 인덱스
 
 function finishTrack(track, def) {
@@ -261,9 +274,43 @@ export const TRACKS = {
       lava: 0xff5a1f, // 협곡 아래 용암 / 화산 분화구 색
     },
   }),
+  rails: finishTrack(buildGeom(RAIL_CTRL, 2.4, 6), {
+    id: 'rails',
+    name: '칙칙폭폭 철길',
+    emoji: '🚂',
+    desc: '시리즈 최대 코스! 건널목에서 기차에 치이면 하늘로 펑~ 다리는 점프로!',
+    difficulty: '최고난도',
+    padSeed: 333.7,
+    // 강 위 끊어진 다리: 살짝 오르막 → 점프로 건넌다 (+ 가벼운 언덕 하나)
+    elev: [
+      [0, 0], [0.28, 0], [0.34, 2], [0.4, 0],
+      [0.44, 0], [0.485, 3.5], [0.56, 3.5], [0.62, 0], [1, 0],
+    ],
+    jumps: [{ i: fi(0.5) }],
+    gaps: [{ from: fi(0.5) + 1, to: fi(0.5) + 5 }],
+    // 기차 건널목: 기차가 도로 법선 방향으로 가로질러 달린다 (치이면 펑!)
+    trains: [
+      { i: fi(0.3), period: 8, phase: 0.35, dir: 1, span: 60, cars: 4, carGap: 6.5, r: 2.2 },
+      { i: fi(0.9), period: 10, phase: 0.75, dir: -1, span: 60, cars: 5, carGap: 6.5, r: 2.2 },
+    ],
+    obstacles: [
+      { kind: 'barrier', i: fi(0.18), lat: -2.5, r: 1.3 },
+      { kind: 'barrier', i: fi(0.63), lat: 2.4, r: 1.3 },
+      { kind: 'tractor', i: fi(0.4), cross: true, period: 10, phase: 0.3, dir: 1, span: 9.5, r: 1.7 },
+      { kind: 'tractor', i: fi(0.74), cross: true, period: 12, phase: 0.7, dir: -1, span: 9.5, r: 1.7 },
+      { kind: 'steam', i: fi(0.26), period: 7, phase: 1.4, span: 4.5, r: 1.7 },
+      { kind: 'steam', i: fi(0.68), period: 8, phase: 4.2, span: 4.5, r: 1.7 },
+    ],
+    theme: {
+      sky: 0xa9d3ec, dusk: 0xf09a5e, ground: 0x86a85c, road: 0x4a4a52,
+      treeLeaf: 0x4f9a4a, treeTrunk: 0x6e4f33, treeCount: 56,
+      flora: ['🌾', '🌻', '🪨', '🐓', '🌼', '🛤️'],
+      pool: 0x3e7bd6, // 다리 아래 강물
+    },
+  }),
 }
 
-export const TRACK_LIST = [TRACKS.meadow, TRACKS.desert, TRACKS.snow, TRACKS.volcano]
+export const TRACK_LIST = [TRACKS.meadow, TRACKS.desert, TRACKS.snow, TRACKS.volcano, TRACKS.rails]
 export const DEFAULT_TRACK_ID = 'meadow'
 
 // 이전 호환(테스트 등): 기본 트랙과 그 배치
@@ -302,6 +349,21 @@ export function obstaclePose(track, ob, time) {
   const { prog, lat } = obstacleTrackPos(track, ob, time)
   const p = samplePoint(track, prog)
   return { x: p.x + p.nx * lat, y: p.y, z: p.z + p.nz * lat }
+}
+
+// 기차의 현재 객차 위치들 — 시간의 순수 함수라 엔진(충돌)과 렌더러(그리기)가
+// 같은 결과를 얻는다. 기관차(head)가 도로 법선 방향으로 -span → +span을 주기마다 가로지른다.
+export function trainCars(track, tr, time) {
+  const f = (((time / tr.period + tr.phase) % 1) + 1) % 1
+  const head = (f * 2 - 1) * tr.span * tr.dir
+  const s = track.samples[tr.i]
+  const out = []
+  for (let c = 0; c < tr.cars; c++) {
+    const lat = head - tr.dir * c * tr.carGap
+    if (Math.abs(lat) > tr.span) continue
+    out.push({ x: s.x + s.nx * lat, z: s.z + s.nz * lat, lat, c, engine: c === 0 })
+  }
+  return out
 }
 
 // 샘플 인덱스가 빙판 구간 안인지 (눈꽃 빙판 전용)
