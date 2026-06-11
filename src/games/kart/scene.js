@@ -2,7 +2,9 @@
 // 엔진의 makeView() 스냅샷만 보고 그린다 — 호스트/게스트 공용.
 import * as THREE from 'three'
 import { getZodiac } from '../../shared/zodiac.js'
-import { PAD_HALF_W, obstaclePose, obstacleVisible, inGap, samplePoint, nearestSample } from './track.js'
+import {
+  PAD_HALF_W, obstaclePose, obstacleVisible, inGap, samplePoint, nearestSample, trainCars,
+} from './track.js'
 import { FLY_TIME } from './engine.js'
 
 // 이모지 한 글자를 캔버스에 그려 스프라이트 텍스처로 만든다
@@ -642,6 +644,10 @@ const OBSTACLE_LOOK = {
   cactus: { emoji: '🌵', scale: 3, y: 1.4 },
   snowman: { emoji: '⛄', scale: 3.2, y: 1.5 },
   penguin: { emoji: '🐧', scale: 2.4, y: 1 },
+  magma: { emoji: '🔥', scale: 2.8, y: 1.3 },
+  barrier: { emoji: '🚧', scale: 2.7, y: 1.2 },
+  tractor: { emoji: '🚜', scale: 3, y: 1.4 },
+  steam: { emoji: '💨', scale: 3.2, y: 1.6 },
 }
 
 // 마지막 바퀴엔 하늘이 노을빛으로 물든다 (드라마 연출)
@@ -691,28 +697,31 @@ export function createKartScene(canvas, track) {
   scene.add(startGate.group)
   scene.add(buildPads(track))
 
-  // 용암 협곡: 끊긴 도로 아래에 이글거리는 용암 웅덩이 (render에서 색이 출렁인다)
-  const lavaPools = []
+  // 끊긴 도로(gap) 아래의 웅덩이 — 화산은 용암, 철길은 강물 (render에서 출렁인다)
+  const poolBase = new THREE.Color(theme.pool ?? theme.lava ?? 0x3e7bd6)
+  const poolCore = poolBase.clone().offsetHSL(0, 0, 0.18)
+  const pools = []
+  const craterSmoke = []
+  for (const gap of track.gaps || []) {
+    const mid = samplePoint(track, (gap.from + gap.to) / 2)
+    const r = ((gap.to - gap.from + 1) * track.segLen) / 2 + track.halfW + 3
+    const pool = new THREE.Mesh(
+      new THREE.CircleGeometry(r, 24),
+      new THREE.MeshBasicMaterial({ color: poolBase.clone().offsetHSL(0, 0, -0.05) })
+    )
+    pool.geometry.rotateX(-Math.PI / 2)
+    pool.position.set(mid.x, 0.08, mid.z)
+    // 안쪽은 더 밝게 이글이글/반짝반짝 (render에서 맥동)
+    const core = new THREE.Mesh(
+      new THREE.CircleGeometry(r * 0.55, 20),
+      new THREE.MeshBasicMaterial({ color: poolCore })
+    )
+    core.geometry.rotateX(-Math.PI / 2)
+    core.position.set(mid.x, 0.1, mid.z)
+    pools.push({ mesh: pool, core, x: mid.x, z: mid.z, r })
+    scene.add(pool, core)
+  }
   if (theme.lava) {
-    for (const gap of track.gaps || []) {
-      const mid = samplePoint(track, (gap.from + gap.to) / 2)
-      const r = ((gap.to - gap.from + 1) * track.segLen) / 2 + track.halfW + 3
-      const pool = new THREE.Mesh(
-        new THREE.CircleGeometry(r, 24),
-        new THREE.MeshBasicMaterial({ color: 0xe8420c })
-      )
-      pool.geometry.rotateX(-Math.PI / 2)
-      pool.position.set(mid.x, 0.08, mid.z)
-      // 안쪽은 더 밝게 이글이글 (render에서 맥동)
-      const core = new THREE.Mesh(
-        new THREE.CircleGeometry(r * 0.55, 20),
-        new THREE.MeshBasicMaterial({ color: 0xffa64d })
-      )
-      core.geometry.rotateX(-Math.PI / 2)
-      core.position.set(mid.x, 0.1, mid.z)
-      lavaPools.push({ mesh: pool, core, x: mid.x, z: mid.z, r })
-      scene.add(pool, core)
-    }
     // 멀리서 연기를 뿜는 화산 본체
     const volC = new THREE.Color(0x5e4640)
     const vol = new THREE.Mesh(
@@ -727,16 +736,101 @@ export function createKartScene(canvas, track) {
     crater.scale.set(46, 46, 1)
     crater.position.set(185, 80, -135)
     scene.add(crater)
-    lavaPools.craterSmoke = []
     for (let i = 0; i < 3; i++) {
       const puff = emojiSprite('💨', 16)
       puff.material.transparent = true // 연기가 위로 가며 옅어진다
       puff.position.set(185, 86, -135)
       puff.userData.phase = i / 3
-      lavaPools.craterSmoke.push(puff)
+      craterSmoke.push(puff)
       scene.add(puff)
     }
   }
+
+  // 기차 건널목: 철길(침목+레일) + 경고등 + 알록달록 기차 (시간의 순수 함수로 달린다)
+  const TRAIN_CAR_COLORS = [0x3e6fd0, 0xd9a23a, 0x4caf6e, 0x9a5fd0]
+  const crossingLights = []
+  const trainNodes = (track.trains || []).map((tr) => {
+    const s = track.samples[tr.i]
+    const baseY = s.y || 0
+    const angle = Math.atan2(s.nz, s.nx)
+    // 철길: 침목 + 레일 2줄
+    const rail = new THREE.Group()
+    rail.position.set(s.x, baseY, s.z)
+    rail.rotation.y = -angle
+    const sleeperGeo = new THREE.BoxGeometry(0.55, 0.07, 2.6)
+    const sleeperMat = new THREE.MeshLambertMaterial({ color: 0x5a4633 })
+    for (let x = -tr.span; x <= tr.span; x += 2.4) {
+      const sl = new THREE.Mesh(sleeperGeo, sleeperMat)
+      sl.position.set(x, 0.05, 0)
+      rail.add(sl)
+    }
+    const railGeo = new THREE.BoxGeometry(tr.span * 2, 0.09, 0.17)
+    const railMat = new THREE.MeshLambertMaterial({ color: 0x9aa2ad })
+    for (const rz of [0.8, -0.8]) {
+      const rm = new THREE.Mesh(railGeo, railMat)
+      rm.position.set(0, 0.13, rz)
+      rail.add(rm)
+    }
+    scene.add(rail)
+    // 건널목 경고등: 건널목 직전 도로 양옆 기둥 + 🚨 (기차가 오면 깜빡)
+    const ps = track.samples[(tr.i - 3 + track.n) % track.n]
+    for (const side of [1, -1]) {
+      const px = ps.x + ps.nx * (track.halfW + 1.4) * side
+      const pz = ps.z + ps.nz * (track.halfW + 1.4) * side
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.14, 0.14, 2.6, 6),
+        new THREE.MeshLambertMaterial({ color: 0xd8d8d8 })
+      )
+      pole.position.set(px, (ps.y || 0) + 1.3, pz)
+      scene.add(pole)
+      const light = emojiSprite('🚨', 1.9)
+      light.material.transparent = true
+      light.position.set(px, (ps.y || 0) + 3.1, pz)
+      crossingLights.push({ sp: light, tr })
+      scene.add(light)
+    }
+    // 기차: 기관차(빨강 + 굴뚝) + 객차들
+    const cars = []
+    for (let c = 0; c < tr.cars; c++) {
+      const grp = new THREE.Group()
+      const col = c === 0 ? 0xc23b2a : TRAIN_CAR_COLORS[(c - 1) % TRAIN_CAR_COLORS.length]
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(5.2, 2.0, 2.6),
+        new THREE.MeshLambertMaterial({ color: col })
+      )
+      body.position.y = 1.55
+      const under = new THREE.Mesh(
+        new THREE.BoxGeometry(5.4, 0.55, 2.1),
+        new THREE.MeshLambertMaterial({ color: 0x23262e })
+      )
+      under.position.y = 0.42
+      grp.add(body, under)
+      if (c === 0) {
+        const cab = new THREE.Mesh(
+          new THREE.BoxGeometry(1.8, 1.3, 2.4),
+          new THREE.MeshLambertMaterial({ color: 0x86281c })
+        )
+        cab.position.set(-1.5, 3.0, 0)
+        const chimney = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.34, 0.5, 1.2, 8),
+          new THREE.MeshLambertMaterial({ color: 0x2c2f36 })
+        )
+        chimney.position.set(1.6, 3.1, 0)
+        grp.add(cab, chimney)
+      } else {
+        const roof = new THREE.Mesh(
+          new THREE.BoxGeometry(5.0, 0.25, 2.7),
+          new THREE.MeshLambertMaterial({ color: 0xf2ead8 })
+        )
+        roof.position.y = 2.65
+        grp.add(roof)
+      }
+      grp.visible = false
+      scene.add(grp)
+      cars.push(grp)
+    }
+    return { tr, cars, baseY, sx: s.x, sz: s.z, nx: s.nx, nz: s.nz, angle }
+  })
 
   // 빙판 반짝임: 얼음 위 여기저기서 별처럼 반짝 (render에서 트윙클)
   const iceSparkles = []
@@ -1007,6 +1101,8 @@ export function createKartScene(canvas, track) {
   const glowDay = new THREE.Color(0xfff2b8)
   const glowDusk = new THREE.Color(0xff9a5e)
   const dustCol = new THREE.Color(theme.ground).lerp(whiteCol, 0.35) // 오프로드 먼지색
+  const emberCol = poolBase.clone().offsetHSL(0, 0, 0.22) // 웅덩이에서 떠오르는 불티/물방울
+  const splashCol = poolBase.clone().lerp(whiteCol, 0.3) // 풍덩 스플래시
 
   function render(view, myId) {
     const now = performance.now()
@@ -1085,19 +1181,22 @@ export function createKartScene(canvas, track) {
         }))
       }
       node.prevJumpSeq = k.jumpSeq
-      // 추락 순간: 용암(또는 협곡 바닥) 풍덩 스플래시!
+      // 추락 순간: 기차에 치이면 펑! 별이 사방으로, 웅덩이엔 풍덩 스플래시!
       if (k.fallSeq > (node.prevFallSeq || 0)) {
-        const lava = !!theme.lava
-        spawnParts(36, () => {
+        const train = k.fallKind === 'train'
+        spawnParts(train ? 44 : 36, () => {
           const a = Math.random() * Math.PI * 2
-          const r = 2 + Math.random() * 6
+          const r = train ? 4 + Math.random() * 9 : 2 + Math.random() * 6
+          const yellow = Math.random() < 0.6
           return {
             x: k.x, y: Math.max(0.4, worldY), z: k.z,
-            vx: Math.cos(a) * r, vy: 6 + Math.random() * 7, vz: Math.sin(a) * r,
-            life: 0.7 + Math.random() * 0.5, grav: 12,
-            r: lava ? 1 : dustCol.r,
-            g: lava ? 0.35 + Math.random() * 0.3 : dustCol.g,
-            b: lava ? 0.08 : dustCol.b,
+            vx: Math.cos(a) * r,
+            vy: (train ? 9 : 6) + Math.random() * 7,
+            vz: Math.sin(a) * r,
+            life: 0.7 + Math.random() * 0.6, grav: 12,
+            r: train ? 1 : splashCol.r,
+            g: train ? (yellow ? 0.85 : 1) : splashCol.g,
+            b: train ? (yellow ? 0.2 : 1) : splashCol.b,
           }
         })
       }
@@ -1263,8 +1362,8 @@ export function createKartScene(canvas, track) {
       let sy = node.look.scale
       if (node.ob.kind === 'cow') y += Math.sin(view.time * 2.2 + idx) * 0.12
       if (node.ob.kind === 'penguin') y += Math.abs(Math.sin(view.time * 5 + idx)) * 0.35
-      if (node.ob.kind === 'tornado') {
-        // 회오리는 굴러가지 않는다 — 부르르 흔들리고 들썩이며 출렁인다
+      if (node.ob.kind === 'tornado' || node.ob.kind === 'steam') {
+        // 회오리/증기는 굴러가지 않는다 — 부르르 흔들리고 들썩이며 출렁인다
         node.sp.material.rotation = Math.sin(now / 110 + idx * 2) * 0.18
         y += Math.abs(Math.sin(now / 160 + idx)) * 0.5
         const pulse = 1 + Math.sin(now / 130 + idx) * 0.08
@@ -1277,6 +1376,38 @@ export function createKartScene(canvas, track) {
         (pos.y || 0) + y,
         pos.z
       )
+    }
+
+    // 기차: 객차들을 시간의 순수 함수로 배치하고, 기관차는 연기를 뿜는다
+    for (const tn of trainNodes) {
+      for (const grp of tn.cars) grp.visible = false
+      const cars = trainCars(track, tn.tr, view.time)
+      for (const c of cars) {
+        const grp = tn.cars[c.c]
+        grp.visible = true
+        grp.position.set(c.x, tn.baseY, c.z)
+        grp.rotation.y = -tn.angle
+        if (c.engine && Math.abs(c.lat) < tn.tr.span * 0.7 && Math.random() < 0.5) {
+          // 굴뚝 연기 칙칙폭폭
+          spawnParts(1, () => ({
+            x: c.x + tn.nx * tn.tr.dir * 1.6,
+            y: tn.baseY + 3.9,
+            z: c.z + tn.nz * tn.tr.dir * 1.6,
+            vx: (Math.random() - 0.5) * 1.5,
+            vy: 3 + Math.random() * 2,
+            vz: (Math.random() - 0.5) * 1.5,
+            life: 0.7 + Math.random() * 0.5,
+            grav: -1.5, // 연기는 떠오른다
+            r: 0.78, g: 0.78, b: 0.8,
+          }))
+        }
+      }
+      // 건널목 경고등: 기차가 가까우면 빨갛게 깜빡!
+      const warn = cars.some((c) => Math.abs(c.lat) < track.halfW + 30)
+      for (const cl of crossingLights) {
+        if (cl.tr !== tn.tr) continue
+        cl.sp.material.opacity = warn ? (Math.floor(now / 220) % 2 ? 1 : 0.2) : 0.35
+      }
     }
 
     // 아이템 박스 회전/표시 (유리 큐브가 빙글빙글, '?'는 항상 카메라를 본다)
@@ -1308,11 +1439,11 @@ export function createKartScene(canvas, track) {
       const sc = 0.7 + tw * 0.7
       sp.scale.set(sc, sc, 1)
     }
-    // 용암: 이글이글 색이 출렁이고, 불티가 떠오르고, 화산은 연기를 뿜는다
-    if (lavaPools.length) {
+    // 웅덩이: 가운데가 출렁이고, 용암은 불티 / 강물은 물방울이 떠오른다
+    if (pools.length) {
       const pulse = 0.5 + 0.5 * Math.sin(now / 260)
-      for (const pool of lavaPools) {
-        pool.core.material.color.setHex(0xffa64d).offsetHSL(0, 0, pulse * 0.06)
+      for (const pool of pools) {
+        pool.core.material.color.copy(poolCore).offsetHSL(0, 0, pulse * 0.06)
         pool.core.scale.setScalar(0.9 + pulse * 0.18)
         if (Math.random() < 0.25) {
           const a = Math.random() * Math.PI * 2
@@ -1321,18 +1452,18 @@ export function createKartScene(canvas, track) {
             x: pool.x + Math.cos(a) * rr, y: 0.3, z: pool.z + Math.sin(a) * rr,
             vx: (Math.random() - 0.5) * 1.5, vy: 3 + Math.random() * 4, vz: (Math.random() - 0.5) * 1.5,
             life: 0.6 + Math.random() * 0.5, grav: 2,
-            r: 1, g: 0.4 + Math.random() * 0.35, b: 0.08,
+            r: emberCol.r, g: emberCol.g, b: emberCol.b,
           }))
         }
       }
-      ;(lavaPools.craterSmoke || []).forEach((puff, i) => {
-        const f = ((now / 4200 + puff.userData.phase) % 1 + 1) % 1
-        puff.position.y = 86 + f * 34
-        puff.material.opacity = 0.55 * (1 - f)
-        const sc = 10 + f * 16
-        puff.scale.set(sc, sc, 1)
-      })
     }
+    craterSmoke.forEach((puff) => {
+      const f = ((now / 4200 + puff.userData.phase) % 1 + 1) % 1
+      puff.position.y = 86 + f * 34
+      puff.material.opacity = 0.55 * (1 - f)
+      const sc = 10 + f * 16
+      puff.scale.set(sc, sc, 1)
+    })
 
     // 카메라: 내 카트(없으면 1등)를 3인칭으로 따라간다
     const target =

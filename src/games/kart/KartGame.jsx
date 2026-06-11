@@ -289,7 +289,11 @@ function useKartSounds(hud, myId) {
     if (me?.rocketT > 0 && !(p.rocketT > 0)) sound.rocket()
     if (me?.flyT > 0 && !(p.flyT > 0)) sound.rocket() // 회오리에 붕~ 떠오를 때
     if (me && p.jumpSeq != null && me.jumpSeq > p.jumpSeq) sound.jump() // 점프대 발사!
-    if (me && p.fallSeq != null && me.fallSeq > p.fallSeq) sound.splash() // 용암 풍덩~
+    if (me && p.fallSeq != null && me.fallSeq > p.fallSeq) {
+      if (me.fallKind === 'train') sound.thunder() // 기차에 펑!
+      else sound.splash() // 용암/강물에 풍덩~
+    }
+    if (hud.trainNear && !p.trainNear) sound.train() // 빵빵~ 기차가 와요!
     if (hud.lightning && !p.lightning) sound.thunder() // 번개는 모두에게 들린다
     // 소/펭귄/눈사람 등 장애물과 쿵! (스턴형 장애물은 위의 스턴음이 담당)
     if (me && p.bumpSeq != null && me.bumpSeq > p.bumpSeq && !(me.stunT > 0)) sound.bounce()
@@ -305,6 +309,7 @@ function useKartSounds(hud, myId) {
       fallSeq: me?.fallSeq,
       bumpSeq: me?.bumpSeq,
       lightning: hud.lightning,
+      trainNear: hud.trainNear,
     }
   }, [hud, myId])
 }
@@ -317,6 +322,9 @@ const BUMP_MSG = {
   cactus: '🌵 아야야! 따가워!',
   tornado: '🌪️ 회오리에 휘말려 붕~!',
   magma: '🔥 용암 불덩이! 앗 뜨거!',
+  barrier: '🚧 공사중! 쿵!',
+  tractor: '🚜 트랙터랑 꽈당!',
+  steam: '💨 증기에 휘말려 붕~!',
 }
 
 // 레이스 드라마 배너: 랩 진입 / 장애물 사고 / 추월·역전 / 슬립스트림 / 번개를
@@ -379,7 +387,11 @@ function useRaceBanner(hud, myId) {
     }
     if (!me || me.finished) return
     if (cur.fallSeq > p.fallSeq) {
-      show('😱 풍덩~! 낭떠러지 앞에서 재출발!')
+      show(
+        me.fallKind === 'train'
+          ? '🚂 칙칙폭폭... 펑! 기차에 치였어!'
+          : '😱 풍덩~! 낭떠러지 앞에서 재출발!'
+      )
       return
     }
     if (cur.jumpSeq > p.jumpSeq) {
