@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { CLASSES } from './engine.js'
 
 const JOY_RADIUS = 60 // px. 이만큼 끌면 풀 스피드
 const ATK_REPEAT_MS = 220 // 공격 버튼을 누르고 있으면 연타해 준다
 
 // 이동 조작: 화면 아무 데나 드래그하면 그 자리에 조이스틱이 생기고(8방향 이동),
-// 오른쪽 아래에 기본공격/스킬/궁극기 버튼 3개.
+// 오른쪽 아래에 기본공격 + 직업 스킬 + 궁극기 버튼 (스킬 이름 표시).
 const KEYS = {
   left: new Set(['ArrowLeft', 'a', 'A']),
   right: new Set(['ArrowRight', 'd', 'D']),
@@ -12,7 +13,7 @@ const KEYS = {
   down: new Set(['ArrowDown', 's', 'S']),
 }
 
-// 쿨다운 버튼: 남은 시간 비율만큼 어두운 부채꼴 오버레이
+// 쿨다운 버튼: 남은 시간 비율만큼 어두운 부채꼴 오버레이 + 스킬 이름
 function CdButton({ className, icon, label, cd, cdMax, locked, lockText, onPress, onRelease }) {
   const frac = cdMax > 0 ? Math.max(0, Math.min(1, cd / cdMax)) : 0
   const ready = !locked && frac <= 0
@@ -47,6 +48,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onUlt, me, dis
   const onAttackRef = useRef(onAttack)
   onAttackRef.current = onAttack
   const atkTimer = useRef(null)
+  const cls = CLASSES[me?.cls] || CLASSES.warrior
 
   // 키보드: WASD/화살표 이동, Space/J 공격, K 스킬, L 궁극기
   useEffect(() => {
@@ -149,20 +151,20 @@ export default function RiftControls({ onMove, onAttack, onSkill, onUlt, me, dis
       )}
       <CdButton
         className="rift-btn--ult"
-        icon="💥"
-        label="궁극기"
+        icon={cls.ult.icon}
+        label={cls.ult.name}
         cd={me?.ultCd ?? 0}
-        cdMax={45}
+        cdMax={cls.ult.cd}
         locked={me?.ultLocked}
-        lockText={`Lv3 해금`}
+        lockText="Lv3 해금"
         onPress={onUlt}
       />
       <CdButton
         className="rift-btn--skill"
-        icon="✨"
-        label="스킬"
+        icon={cls.skill.icon}
+        label={cls.skill.name}
         cd={me?.skillCd ?? 0}
-        cdMax={5}
+        cdMax={cls.skill.cd}
         onPress={onSkill}
       />
       <CdButton

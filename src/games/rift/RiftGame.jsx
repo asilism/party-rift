@@ -7,7 +7,7 @@ import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import {
   createGame, setInput, castAttack, castSkill, castUlt, step, makeView, makeBot,
-  STEP, TEAM_SIZE, ULT_LEVEL,
+  STEP, TEAM_SIZE, ULT_LEVEL, CLASSES, CLASS_IDS,
 } from './engine.js'
 import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import { sound } from '../../shared/sound.js'
@@ -145,8 +145,8 @@ export default function RiftGame({ roster, onExit, net }) {
   const sampleHost = useCallback(() => (stateRef.current ? makeView(stateRef.current) : null), [])
   const sampleGuest = useCallback(() => interpolate(bufRef.current), [])
 
-  function startGame(teams) {
-    lastTeamsRef.current = teams
+  function startGame(teams, classes) {
+    lastTeamsRef.current = [teams, classes]
     sound.setEnabled(soundOn)
     sound.unlock()
     const humans = racers.map((p) => ({
@@ -155,17 +155,24 @@ export default function RiftGame({ roster, onExit, net }) {
       zodiacId: p.zodiacId,
       color: getZodiac(p.zodiacId)?.color,
       team: teams[p.id] || 'blue',
+      cls: classes?.[p.id],
     }))
-    // 빈자리는 안 쓰는 12지신 봇으로 3:3을 채운다
+    // 빈자리는 안 쓰는 12지신 봇 + 남은 직업으로 3:3을 채운다
     const used = new Set(roster.map((p) => p.zodiacId))
     const free = ZODIAC.filter((z) => !used.has(z.id))
     const bots = []
     for (const team of ['blue', 'red']) {
-      const need = TEAM_SIZE - humans.filter((h) => h.team === team).length
-      for (let i = 0; i < need; i++) {
+      const mine = humans.filter((h) => h.team === team)
+      const takenCls = new Set(mine.map((h) => h.cls))
+      for (let i = mine.length; i < TEAM_SIZE; i++) {
         const z = free.shift()
         if (!z) break
-        bots.push({ id: `bot-${z.id}`, name: `${z.name}봇`, zodiacId: z.id, color: z.color, team, isBot: true })
+        const cls = CLASS_IDS.find((c) => !takenCls.has(c))
+        takenCls.add(cls)
+        bots.push({
+          id: `bot-${z.id}`, name: `${z.name}봇`, zodiacId: z.id, color: z.color,
+          team, cls, isBot: true,
+        })
       }
     }
     stateRef.current = createGame([...humans, ...bots], Math.random)
@@ -237,7 +244,7 @@ export default function RiftGame({ roster, onExit, net }) {
       myId={myId}
       ctrlRef={ctrlRef}
       onCast={cast}
-      onRematch={() => startGame(lastTeamsRef.current)} // 같은 팀으로 즉시 한판 더!
+      onRematch={() => startGame(...lastTeamsRef.current)} // 같은 팀/직업으로 즉시 한판 더!
       onRestart={() => setPhase('setup')} // 팀 다시 나누기
       onExit={onExit}
       soundOn={soundOn}
@@ -298,7 +305,10 @@ function useRiftSounds(hud, myId) {
     if (me && p.respawnT === 0 && me.respawnT > 0) sound.chuteDown() // 내 영웅 사망
     if (me && p.respawnT > 0 && me.respawnT === 0) sound.ladderUp() // 부활!
     if (me && p.lvl != null && me.lvl > p.lvl) sound.ladderUp() // 레벨 업
-    if ((hud.novas?.length || 0) > 0 && (p.novas || 0) === 0) sound.thunder() // 궁극기 폭발
+    // 궁극기급 광역 이펙트가 터지면 우르릉!
+    const BIG_FX = new Set(['whirl', 'storm', 'rain', 'slam', 'boom', 'execute'])
+    const bigFx = (hud.fx || []).filter((n) => BIG_FX.has(n.kind)).length
+    if (bigFx > 0 && (p.bigFx || 0) === 0) sound.thunder()
     if (hud.status === 'finished' && p.status && p.status !== 'finished') sound.win()
     prev.current = {
       countdown: hud.countdown,
@@ -306,7 +316,7 @@ function useRiftSounds(hud, myId) {
       feedSeq,
       respawnT: me?.respawnT ?? 0,
       lvl: me?.lvl,
-      novas: hud.novas?.length || 0,
+      bigFx,
     }
   }, [hud, myId])
 }
@@ -389,6 +399,7 @@ function RiftPlay({
           <div className="rift__me">
             <div className="rift__me-top">
               <span className="rift__me-emoji">{getZodiac(me.zodiacId)?.emoji}</span>
+              <span className="rift__me-cls">{CLASSES[me.cls]?.icon}{CLASSES[me.cls]?.name}</span>
               <span className="rift__me-lvl">Lv.{me.lvl}</span>
               <span className="rift__me-kd">⚔️{me.kills} 💀{me.deaths}</span>
               {me.dragonT > 0 && <span title="용 버프">🐉</span>}
@@ -412,13 +423,16 @@ function RiftPlay({
           <div className="rift__banner" key={banner.key}>{banner.text}</div>
         )}
         {me && me.respawnT > 0 && !finished && (
-          <div className="rift__respawn">
-            💀 부활까지 <b>{Math.ceil(me.respawnT)}</b>초...
-          </div>
+          <>
+            <div className="rift__dead" />
+            <div className="rift__respawn">
+              💀 부활까지 <b>{Math.ceil(me.respawnT)}</b>초...
+            </div>
+          </>
         )}
         {me && hud.status === 'playing' && hud.go && (
           <div className="rift__hint">
-            🕹️ 드래그로 이동 · ⚔️ 자동 조준 공격 · 💥 궁극기는 Lv{ULT_LEVEL}부터!
+            🕹️ 드래그로 이동 · ⚔️ 자동 조준 · 🌿 수풀에 숨기 · 궁극기는 Lv{ULT_LEVEL}부터!
           </div>
         )}
       </div>
@@ -436,6 +450,7 @@ function RiftPlay({
                   {hud.heroes.filter((h) => h.team === team).map((h) => (
                     <div key={h.id} className="rift-result__row">
                       <span>{getZodiac(h.zodiacId)?.emoji}</span>
+                      <span title={CLASSES[h.cls]?.name}>{CLASSES[h.cls]?.icon}</span>
                       <span className="rift-result__name">{h.name}{h.isBot ? ' 🤖' : ''}</span>
                       <span>Lv.{h.lvl}</span>
                       <span>⚔️{h.kills}</span>

@@ -1,10 +1,12 @@
 // 파티 리프트 순수 게임 로직 (호스트 권위) — 3:3 AOS.
-//  - 이동(조이스틱) + 버튼 3개: 기본공격 / 스킬 / 궁극기.
+//  - 이동(조이스틱) + 버튼 3개: 기본공격 / 직업 스킬 / 궁극기.
+//  - 직업 6종(전사/궁수/마법사/힐러/암살자/탱커) — 한 팀에 같은 직업 금지.
 //  - 레벨 최대 10, 미니언·정글·용·바론으로 성장, 넥서스가 터지면 끝.
+//  - 수풀 은신 + 전장의 안개: 시야 밖 적은 안 보인다 (봇도 같은 규칙).
 //  - 호스트가 step()을 60Hz로 돌리고 makeView() 스냅샷을 전파한다.
 import {
-  WORLD, NEXUS_POS, FOUNTAIN_RADIUS, LANES, TOWER_SPOTS, WOLF_CAMPS,
-  DRAGON_PIT, BARON_PIT, enemyOf, nearestWp, resolveTerrain,
+  NEXUS_POS, FOUNTAIN_RADIUS, LANES, LANE_IDS, TOWER_SPOTS, WOLF_CAMPS,
+  DRAGON_PIT, BARON_PIT, enemyOf, nearestWp, resolveTerrain, bushIndexAt,
 } from './map.js'
 import { getZodiac } from '../../shared/zodiac.js'
 
@@ -15,33 +17,80 @@ export const MAX_LEVEL = 10
 export const ULT_LEVEL = 3 // 궁극기가 열리는 레벨
 export const TEAM_SIZE = 3
 
-// ── 영웅 ──
+// ── 직업 (한 팀에 같은 직업은 한 명만) ──
+// 기본공격은 모두 자동 조준이지만 사거리/속도/딜이 다르고,
+// 스킬과 궁극기는 직업마다 완전히 다르다.
+export const CLASSES = {
+  warrior: {
+    name: '전사', icon: '⚔️', desc: '돌진해서 베는 근접 딜러',
+    hp: 620, hpLvl: 70, atk: 62, atkLvl: 9, range: 3.8, atkCd: 0.7, speed: 13.5, def: 0.85,
+    skill: { name: '돌진', icon: '💨', cd: 7, desc: '적에게 돌진해 베고 잠깐 기절' },
+    ult: { name: '회전베기', icon: '🌪️', cd: 40, desc: '주변을 크게 휩쓴다' },
+  },
+  archer: {
+    name: '궁수', icon: '🏹', desc: '제일 긴 사거리의 원거리 딜러',
+    hp: 440, hpLvl: 48, atk: 50, atkLvl: 9, range: 12.5, atkCd: 0.65, speed: 13,
+    skill: { name: '연속사격', icon: '🎯', cd: 6, desc: '화살 3발을 연달아 쏜다' },
+    ult: { name: '화살비', icon: '☄️', cd: 42, desc: '멀리 있는 적 머리 위로 화살 폭격' },
+  },
+  mage: {
+    name: '마법사', icon: '🔮', desc: '폭발 마법의 광역 딜러',
+    hp: 430, hpLvl: 46, atk: 42, atkLvl: 7, range: 10.5, atkCd: 0.9, speed: 12.5,
+    skill: { name: '화염구', icon: '🔥', cd: 6, desc: '크게 터지는 불덩이를 날린다' },
+    ult: { name: '번개폭풍', icon: '⛈️', cd: 45, desc: '주변 모든 적 감전 + 기절' },
+  },
+  healer: {
+    name: '힐러', icon: '💚', desc: '아군을 살리는 서포터',
+    hp: 470, hpLvl: 52, atk: 38, atkLvl: 6, range: 9.5, atkCd: 0.9, speed: 13,
+    skill: { name: '치유', icon: '💞', cd: 8, desc: '제일 아픈 아군(나 포함)을 회복' },
+    ult: { name: '성역', icon: '✨', cd: 50, desc: '주변 아군 모두 크게 회복 + 기절 해제' },
+  },
+  assassin: {
+    name: '암살자', icon: '🥷', desc: '제일 빠른 발의 기습 딜러',
+    hp: 500, hpLvl: 54, atk: 68, atkLvl: 10, range: 4.2, atkCd: 0.55, speed: 15, def: 0.88,
+    skill: { name: '점멸습격', icon: '🌀', cd: 8, desc: '적 등 뒤로 순간이동해 벤다' },
+    ult: { name: '그림자처형', icon: '☠️', cd: 38, desc: '빈사 상태 적에게 2배 일격, 처치 시 점멸 초기화' },
+  },
+  tank: {
+    name: '탱커', icon: '🛡️', desc: '앞장서서 버티는 방패',
+    hp: 780, hpLvl: 92, atk: 44, atkLvl: 6, range: 3.8, atkCd: 0.85, speed: 12.5, def: 0.8,
+    skill: { name: '방패막기', icon: '🛡️', cd: 9, desc: '3초간 받는 피해 65% 감소 + 돌진 가속' },
+    ult: { name: '대지강타', icon: '💥', cd: 44, desc: '땅을 내려쳐 주변을 길게 기절' },
+  },
+}
+export const CLASS_IDS = Object.keys(CLASSES)
+
+// ── 공용 수치 ──
 const HERO_RADIUS = 1.3
-const HERO_SPEED = 13 // m/s
-const ATK_RANGE = 9
-const ATK_CD = 0.8
 const BOLT_SPEED = 38
-const BASE_HP = 520
-const HP_PER_LVL = 60
-const BASE_ATK = 52
-const ATK_PER_LVL = 8
-// 스킬: 바라보는 방향으로 날아가 첫 적에게 폭발 (근처 적 휩쓸기)
-const SKILL_CD = 5
-const SKILL_RANGE = 24
-const SKILL_SPEED = 30
-const SKILL_AOE = 4
-const skillDmg = (lvl) => 70 + 14 * (lvl - 1)
-// 궁극기: 내 주변 폭발 — 큰 피해 + 잠깐 스턴
-const ULT_CD = 45
-export const ULT_RADIUS = 11
-const ULT_STUN = 1.2
-const ultDmg = (lvl) => 140 + 22 * (lvl - 1)
+const FIREBALL_RANGE = 24
+const FIREBALL_SPEED = 30
+const FIREBALL_AOE = 5
+const DASH_DIST = 13
+const DASH_AIM = 16
+const BLINK_RANGE = 18
+const EXECUTE_RANGE = 9
+const SHIELD_TIME = 3
+const SHIELD_CUT = 0.35 // 방패막기 중 받는 피해 배율
+const HEAL_RANGE = 14
+const RAIN_RANGE = 26
+const RAIN_AOE = 7
+const STORM_RADIUS = 13
+const SLAM_RADIUS = 9
+const WHIRL_RADIUS = 9
+
+export const SIGHT_RANGE = 24 // 아군 유닛 주변 이만큼이 우리 시야
+export const BUSH_REVEAL = 4 // 수풀 속 적도 이만큼 붙으면 보인다
+const REVEAL_TIME = 1.5 // 공격하면 이만큼 모습이 드러난다
+const ATK_SLOW_T = 0.3 // 공격 직후 발이 무거운 시간 (무빙샷 견제)
+const ATK_SLOW = 0.55 // 그동안의 이동 속도 배율
 
 const REGEN_DELAY = 5 // 전투 이탈 후 자연 회복까지 (초)
 const REGEN_RATE = 0.015 // 초당 최대 HP 비율
 const FOUNTAIN_HEAL = 0.12
 const FOUNTAIN_DMG = 90 // 적 우물에 들어가면 따끔!
 const XP_RANGE = 22 // 처치 경험치를 나눠 받는 거리
+const TOWER_AGGRO_TIME = 3 // 적 영웅을 때리면 타워가 이만큼 노린다
 
 // ── 미니언 ──
 const WAVE_PERIOD = 28
@@ -70,8 +119,8 @@ const CAMP_LEASH = 24 // 캠프에서 이만큼 멀어지면 포기하고 복귀
 export const DRAGON_BUFF_T = 60 // 용 버프: 공격력 +25%
 export const BARON_BUFF_T = 75 // 바론 버프: 공격력 +40% + 빠른 회복
 
-const heroMaxHp = (lvl) => BASE_HP + HP_PER_LVL * (lvl - 1)
-const heroAtk = (lvl) => BASE_ATK + ATK_PER_LVL * (lvl - 1)
+const heroMaxHp = (h) => CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1)
+const heroAtk = (h) => CLASSES[h.cls].atk + CLASSES[h.cls].atkLvl * (h.lvl - 1)
 export const xpNeed = (lvl) => 60 + 40 * (lvl - 1)
 const respawnTime = (lvl) => 4 + 1.2 * lvl
 
@@ -86,22 +135,29 @@ function spawnPos(team, slot) {
   return { x: n.x + side * 7, z: (slot - 1) * 5 }
 }
 
-// players: [{ id, name, zodiacId, color, team: 'blue'|'red', isBot? }]
+// players: [{ id, name, zodiacId, color, team, cls, isBot? }]
+// 같은 팀에 같은 직업이 오면(또는 직업 미지정이면) 남은 직업으로 바꿔준다.
 export function createGame(players, rng = Math.random) {
   const slotCount = { blue: 0, red: 0 }
-  const botRoles = { blue: ['top', 'bot', 'jungle'], red: ['top', 'bot', 'jungle'] }
-  // 사람이 없는 역할부터 봇에게 맡긴다 (사람은 자유롭게 다님)
+  const botRoles = { blue: ['mid', 'top', 'bot'], red: ['mid', 'top', 'bot'] }
+  const usedCls = { blue: new Set(), red: new Set() }
   const heroes = players.map((p) => {
     const slot = slotCount[p.team]++
     const pos = spawnPos(p.team, slot)
+    let cls = p.cls
+    if (!CLASSES[cls] || usedCls[p.team].has(cls)) {
+      cls = CLASS_IDS.find((c) => !usedCls[p.team].has(c)) || 'warrior'
+    }
+    usedCls[p.team].add(cls)
     return {
       id: p.id,
       name: p.name,
       zodiacId: p.zodiacId,
       color: p.color,
       team: p.team,
+      cls,
       isBot: !!p.isBot,
-      role: p.isBot ? botRoles[p.team].shift() || 'top' : null,
+      role: p.isBot ? botRoles[p.team].shift() || 'mid' : null,
       x: pos.x,
       z: pos.z,
       mx: 0, // 이동 입력 (-1~1)
@@ -109,13 +165,18 @@ export function createGame(players, rng = Math.random) {
       dir: p.team === 'blue' ? 0 : Math.PI, // 바라보는 방향 (적 본진 쪽)
       lvl: 1,
       xp: 0,
-      hp: heroMaxHp(1),
-      maxHp: heroMaxHp(1),
+      hp: 0, // 아래에서 직업 최대치로 채운다
+      maxHp: 0,
       atkCd: 0,
       skillCd: 0,
       ultCd: 0,
       stunT: 0,
+      shieldT: 0, // 탱커 방패막기 남은 시간
+      slowT: 0, // 공격 직후 무거운 발 남은 시간
       respawnT: 0, // >0이면 사망 중
+      bushI: -1, // 들어가 있는 수풀 (적에겐 안 보인다)
+      revealT: 0, // 공격 직후 모습이 드러나는 시간
+      aggroT: 0, // 적 영웅을 때린 직후 — 타워가 우선 조준
       lastHurt: -99,
       lastHitBy: null, // 마지막으로 나를 때린 영웅 (킬 크레딧)
       dragonT: 0, // 용 버프 남은 시간
@@ -124,11 +185,13 @@ export function createGame(players, rng = Math.random) {
       deaths: 0,
       // 봇 상태
       botRetreat: false,
-      botWp: nearestWp('top', pos.x, pos.z),
-      botLane: null,
       botStrafe: rng() * Math.PI * 2,
     }
   })
+  for (const h of heroes) {
+    h.maxHp = heroMaxHp(h)
+    h.hp = h.maxHp
+  }
   const monsters = [
     ...WOLF_CAMPS.map((c, i) => ({
       id: `wolf${i}`, kind: 'wolf', camp: c, x: c.x, z: c.z,
@@ -158,8 +221,8 @@ export function createGame(players, rng = Math.random) {
       blue: { hp: NEXUS_HP, maxHp: NEXUS_HP },
       red: { hp: NEXUS_HP, maxHp: NEXUS_HP },
     },
-    projectiles: [], // {id, kind:'bolt'|'skill'|'towerbolt', ...}
-    novas: [], // 궁극기 폭발 연출 {id, x, z, t, team}
+    projectiles: [], // {id, kind:'bolt'|'fireball'|'towerbolt', ...}
+    fx: [], // 시각 효과 {id, kind, x, z, r, t, team}
     kills: { blue: 0, red: 0 },
     towersDown: { blue: 0, red: 0 }, // 그 팀이 "부순" 적 타워 수
     feed: [], // 킬/오브젝트 피드 {seq, t, msg}
@@ -187,7 +250,7 @@ export function makeBot(state, id) {
   h.mz = 0
   // 비어 있는 레인부터 맡는다
   const taken = state.heroes.filter((o) => o.isBot && o.team === h.team && o !== h).map((o) => o.role)
-  h.role = ['top', 'bot', 'jungle'].find((r) => !taken.includes(r)) || 'top'
+  h.role = LANE_IDS.find((r) => !taken.includes(r)) || 'mid'
   h.botStrafe = state.rng() * Math.PI * 2
   return h
 }
@@ -197,12 +260,52 @@ function pushFeed(state, t, msg) {
   if (state.feed.length > 8) state.feed.shift()
 }
 
+function pushFx(state, kind, x, z, r, team = null) {
+  state.fx.push({ id: state.nextId++, kind, x, z, r, t: 0, team })
+}
+
 const canAct = (h) => h.respawnT <= 0 && h.stunT <= 0
 
-// 버프 포함 공격력
-function atkOf(h) {
-  const mult = h.baronT > 0 ? 1.4 : h.dragonT > 0 ? 1.25 : 1
-  return heroAtk(h.lvl) * mult
+// 버프 포함 피해 배율 / 공격력
+const dmgMult = (h) => (h.baronT > 0 ? 1.4 : h.dragonT > 0 ? 1.25 : 1)
+const atkOf = (h) => heroAtk(h) * dmgMult(h)
+
+// ── 시야 (전장의 안개 + 수풀 은신) ──
+// state와 makeView() 스냅샷 양쪽에서 같은 필드를 쓰므로 둘 다 받을 수 있다.
+// team의 시야: 아군 영웅/미니언/타워/넥서스 주변 SIGHT_RANGE.
+// 수풀 속 영웅은 시야 안이어도, 같은 수풀에 들어가거나 바짝 붙어야 보인다.
+export function isHeroVisible(snap, h, team) {
+  if (!team || h.team === team) return true
+  if (h.respawnT > 0) return true // 시체/부활은 숨길 필요 없음 (렌더러가 숨김)
+  if (h.bushI >= 0 && h.revealT <= 0) {
+    const br2 = BUSH_REVEAL * BUSH_REVEAL
+    return snap.heroes.some(
+      (a) => a.team === team && a.respawnT <= 0 && (a.bushI === h.bushI || dist2(a, h) <= br2)
+    )
+  }
+  if (h.revealT > 0) return true
+  return inSight(snap, h, team)
+}
+
+// 미니언 등 일반 유닛: 수풀 규칙 없이 시야 거리만 본다
+export function isUnitVisible(snap, ent, team) {
+  if (!team || ent.team === team) return true
+  return inSight(snap, ent, team)
+}
+
+function inSight(snap, ent, team) {
+  const r2 = SIGHT_RANGE * SIGHT_RANGE
+  for (const a of snap.heroes) {
+    if (a.team === team && a.respawnT <= 0 && dist2(a, ent) <= r2) return true
+  }
+  for (const m of snap.minions) {
+    if (m.team === team && dist2(m, ent) <= r2) return true
+  }
+  for (const t of snap.towers) {
+    if (t.team === team && t.alive && dist2(t, ent) <= r2) return true
+  }
+  if (dist2(NEXUS_POS[team], ent) <= r2) return true
+  return false
 }
 
 // 이 타워를 지금 공격할 수 있나 (외곽 → 내곽 → 넥서스 순서)
@@ -215,21 +318,29 @@ export function nexusVulnerable(state, team) {
   return state.towers.some((t) => t.team === team && t.tier === 2 && !t.alive)
 }
 
-// ── 공격 대상 찾기 (영웅 우선, 다음 가까운 유닛) ──
-function findAttackTarget(state, h, range = ATK_RANGE) {
+// ── 공격 대상 찾기 (보이는 적 영웅 우선, 다음 가까운 유닛) ──
+function nearestFoeHero(state, h, range) {
   const r2 = range * range
   let best = null
   let bd = r2
   for (const e of state.heroes) {
     if (e.team === h.team || e.respawnT > 0) continue
+    if (!isHeroVisible(state, e, h.team)) continue // 수풀 매복은 자동 조준에 안 잡힌다
     const d = dist2(h, e)
     if (d < bd) {
       bd = d
-      best = { tk: 'hero', id: e.id }
+      best = e
     }
   }
-  if (best) return best
-  bd = r2
+  return best
+}
+
+function findAttackTarget(state, h, range) {
+  const hero = nearestFoeHero(state, h, range)
+  if (hero) return { tk: 'hero', id: hero.id }
+  const r2 = range * range
+  let best = null
+  let bd = r2
   for (const m of state.minions) {
     if (m.team === h.team) continue
     const d = dist2(h, m)
@@ -283,16 +394,22 @@ function targetEntity(state, ref) {
   return null
 }
 
+function getHero(state, id) {
+  return state.heroes.find((p) => p.id === id)
+}
+
 // ── 기본공격: 사거리 안 가장 가까운 적에게 자동 조준 ──
 export function castAttack(state, id) {
   if (state.status !== 'playing') return state
-  const h = state.heroes.find((p) => p.id === id)
+  const h = getHero(state, id)
   if (!h || !canAct(h) || h.atkCd > 0) return state
-  const ref = findAttackTarget(state, h)
+  const ref = findAttackTarget(state, h, CLASSES[h.cls].range)
   if (!ref) return state
   const tgt = targetEntity(state, ref)
-  h.atkCd = ATK_CD
+  h.atkCd = CLASSES[h.cls].atkCd
   h.dir = Math.atan2(tgt.z - h.z, tgt.x - h.x)
+  h.revealT = Math.max(h.revealT, REVEAL_TIME)
+  h.slowT = Math.max(h.slowT, ATK_SLOW_T) // 쏘는 동안엔 발이 무겁다
   state.projectiles.push({
     id: state.nextId++, kind: 'bolt', team: h.team, owner: h.id,
     x: h.x, z: h.z, target: ref, dmg: atkOf(h), speed: BOLT_SPEED,
@@ -300,66 +417,186 @@ export function castAttack(state, id) {
   return state
 }
 
-// ── 스킬: 가까운 적 영웅 쪽(없으면 바라보는 방향)으로 폭발탄 발사 ──
+// ── 직업 스킬 ──
 export function castSkill(state, id) {
   if (state.status !== 'playing') return state
-  const h = state.heroes.find((p) => p.id === id)
+  const h = getHero(state, id)
   if (!h || !canAct(h) || h.skillCd > 0) return state
-  let dir = h.dir
-  const aim = findAttackTarget(state, h, SKILL_RANGE)
-  if (aim?.tk === 'hero') {
-    const e = targetEntity(state, aim)
-    dir = Math.atan2(e.z - h.z, e.x - h.x)
-  }
-  h.skillCd = SKILL_CD
-  h.dir = dir
-  state.projectiles.push({
-    id: state.nextId++, kind: 'skill', team: h.team, owner: h.id,
-    x: h.x, z: h.z, vx: Math.cos(dir) * SKILL_SPEED, vz: Math.sin(dir) * SKILL_SPEED,
-    dmg: skillDmg(h.lvl) * (h.baronT > 0 ? 1.4 : h.dragonT > 0 ? 1.25 : 1),
-    travel: 0,
-  })
+  const ok = SKILLS[h.cls](state, h)
+  if (ok === false) return state // 대상이 없으면 쿨다운을 안 쓴다
+  h.skillCd = CLASSES[h.cls].skill.cd
+  h.revealT = Math.max(h.revealT, REVEAL_TIME)
   return state
 }
 
-// ── 궁극기: 내 주변 큰 폭발 + 스턴 (레벨 3부터) ──
+const SKILLS = {
+  // 전사 돌진: 가까운 적 쪽으로 짧게 돌격, 도착 지점 휩쓸기 + 짧은 기절
+  warrior(state, h) {
+    const foe = nearestFoeHero(state, h, DASH_AIM)
+    const dir = foe ? Math.atan2(foe.z - h.z, foe.x - h.x) : h.dir
+    const d = foe ? Math.min(DASH_DIST, Math.max(0, dist(h, foe) - 1.5)) : DASH_DIST
+    h.dir = dir
+    h.x += Math.cos(dir) * d
+    h.z += Math.sin(dir) * d
+    resolveTerrain(h, HERO_RADIUS, state.towers)
+    const dmg = (60 + 12 * (h.lvl - 1)) * dmgMult(h)
+    aoeDamage(state, h, h.x, h.z, 3.5, dmg, 0.5)
+    pushFx(state, 'dash', h.x, h.z, 3.5, h.team)
+  },
+  // 궁수 연속사격: 한 대상에게 화살 3발
+  archer(state, h) {
+    const ref = findAttackTarget(state, h, CLASSES.archer.range + 1.5)
+    if (!ref) return false
+    const tgt = targetEntity(state, ref)
+    h.dir = Math.atan2(tgt.z - h.z, tgt.x - h.x)
+    const dmg = atkOf(h) * 0.9
+    for (const sp of [34, 39, 44]) {
+      state.projectiles.push({
+        id: state.nextId++, kind: 'bolt', team: h.team, owner: h.id,
+        x: h.x, z: h.z, target: ref, dmg, speed: sp,
+      })
+    }
+  },
+  // 마법사 화염구: 직선으로 날아가 크게 폭발 (적 영웅 자동 조준)
+  mage(state, h) {
+    let dir = h.dir
+    const foe = nearestFoeHero(state, h, FIREBALL_RANGE)
+    if (foe) dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    h.dir = dir
+    state.projectiles.push({
+      id: state.nextId++, kind: 'fireball', team: h.team, owner: h.id,
+      x: h.x, z: h.z, vx: Math.cos(dir) * FIREBALL_SPEED, vz: Math.sin(dir) * FIREBALL_SPEED,
+      dmg: (85 + 18 * (h.lvl - 1)) * dmgMult(h),
+      travel: 0,
+    })
+  },
+  // 힐러 치유: 가까운 아군 중 제일 아픈 친구(나 포함)를 회복
+  healer(state, h) {
+    let best = null
+    let worst = -30 // 이만큼은 아파야 낭비가 아니다
+    for (const a of state.heroes) {
+      if (a.team !== h.team || a.respawnT > 0 || dist(h, a) > HEAL_RANGE) continue
+      const missing = a.maxHp - a.hp
+      if (missing > -worst && (!best || missing > best.maxHp - best.hp)) best = a
+    }
+    if (!best) return false
+    best.hp = Math.min(best.maxHp, best.hp + 90 + 20 * (h.lvl - 1))
+    pushFx(state, 'heal', best.x, best.z, 3.5, h.team)
+  },
+  // 암살자 점멸습격: 보이는 적 영웅 등 뒤로 순간이동 + 일격
+  assassin(state, h) {
+    const foe = nearestFoeHero(state, h, BLINK_RANGE)
+    if (!foe) return false
+    const d = dist(h, foe) || 1
+    h.x = foe.x + ((foe.x - h.x) / d) * 1.8 // 등 뒤로
+    h.z = foe.z + ((foe.z - h.z) / d) * 1.8
+    resolveTerrain(h, HERO_RADIUS, state.towers)
+    h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    damageHero(state, foe, (80 + 16 * (h.lvl - 1)) * dmgMult(h), h)
+    pushFx(state, 'blink', h.x, h.z, 3, h.team)
+  },
+  // 탱커 방패막기: 잠시 받는 피해 크게 감소
+  tank(state, h) {
+    h.shieldT = SHIELD_TIME
+    pushFx(state, 'shield', h.x, h.z, 3, h.team)
+  },
+}
+
+// ── 궁극기 (레벨 3부터) ──
 export function castUlt(state, id) {
   if (state.status !== 'playing') return state
-  const h = state.heroes.find((p) => p.id === id)
+  const h = getHero(state, id)
   if (!h || !canAct(h) || h.ultCd > 0 || h.lvl < ULT_LEVEL) return state
-  h.ultCd = ULT_CD
-  const mult = h.baronT > 0 ? 1.4 : h.dragonT > 0 ? 1.25 : 1
-  const dmg = ultDmg(h.lvl) * mult
-  state.novas.push({ id: state.nextId++, x: h.x, z: h.z, t: 0, team: h.team })
-  const r2 = ULT_RADIUS * ULT_RADIUS
+  const ok = ULTS[h.cls](state, h)
+  if (ok === false) return state
+  h.ultCd = CLASSES[h.cls].ult.cd
+  h.revealT = Math.max(h.revealT, REVEAL_TIME)
+  return state
+}
+
+const ULTS = {
+  // 회전베기: 내 주변을 크게 휩쓴다
+  warrior(state, h) {
+    aoeDamage(state, h, h.x, h.z, WHIRL_RADIUS, (120 + 20 * (h.lvl - 1)) * dmgMult(h), 0)
+    pushFx(state, 'whirl', h.x, h.z, WHIRL_RADIUS, h.team)
+  },
+  // 화살비: 보이는 적 영웅 머리 위로 폭격
+  archer(state, h) {
+    const foe = nearestFoeHero(state, h, RAIN_RANGE)
+    if (!foe) return false
+    aoeDamage(state, h, foe.x, foe.z, RAIN_AOE, (130 + 22 * (h.lvl - 1)) * dmgMult(h), 0)
+    pushFx(state, 'rain', foe.x, foe.z, RAIN_AOE, h.team)
+  },
+  // 번개폭풍: 내 주변 모든 적 감전 + 기절
+  mage(state, h) {
+    aoeDamage(state, h, h.x, h.z, STORM_RADIUS, (150 + 26 * (h.lvl - 1)) * dmgMult(h), 1.2)
+    pushFx(state, 'storm', h.x, h.z, STORM_RADIUS, h.team)
+  },
+  // 성역: 주변 아군 모두 크게 회복 + 기절 해제
+  healer(state, h) {
+    for (const a of state.heroes) {
+      if (a.team !== h.team || a.respawnT > 0 || dist(h, a) > HEAL_RANGE) continue
+      a.hp = Math.min(a.maxHp, a.hp + 180 + 30 * (h.lvl - 1))
+      a.stunT = 0
+    }
+    pushFx(state, 'sanctuary', h.x, h.z, HEAL_RANGE, h.team)
+  },
+  // 그림자처형: 가까운 적 영웅 일격 — 빈사(35% 미만)면 2배, 처치하면 점멸 초기화
+  assassin(state, h) {
+    const foe = nearestFoeHero(state, h, EXECUTE_RANGE)
+    if (!foe) return false
+    let dmg = (160 + 26 * (h.lvl - 1)) * dmgMult(h)
+    if (foe.hp < foe.maxHp * 0.35) dmg *= 2
+    pushFx(state, 'execute', foe.x, foe.z, 3, h.team)
+    damageHero(state, foe, dmg, h)
+    if (foe.respawnT > 0) h.skillCd = 0 // 처형 성공 → 점멸로 빠져나가라!
+  },
+  // 대지강타: 주변을 길게 기절시킨다
+  tank(state, h) {
+    aoeDamage(state, h, h.x, h.z, SLAM_RADIUS, (90 + 14 * (h.lvl - 1)) * dmgMult(h), 1.6)
+    pushFx(state, 'slam', h.x, h.z, SLAM_RADIUS, h.team)
+  },
+}
+
+// (x,z) 주변 적 영웅/미니언/정글몹에게 피해 (+기절)
+function aoeDamage(state, attacker, x, z, radius, dmg, stun) {
+  const r2 = radius * radius
+  const at = { x, z }
   for (const e of state.heroes) {
-    if (e.team === h.team || e.respawnT > 0 || dist2(h, e) > r2) continue
-    e.stunT = Math.max(e.stunT, ULT_STUN)
-    damageHero(state, e, dmg, h)
+    if (e.team === attacker.team || e.respawnT > 0 || dist2(at, e) > r2) continue
+    if (stun > 0) e.stunT = Math.max(e.stunT, stun)
+    damageHero(state, e, dmg, attacker)
   }
   for (const m of [...state.minions]) {
-    if (m.team !== h.team && dist2(h, m) <= r2) damageMinion(state, m, dmg, h)
+    if (m.team !== attacker.team && dist2(at, m) <= r2) damageMinion(state, m, dmg, attacker)
   }
   for (const m of state.monsters) {
-    if (m.alive && dist2(h, m) <= r2) damageMonster(state, m, dmg, h)
+    if (m.alive && dist2(at, m) <= r2) damageMonster(state, m, dmg, attacker)
   }
-  return state
 }
 
 // ── 피해 처리 ──
 function damageHero(state, victim, amount, attacker) {
   if (victim.respawnT > 0 || state.status !== 'playing') return
+  amount *= CLASSES[victim.cls].def ?? 1 // 근접 직업은 기본 방어력이 높다
+  if (victim.shieldT > 0) amount *= SHIELD_CUT // 방패막기!
   victim.hp -= amount
   victim.lastHurt = state.time
-  if (attacker?.id) victim.lastHitBy = attacker.id
+  if (attacker?.id) {
+    victim.lastHitBy = attacker.id
+    attacker.aggroT = TOWER_AGGRO_TIME // 타워 앞에서 깐족이면 타워가 노린다
+    victim.revealT = Math.max(victim.revealT, 0.8) // 맞으면 잠깐 드러난다
+  }
   if (victim.hp > 0) return
   // 사망!
   victim.hp = 0
   victim.deaths++
   victim.respawnT = respawnTime(victim.lvl)
   victim.stunT = 0
+  victim.shieldT = 0
   victim.dragonT = 0
   victim.baronT = 0
+  pushFx(state, 'death', victim.x, victim.z, 3, victim.team)
   const killer = state.heroes.find((h) => h.id === victim.lastHitBy && h.team !== victim.team)
   if (killer) {
     killer.kills++
@@ -396,7 +633,7 @@ function damageMonster(state, m, amount, attacker) {
     // 용/바론: 팀 전체 경험치 + 버프
     for (const h of state.heroes) {
       if (h.team !== attacker.team) continue
-      giveXp(h, spec.xp)
+      giveXp(state, h, spec.xp)
       if (h.respawnT > 0) continue
       if (m.kind === 'dragon') h.dragonT = DRAGON_BUFF_T
       else h.baronT = BARON_BUFF_T
@@ -419,8 +656,9 @@ function damageTower(state, t, amount, attacker) {
   t.alive = false
   const team = attacker?.team || enemyOf(t.team)
   state.towersDown[team]++
-  for (const h of state.heroes) if (h.team === team) giveXp(h, TOWER_XP)
-  pushFeed(state, 'tower', `💥 ${t.team === 'blue' ? '파랑' : '빨강'} ${t.tier === 1 ? '외곽' : '내곽'} 타워 파괴!`)
+  for (const h of state.heroes) if (h.team === team) giveXp(state, h, TOWER_XP)
+  const laneName = { top: '윗길', mid: '가운데길', bot: '아랫길' }[t.lane]
+  pushFeed(state, 'tower', `💥 ${t.team === 'blue' ? '파랑' : '빨강'} ${laneName} ${t.tier === 1 ? '외곽' : '내곽'} 타워 파괴!`)
 }
 
 function damageNexus(state, team, amount, attacker) {
@@ -458,19 +696,23 @@ function awardXp(state, team, at, amount, killer) {
   const r2 = XP_RANGE * XP_RANGE
   for (const h of state.heroes) {
     if (h.team !== team) continue
-    if (h === killer || dist2(h, at) <= r2) giveXp(h, amount)
+    if (h === killer || dist2(h, at) <= r2) giveXp(state, h, amount)
   }
 }
 
-function giveXp(h, amount) {
+function giveXp(state, h, amount) {
   if (h.lvl >= MAX_LEVEL) return
   h.xp += amount
+  let up = false
   while (h.lvl < MAX_LEVEL && h.xp >= xpNeed(h.lvl)) {
     h.xp -= xpNeed(h.lvl)
     h.lvl++
-    h.maxHp = heroMaxHp(h.lvl)
-    h.hp = Math.min(h.maxHp, h.hp + HP_PER_LVL + h.maxHp * 0.15) // 레벨업 보너스 회복
+    up = true
+    const grow = CLASSES[h.cls].hpLvl
+    h.maxHp = heroMaxHp(h)
+    h.hp = Math.min(h.maxHp, h.hp + grow + h.maxHp * 0.15) // 레벨업 보너스 회복
   }
+  if (up && h.respawnT <= 0) pushFx(state, 'level', h.x, h.z, 4, h.team)
   if (h.lvl >= MAX_LEVEL) h.xp = 0
 }
 
@@ -494,7 +736,7 @@ export function step(state, dt) {
   stepMonsters(state, dt)
   stepTowers(state, dt)
   stepProjectiles(state, dt)
-  state.novas = state.novas.filter((n) => (n.t += dt) < 0.7)
+  state.fx = state.fx.filter((n) => (n.t += dt) < 0.8)
   // 시간 초과: 부순 타워 → 킬 → 넥서스 체력으로 판정
   if (state.status === 'playing' && state.time >= COUNTDOWN_TIME + TIME_LIMIT) {
     const d = state.towersDown
@@ -509,14 +751,14 @@ export function step(state, dt) {
   return state
 }
 
-// 미니언 웨이브: 레인마다 근접 2 + 원거리 1
+// 미니언 웨이브: 세 레인마다 근접 2 + 원거리 1
 function stepWaves(state, dt) {
   state.waveT -= dt
   if (state.waveT > 0) return
   state.waveT += WAVE_PERIOD
   const grow = MINION_HP_GROWTH * (state.time / 60)
   for (const team of ['blue', 'red']) {
-    for (const lane of ['top', 'bot']) {
+    for (const lane of LANE_IDS) {
       for (let i = 0; i < 3; i++) {
         const spec = i === 2 ? RANGED : MELEE
         const wps = LANES[lane]
@@ -547,6 +789,10 @@ function stepHero(state, h, dt) {
   h.ultCd = Math.max(0, h.ultCd - dt)
   h.dragonT = Math.max(0, h.dragonT - dt)
   h.baronT = Math.max(0, h.baronT - dt)
+  h.shieldT = Math.max(0, h.shieldT - dt)
+  h.slowT = Math.max(0, h.slowT - dt)
+  h.revealT = Math.max(0, h.revealT - dt)
+  h.aggroT = Math.max(0, h.aggroT - dt)
   // 부활 대기 → 우물에서 부활
   if (h.respawnT > 0) {
     h.respawnT = Math.max(0, h.respawnT - dt)
@@ -557,6 +803,7 @@ function stepHero(state, h, dt) {
       h.z = pos.z
       h.hp = h.maxHp
       h.lastHitBy = null
+      h.bushI = -1
       h.dir = h.team === 'blue' ? 0 : Math.PI
     }
     return
@@ -566,13 +813,17 @@ function stepHero(state, h, dt) {
   if (h.stunT <= 0) {
     const len = Math.hypot(h.mx, h.mz)
     if (len > 0.12) {
-      const sp = HERO_SPEED * Math.min(1, len)
+      // 공격 직후엔 발이 무겁고, 탱커는 방패막기 중 돌진 가속
+      const slow = h.slowT > 0 ? ATK_SLOW : 1
+      const charge = h.cls === 'tank' && h.shieldT > 0 ? 1.45 : 1
+      const sp = CLASSES[h.cls].speed * slow * charge * Math.min(1, len)
       h.dir = Math.atan2(h.mz, h.mx)
       h.x += (h.mx / len) * sp * dt
       h.z += (h.mz / len) * sp * dt
     }
   }
   resolveTerrain(h, HERO_RADIUS, state.towers)
+  h.bushI = bushIndexAt(h.x, h.z) // 수풀 은신 판정
   // 우물: 우리 편이면 회복, 적이면 따끔!
   for (const team of ['blue', 'red']) {
     if (dist2(h, NEXUS_POS[team]) > FOUNTAIN_RADIUS * FOUNTAIN_RADIUS) continue
@@ -604,6 +855,7 @@ function stepMinions(state, dt) {
     if (!tgt) {
       for (const o of state.heroes) {
         if (o.team === m.team || o.respawnT > 0) continue
+        if (o.bushI >= 0 && o.revealT <= 0) continue // 수풀 속은 미니언도 못 본다
         const d = dist2(m, o)
         if (d < bd) {
           bd = d
@@ -713,7 +965,7 @@ function stepMonsters(state, dt) {
   }
 }
 
-// 타워: 미니언 우선, 없으면 영웅 — 투사체로 공격
+// 타워: 깐족거린 영웅(아군 영웅을 때린 적) → 미니언 → 영웅 순으로 조준
 function stepTowers(state, dt) {
   const r2 = TOWER_RANGE * TOWER_RANGE
   for (const t of state.towers) {
@@ -722,17 +974,32 @@ function stepTowers(state, dt) {
     if (t.cd > 0) continue
     let ref = null
     let bd = r2
-    for (const m of state.minions) {
-      if (m.team === t.team) continue
-      const d = dist2(t, m)
+    // 1) 타워 사거리 안에서 우리 영웅을 때린 녀석 (타워 다이브 응징!)
+    for (const h of state.heroes) {
+      if (h.team === t.team || h.respawnT > 0 || h.aggroT <= 0) continue
+      if (!isHeroVisible(state, h, t.team)) continue
+      const d = dist2(t, h)
       if (d < bd) {
         bd = d
-        ref = { tk: 'minion', id: m.id }
+        ref = { tk: 'hero', id: h.id }
       }
     }
+    // 2) 미니언
+    if (!ref) {
+      for (const m of state.minions) {
+        if (m.team === t.team) continue
+        const d = dist2(t, m)
+        if (d < bd) {
+          bd = d
+          ref = { tk: 'minion', id: m.id }
+        }
+      }
+    }
+    // 3) 영웅
     if (!ref) {
       for (const h of state.heroes) {
         if (h.team === t.team || h.respawnT > 0) continue
+        if (!isHeroVisible(state, h, t.team)) continue
         const d = dist2(t, h)
         if (d < bd) {
           bd = d
@@ -754,12 +1021,12 @@ function stepTowers(state, dt) {
 function stepProjectiles(state, dt) {
   const remove = new Set()
   for (const p of state.projectiles) {
-    if (p.kind === 'skill') {
+    if (p.kind === 'fireball') {
       // 직선 비행 — 적 영웅/미니언/정글몹에 닿으면 폭발 (주변 휩쓸기)
       p.x += p.vx * dt
       p.z += p.vz * dt
-      p.travel += SKILL_SPEED * dt
-      let hit = p.travel >= SKILL_RANGE
+      p.travel += FIREBALL_SPEED * dt
+      let hit = p.travel >= FIREBALL_RANGE
       const owner = state.heroes.find((h) => h.id === p.owner)
       const touches = (e) => dist2(p, e) < 2.6 * 2.6
       if (!hit) {
@@ -770,18 +1037,8 @@ function stepProjectiles(state, dt) {
       }
       if (hit) {
         remove.add(p.id)
-        const r2a = SKILL_AOE * SKILL_AOE
-        for (const e of state.heroes) {
-          if (e.team !== p.team && e.respawnT <= 0 && dist2(p, e) <= r2a) {
-            damageHero(state, e, p.dmg, owner)
-          }
-        }
-        for (const e of [...state.minions]) {
-          if (e.team !== p.team && dist2(p, e) <= r2a) damageMinion(state, e, p.dmg, owner)
-        }
-        for (const e of state.monsters) {
-          if (e.alive && dist2(p, e) <= r2a) damageMonster(state, e, p.dmg, owner)
-        }
+        pushFx(state, 'boom', p.x, p.z, FIREBALL_AOE, p.team)
+        if (owner) aoeDamage(state, owner, p.x, p.z, FIREBALL_AOE, p.dmg, 0)
       }
       continue
     }
@@ -805,10 +1062,9 @@ function stepProjectiles(state, dt) {
 }
 
 // ── 봇 AI ──
-// 체력이 낮으면 우물로 후퇴, 적 영웅이 보이면 거리를 재며 교전,
-// 평소엔 맡은 레인을 행군(정글 봇은 캠프 사냥). 타워 다이브는 미니언이 있을 때만.
+// 체력이 낮으면 우물로 후퇴, "보이는" 적 영웅과는 직업 사거리에 맞춰 교전,
+// 평소엔 맡은 레인을 행군하며 지나는 길의 정글몹/용/바론도 사냥한다.
 const BOT_SIGHT = 18
-const BOT_KITE = 7.5
 
 function stepBots(state, dt) {
   for (const h of state.heroes) {
@@ -818,20 +1074,34 @@ function stepBots(state, dt) {
       h.mz = 0
       continue
     }
-    // 후퇴 판단
-    if (h.hp < h.maxHp * 0.3) h.botRetreat = true
+    const cls = CLASSES[h.cls]
+    // 후퇴 판단 (탱커는 더 끈질기게 버틴다)
+    const panic = h.cls === 'tank' ? 0.22 : 0.3
+    if (h.hp < h.maxHp * panic) h.botRetreat = true
     if (h.botRetreat && h.hp > h.maxHp * 0.85) h.botRetreat = false
     if (h.botRetreat) {
+      if (h.cls === 'tank' && h.skillCd <= 0) castSkill(state, h.id) // 방패 켜고 도망!
       steerToward(h, NEXUS_POS[h.team])
       castAttack(state, h.id) // 도망치면서도 사거리 안이면 반격
       continue
     }
-    // 가장 가까운 적 영웅
+    // 힐러: 아픈 아군이 보이면 우선 치유
+    if (h.cls === 'healer') {
+      if (h.skillCd <= 0) castSkill(state, h.id) // 대상 없으면 안 쓴다
+      if (h.ultCd <= 0 && h.lvl >= ULT_LEVEL) {
+        const hurt = state.heroes.filter(
+          (a) => a.team === h.team && a.respawnT <= 0 && dist(h, a) <= HEAL_RANGE && a.hp < a.maxHp * 0.55
+        ).length
+        if (hurt >= 2 || h.hp < h.maxHp * 0.4) castUlt(state, h.id)
+      }
+    }
+    // 가장 가까운 "보이는" 적 영웅
     let foe = null
     let bd = BOT_SIGHT * BOT_SIGHT
     let nearCount = 0
     for (const e of state.heroes) {
       if (e.team === h.team || e.respawnT > 0) continue
+      if (!isHeroVisible(state, e, h.team)) continue
       const d = dist2(h, e)
       if (d < 9 * 9) nearCount++
       if (d < bd) {
@@ -841,27 +1111,50 @@ function stepBots(state, dt) {
     }
     if (foe) {
       const d = Math.sqrt(bd)
-      // 거리 유지(카이팅): 가까우면 물러서고 멀면 다가가고, 옆으로도 살짝
+      // 직업 사거리에 맞춰 거리 유지(카이팅): 근접은 파고들고 원거리는 빠진다
+      const kite = Math.max(2.6, cls.range - 1)
       h.botStrafe += dt * 0.7
       const away = Math.atan2(h.z - foe.z, h.x - foe.x)
       const to = Math.atan2(foe.z - h.z, foe.x - h.x)
-      const ang = d < BOT_KITE - 1.5 ? away : d > BOT_KITE + 1.5 ? to : away + Math.PI / 2
-      h.mx = Math.cos(ang) * 0.9 + Math.cos(h.botStrafe) * 0.25
-      h.mz = Math.sin(ang) * 0.9 + Math.sin(h.botStrafe) * 0.25
+      const chasing = d > kite + 1.2
+      const ang = d < kite - 1.2 ? away : chasing ? to : away + Math.PI / 2
+      // 추격 중엔 옆걸음 없이 전속 직진 — 근접이 원거리를 따라잡을 수 있게
+      const wob = chasing ? 0 : 0.25
+      h.mx = Math.cos(ang) * (1 - wob) + Math.cos(h.botStrafe) * wob
+      h.mz = Math.sin(ang) * (1 - wob) + Math.sin(h.botStrafe) * wob
       castAttack(state, h.id)
-      if (h.skillCd <= 0 && d < SKILL_RANGE - 4) castSkill(state, h.id)
-      if (
-        h.ultCd <= 0 && h.lvl >= ULT_LEVEL &&
-        (nearCount >= 2 || (d < ULT_RADIUS - 2 && foe.hp < foe.maxHp * 0.45))
-      ) {
-        castUlt(state, h.id)
-      }
+      botCombatSkills(state, h, foe, d, nearCount)
       continue
     }
     // 교전 상대가 없으면 임무 수행
     castAttack(state, h.id) // 미니언/정글/타워 등 사거리 안 아무거나
-    if (h.role === 'jungle' && botJungleMove(state, h)) continue
+    if (botJungleMove(state, h)) continue
     botLaneMove(state, h)
+  }
+}
+
+// 직업별 교전 스킬 사용
+function botCombatSkills(state, h, foe, d, nearCount) {
+  const ready = h.skillCd <= 0
+  if (ready) {
+    if (h.cls === 'warrior' && d < DASH_AIM - 2) castSkill(state, h.id)
+    else if (h.cls === 'archer' && d < CLASSES.archer.range) castSkill(state, h.id)
+    else if (h.cls === 'mage' && d < FIREBALL_RANGE - 6) castSkill(state, h.id)
+    else if (h.cls === 'assassin' && d < BLINK_RANGE - 2 && h.hp > h.maxHp * 0.45) castSkill(state, h.id)
+    else if (h.cls === 'tank' && d < 14) castSkill(state, h.id) // 방패 들고 돌격!
+    // 힐러 치유는 stepBots 위쪽에서 항상 챙긴다
+  }
+  if (h.ultCd > 0 || h.lvl < ULT_LEVEL) return
+  if (h.cls === 'warrior' && (nearCount >= 2 || (d < WHIRL_RADIUS - 2 && foe.hp < foe.maxHp * 0.5))) {
+    castUlt(state, h.id)
+  } else if (h.cls === 'archer' && d < RAIN_RANGE - 4 && (foe.hp < foe.maxHp * 0.6 || nearCount >= 2)) {
+    castUlt(state, h.id)
+  } else if (h.cls === 'mage' && (nearCount >= 2 || (d < STORM_RADIUS - 2 && foe.hp < foe.maxHp * 0.5))) {
+    castUlt(state, h.id)
+  } else if (h.cls === 'assassin' && d < EXECUTE_RANGE - 1 && foe.hp < foe.maxHp * 0.45) {
+    castUlt(state, h.id)
+  } else if (h.cls === 'tank' && nearCount >= 2) {
+    castUlt(state, h.id)
   }
 }
 
@@ -871,9 +1164,8 @@ function steerToward(h, to) {
   h.mz = (to.z - h.z) / d
 }
 
-// 정글 봇: 우리 진영 늑대 → 용/바론 기웃 → 캠프가 없으면 레인 합류
+// 정글 사냥: 지나는 길의 늑대, 아군이 모여 있으면 용/바론 도전
 function botJungleMove(state, h) {
-  const side = h.team === 'blue' ? -1 : 1
   // 아군이 근처에 있으면 용/바론 도전
   for (const big of state.monsters) {
     if (!big.alive || big.kind === 'wolf') continue
@@ -881,7 +1173,7 @@ function botJungleMove(state, h) {
       (o) => o.team === h.team && o.respawnT <= 0 && dist(o, big) < 28
     ).length
     if (allies >= 2 && h.hp > h.maxHp * 0.55) {
-      if (dist(h, big) > ATK_RANGE - 2) steerToward(h, big)
+      if (dist(h, big) > CLASSES[h.cls].range - 1) steerToward(h, big)
       else {
         h.mx = 0
         h.mz = 0
@@ -889,19 +1181,19 @@ function botJungleMove(state, h) {
       return true
     }
   }
+  // 가까운 늑대 캠프 (멀리 돌아가진 않는다)
   let camp = null
-  let bd = Infinity
+  let bd = 16 * 16
   for (const m of state.monsters) {
     if (!m.alive || m.kind !== 'wolf') continue
-    const mySide = Math.sign(m.camp.x) === side
-    const d = dist2(h, m) - (mySide ? 1e6 : 0) // 우리 쪽 캠프 우선
+    const d = dist2(h, m)
     if (d < bd) {
       bd = d
       camp = m
     }
   }
-  if (!camp) return false
-  if (dist(h, camp) > ATK_RANGE - 2) steerToward(h, camp)
+  if (!camp || h.hp < h.maxHp * 0.6) return false
+  if (dist(h, camp) > CLASSES[h.cls].range - 1) steerToward(h, camp)
   else {
     h.mx = 0
     h.mz = 0
@@ -912,7 +1204,7 @@ function botJungleMove(state, h) {
 // 레인 봇: 경유지를 따라 적 본진 쪽으로. 목표 타워 근처에선
 // 아군 미니언이 받아주고 있을 때만 들어간다 (타워 다이브 금지).
 function botLaneMove(state, h) {
-  const lane = h.role === 'bot' ? 'bot' : 'top'
+  const lane = LANES[h.role] ? h.role : 'mid'
   const en = enemyOf(h.team)
   const objective =
     state.towers.find((t) => t.team === en && t.lane === lane && t.tier === 1 && t.alive) ||
@@ -928,7 +1220,7 @@ function botLaneMove(state, h) {
       h.mz = Math.sin(away) * 0.7
       return
     }
-    if (dObj <= ATK_RANGE - 1.5) {
+    if (dObj <= CLASSES[h.cls].range - 0.5) {
       h.mx = 0
       h.mz = 0
       return
@@ -936,14 +1228,16 @@ function botLaneMove(state, h) {
     steerToward(h, objective)
     return
   }
-  // 경유지 행군: 목표에 가까운 다음 경유지로
+  // 경유지 행군: 가장 가까운 경유지의 "다음 칸"을 향한다.
+  // (가까운 칸 자체를 향하면 본진 옆에서 출발 경유지(넥서스)와
+  //  충돌체 경계 사이를 제자리 왕복하는 함정에 빠진다)
   const wps = LANES[lane]
   const dirI = h.team === 'blue' ? 1 : -1
-  let wpI = nearestWp(lane, h.x, h.z)
-  // 이미 그 경유지에 도착해 있으면 다음 칸으로
-  if (dist(h, wps[wpI]) < 6) wpI += dirI
-  wpI = Math.max(0, Math.min(wps.length - 1, wpI))
-  const wp = wps[wpI]
+  const wp = wps[nearestWp(lane, h.x, h.z) + dirI]
+  if (!wp) {
+    steerToward(h, objective)
+    return
+  }
   // 경유지보다 목표가 더 가까우면 목표로 직행
   steerToward(h, dist(h, objective) < dist(h, wp) + 6 ? objective : wp)
 }
@@ -968,6 +1262,7 @@ export function makeView(state) {
       zodiacId: h.zodiacId,
       color: h.color,
       team: h.team,
+      cls: h.cls,
       isBot: h.isBot,
       x: r1(h.x),
       z: r1(h.z),
@@ -982,7 +1277,10 @@ export function makeView(state) {
       ultCd: r2d(h.ultCd),
       ultLocked: h.lvl < ULT_LEVEL,
       stunT: r2d(h.stunT),
+      shieldT: r2d(h.shieldT),
       respawnT: r2d(h.respawnT),
+      bushI: h.bushI,
+      revealT: r2d(h.revealT),
       dragonT: r1(h.dragonT),
       baronT: r1(h.baronT),
       kills: h.kills,
@@ -1030,7 +1328,9 @@ export function makeView(state) {
       x: r1(p.x),
       z: r1(p.z),
     })),
-    novas: state.novas.map((n) => ({ id: n.id, x: r1(n.x), z: r1(n.z), t: r2d(n.t), team: n.team })),
+    fx: state.fx.map((n) => ({
+      id: n.id, kind: n.kind, x: r1(n.x), z: r1(n.z), r: n.r, t: r2d(n.t), team: n.team,
+    })),
     feed: state.feed.slice(-5),
   }
 }
