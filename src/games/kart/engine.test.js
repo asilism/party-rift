@@ -921,3 +921,86 @@ test('철길: 뷰에 기차 접근(trainNear)과 fallKind가 실린다', () => {
   assert.equal(v.trainNear, true)
   assert.ok('fallKind' in v.karts[0])
 })
+
+// ── 맵별 시그니처 장치: 지름길 / 눈도깨비 / 용암 불기둥 ──
+
+test('사막 지름길: 구간 안에서는 흙길까지 감속 없이 허용, 밖에서는 클램프', () => {
+  const g = createGame([P2[0]], Math.random, 'desert')
+  startRacing(g)
+  const t = g.track
+  const k = g.karts[0]
+  const sc = t.shortcuts[0]
+  const mid = Math.round((sc.from + sc.to) / 2)
+  // 지름길 위 (도로 밖 + 흙길 안)
+  const s = t.samples[mid]
+  const lat = (t.halfW + sc.w * 0.5) * sc.side
+  k.x = s.x + s.nx * lat
+  k.z = s.z + s.nz * lat
+  k.ci = mid
+  k.heading = Math.atan2(s.dz, s.dx)
+  k.speed = 20
+  step(g, STEP)
+  assert.equal(k.offroad, false, '지름길에선 감속 없음')
+  const latAfter = (k.x - t.samples[k.ci].x) * t.samples[k.ci].nx + (k.z - t.samples[k.ci].z) * t.samples[k.ci].nz
+  assert.ok(Math.abs(latAfter) > t.halfW, `흙길 위 유지 (lat=${latAfter.toFixed(1)})`)
+  // 같은 lat라도 지름길 반대쪽이면 도로로 끌려 들어온다
+  const k2 = k
+  const s2 = t.samples[mid]
+  const lat2 = -lat // 반대쪽
+  k2.x = s2.x + s2.nx * lat2
+  k2.z = s2.z + s2.nz * lat2
+  k2.ci = mid
+  step(g, STEP)
+  const after2 = (k2.x - t.samples[k2.ci].x) * t.samples[k2.ci].nx + (k2.z - t.samples[k2.ci].z) * t.samples[k2.ci].nz
+  assert.ok(Math.abs(after2) <= t.halfW, `반대쪽은 클램프 (lat=${after2.toFixed(1)})`)
+})
+
+test('눈도깨비: 주기마다 눈덩이를 던지고, 맞으면 스턴', () => {
+  const g = createGame([P2[0]], Math.random, 'snow')
+  startRacing(g)
+  const t = g.track
+  const k = g.karts[0]
+  const m = t.monsters[0]
+  placeAt(t, k, m.i, 0) // 도깨비 옆 도로에 서 있는다
+  k.invT = 0
+  // 한 주기 안에 발사 → 명중까지
+  let threw = false
+  for (let i = 0; i < Math.ceil((m.period + 2) / STEP) && !(k.stunT > 0); i++) {
+    placeAt(t, k, m.i, 0)
+    k.invT = 0
+    step(g, STEP)
+    if (g.objects.some((o) => o.kind === 'snowball')) threw = true
+  }
+  assert.ok(threw, '눈덩이 발사')
+  assert.ok(k.stunT > 0, '눈덩이 명중 → 스턴')
+  assert.equal(k.bumpKind, 'snowball')
+})
+
+test('용암 불기둥: 분출 순간 위에 있으면 하늘로 펑 → 리스폰', () => {
+  const g = createGame([P2[0]], Math.random, 'volcano')
+  startRacing(g)
+  const t = g.track
+  const k = g.karts[0]
+  const gy = t.geysers[0]
+  const s = t.samples[gy.i]
+  k.invT = 0
+  for (let i = 0; i < Math.ceil((gy.period + 1) / STEP) && k.fallSeq === 0; i++) {
+    k.x = s.x + s.nx * gy.lat
+    k.z = s.z + s.nz * gy.lat
+    k.ci = gy.i
+    k.ky = s.y || 0
+    k.invT = 0
+    step(g, STEP)
+  }
+  assert.equal(k.fallSeq, 1, '불기둥 명중')
+  assert.equal(k.fallKind, 'erupt')
+  for (let i = 0; i < 60 * 3 && k.fallT > 0; i++) step(g, STEP)
+  assert.equal(k.ci, (gy.i - 8 + t.n) % t.n, '불기둥 앞 리스폰')
+  assert.ok(k.invT > 0)
+})
+
+test('TRACK_LIST는 난이도(별점) 오름차순', () => {
+  const stars = TRACK_LIST.map((t) => t.stars)
+  assert.deepEqual(stars, [...stars].sort((a, b) => a - b))
+  assert.ok(TRACK_LIST.every((t) => t.stars >= 1 && t.stars <= 5))
+})

@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { getZodiac } from '../../shared/zodiac.js'
 import {
   PAD_HALF_W, obstaclePose, obstacleVisible, inGap, samplePoint, nearestSample, trainCars,
+  geyserState, shortcutWidth,
 } from './track.js'
 import { FLY_TIME } from './engine.js'
 
@@ -589,6 +590,109 @@ function buildCenterline(track) {
   )
 }
 
+// 지름길 흙길: 도로 한쪽 옆으로 좁은 흙길 리본 (입구/출구는 테이퍼)
+// + 길 따라 골드 점선을 깔아 "비밀 지름길!" 느낌을 준다
+function buildShortcuts(track) {
+  const g = new THREE.Group()
+  const mat = new THREE.MeshLambertMaterial({ color: 0xb9854a, side: THREE.DoubleSide })
+  const dotMat = new THREE.MeshBasicMaterial({
+    color: 0xffd34d, transparent: true, opacity: 0.85, side: THREE.DoubleSide,
+  })
+  const T = 6
+  for (const sc of track.shortcuts || []) {
+    const pos = []
+    const idx = []
+    let v = 0
+    for (let i = sc.from - T; i <= sc.to + T; i++) {
+      const ii = ((i % track.n) + track.n) % track.n
+      const s = track.samples[ii]
+      const w = shortcutWidth(track, ii, sc.side)
+      const a = (track.halfW - 0.3) * sc.side
+      const b = (track.halfW - 0.6 + Math.max(0.05, w)) * sc.side
+      pos.push(s.x + s.nx * a, (s.y || 0) + 0.026, s.z + s.nz * a)
+      pos.push(s.x + s.nx * b, (s.y || 0) + 0.026, s.z + s.nz * b)
+      if (i < sc.to + T) idx.push(v, v + 1, v + 2, v + 1, v + 3, v + 2)
+      v += 2
+    }
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+    geo.setIndex(idx)
+    geo.computeVertexNormals()
+    g.add(new THREE.Mesh(geo, mat))
+    // 골드 점선 (흙길 중앙)
+    for (let i = sc.from - T + 2; i <= sc.to + T - 2; i += 4) {
+      const ii = ((i % track.n) + track.n) % track.n
+      const s = track.samples[ii]
+      const w = shortcutWidth(track, ii, sc.side)
+      if (w < 0.8) continue
+      const lat = (track.halfW - 0.6 + w * 0.5) * sc.side
+      const dot = new THREE.Mesh(new THREE.CircleGeometry(0.3, 8), dotMat)
+      dot.geometry.rotateX(-Math.PI / 2)
+      dot.position.set(s.x + s.nx * lat, (s.y || 0) + 0.04, s.z + s.nz * lat)
+      g.add(dot)
+    }
+  }
+  return g
+}
+
+// 도시 빌딩: 창문이 빛나는 박스 빌딩들 (트랙 주변 + 지평선 스카이라인)
+function windowTexture() {
+  const c = document.createElement('canvas')
+  c.width = 64
+  c.height = 128
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = '#3c424e'
+  ctx.fillRect(0, 0, 64, 128)
+  const rnd = lcg(515)
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 4; x++) {
+      ctx.fillStyle = rnd() < 0.4 ? '#ffd98a' : '#232936'
+      ctx.fillRect(6 + x * 14, 8 + y * 14, 9, 9)
+    }
+  }
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+function buildBuildings(track) {
+  const g = new THREE.Group()
+  const rnd = lcg(8282)
+  const winTex = windowTexture()
+  const palette = [0x9aa3b5, 0xb5a39a, 0xa3b59a, 0xa89ab5, 0xb5b0a0]
+  const make = (x, z, w, h, d) => {
+    const colHex = palette[Math.floor(rnd() * palette.length)]
+    const col = new THREE.Color(colHex)
+    const wall = new THREE.MeshLambertMaterial({
+      map: winTex, color: colHex, emissive: col.clone().multiplyScalar(0.22),
+    })
+    const flat = new THREE.MeshLambertMaterial({ color: col.clone().offsetHSL(0, 0, -0.06) })
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [wall, wall, flat, flat, wall, wall])
+    b.position.set(x, h / 2, z)
+    g.add(b)
+  }
+  // 트랙 주변 빌딩들 (도로에서 충분히 떨어진 자리)
+  let placed = 0
+  for (let tries = 0; tries < 1500 && placed < 42; tries++) {
+    const x = (rnd() - 0.5) * 420
+    const z = (rnd() - 0.5) * 380 + 10
+    let minD = Infinity
+    for (let i = 0; i < track.n; i += 4) {
+      const s = track.samples[i]
+      minD = Math.min(minD, Math.hypot(x - s.x, z - s.z))
+    }
+    if (minD < track.halfW + 16 || minD > 130) continue
+    make(x, z, 9 + rnd() * 9, 8 + rnd() * 22, 9 + rnd() * 9)
+    placed++
+  }
+  // 지평선 스카이라인 (안개에 잠긴 큰 빌딩들)
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2 + rnd() * 0.3
+    const r = 240 + rnd() * 110
+    make(Math.cos(a) * r, Math.sin(a) * r, 26 + rnd() * 26, 35 + rnd() * 55, 26 + rnd() * 26)
+  }
+  return g
+}
+
 // 멀리 보이는 low-poly 언덕 — 지평선이 심심하지 않게 (안개에 살짝 잠긴다)
 function buildHills(theme) {
   const g = new THREE.Group()
@@ -627,7 +731,8 @@ function glowTexture(size = 128) {
   return tex
 }
 
-const OBJ_EMOJI = { banana: '🍌', bomb: '💣' }
+const OBJ_EMOJI = { banana: '🍌', bomb: '💣', snowball: '⚪' }
+const OBJ_SCALE = { rocket: 2.2, snowball: 1.3 }
 
 // 드리프트 스파크 색: 충전 전(하양) → 1단계 파랑 → 2단계 주황 → 3단계 보라
 const DRIFT_SPARK = [
@@ -693,9 +798,47 @@ export function createKartScene(canvas, track) {
   if (track.jumps?.length) scene.add(buildRampOverlays(track))
   if (track.ice) scene.add(buildIce(track))
   scene.add(buildCurbs(track))
+  if (track.shortcuts?.length) scene.add(buildShortcuts(track))
   const startGate = buildStart(track)
   scene.add(startGate.group)
   scene.add(buildPads(track))
+
+  // 눈도깨비: 길가에 서서 주기적으로 눈덩이를 던진다 (render에서 폴짝 모션)
+  const monsterNodes = (track.monsters || []).map((m) => {
+    const s = track.samples[m.i]
+    const sp = emojiSprite('👹', 3.6)
+    sp.position.set(s.x + s.nx * m.lat, (s.y || 0) + 1.8, s.z + s.nz * m.lat)
+    scene.add(sp)
+    return { sp, m, baseY: (s.y || 0) + 1.8 }
+  })
+
+  // 용암 불기둥: 경고 링(바닥) + 분출 기둥(글로우 스프라이트 스택)
+  const geyserNodes = (track.geysers || []).map((gy) => {
+    const s = track.samples[gy.i]
+    const x = s.x + s.nx * gy.lat
+    const z = s.z + s.nz * gy.lat
+    const y = s.y || 0
+    const ring = new THREE.Mesh(
+      new THREE.CircleGeometry(gy.r + 0.8, 18),
+      new THREE.MeshBasicMaterial({ color: 0xff3a1a, transparent: true, opacity: 0 })
+    )
+    ring.geometry.rotateX(-Math.PI / 2)
+    ring.position.set(x, y + 0.06, z)
+    scene.add(ring)
+    const column = []
+    for (let i = 0; i < 3; i++) {
+      const sp = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: glowTex, color: 0xff7a22, transparent: true, opacity: 0, depthWrite: false,
+        })
+      )
+      sp.position.set(x, y + 1.2 + i * 2.3, z)
+      sp.scale.set(3.6 + i * 0.8, 4.4, 1)
+      column.push(sp)
+      scene.add(sp)
+    }
+    return { gy, ring, column, x, z, y }
+  })
 
   // 끊긴 도로(gap) 아래의 웅덩이 — 화산은 용암, 철길은 강물 (render에서 출렁인다)
   const poolBase = new THREE.Color(theme.pool ?? theme.lava ?? 0x3e7bd6)
@@ -869,7 +1012,7 @@ export function createKartScene(canvas, track) {
     }
   }
   scene.add(buildTrees(track, theme))
-  scene.add(buildHills(theme))
+  scene.add(theme.city ? buildBuildings(track) : buildHills(theme))
   const decor = buildDecor(track, theme)
   scene.add(decor.group)
 
@@ -1329,11 +1472,11 @@ export function createKartScene(canvas, track) {
       alive.add(o.id)
       let sp = objNodes.get(o.id)
       if (!sp) {
-        sp = emojiSprite(OBJ_EMOJI[o.kind] || '🎁', o.kind === 'rocket' ? 2.2 : 1.7)
+        sp = emojiSprite(OBJ_EMOJI[o.kind] || '🎁', OBJ_SCALE[o.kind] || 1.7)
         objNodes.set(o.id, sp)
         scene.add(sp)
       }
-      sp.position.set(o.x, o.kind === 'rocket' ? 1.2 : 0.8, o.z)
+      sp.position.set(o.x, o.kind === 'rocket' ? 1.2 : o.kind === 'snowball' ? 1.0 : 0.8, o.z)
     }
     for (const [id, sp] of objNodes) {
       if (alive.has(id)) continue
@@ -1448,6 +1591,46 @@ export function createKartScene(canvas, track) {
       f.scale.x = 2.3 * (0.92 + Math.sin(now / 150 + i) * 0.08)
     })
     startGate.banner.rotation.x = Math.sin(now / 480) * 0.1
+    // 눈도깨비: 던지기 직전 움찔 웅크렸다가, 던지며 폴짝!
+    for (const mn of monsterNodes) {
+      const f = (((view.time / mn.m.period + mn.m.phase) % 1) + 1) % 1
+      let y = mn.baseY
+      let sy = 3.6
+      if (f > 0.8) {
+        const w = (f - 0.8) / 0.2 // 웅크리기
+        sy = 3.6 * (1 - 0.22 * w)
+        y -= 0.4 * w
+      } else if (f < 0.15) {
+        y += Math.sin((f / 0.15) * Math.PI) * 1.3 // 던지고 폴짝
+      }
+      mn.sp.position.y = y
+      mn.sp.scale.set(3.6, sy, 1)
+    }
+    // 용암 불기둥: 경고(바닥이 달아오름) → 분출(불기둥 + 용암 분수)
+    for (const gn of geyserNodes) {
+      const st = geyserState(gn.gy, view.time)
+      gn.ring.material.opacity = st.warn
+        ? 0.3 + 0.25 * (0.5 + 0.5 * Math.sin(now / 80))
+        : st.burst
+          ? 0.75
+          : 0
+      for (let i = 0; i < gn.column.length; i++) {
+        gn.column[i].material.opacity = st.burst ? 0.85 - i * 0.18 : 0
+      }
+      if (st.burst) {
+        spawnParts(3, () => ({
+          x: gn.x + (Math.random() - 0.5) * 1.6,
+          y: gn.y + 0.4,
+          z: gn.z + (Math.random() - 0.5) * 1.6,
+          vx: (Math.random() - 0.5) * 4,
+          vy: 11 + Math.random() * 6,
+          vz: (Math.random() - 0.5) * 4,
+          life: 0.5 + Math.random() * 0.35,
+          grav: 14, floor: gn.y + 0.06,
+          r: 1, g: 0.45 + Math.random() * 0.3, b: 0.08,
+        }))
+      }
+    }
     // 빙판 반짝임: 별처럼 트윙클
     for (const sp of iceSparkles) {
       const tw = 0.5 + 0.5 * Math.sin((now / 1000) * sp.userData.speed + sp.userData.phase)

@@ -290,8 +290,8 @@ function useKartSounds(hud, myId) {
     if (me?.flyT > 0 && !(p.flyT > 0)) sound.rocket() // 회오리에 붕~ 떠오를 때
     if (me && p.jumpSeq != null && me.jumpSeq > p.jumpSeq) sound.jump() // 점프대 발사!
     if (me && p.fallSeq != null && me.fallSeq > p.fallSeq) {
-      if (me.fallKind === 'train') sound.thunder() // 기차에 펑!
-      else sound.splash() // 용암/강물에 풍덩~
+      if (me.fallKind === 'pool') sound.splash() // 용암/강물에 풍덩~
+      else sound.thunder() // 기차/불기둥에 펑!
     }
     if (hud.trainNear && !p.trainNear) sound.train() // 빵빵~ 기차가 와요!
     if (hud.lightning && !p.lightning) sound.thunder() // 번개는 모두에게 들린다
@@ -325,6 +325,7 @@ const BUMP_MSG = {
   barrier: '🚧 공사중! 쿵!',
   tractor: '🚜 트랙터랑 꽈당!',
   steam: '💨 증기에 휘말려 붕~!',
+  snowball: '👹 눈도깨비의 눈덩이 명중! 꽁!',
 }
 
 // 레이스 드라마 배너: 랩 진입 / 장애물 사고 / 추월·역전 / 슬립스트림 / 번개를
@@ -390,7 +391,9 @@ function useRaceBanner(hud, myId) {
       show(
         me.fallKind === 'train'
           ? '🚂 칙칙폭폭... 펑! 기차에 치였어!'
-          : '😱 풍덩~! 낭떠러지 앞에서 재출발!'
+          : me.fallKind === 'erupt'
+            ? '🌋 불기둥에 맞아 하늘로 펑!'
+            : '😱 풍덩~! 낭떠러지 앞에서 재출발!'
       )
       return
     }

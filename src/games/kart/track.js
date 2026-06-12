@@ -82,6 +82,30 @@ export function inGap(track, ci) {
   return (track.gaps || []).some((g) => ci >= g.from && ci <= g.to)
 }
 
+// 용암 불기둥의 현재 상태 — 시간의 순수 함수 (엔진 판정 + 렌더러 연출 공유).
+// 주기의 끝자락에서 바닥이 빨갛게 달아오르고(warn) 곧바로 분출한다(burst).
+export function geyserState(gy, time) {
+  const f = (((time / gy.period + gy.phase) % 1) + 1) % 1
+  return { f, warn: f > 0.68 && f <= 0.85, burst: f > 0.85 }
+}
+
+// 지름길: 해당 구간에서 도로 한쪽 바깥으로 좁은 흙길이 열린다.
+// 반환값 = 그 방향으로 추가 허용되는 폭(m). 입구/출구는 테이퍼로 부드럽게.
+const SHORTCUT_TAPER = 6 // 샘플
+export function shortcutWidth(track, ci, side) {
+  let w = 0
+  for (const s of track.shortcuts || []) {
+    if (s.side !== side) continue
+    if (ci >= s.from && ci <= s.to) w = Math.max(w, s.w)
+    else if (ci > s.to && ci <= s.to + SHORTCUT_TAPER) {
+      w = Math.max(w, s.w * (1 - (ci - s.to) / SHORTCUT_TAPER))
+    } else if (ci < s.from && ci >= s.from - SHORTCUT_TAPER) {
+      w = Math.max(w, s.w * (1 - (s.from - ci) / SHORTCUT_TAPER))
+    }
+  }
+  return w
+}
+
 // 아이템 박스 위치: 트랙 위 3곳 × 가로 3개 (모든 트랙 공통 비율)
 const BOX_FRACS = [0.22, 0.5, 0.8]
 function makeBoxes(track) {
@@ -184,6 +208,7 @@ export const TRACKS = {
     emoji: '🌳',
     desc: '한가로운 초원 코스. 단, 소들이 트랙을 건너다닌다?!',
     difficulty: '쉬움',
+    stars: 1,
     padSeed: 311.7,
     // 소는 한 방향으로만 건너간다 (cross): 코스 밖으로 나가면 사라졌다가
     // 반대편에서 다시 나타난다 — 뒷걸음질 없음!
@@ -202,9 +227,12 @@ export const TRACKS = {
     id: 'desert',
     name: '사막 협곡',
     emoji: '🏜️',
-    desc: '유턴 헤어핀 3개의 최고난도 코스. 선인장은 따갑고 회오리는 하늘로 붕!',
-    difficulty: '어려움',
+    desc: '유턴 헤어핀 3개! 회오리는 하늘로 붕, 첫 헤어핀 안쪽엔 아주 좁은 지름길이…',
+    difficulty: '아주 어려움',
+    stars: 4,
     padSeed: 73.3,
+    // 헤어핀1 안쪽의 좁은 모랫길 지름길 (도로 왼쪽(+1)으로 폭 3.4m)
+    shortcuts: [{ from: fi(0.13), to: fi(0.18), side: 1, w: 3.4 }],
     obstacles: [
       { kind: 'cactus', i: fi(0.16), lat: -2.6, r: 1.3 },
       { kind: 'cactus', i: fi(0.34), lat: 2.6, r: 1.3 },
@@ -223,9 +251,15 @@ export const TRACKS = {
     id: 'snow',
     name: '눈꽃 빙판',
     emoji: '❄️',
-    desc: '파란 빙판에선 핸들이 주르륵~ 눈사람은 박으면 와장창!',
+    desc: '파란 빙판에선 핸들이 주르륵~ 눈도깨비의 눈덩이를 피해라!',
     difficulty: '보통',
+    stars: 2,
     padSeed: 521.9,
+    // 눈도깨비: 길가에서 지나가는 카트에게 눈덩이를 던진다 (맞으면 꽁! 스턴)
+    monsters: [
+      { i: fi(0.24), lat: 10.5, period: 4.5, phase: 0, range: 55 },
+      { i: fi(0.62), lat: -10.5, period: 5, phase: 2.2, range: 55 },
+    ],
     // 빙판 구간 (샘플 범위): 이 위에선 조향이 잘 안 듣는다
     ice: [
       { from: fi(0.05), to: fi(0.17) },
@@ -250,9 +284,16 @@ export const TRACKS = {
     id: 'volcano',
     name: '화산 협곡',
     emoji: '🌋',
-    desc: '오르막을 달려 용암 협곡을 점프! 느리면 풍덩~ 불덩이는 앗 뜨거!',
-    difficulty: '보통',
+    desc: '용암 협곡을 점프! 바닥이 달아오르면 불기둥이 솟는다 — 맞으면 하늘로 펑!',
+    difficulty: '어려움',
+    stars: 3,
     padSeed: 911.3,
+    // 용암 불기둥: 바닥이 빨갛게 달아오른 뒤 분출 — 맞으면 날아갔다 리스폰
+    geysers: [
+      { i: fi(0.15), lat: -2, period: 5.5, phase: 0.2, r: 2.2 },
+      { i: fi(0.55), lat: 2.2, period: 6, phase: 0.55, r: 2.2 },
+      { i: fi(0.83), lat: 0, period: 6.5, phase: 0.8, r: 2.2 },
+    ],
     // 고도 프로필: 오르막 → 산허리 평지(협곡 점프) → 내리막 → 점프 언덕
     elev: [
       [0, 0], [0.16, 0], [0.26, 6], [0.5, 6], [0.6, 0],
@@ -276,10 +317,11 @@ export const TRACKS = {
   }),
   rails: finishTrack(buildGeom(RAIL_CTRL, 2.4, 6), {
     id: 'rails',
-    name: '칙칙폭폭 철길',
+    name: '기차마을 대질주',
     emoji: '🚂',
-    desc: '시리즈 최대 코스! 건널목에서 기차에 치이면 하늘로 펑~ 다리는 점프로!',
+    desc: '시리즈 최대, 빌딩 숲 도시 코스! 건널목에서 기차에 치이면 하늘로 펑~',
     difficulty: '최고난도',
+    stars: 5,
     padSeed: 333.7,
     // 강 위 끊어진 다리: 살짝 오르막 → 점프로 건넌다 (+ 가벼운 언덕 하나)
     elev: [
@@ -302,15 +344,18 @@ export const TRACKS = {
       { kind: 'steam', i: fi(0.68), period: 8, phase: 4.2, span: 4.5, r: 1.7 },
     ],
     theme: {
-      sky: 0xa9d3ec, dusk: 0xf09a5e, ground: 0x86a85c, road: 0x4a4a52,
-      treeLeaf: 0x4f9a4a, treeTrunk: 0x6e4f33, treeCount: 56,
-      flora: ['🌾', '🌻', '🪨', '🐓', '🌼', '🌿'],
+      // 도시: 콘크리트 광장 + 아스팔트 + 빌딩 스카이라인 (초원과 확실히 다른 색감)
+      sky: 0x9fc4e8, dusk: 0xe88a9a, ground: 0xa8a49c, road: 0x33363e,
+      treeLeaf: 0x4a9a55, treeTrunk: 0x5a4a3a, treeCount: 22, // 가로수만 조금
+      flora: ['🚦', '📦', '🐈', '🛢️', '🌼'],
       pool: 0x3e7bd6, // 다리 아래 강물
+      city: true, // 언덕 대신 창문이 빛나는 빌딩들
     },
   }),
 }
 
-export const TRACK_LIST = [TRACKS.meadow, TRACKS.desert, TRACKS.snow, TRACKS.volcano, TRACKS.rails]
+// 난이도 순서대로 (쉬움 → 최고난도)
+export const TRACK_LIST = [TRACKS.meadow, TRACKS.snow, TRACKS.volcano, TRACKS.desert, TRACKS.rails]
 export const DEFAULT_TRACK_ID = 'meadow'
 
 // 이전 호환(테스트 등): 기본 트랙과 그 배치
