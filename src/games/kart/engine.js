@@ -4,7 +4,7 @@
 import {
   TRACK, TRACKS, DEFAULT_TRACK_ID, PAD_HALF_W,
   nearestSample, wrapDelta, samplePoint, obstaclePose, obstacleTrackPos, obstacleVisible,
-  onIce, inGap, trainCars,
+  onIce, inGap, trainCars, geyserState, shortcutWidth,
 } from './track.js'
 
 export const STEP = 1 / 60 // 물리 틱 (초)
@@ -53,9 +53,11 @@ const AIR_STEER = 0.3 // 공중 조향 효율
 const FALL_SINK = 3 // 도로보다 이만큼 아래로 떨어지면 추락 확정 (m)
 const FALL_TIME = 1.4 // 추락 연출 시간 (초)
 const RESPAWN_BACK = 8 // 낭떠러지/건널목 몇 샘플 앞에서 다시 출발할지
-const TRAIN_HIT_TIME = 1.6 // 기차에 치여 날아가는 연출 시간 (초)
+const TRAIN_HIT_TIME = 1.6 // 기차/불기둥에 치여 날아가는 연출 시간 (초)
 const TRAIN_TOSS_UP = 12 // 치인 순간 수직 발사 속도 (m/s)
 const TRAIN_TOSS_SIDE = 9 // 기차 진행 방향으로 튕겨나가는 속도 (m/s)
+const SNOWBALL_SPEED = 17 // 눈도깨비가 던지는 눈덩이 속도 (m/s)
+const SNOWBALL_LIFE = 2.4 // 눈덩이 수명 (초)
 const SNOWMAN_RESPAWN = 7 // 부서진 눈사람이 다시 만들어지는 시간 (초)
 const OB_BOUNCE_SLOW = 0.7 // 소/펭귄에 부딪혔을 때 속도 배율
 export const FLY_TIME = 1.3 // 회오리에 휘말려 하늘로 붕 떠 있는 시간 (초, 렌더러 공유)
@@ -263,6 +265,8 @@ export function step(state, dt) {
   stepDraft(state, dt)
   stepObstacles(state, dt)
   stepTrains(state)
+  stepMonsters(state, dt)
+  stepGeysers(state)
   stepBoxes(state, dt)
   stepObjects(state, dt)
   checkFinish(state, dt)
@@ -436,7 +440,7 @@ function stepKart(state, k, dt) {
   // 끝나면 낭떠러지/건널목 앞에서 다시 출발.
   if (k.fallT > 0) {
     k.fallT = Math.max(0, k.fallT - dt)
-    if (k.fallKind === 'train') {
+    if (k.fallKind === 'train' || k.fallKind === 'erupt') {
       k.spin += dt * 12
       k.vy -= GRAV * 0.8 * dt
       k.ky = Math.max((track.samples[k.ci].y || 0) + 0.1, k.ky + k.vy * dt)
@@ -562,9 +566,12 @@ function stepKart(state, k, dt) {
   const lat = (k.x - s.x) * s.nx + (k.z - s.z) * s.nz
   k.lat = lat // 가속 발판 판정 등에서 재사용
   const edge = track.halfW - 0.6 // 카트 폭 고려
-  k.offroad = !k.air && Math.abs(lat) >= edge // 가장자리 접촉 (감속용 플래그)
-  if (!k.air && Math.abs(lat) > edge) {
-    const cl = Math.sign(lat) * edge
+  // 지름길 구간에서는 한쪽 바깥 흙길까지 감속 없이 허용된다
+  const hi = edge + shortcutWidth(track, ci, 1)
+  const lo = edge + shortcutWidth(track, ci, -1)
+  k.offroad = !k.air && (lat >= hi || lat <= -lo) // 가장자리 접촉 (감속용 플래그)
+  if (!k.air && (lat > hi || lat < -lo)) {
+    const cl = lat > hi ? hi : -lo
     k.x -= s.nx * (lat - cl)
     k.z -= s.nz * (lat - cl)
     const desired = Math.atan2(s.dz, s.dx) - Math.sign(lat) * EDGE_IN_ANGLE
@@ -625,6 +632,77 @@ function startFall(state, k) {
   releaseDrift(k, false)
   const gap = (track.gaps || []).find((g) => k.ci >= g.from - 2 && k.ci <= g.to + 2)
   k.respawnI = (((gap ? gap.from : k.ci) - RESPAWN_BACK) % track.n + track.n) % track.n
+}
+
+// 눈도깨비: 주기마다 사정거리 안의 가장 가까운 카트를 향해 눈덩이를 던진다.
+// 발사 시각은 주기 경계(결정적)라 호스트만 굴려도 모두 같은 장면을 본다.
+function stepMonsters(state, dt) {
+  const track = state.track
+  if (!track.monsters?.length) return
+  for (const m of track.monsters) {
+    const prev = Math.floor((state.time - dt) / m.period + m.phase)
+    const cur = Math.floor(state.time / m.period + m.phase)
+    if (cur === prev) continue
+    const s = track.samples[m.i]
+    const mx = s.x + s.nx * m.lat
+    const mz = s.z + s.nz * m.lat
+    let best = null
+    let bd = m.range * m.range
+    for (const k of state.karts) {
+      if (k.finished || k.rocketT > 0 || k.invT > 0 || k.fallT > 0 || k.flyT > 0) continue
+      const d2 = (k.x - mx) ** 2 + (k.z - mz) ** 2
+      if (d2 < bd) {
+        bd = d2
+        best = k
+      }
+    }
+    if (!best) continue
+    // 도착 시간만큼 살짝 앞을 노리는 예측 사격 (완벽하진 않게 0.8배)
+    const lead = (Math.sqrt(bd) / SNOWBALL_SPEED) * 0.8
+    const tx = best.x + Math.cos(best.heading) * best.speed * lead
+    const tz = best.z + Math.sin(best.heading) * best.speed * lead
+    const d = Math.hypot(tx - mx, tz - mz) || 1
+    state.objects.push({
+      kind: 'snowball',
+      id: state.nextObjId++,
+      x: mx,
+      z: mz,
+      vx: ((tx - mx) / d) * SNOWBALL_SPEED,
+      vz: ((tz - mz) / d) * SNOWBALL_SPEED,
+      life: SNOWBALL_LIFE,
+    })
+  }
+}
+
+// 용암 불기둥: 바닥이 달아오른 뒤(warn) 분출(burst) — 맞으면 하늘로 펑! 리스폰
+function stepGeysers(state) {
+  const track = state.track
+  if (!track.geysers?.length) return
+  for (const gy of track.geysers) {
+    if (!geyserState(gy, state.time).burst) continue
+    const s = track.samples[gy.i]
+    const gx = s.x + s.nx * gy.lat
+    const gz = s.z + s.nz * gy.lat
+    for (const k of state.karts) {
+      // 불기둥은 높아서 점프 중에도 맞는다!
+      if (k.finished || k.rocketT > 0 || k.invT > 0 || k.fallT > 0 || k.flyT > 0) continue
+      const dx = k.x - gx
+      const dz = k.z - gz
+      const r = gy.r + 1
+      if (dx * dx + dz * dz >= r * r) continue
+      k.fallT = TRAIN_HIT_TIME
+      k.fallKind = 'erupt'
+      k.fallSeq++
+      k.air = false
+      k.vy = TRAIN_TOSS_UP + 2
+      k.tossX = 0
+      k.tossZ = 0
+      k.speed = 0
+      k.boostT = 0
+      releaseDrift(k, false)
+      k.respawnI = (((gy.i - RESPAWN_BACK) % track.n) + track.n) % track.n
+    }
+  }
 }
 
 // 건널목을 달리는 기차와 충돌 — 치이면 하늘로 펑! 날아갔다가 건널목 앞 리스폰
@@ -767,6 +845,12 @@ function stepObjects(state, dt) {
       o.z = p.z
       o.heading = Math.atan2(p.dz, p.dx)
       if (o.life <= 0) remove.add(o.id)
+    } else if (o.kind === 'snowball') {
+      // 눈도깨비가 던진 눈덩이: 직선으로 슝~
+      o.x += o.vx * dt
+      o.z += o.vz * dt
+      o.life -= dt
+      if (o.life <= 0) remove.add(o.id)
     }
     for (const k of state.karts) {
       if (
@@ -779,6 +863,10 @@ function stepObjects(state, dt) {
       const dz = k.z - o.z
       if (dx * dx + dz * dz < r * r) {
         stunKart(k)
+        if (o.kind === 'snowball') {
+          k.bumpSeq++ // "눈덩이 명중!" 배너 트리거
+          k.bumpKind = 'snowball'
+        }
         remove.add(o.id)
         break
       }

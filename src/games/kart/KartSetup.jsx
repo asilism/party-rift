@@ -6,10 +6,10 @@ import { TRACK_LIST, DEFAULT_TRACK_ID } from './track.js'
 // 맵별 명물 미리보기 (선택 카드에 표시)
 const MAP_FEATURE = {
   meadow: '🐄 소들이 트랙을 건너다녀요',
-  desert: '유턴 헤어핀×3! 🌪️ 회오리가 하늘로 날려버려요',
-  snow: '🧊 빙판에선 핸들이 주르륵, ⛄ 와장창',
-  volcano: '🛫 점프대로 용암 협곡을 건너요! 느리면 풍덩~',
-  rails: '🚂 기차에 치이면 하늘로 펑! 끊어진 다리는 점프로',
+  snow: '🧊 빙판 주르륵 + 👹 눈도깨비가 눈덩이를 던져요!',
+  volcano: '🛫 용암 협곡 점프 + 🔥 불기둥이 솟아요!',
+  desert: '헤어핀×3 + 🌪️ 회오리, 첫 헤어핀 안쪽엔 비밀 지름길!',
+  rails: '🏙️ 빌딩 숲 최대 코스 — 🚂 기차에 치이면 하늘로 펑!',
 }
 
 // 호스트 전용 시작 화면. 카트는 기기당 1대 — 각 기기의 첫 참가자가 달린다.
@@ -50,7 +50,9 @@ export default function KartSetup({ racers, benched, onStart, onExit }) {
             >
               <span className="kart-map__emoji">{t.emoji}</span>
               <span className="kart-map__name">{t.name}</span>
-              <span className="kart-map__diff">{t.difficulty}</span>
+              <span className="kart-map__diff">
+                {'⭐'.repeat(t.stars || 1)} {t.difficulty}
+              </span>
               <span className="kart-map__desc">{MAP_FEATURE[t.id] || t.desc}</span>
             </button>
           ))}
