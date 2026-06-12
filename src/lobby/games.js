@@ -74,6 +74,16 @@ export const GAMES = [
     onlineOnly: true, // 기기마다 조이스틱이 필요 → 온라인 방 전용
     ready: true,
   },
+  {
+    id: 'rift',
+    title: '파티 리프트',
+    emoji: '⚔️',
+    desc: '3D 3:3 전장! 타워를 부수고 넥서스를 터뜨려요',
+    minPlayers: 1,
+    maxPlayers: 6,
+    onlineOnly: true, // 기기마다 조이스틱이 필요 → 온라인 방 전용
+    ready: true,
+  },
 ]
 
 // 참가 인원으로 게임 선택 가능 여부 판단. 가능하면 null, 불가면 사유 문자열.
