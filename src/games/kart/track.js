@@ -304,7 +304,7 @@ export const TRACKS = {
     theme: {
       sky: 0xa9d3ec, dusk: 0xf09a5e, ground: 0x86a85c, road: 0x4a4a52,
       treeLeaf: 0x4f9a4a, treeTrunk: 0x6e4f33, treeCount: 56,
-      flora: ['🌾', '🌻', '🪨', '🐓', '🌼', '🛤️'],
+      flora: ['🌾', '🌻', '🪨', '🐓', '🌼', '🌿'],
       pool: 0x3e7bd6, // 다리 아래 강물
     },
   }),
