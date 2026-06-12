@@ -10,8 +10,9 @@ import RaceGame from './games/race/RaceGame.jsx'
 import WhackGame from './games/whack/WhackGame.jsx'
 import TrafficGame from './games/traffic/TrafficGame.jsx'
 
-// 파티 카트는 three.js(3D)를 쓰므로 선택할 때만 내려받는다 (번들 분리)
+// 파티 카트/리프트는 three.js(3D)를 쓰므로 선택할 때만 내려받는다 (번들 분리)
 const KartGame = lazy(() => import('./games/kart/KartGame.jsx'))
+const RiftGame = lazy(() => import('./games/rift/RiftGame.jsx'))
 import ErrorBoundary from './shared/ErrorBoundary.jsx'
 import { RoomProvider, useRoom } from './net/RoomContext.jsx'
 import { loadRoster, saveRoster } from './shared/storage.js'
@@ -27,6 +28,7 @@ const GAME_COMPONENTS = {
   whack: WhackGame,
   traffic: TrafficGame,
   kart: KartGame,
+  rift: RiftGame,
 }
 
 function renderGame(id, props) {
