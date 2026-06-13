@@ -8,7 +8,7 @@ import {
   WORLD, NEXUS_POS, NEXUS_RADIUS, FOUNTAIN_RADIUS, LANES, LANE_IDS, ROCKS, BUSHES,
   WALL_LINES, WALL_RADIUS, DRAGON_PIT, BARON_PIT,
 } from './map.js'
-import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE } from './engine.js'
+import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE } from './engine.js'
 
 export const TEAM_COLOR = { blue: 0x4f8cff, red: 0xff6b6b }
 const ALLY_HP = 0x4ade80
@@ -135,7 +135,24 @@ function buildTower(team) {
   const bar = makeHpBar(4, col)
   bar.position.y = 10.4
   g.add(bar)
-  g.userData = { crystal, body, rubble, bar }
+  // 적 타워 공격범위 경고 표시 — 가까이 가면 보인다 (붉은 원판 + 테두리)
+  const range = new THREE.Group()
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(TOWER_RANGE, 40),
+    new THREE.MeshBasicMaterial({ color: 0xff3b3b, transparent: true, opacity: 0.08, depthWrite: false })
+  )
+  disc.rotation.x = -Math.PI / 2
+  disc.position.y = 0.08
+  const edge = new THREE.Mesh(
+    new THREE.RingGeometry(TOWER_RANGE - 0.7, TOWER_RANGE, 48),
+    new THREE.MeshBasicMaterial({ color: 0xff3b3b, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false })
+  )
+  edge.rotation.x = -Math.PI / 2
+  edge.position.y = 0.09
+  range.add(disc, edge)
+  range.visible = false
+  g.add(range)
+  g.userData = { crystal, body, rubble, bar, range, disc, edge }
   return g
 }
 
@@ -330,7 +347,7 @@ function buildMonster(m) {
   const bar = makeHpBar(look.r * 2.2, 0xffd34d)
   bar.position.y = look.r * 2 + look.size * 0.9
   g.add(body, face, bar)
-  g.userData = { bar }
+  g.userData = { bar, body }
   return g
 }
 
@@ -596,6 +613,22 @@ export function createRiftScene(canvas) {
         // 아직 공격 못 하는 타워는 크리스탈이 흐릿하게
         u.crystal.material.emissiveIntensity = t.vuln ? 0.45 : 0.15
       }
+      // 적 타워 사거리 경고: 내 영웅이 가까워지면 미리 범위를 보여 준다
+      let warn = false
+      if (t.alive && me && myTeam && t.team !== myTeam) {
+        const dToMe = Math.hypot(me.x - t.x, me.z - t.z)
+        const WARN_PAD = 9 // 사거리 밖 이만큼부터 미리 표시
+        if (dToMe < TOWER_RANGE + WARN_PAD) {
+          warn = true
+          const inside = dToMe <= TOWER_RANGE
+          // 가까울수록(또는 사거리 안이면) 진하게 + 안에 들어가면 깜빡인다
+          const near = Math.min(1, (TOWER_RANGE + WARN_PAD - dToMe) / WARN_PAD)
+          const pulse = inside ? 0.6 + Math.sin(view.time * 9) * 0.35 : 1
+          u.edge.material.opacity = (0.2 + near * 0.45) * pulse
+          u.disc.material.opacity = (0.04 + near * 0.12) * (inside ? 1.4 : 1)
+        }
+      }
+      u.range.visible = warn
     }
     // 넥서스
     for (const team of ['blue', 'red']) {
@@ -669,6 +702,15 @@ export function createRiftScene(canvas) {
       (obj, m) => {
         obj.position.set(m.x, Math.sin(view.time * 2 + m.x) * 0.15, m.z)
         setHpBar(obj.userData.bar, m.hp / m.maxHp)
+        // 분노(enrage): 교전이 길어질수록 붉게 달아오르고 거칠게 떤다
+        const body = obj.userData.body
+        if (body) {
+          const rage = Math.min(1, (m.enrage || 0) / 6)
+          body.material.emissive.setRGB(rage, 0, 0)
+          body.material.emissiveIntensity = rage
+          const shake = rage > 0 ? 1 + Math.sin(view.time * 18) * 0.06 * rage : 1
+          body.scale.setScalar(shake)
+        }
       }
     )
     // 투사체
