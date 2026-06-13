@@ -109,8 +109,12 @@ const MINION_DEFEND_HURT_T = 1.5 // 아군이 최근 이 시간 안에 맞았어
 const TOWER_HP = [0, 900, 1100] // tier 1(외곽) / 2(내곽)
 export const TOWER_RANGE = 13
 const TOWER_CD = 1.2
-const TOWER_DMG_HERO = 85
+const TOWER_DMG_HERO = 180 // 영웅 기본 피해 — 같은 영웅을 연속으로 맞히면 점점 세진다
 const TOWER_DMG_MINION = 60
+// 타워 응징 가중: 같은 영웅을 연달아 맞힐 때마다 피해 배율이 오른다 (다이브 응징).
+//  1발째 ×1 → 2발째 ×1.9 → 3발째 ×2.8 … (최대 ×4). 표적이 바뀌거나 한 발 쉬면 초기화.
+const TOWER_RAMP = 0.9
+const TOWER_RAMP_MAX = 4
 const TOWER_XP = 90
 const NEXUS_HP = 1700
 
@@ -964,16 +968,36 @@ function stepMinions(state, dt) {
         marched = true
       }
     } else {
-      // 레인 행군
+      // 레인 행군: 경유지를 차례로 통과한다.
+      //  - 경유지에 "닿거나" 진행 방향으로 그 지점을 "지나치면" 다음 경유지로 넘어간다.
+      //  - 미드 1차 타워는 경유지(-34,0)/(34,0) 위에 서 있어 그 칸에 3 이내로
+      //    못 들어간다 → 닿기만 기다리면 wpI가 안 넘어가 타워를 빙빙 돌며 라인이 멈춘다.
+      //    "지나침" 판정을 더해 타워를 돌아 나가면 곧장 다음 칸을 향하게 한다.
       const wps = LANES[m.lane]
       const dirI = m.team === 'blue' ? 1 : -1
+      let guard = 0
+      while (guard++ < wps.length) {
+        const wp = wps[m.wpI]
+        const nextWp = wps[m.wpI + dirI]
+        if (!wp) break
+        let passed = dist(m, wp) < 3
+        if (!passed && nextWp) {
+          // 경유지에서 다음 경유지로 향하는 방향 기준, 미니언이 그 너머에 있으면 지나친 것
+          const fx = nextWp.x - wp.x
+          const fz = nextWp.z - wp.z
+          if ((m.x - wp.x) * fx + (m.z - wp.z) * fz > 0) passed = true
+        }
+        if (passed) m.wpI += dirI
+        else break
+      }
       const wp = wps[m.wpI]
       if (wp) {
-        if (dist(m, wp) < 3) m.wpI += dirI
-        else {
-          moveMinion(state, m, wp, dt)
-          marched = true
-        }
+        // 현재 칸에 가까워지면 다음 칸을 겨눈다. 그래야 그 칸 위에 선 타워를
+        // "목적지"가 아닌 "장애물"로 보고 avoidDir가 깔끔히 돌아 나간다.
+        const nextWp = wps[m.wpI + dirI]
+        const aim = nextWp && dist(m, wp) < 7 ? nextWp : wp
+        moveMinion(state, m, aim, dt)
+        marched = true
       }
     }
     resolveTerrain(m, 0.8, state.towers)
@@ -1124,13 +1148,30 @@ function stepTowers(state, dt) {
         }
       }
     }
-    if (!ref) continue
+    if (!ref) {
+      // 표적이 없으면(영웅이 빠지면) 응징 연사 게이지 초기화
+      t.streak = 0
+      t.streakTarget = null
+      continue
+    }
     t.cd = TOWER_CD
+    let dmg
+    if (ref.tk === 'hero') {
+      // 같은 영웅을 연달아 맞히면 점점 세진다 (다이브 응징)
+      if (t.streakTarget === ref.id) t.streak = (t.streak || 0) + 1
+      else {
+        t.streak = 0
+        t.streakTarget = ref.id
+      }
+      dmg = TOWER_DMG_HERO * Math.min(TOWER_RAMP_MAX, 1 + TOWER_RAMP * t.streak)
+    } else {
+      t.streak = 0
+      t.streakTarget = null
+      dmg = TOWER_DMG_MINION
+    }
     state.projectiles.push({
       id: state.nextId++, kind: 'towerbolt', team: t.team,
-      x: t.x, z: t.z, target: ref,
-      dmg: ref.tk === 'hero' ? TOWER_DMG_HERO : TOWER_DMG_MINION,
-      speed: 34,
+      x: t.x, z: t.z, target: ref, dmg, speed: 34,
     })
   }
 }
@@ -1322,6 +1363,82 @@ function botJungleMove(state, h) {
   return true
 }
 
+// 적 타워에서 안전거리(사거리 밖)를 두고 대기 — 제자리 진동 없이 한 자리에 머문다.
+function botHoldOutside(state, h, objective) {
+  const hold = TOWER_RANGE + 3
+  const d = dist(h, objective)
+  if (d < hold - 1) {
+    const away = Math.atan2(h.z - objective.z, h.x - objective.x)
+    h.mx = Math.cos(away) * 0.6
+    h.mz = Math.sin(away) * 0.6
+  } else if (d > hold + 3) {
+    steerToward(state, h, objective)
+  } else {
+    h.mx = 0
+    h.mz = 0
+  }
+}
+
+// 타워에 들이박을 수 없을 때(미니언 방패 없음) 다른 할 일을 찾는다.
+// 적 타워 "너머"의 목표(정글 등)로 가면 타워를 끼고 빙빙 돌게 되니,
+// 안전한 우리 쪽으로 후퇴해 합류·지원하는 쪽을 고른다.
+//  1) 이 레인에 아군 미니언이 오고 있으면 마중 나가 함께 전진
+//  2) 아군 미니언 어디든 합류 (후퇴했다가 같이 밀러 온다)
+//  3) 가까운 아군 영웅 지원
+// (지나는 길의 가까운 정글몹은 botJungleMove가 앞단에서 이미 챙긴다)
+function botSeekWork(state, h, lane, objective) {
+  // 1) 이 레인 아군 미니언 중 타워에 가장 가까운(선두) 미니언
+  let lead = null
+  let lbd = Infinity
+  for (const m of state.minions) {
+    if (m.team !== h.team || m.lane !== lane) continue
+    const d = dist(m, objective)
+    if (d < lbd) {
+      lbd = d
+      lead = m
+    }
+  }
+  if (lead) {
+    // 선두 미니언이 아직 타워에서 멀고 나와도 떨어져 있으면 마중 나간다
+    if (dist(h, lead) > 7 && lbd > TOWER_RANGE) {
+      steerToward(state, h, lead)
+      return true
+    }
+    return false // 곧 합류한다 → 안전거리에서 대기(holdOutside)
+  }
+  // 2) 어느 레인이든 가장 가까운 아군 미니언에 합류
+  let mn = null
+  let mbd = Infinity
+  for (const m of state.minions) {
+    if (m.team !== h.team) continue
+    const d = dist2(h, m)
+    if (d < mbd) {
+      mbd = d
+      mn = m
+    }
+  }
+  if (mn) {
+    steerToward(state, h, mn)
+    return true
+  }
+  // 3) 가까운 아군 영웅 지원
+  let mate = null
+  let tbd = Infinity
+  for (const o of state.heroes) {
+    if (o === h || o.team !== h.team || o.respawnT > 0) continue
+    const d = dist2(h, o)
+    if (d < tbd) {
+      tbd = d
+      mate = o
+    }
+  }
+  if (mate) {
+    steerToward(state, h, mate)
+    return true
+  }
+  return false
+}
+
 // 레인 봇: 경유지를 따라 적 본진 쪽으로. 목표 타워 근처에선
 // 아군 미니언이 받아주고 있을 때만 들어간다 (타워 다이브 금지).
 function botLaneMove(state, h) {
@@ -1331,22 +1448,25 @@ function botLaneMove(state, h) {
     state.towers.find((t) => t.team === en && t.lane === lane && t.tier === 1 && t.alive) ||
     state.towers.find((t) => t.team === en && t.lane === lane && t.tier === 2 && t.alive) ||
     NEXUS_POS[en]
-  // 타워가 살아있고 아군 미니언 방패가 없으면 사거리 밖에서 대기
+  // 적 타워 근처(넉넉한 반경)에서의 행동을 한 자리에서 결정한다 — 사거리 경계 진동 방지
   const dObj = dist(h, objective)
-  if (objective.id && dObj < TOWER_RANGE + 2) {
+  if (objective.id && dObj < TOWER_RANGE + 8) {
     const shield = state.minions.some((m) => m.team === h.team && dist(m, objective) < TOWER_RANGE)
-    if (!shield) {
-      const away = Math.atan2(h.z - objective.z, h.x - objective.x)
-      h.mx = Math.cos(away) * 0.7
-      h.mz = Math.sin(away) * 0.7
+    // 타워 응징 연사가 매서우니, 방패가 있어도 타워가 빈사이거나 탱커일 때만 마무리 다이브
+    const lowTower = objective.hp < objective.maxHp * 0.3
+    const beefy = h.cls === 'tank' || h.shieldT > 0
+    if (shield && (lowTower || beefy) && h.hp > h.maxHp * 0.5) {
+      if (dObj <= CLASSES[h.cls].range - 0.5) {
+        h.mx = 0
+        h.mz = 0
+      } else {
+        steerToward(state, h, objective)
+      }
       return
     }
-    if (dObj <= CLASSES[h.cls].range - 0.5) {
-      h.mx = 0
-      h.mz = 0
-      return
-    }
-    steerToward(state, h, objective)
+    // 들이박지 않는다 → 다른 할 일을 찾고, 없으면 안전거리에서 대기
+    if (botSeekWork(state, h, lane, objective)) return
+    botHoldOutside(state, h, objective)
     return
   }
   // 경유지 행군: 가장 가까운 경유지의 "다음 칸"을 향한다.
