@@ -91,6 +91,7 @@ const FOUNTAIN_HEAL = 0.12
 const FOUNTAIN_DMG = 90 // 적 우물에 들어가면 따끔!
 const XP_RANGE = 22 // 처치 경험치를 나눠 받는 거리
 const TOWER_AGGRO_TIME = 3 // 적 영웅을 때리면 타워가 이만큼 노린다
+export const RECALL_TIME = 7 // 귀환 시전(채널링) 시간 — 방해 없이 버티면 우물로 복귀
 
 // ── 미니언 ──
 const WAVE_PERIOD = 28
@@ -187,6 +188,7 @@ export function createGame(players, rng = Math.random) {
       stunT: 0,
       shieldT: 0, // 탱커 방패막기 남은 시간
       slowT: 0, // 공격 직후 무거운 발 남은 시간
+      recallT: 0, // 귀환 채널링 남은 시간 (>0이면 시전 중)
       respawnT: 0, // >0이면 사망 중
       bushI: -1, // 들어가 있는 수풀 (적에겐 안 보인다)
       revealT: 0, // 공격 직후 모습이 드러나는 시간
@@ -413,6 +415,26 @@ function getHero(state, id) {
   return state.heroes.find((p) => p.id === id)
 }
 
+// 귀환 채널링을 끊는다 (이동·피격·기절·다른 행동에 방해받으면)
+function cancelRecall(h) {
+  h.recallT = 0
+}
+
+// ── 귀환: 쿨다운 없이 RECALL_TIME초 집중하면 우물로 복귀. 다시 누르면 취소. ──
+export function castRecall(state, id) {
+  if (state.status !== 'playing') return state
+  const h = getHero(state, id)
+  if (!h) return state
+  if (h.recallT > 0) {
+    h.recallT = 0 // 시전 중 다시 누르면 취소
+    return state
+  }
+  if (!canAct(h)) return state
+  h.recallT = RECALL_TIME
+  pushFx(state, 'recall', h.x, h.z, 3, h.team)
+  return state
+}
+
 // ── 기본공격: 사거리 안 가장 가까운 적에게 자동 조준 ──
 export function castAttack(state, id) {
   if (state.status !== 'playing') return state
@@ -421,6 +443,7 @@ export function castAttack(state, id) {
   const ref = findAttackTarget(state, h, CLASSES[h.cls].range)
   if (!ref) return state
   const tgt = targetEntity(state, ref)
+  cancelRecall(h) // 공격하면 집중이 풀린다
   h.atkCd = CLASSES[h.cls].atkCd
   h.atkSeq++
   h.dir = Math.atan2(tgt.z - h.z, tgt.x - h.x)
@@ -440,6 +463,7 @@ export function castSkill(state, id) {
   if (!h || !canAct(h) || h.skillCd > 0) return state
   const ok = SKILLS[h.cls](state, h)
   if (ok === false) return state // 대상이 없으면 쿨다운을 안 쓴다
+  cancelRecall(h) // 스킬을 쓰면 집중이 풀린다
   h.skillCd = CLASSES[h.cls].skill.cd
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
   return state
@@ -525,6 +549,7 @@ export function castUlt(state, id) {
   if (!h || !canAct(h) || h.ultCd > 0 || h.lvl < ULT_LEVEL) return state
   const ok = ULTS[h.cls](state, h)
   if (ok === false) return state
+  cancelRecall(h) // 궁극기를 쓰면 집중이 풀린다
   h.ultCd = CLASSES[h.cls].ult.cd
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
   return state
@@ -598,6 +623,7 @@ function damageHero(state, victim, amount, attacker) {
   if (victim.shieldT > 0) amount *= SHIELD_CUT // 방패막기!
   victim.hp -= amount
   victim.lastHurt = state.time
+  if (victim.recallT > 0) victim.recallT = 0 // 피해를 받으면 귀환이 끊긴다
   if (attacker?.id) {
     victim.lastHitBy = attacker.id
     attacker.aggroT = TOWER_AGGRO_TIME // 타워 앞에서 깐족이면 타워가 노린다
@@ -827,6 +853,24 @@ function stepHero(state, h, dt) {
     return
   }
   h.stunT = Math.max(0, h.stunT - dt)
+  // 귀환 채널링: 가만히, 방해(이동/기절/피격) 없이 RECALL_TIME초 버티면 우물로 복귀
+  if (h.recallT > 0) {
+    const moving = Math.hypot(h.mx, h.mz) > 0.12
+    if (h.stunT > 0 || moving) {
+      h.recallT = 0 // 방해받음 → 취소
+    } else {
+      h.recallT = Math.max(0, h.recallT - dt)
+      if (h.recallT === 0) {
+        const slot = state.heroes.filter((o) => o.team === h.team).indexOf(h)
+        const pos = spawnPos(h.team, slot)
+        h.x = pos.x
+        h.z = pos.z
+        h.dir = h.team === 'blue' ? 0 : Math.PI
+        h.bushI = bushIndexAt(h.x, h.z)
+        pushFx(state, 'recall', h.x, h.z, 4, h.team)
+      }
+    }
+  }
   // 이동
   if (h.stunT <= 0) {
     const len = Math.hypot(h.mx, h.mz)
@@ -1542,6 +1586,7 @@ export function makeView(state) {
       ultLocked: h.lvl < ULT_LEVEL,
       stunT: r2d(h.stunT),
       shieldT: r2d(h.shieldT),
+      recallT: r2d(h.recallT),
       respawnT: r2d(h.respawnT),
       bushI: h.bushI,
       revealT: r2d(h.revealT),

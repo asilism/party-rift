@@ -6,7 +6,7 @@ import RiftControls from './RiftControls.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import {
-  createGame, setInput, castAttack, castSkill, castUlt, step, makeView, makeBot,
+  createGame, setInput, castAttack, castSkill, castUlt, castRecall, step, makeView, makeBot,
   STEP, TEAM_SIZE, ULT_LEVEL, CLASSES, CLASS_IDS,
 } from './engine.js'
 import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
@@ -55,6 +55,7 @@ export default function RiftGame({ roster, onExit, net }) {
       if (a.slot === 'atk') castAttack(st, a.playerId)
       else if (a.slot === 'skill') castSkill(st, a.playerId)
       else if (a.slot === 'ult') castUlt(st, a.playerId)
+      else if (a.slot === 'recall') castRecall(st, a.playerId)
     }
   }
 
@@ -187,7 +188,8 @@ export default function RiftGame({ roster, onExit, net }) {
     if (isHost && st) {
       if (slot === 'atk') castAttack(st, myId)
       else if (slot === 'skill') castSkill(st, myId)
-      else castUlt(st, myId)
+      else if (slot === 'ult') castUlt(st, myId)
+      else if (slot === 'recall') castRecall(st, myId)
     } else {
       sendAction({ type: 'cast', playerId: myId, slot })
     }
@@ -381,6 +383,7 @@ function RiftPlay({
           onAttack={() => onCast('atk')}
           onSkill={() => onCast('skill')}
           onUlt={() => onCast('ult')}
+          onRecall={() => onCast('recall')}
           me={me}
           disabled={me.respawnT > 0}
         />

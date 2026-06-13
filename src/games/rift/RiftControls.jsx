@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CLASSES } from './engine.js'
+import { CLASSES, RECALL_TIME } from './engine.js'
 
 const JOY_RADIUS = 60 // px. 이만큼 끌면 풀 스피드
 const ATK_REPEAT_MS = 220 // 공격 버튼을 누르고 있으면 연타해 준다
@@ -40,17 +40,51 @@ function CdButton({ className, icon, label, cd, cdMax, locked, lockText, onPress
   )
 }
 
-export default function RiftControls({ onMove, onAttack, onSkill, onUlt, me, disabled }) {
+// 귀환 버튼: 쿨다운 없이 7초 채널링. 시전 중엔 남은 시간만큼 차오르는 게이지를 보여준다.
+// (이동/피격/기절/다른 스킬에 방해받으면 엔진이 취소한다. 다시 누르면 시전 취소)
+function RecallButton({ recallT, onPress }) {
+  const channeling = recallT > 0
+  const frac = channeling ? 1 - recallT / RECALL_TIME : 0 // 진행도(0→1)
+  return (
+    <button
+      className={`rift-btn rift-btn--recall ${channeling ? 'rift-btn--channel-on' : 'rift-btn--ready'}`}
+      onPointerDown={() => onPress?.()}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <span className="rift-btn__icon">🏠</span>
+      <small>{channeling ? '시전중' : '귀환'}</small>
+      {channeling && (
+        <span
+          className="rift-btn__cd"
+          style={{ background: `conic-gradient(rgba(40, 190, 200, 0.85) ${frac * 360}deg, rgba(8, 12, 26, 0.6) 0deg)` }}
+        >
+          {Math.ceil(recallT)}
+        </span>
+      )}
+    </button>
+  )
+}
+
+export default function RiftControls({ onMove, onAttack, onSkill, onUlt, onRecall, me, disabled }) {
   const [joy, setJoy] = useState(null) // {ox, oy, dx, dy}
   const joyPointer = useRef(null)
   const onMoveRef = useRef(onMove)
   onMoveRef.current = onMove
   const onAttackRef = useRef(onAttack)
   onAttackRef.current = onAttack
+  // 키보드 핸들러는 마운트 시 한 번만 등록한다(아래 useEffect [] 의존). 콜백은 ref로 최신화 —
+  // 매 렌더마다 새로 만들어지는 onSkill/onUlt를 의존성에 넣으면 effect가 재실행되며
+  // 눌린 키 집합(held)이 초기화돼 대각(동시키) 입력이 사라진다.
+  const onSkillRef = useRef(onSkill)
+  onSkillRef.current = onSkill
+  const onUltRef = useRef(onUlt)
+  onUltRef.current = onUlt
+  const onRecallRef = useRef(onRecall)
+  onRecallRef.current = onRecall
   const atkTimer = useRef(null)
   const cls = CLASSES[me?.cls] || CLASSES.warrior
 
-  // 키보드: WASD/화살표 이동, Space/J 공격, K 스킬, L 궁극기
+  // 키보드: WASD/화살표 이동(대각 포함), Space/J 공격, K 스킬, L 궁극기, B 귀환
   useEffect(() => {
     const held = new Set()
     const apply = () => {
@@ -68,8 +102,9 @@ export default function RiftControls({ onMove, onAttack, onSkill, onUlt, me, dis
         onAttackRef.current?.()
         return
       }
-      if (e.key === 'k' || e.key === 'K') return onSkill?.()
-      if (e.key === 'l' || e.key === 'L') return onUlt?.()
+      if (e.key === 'k' || e.key === 'K') return onSkillRef.current?.()
+      if (e.key === 'l' || e.key === 'L') return onUltRef.current?.()
+      if (e.key === 'b' || e.key === 'B') return onRecallRef.current?.()
       for (const set of Object.values(KEYS)) {
         if (set.has(e.key)) {
           e.preventDefault()
@@ -88,7 +123,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onUlt, me, dis
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
-  }, [onSkill, onUlt])
+  }, [])
 
   useEffect(() => () => clearInterval(atkTimer.current), [])
 
@@ -176,6 +211,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onUlt, me, dis
         onPress={atkPress}
         onRelease={atkRelease}
       />
+      <RecallButton recallT={me?.recallT ?? 0} onPress={onRecall} />
     </>
   )
 }
