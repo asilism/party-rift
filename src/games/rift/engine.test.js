@@ -6,7 +6,8 @@ import {
   STEP, COUNTDOWN_TIME, TIME_LIMIT, ULT_LEVEL, TEAM_SIZE, MAX_LEVEL, CLASS_IDS, CLASSES,
 } from './engine.js'
 import {
-  NEXUS_POS, LANES, LANE_IDS, BUSHES, nearestWp, resolveTerrain, WORLD, bushIndexAt,
+  NEXUS_POS, LANES, LANE_IDS, BUSHES, WALLS, TOWER_SPOTS, avoidDir,
+  nearestWp, resolveTerrain, WORLD, bushIndexAt,
 } from './map.js'
 
 // 3:3 사람 풀파티 — 직업 6종이 모두 등장한다 (봇 AI가 안 끼어 결정적 테스트가 쉽다)
@@ -215,12 +216,12 @@ test('수풀 은신: 적에겐 안 보이고, 자동 조준에도 안 잡힌다 
   startPlaying(g)
   const hider = g.heroes[0] // blue mage
   const seeker = g.heroes[3] // red healer
-  const bush = BUSHES[7] // (0, 16)
+  const bush = BUSHES[9] // (0, 16) — 강가 수풀
   hider.x = bush.x
   hider.z = bush.z
   step(g, STEP) // bushI 갱신
   assert.ok(hider.bushI >= 0)
-  assert.equal(bushIndexAt(bush.x, bush.z), 7)
+  assert.equal(bushIndexAt(bush.x, bush.z), 9)
   // 적이 코앞 시야 거리(수풀 밖)에 있어도 안 보인다
   seeker.x = bush.x + 8
   seeker.z = bush.z
@@ -435,6 +436,65 @@ test('레벨은 최대 10: 경험치를 쏟아부어도 그 위로 안 오른다
   }
   assert.equal(h.lvl, MAX_LEVEL)
   assert.ok(h.maxHp > CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * 7)
+})
+
+test('성벽: 본진은 막혀 있고, 출입구 3곳은 모두 내곽 타워 사거리 안', () => {
+  // 성벽 한가운데는 뚫고 들어갈 수 없다
+  const p = { x: -82, z: -50 }
+  resolveTerrain(p, 1.3, [])
+  assert.ok(Math.hypot(p.x - -82, p.z - -50) >= 3, '성벽 안이면 밀려나야 한다')
+  // 파랑 출입구(레인이 성벽을 지나는 곳) 3곳 모두 내곽 타워가 지킨다
+  const TOWER_RANGE = 13
+  for (const gap of [{ x: -82, z: -36 }, { x: -82, z: 0 }, { x: -82, z: 36 }]) {
+    assert.equal(bushIndexAt(gap.x, gap.z), -1) // 출입구에 수풀은 없다
+    const guard = TOWER_SPOTS.some(
+      (t) => t.team === 'blue' && t.tier === 2 &&
+        Math.hypot(t.x - gap.x, t.z - gap.z) <= TOWER_RANGE - 2
+    )
+    assert.ok(guard, `출입구 (${gap.x},${gap.z})는 내곽 타워 사거리 안이어야 한다`)
+  }
+  assert.ok(WALLS.length > 50) // 충돌 원들이 깔려 있다
+})
+
+test('avoidDir: 길을 막는 타워/성벽이 있으면 접선으로 비켜 간다', () => {
+  // 정면에 타워가 있는 직선 경로 → 옆으로 꺾인 방향이 나온다
+  const towers = [{ x: -34, z: -56, alive: true }]
+  const e = { x: -44, z: -56 }
+  const d = avoidDir(e, -24, -56, towers, 0.8)
+  assert.ok(Math.abs(d.z) > 0.3, `옆으로 비켜야 한다 (got ${d.x},${d.z})`)
+  // 막는 게 없으면 직진
+  const d2 = avoidDir({ x: 0, z: 0 }, 10, 0, [], 0.8)
+  assert.ok(d2.x > 0.99 && Math.abs(d2.z) < 0.01)
+})
+
+test('미니언이 자기 타워에 껴서 못 가는 문제 회귀: 돌아서 전진한다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  // 파랑 외곽 타워(-34,-56) 바로 뒤에서 적진 쪽으로 행군하는 미니언
+  const m = plantMinion(g, 'blue', -46, -56, 500)
+  m.wpI = 4 // (0,-58)을 향해 — 직선 경로가 타워에 막힌다
+  run(g, 6)
+  assert.ok(m.x > -28, `타워를 돌아서 지나가야 한다 (x=${m.x.toFixed(1)})`)
+})
+
+test('공격 모션 신호: 영웅 atkSeq 증가, 원거리 미니언은 화살 투사체를 쏜다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[0]
+  h.x = 0
+  h.z = 0
+  plantMinion(g, 'red', 5, 0, 9999)
+  const seq0 = h.atkSeq
+  castAttack(g, h.id)
+  assert.equal(h.atkSeq, seq0 + 1)
+  // 원거리 미니언: 사거리 안 적을 만나면 투사체를 쏜다
+  const rm = plantMinion(g, 'blue', 12, 0, 9999)
+  rm.ranged = true
+  rm.dir = 0
+  rm.atkSeq = 0
+  run(g, 0.1) // 화살이 아직 날아가는 중
+  assert.ok(rm.atkSeq > 0, '원거리 미니언이 공격해야 한다')
+  assert.ok(g.projectiles.some((p) => p.team === 'blue' && p.kind === 'bolt'))
 })
 
 test('지형: 바위/맵 경계를 뚫고 나갈 수 없다', () => {
