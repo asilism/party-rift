@@ -2000,10 +2000,17 @@ body {
   right: 252px; bottom: 22px; width: 92px; height: 92px; font-size: 32px;
   background: rgba(155, 107, 214, 0.92);
 }
+.rift-btn--recall {
+  left: 22px; bottom: 20px; width: 84px; height: 84px; font-size: 30px;
+  background: rgba(40, 180, 196, 0.9);
+}
+.rift-btn--recall small { font-size: 11px; }
+.rift-btn--channel-on { border-color: #8af0f7; box-shadow: 0 0 22px rgba(74, 214, 224, 0.9); }
 .rift-btn--ready { border-color: #fff; }
 .rift-btn--atk.rift-btn--ready { box-shadow: 0 0 22px rgba(255, 160, 80, 0.8); }
 .rift-btn--skill.rift-btn--ready { box-shadow: 0 0 22px rgba(110, 170, 255, 0.9); }
 .rift-btn--ult.rift-btn--ready { box-shadow: 0 0 26px rgba(200, 140, 255, 0.95); }
+.rift-btn--recall.rift-btn--ready { box-shadow: 0 0 20px rgba(80, 220, 230, 0.85); }
 .rift-btn__cd {
   position: absolute; inset: 0; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;

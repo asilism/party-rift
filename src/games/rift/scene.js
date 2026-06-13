@@ -303,11 +303,19 @@ function buildHero(h, mine, barColor) {
   const stun = emojiSprite('💫', 2)
   stun.position.y = 5.4 * s
   stun.visible = false
+  // 귀환 채널링 링 (발밑에서 청록색으로 돈다)
+  const recall = new THREE.Mesh(
+    new THREE.RingGeometry(1.7, 2.4, 28),
+    new THREE.MeshBasicMaterial({ color: 0x4ad6e0, transparent: true, opacity: 0.9, side: THREE.DoubleSide })
+  )
+  recall.rotation.x = -Math.PI / 2
+  recall.position.y = 0.14
+  recall.visible = false
   // 직업 무기 — 몸통에 붙여 바라보는 방향과 함께 돈다
   const weapon = buildWeapon(h.cls)
   body.add(weapon)
-  g.add(body, face, name, bar, ring, buff, shield, stun)
-  g.userData = { body, face, bar, ring, buff, shield, stun, weapon, lastAtkSeq: h.atkSeq, animT: 1 }
+  g.add(body, face, name, bar, ring, buff, shield, stun, recall)
+  g.userData = { body, face, bar, ring, buff, shield, stun, recall, weapon, lastAtkSeq: h.atkSeq, animT: 1 }
   return g
 }
 
@@ -372,6 +380,7 @@ const FX_LOOK = {
   level: { color: 0xffe066 },
   death: { color: 0x39405c },
   shield: { color: 0x9fd0ff },
+  recall: { color: 0x4ad6e0 },
 }
 
 // id → 3D 오브젝트 풀 동기화: 스냅샷에 있으면 만들고/갱신, 없으면 치운다
@@ -654,6 +663,8 @@ export function createRiftScene(canvas) {
         u.body.rotation.y = -h.dir
         setHpBar(u.bar, h.hp / h.maxHp)
         u.stun.visible = h.stunT > 0
+        u.recall.visible = h.recallT > 0
+        if (u.recall.visible) u.recall.rotation.z = view.time * 3
         u.shield.visible = h.shieldT > 0
         u.buff.visible = h.dragonT > 0 || h.baronT > 0
         u.buff.material.color.set(h.baronT > 0 ? 0x9b6bd6 : 0xffa94d)
