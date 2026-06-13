@@ -23,13 +23,13 @@ export const TEAM_SIZE = 3
 export const CLASSES = {
   warrior: {
     name: '전사', icon: '⚔️', desc: '돌진해서 베는 근접 딜러',
-    hp: 620, hpLvl: 70, atk: 62, atkLvl: 9, range: 3.8, atkCd: 0.7, speed: 13.5, def: 0.85,
+    hp: 620, hpLvl: 70, atk: 62, atkLvl: 9, range: 3.8, atkCd: 0.7, speed: 14.2, def: 0.85,
     skill: { name: '돌진', icon: '💨', cd: 7, desc: '적에게 돌진해 베고 잠깐 기절' },
     ult: { name: '회전베기', icon: '🌪️', cd: 40, desc: '주변을 크게 휩쓴다' },
   },
   archer: {
-    name: '궁수', icon: '🏹', desc: '제일 긴 사거리의 원거리 딜러',
-    hp: 440, hpLvl: 48, atk: 50, atkLvl: 9, range: 12.5, atkCd: 0.65, speed: 13,
+    name: '궁수', icon: '🏹', desc: '제일 긴 사거리·제일 약한 몸의 원거리 딜러',
+    hp: 360, hpLvl: 38, atk: 50, atkLvl: 9, range: 12.5, atkCd: 0.65, speed: 12.8,
     skill: { name: '연속사격', icon: '🎯', cd: 6, desc: '화살 3발을 연달아 쏜다' },
     ult: { name: '화살비', icon: '☄️', cd: 42, desc: '멀리 있는 적 머리 위로 화살 폭격' },
   },
@@ -41,19 +41,19 @@ export const CLASSES = {
   },
   healer: {
     name: '힐러', icon: '💚', desc: '아군을 살리는 서포터',
-    hp: 470, hpLvl: 52, atk: 38, atkLvl: 6, range: 9.5, atkCd: 0.9, speed: 13,
+    hp: 470, hpLvl: 52, atk: 38, atkLvl: 6, range: 9.5, atkCd: 0.9, speed: 12.8,
     skill: { name: '치유', icon: '💞', cd: 8, desc: '제일 아픈 아군(나 포함)을 회복' },
     ult: { name: '성역', icon: '✨', cd: 50, desc: '주변 아군 모두 크게 회복 + 기절 해제' },
   },
   assassin: {
-    name: '암살자', icon: '🥷', desc: '제일 빠른 발의 기습 딜러',
-    hp: 500, hpLvl: 54, atk: 68, atkLvl: 10, range: 4.2, atkCd: 0.55, speed: 15, def: 0.88,
+    name: '암살자', icon: '🥷', desc: '제일 빠른 발·높은 공격력이지만 몸이 약한 기습 딜러',
+    hp: 430, hpLvl: 44, atk: 70, atkLvl: 10, range: 4.2, atkCd: 0.55, speed: 15, def: 0.9,
     skill: { name: '점멸습격', icon: '🌀', cd: 8, desc: '적 등 뒤로 순간이동해 벤다' },
     ult: { name: '그림자처형', icon: '☠️', cd: 38, desc: '빈사 상태 적에게 2배 일격, 처치 시 점멸 초기화' },
   },
   tank: {
-    name: '탱커', icon: '🛡️', desc: '앞장서서 버티는 방패',
-    hp: 780, hpLvl: 92, atk: 44, atkLvl: 6, range: 3.8, atkCd: 0.85, speed: 12.5, def: 0.8,
+    name: '탱커', icon: '🛡️', desc: '앞장서서 버티는 방패 — 느리지만 단단하다',
+    hp: 800, hpLvl: 94, atk: 44, atkLvl: 6, range: 3.8, atkCd: 0.85, speed: 10.8, def: 0.8,
     skill: { name: '방패막기', icon: '🛡️', cd: 9, desc: '3초간 받는 피해 65% 감소 + 돌진 가속' },
     ult: { name: '대지강타', icon: '💥', cd: 44, desc: '땅을 내려쳐 주변을 길게 기절' },
   },
@@ -200,6 +200,7 @@ export function createGame(players, rng = Math.random) {
       // 봇 상태
       botRetreat: false,
       botStrafe: rng() * Math.PI * 2,
+      botSeekT: 0, // >0이면 타워 앞에서 "딴 일"(합류/정글/지원)을 잠시 유지
     }
   })
   for (const h of heroes) {
@@ -1289,8 +1290,8 @@ function stepBots(state, dt) {
     }
     // 교전 상대가 없으면 임무 수행
     castAttack(state, h.id) // 미니언/정글/타워 등 사거리 안 아무거나
-    if (botJungleMove(state, h)) continue
-    botLaneMove(state, h)
+    if (h.botSeekT > 0 ? false : botJungleMove(state, h)) continue
+    botLaneMove(state, h, dt)
   }
 }
 
@@ -1383,14 +1384,13 @@ function botHoldOutside(state, h, objective) {
 }
 
 // 타워에 들이박을 수 없을 때(미니언 방패 없음) 다른 할 일을 찾는다.
-// 적 타워 "너머"의 목표(정글 등)로 가면 타워를 끼고 빙빙 돌게 되니,
-// 안전한 우리 쪽으로 후퇴해 합류·지원하는 쪽을 고른다.
-//  1) 이 레인에 아군 미니언이 오고 있으면 마중 나가 함께 전진
-//  2) 아군 미니언 어디든 합류 (후퇴했다가 같이 밀러 온다)
-//  3) 가까운 아군 영웅 지원
-// (지나는 길의 가까운 정글몹은 botJungleMove가 앞단에서 이미 챙긴다)
+//  1) 이 레인에 아군 미니언이 멀리서 오고 있으면 마중 나가 함께 전진
+//  2) 가까운 정글몹 탐험 (적당한 거리 안)
+//  3) 다른 레인에서 밀고 있는 아군 미니언에 합류
+//  4) 가까운 아군 영웅 지원
+// 호출부(botLaneMove)가 이 선택을 잠시 유지(botSeekT)해 타워 앞 진동을 막는다.
 function botSeekWork(state, h, lane, objective) {
-  // 1) 이 레인 아군 미니언 중 타워에 가장 가까운(선두) 미니언
+  // 1) 이 레인 선두 아군 미니언
   let lead = null
   let lbd = Infinity
   for (const m of state.minions) {
@@ -1401,15 +1401,28 @@ function botSeekWork(state, h, lane, objective) {
       lead = m
     }
   }
-  if (lead) {
-    // 선두 미니언이 아직 타워에서 멀고 나와도 떨어져 있으면 마중 나간다
-    if (dist(h, lead) > 7 && lbd > TOWER_RANGE) {
-      steerToward(state, h, lead)
-      return true
-    }
-    return false // 곧 합류한다 → 안전거리에서 대기(holdOutside)
+  if (lead && lbd > TOWER_RANGE + 6) {
+    // 웨이브가 아직 타워에서 멀다 → 마중 나가 함께 온다
+    steerToward(state, h, lead)
+    return true
   }
-  // 2) 어느 레인이든 가장 가까운 아군 미니언에 합류
+  if (lead) return false // 웨이브가 곧 타워에 닿는다 → 잠깐 대기(holdOutside)했다 push
+  // 2) 적당히 가까운 정글몹(늑대) 탐험
+  let camp = null
+  let cbd = 30 * 30
+  for (const m of state.monsters) {
+    if (!m.alive || m.kind !== 'wolf') continue
+    const d = dist2(h, m)
+    if (d < cbd) {
+      cbd = d
+      camp = m
+    }
+  }
+  if (camp && h.hp > h.maxHp * 0.45) {
+    steerToward(state, h, camp)
+    return true
+  }
+  // 3) 다른 레인에서 밀고 있는 아군 미니언에 합류
   let mn = null
   let mbd = Infinity
   for (const m of state.minions) {
@@ -1424,7 +1437,7 @@ function botSeekWork(state, h, lane, objective) {
     steerToward(state, h, mn)
     return true
   }
-  // 3) 가까운 아군 영웅 지원
+  // 4) 가까운 아군 영웅 지원
   let mate = null
   let tbd = Infinity
   for (const o of state.heroes) {
@@ -1444,13 +1457,20 @@ function botSeekWork(state, h, lane, objective) {
 
 // 레인 봇: 경유지를 따라 적 본진 쪽으로. 목표 타워 근처에선
 // 아군 미니언이 받아주고 있을 때만 들어간다 (타워 다이브 금지).
-function botLaneMove(state, h) {
+function botLaneMove(state, h, dt) {
+  h.botSeekT = Math.max(0, (h.botSeekT || 0) - dt)
   const lane = LANES[h.role] ? h.role : 'mid'
   const en = enemyOf(h.team)
   const objective =
     state.towers.find((t) => t.team === en && t.lane === lane && t.tier === 1 && t.alive) ||
     state.towers.find((t) => t.team === en && t.lane === lane && t.tier === 2 && t.alive) ||
     NEXUS_POS[en]
+  // "딴 일" 모드: 타워 앞에서 못 밀 때 한번 정한 일을 잠시 유지한다.
+  // (매 틱 라인 푸시로 되돌아가 타워 사거리 경계를 들락날락하던 진동을 막는다)
+  if (h.botSeekT > 0) {
+    if (botSeekWork(state, h, lane, objective)) return
+    h.botSeekT = 0 // 할 일이 없어졌으면 아래 일반 로직으로
+  }
   // 적 타워 근처(넉넉한 반경)에서의 행동을 한 자리에서 결정한다 — 사거리 경계 진동 방지
   const dObj = dist(h, objective)
   if (objective.id && dObj < TOWER_RANGE + 8) {
@@ -1465,7 +1485,8 @@ function botLaneMove(state, h) {
       }
       return
     }
-    // 방패가 없으면 들이박지 않는다 → 다른 할 일을 찾고, 없으면 안전거리에서 대기
+    // 방패가 없으면 들이박지 않는다 → 다른 할 일을 정해 잠시 유지하고, 없으면 대기
+    h.botSeekT = 2.5
     if (botSeekWork(state, h, lane, objective)) return
     botHoldOutside(state, h, objective)
     return
