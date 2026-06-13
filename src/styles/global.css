@@ -2076,3 +2076,112 @@ body {
   max-width: 7.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   margin-right: auto;
 }
+.rift-result__items { font-size: 13px; letter-spacing: 1px; }
+
+/* 내 영웅 패널: 골드 + 인벤토리 */
+.rift__me-gold { margin-left: auto; color: #ffd34d; }
+.rift__me-foot {
+  display: flex; align-items: center; gap: 8px;
+  font-size: clamp(11px, 2vh, 15px); font-weight: 800;
+}
+.rift__me-items { margin-left: auto; display: flex; gap: 3px; }
+.rift__me-item {
+  width: 22px; height: 22px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+  background: rgba(8, 12, 26, 0.6); border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* 넥서스 상점 버튼 (우물 안에서만 뜬다) */
+.rift-shop-fab {
+  position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%);
+  z-index: 7; pointer-events: auto; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 10px 20px; border-radius: 16px; font-size: 26px;
+  border: 3px solid #ffd34d; color: #fff; font-weight: 900;
+  background: rgba(40, 32, 8, 0.86);
+  box-shadow: 0 0 22px rgba(255, 211, 77, 0.7); animation: rift-shop-pulse 1.4s ease-in-out infinite;
+}
+.rift-shop-fab small { font-size: 12px; }
+@keyframes rift-shop-pulse {
+  50% { box-shadow: 0 0 34px rgba(255, 211, 77, 0.95); }
+}
+
+/* 상점 오버레이 */
+.rift-shop {
+  position: absolute; inset: 0; z-index: 9; pointer-events: auto;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(6, 10, 22, 0.55); touch-action: auto;
+}
+.rift-shop__panel {
+  width: min(720px, 94vw); max-height: 92vh; display: flex; flex-direction: column;
+  background: rgba(18, 24, 44, 0.97); border: 2px solid rgba(255, 211, 77, 0.45);
+  border-radius: 18px; padding: 14px 16px; gap: 10px; overflow: hidden;
+}
+.rift-shop__head { display: flex; align-items: center; gap: 10px; }
+.rift-shop__title { display: flex; align-items: center; gap: 12px; flex: 1; font-weight: 900; }
+.rift-shop__who { font-size: clamp(15px, 2.6vh, 20px); }
+.rift-shop__gold { color: #ffd34d; font-size: clamp(16px, 3vh, 22px); }
+.rift-shop__close { flex: none; }
+
+.rift-shop__inv {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px; border-radius: 12px; background: rgba(8, 12, 26, 0.5);
+}
+.rift-shop__slot {
+  width: 64px; height: 64px; border-radius: 12px;
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  display: flex; align-items: center; justify-content: center;
+}
+.rift-shop__slot--filled { border-style: solid; border-color: rgba(255, 211, 77, 0.5); }
+.rift-shop__slot-empty { font-size: 26px; color: rgba(255, 255, 255, 0.3); }
+.rift-shop__sell {
+  width: 100%; height: 100%; cursor: pointer; position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  background: transparent; border: none; color: #fff; font-weight: 800;
+}
+.rift-shop__slot-icon { font-size: 26px; line-height: 1; }
+.rift-shop__sell small { font-size: 9px; opacity: 0.8; max-width: 60px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rift-shop__sell-tag {
+  position: absolute; top: -7px; right: -7px; font-size: 9px; font-weight: 900;
+  background: #d65f31; color: #fff; border-radius: 8px; padding: 1px 5px; opacity: 0;
+}
+.rift-shop__sell:hover .rift-shop__sell-tag { opacity: 1; }
+.rift-shop__totals { flex: 1; min-width: 120px; }
+.rift-shop__totals-none { color: var(--muted); font-size: 13px; }
+.rift-shop__stats { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.rift-shop__stat {
+  font-size: 11px; font-weight: 800; padding: 1px 6px; border-radius: 99px;
+  background: rgba(110, 231, 160, 0.16); color: #8ff0bb; white-space: nowrap;
+}
+
+.rift-shop__tabs { display: flex; gap: 6px; }
+.rift-shop__tab {
+  flex: 1; padding: 7px 4px; border-radius: 10px; cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.14); background: rgba(8, 12, 26, 0.5);
+  color: #fff; font-weight: 800; font-size: 14px;
+}
+.rift-shop__tab--on { border-color: var(--cat); background: color-mix(in srgb, var(--cat) 22%, transparent); }
+
+.rift-shop__grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  overflow-y: auto; padding-right: 2px;
+}
+.rift-shop__item {
+  display: flex; align-items: center; gap: 9px; text-align: left;
+  padding: 8px 10px; border-radius: 12px; cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.14); background: rgba(8, 12, 26, 0.55);
+  color: #fff;
+}
+.rift-shop__item--off { opacity: 0.5; cursor: default; }
+.rift-shop__item-icon { font-size: 28px; line-height: 1; }
+.rift-shop__item-body { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.rift-shop__item-name { font-weight: 900; font-size: 14px; }
+.rift-shop__item-cost {
+  flex: none; font-weight: 900; color: #ffd34d; font-size: 13px; white-space: nowrap;
+}
+.rift-shop__foot { margin: 0; text-align: center; color: var(--muted); font-size: 12px; }
+
+@media (max-width: 560px) {
+  .rift-shop__grid { grid-template-columns: 1fr; }
+}

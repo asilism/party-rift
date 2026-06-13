@@ -9,6 +9,9 @@ import {
   DRAGON_PIT, BARON_PIT, enemyOf, nearestWp, resolveTerrain, bushIndexAt, avoidDir,
 } from './map.js'
 import { getZodiac } from '../../shared/zodiac.js'
+import { ITEM_SLOTS, SELL_REFUND, ITEMS_BY_ID, sumStats } from './items.js'
+
+export { ITEM_SLOTS } from './items.js'
 
 export const STEP = 1 / 60
 export const COUNTDOWN_TIME = 3
@@ -103,6 +106,18 @@ const MELEE = { hp: 165, dmg: 33.6, range: 2.4, cd: 1.1 }
 const RANGED = { hp: 110, dmg: 26.4, range: 8, cd: 1.4 }
 const MINION_HP_GROWTH = 5 // 분당 체력 증가 (타워 피격 설계가 오래 유지되게 완만히)
 const MINION_XP = 28
+
+// ── 골드 / 상점 ──
+// 미니언/정글몹/타워/적 영웅을 "처치(막타)"하면 골드를 얻어 우물 상점에서 아이템을 산다.
+const START_GOLD = 300 // 시작 골드 (싼 아이템 하나는 바로 살 수 있게)
+const GOLD_PASSIVE = 1.6 // 초당 자동 수입 (파밍이 안 풀려도 천천히 모이게)
+const GOLD_MINION_MELEE = 26 // 근접 미니언 막타
+const GOLD_MINION_RANGED = 22 // 원거리 미니언 막타
+const GOLD_WOLF = 48
+const GOLD_DRAGON = 90 // 용 — 팀 전원
+const GOLD_BARON = 130 // 바론 — 팀 전원
+const GOLD_TOWER = 95 // 타워 파괴 — 팀 전원
+const GOLD_KILL = 150 // 적 영웅 처치 — 킬러
 const MINION_DEFEND_RANGE = 14 // 이 거리 안 아군 영웅이 적 영웅에게 맞으면 가해자를 노린다
 const MINION_DEFEND_LEASH = 16 // 가해자를 쫓다 시작점에서 이만큼 벗어나면 포기하고 레인 복귀
 const MINION_DEFEND_HURT_T = 1.5 // 아군이 최근 이 시간 안에 맞았어야 "공격받는 중"으로 본다
@@ -134,8 +149,14 @@ const CAMP_LEASH = 24 // 캠프에서 이만큼 멀어지면 포기하고 복귀
 export const DRAGON_BUFF_T = 60 // 용 버프: 공격력 +25%
 export const BARON_BUFF_T = 75 // 바론 버프: 공격력 +40% + 빠른 회복
 
-const heroMaxHp = (h) => CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1)
-const heroAtk = (h) => CLASSES[h.cls].atk + CLASSES[h.cls].atkLvl * (h.lvl - 1)
+// 아이템 보너스 헬퍼 (h.bonus는 createGame/applyItems에서 채운다 — 없으면 0 취급)
+const itemBonus = (h) => h.bonus || ZERO_BONUS
+const ZERO_BONUS = sumStats([])
+
+const heroMaxHp = (h) => CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1) + itemBonus(h).hp
+const heroAtk = (h) => CLASSES[h.cls].atk + CLASSES[h.cls].atkLvl * (h.lvl - 1) + itemBonus(h).atk
+const heroRange = (h) => CLASSES[h.cls].range + itemBonus(h).range
+const heroSpeed = (h) => CLASSES[h.cls].speed + itemBonus(h).speed
 export const xpNeed = (lvl) => 60 + 40 * (lvl - 1)
 const respawnTime = (lvl) => 4 + 2 * lvl // 레벨이 높을수록 부활 대기 ↑ (Lv1 6초 → Lv10 24초)
 
@@ -181,6 +202,9 @@ export function createGame(players, rng = Math.random) {
       dir: p.team === 'blue' ? 0 : Math.PI, // 바라보는 방향 (적 본진 쪽)
       lvl: 1,
       xp: 0,
+      gold: START_GOLD,
+      items: [], // 산 아이템 id (최대 ITEM_SLOTS칸)
+      bonus: sumStats([]), // 아이템 합산 보너스 (heroMaxHp가 참조하므로 먼저)
       hp: 0, // 아래에서 직업 최대치로 채운다
       maxHp: 0,
       atkCd: 0,
@@ -288,6 +312,8 @@ const canAct = (h) => h.respawnT <= 0 && h.stunT <= 0
 // 버프 포함 피해 배율 / 공격력
 const dmgMult = (h) => (h.baronT > 0 ? 1.4 : h.dragonT > 0 ? 1.25 : 1)
 const atkOf = (h) => heroAtk(h) * dmgMult(h)
+// 주문(스킬/궁극기) 피해: 기본값 + 아이템 주문 위력, 버프 배율 포함
+const abilityDmg = (h, base) => (base + itemBonus(h).power) * dmgMult(h)
 
 // ── 시야 (전장의 안개 + 수풀 은신) ──
 // state와 makeView() 스냅샷 양쪽에서 같은 필드를 쓰므로 둘 다 받을 수 있다.
@@ -446,16 +472,77 @@ export function castRecall(state, id) {
   return state
 }
 
+// ── 골드 / 상점 ──
+// 자기 우물(넥서스 회복 지대) 안인가? — 상점은 여기서만 연다.
+export function inFountain(h) {
+  return dist2(h, NEXUS_POS[h.team]) <= FOUNTAIN_RADIUS * FOUNTAIN_RADIUS
+}
+
+// 골드 지급 + 획득 표시(fx). 미니언 막타 등 "내가 얻은 골드"만 본인에게 떠오른다.
+function awardGold(state, h, amount, x, z) {
+  h.gold += amount
+  if (h.respawnT <= 0) {
+    state.fx.push({
+      id: state.nextId++, kind: 'gold', x: x ?? h.x, z: z ?? h.z,
+      r: 0, t: 0, team: h.team, owner: h.id, n: Math.round(amount),
+    })
+  }
+}
+
+// 팀 전원에게 골드 (용/바론/타워 같은 오브젝트)
+function teamGold(state, team, amount) {
+  for (const h of state.heroes) if (h.team === team) awardGold(state, h, amount)
+}
+
+// 아이템 효과를 다시 계산해 영웅 능력치에 반영 (구매/판매 시).
+// 최대 체력이 늘면 그만큼 즉시 회복(우물에서 사니 자연스럽다).
+function applyItems(h) {
+  const before = h.maxHp
+  h.bonus = sumStats(h.items)
+  h.maxHp = heroMaxHp(h)
+  const gain = h.maxHp - before
+  if (gain > 0) h.hp += gain
+  h.hp = Math.min(h.maxHp, h.hp)
+}
+
+// 아이템 구매: 우물 안 + 빈 칸 + 골드 충분해야 한다 (호스트 권위로 검증).
+export function buyItem(state, id, itemId) {
+  if (state.status !== 'playing') return state
+  const h = getHero(state, id)
+  if (!h || h.respawnT > 0 || !inFountain(h)) return state
+  if (h.items.length >= ITEM_SLOTS) return state
+  const item = ITEMS_BY_ID[itemId]
+  if (!item || h.gold < item.cost) return state
+  h.gold -= item.cost
+  h.items.push(itemId)
+  applyItems(h)
+  return state
+}
+
+// 아이템 판매: 우물 안에서만, 가격의 일부를 돌려받는다.
+export function sellItem(state, id, slot) {
+  if (state.status !== 'playing') return state
+  const h = getHero(state, id)
+  if (!h || h.respawnT > 0 || !inFountain(h)) return state
+  const itemId = h.items[slot]
+  const item = ITEMS_BY_ID[itemId]
+  if (!item) return state
+  h.items.splice(slot, 1)
+  h.gold += Math.floor(item.cost * SELL_REFUND)
+  applyItems(h)
+  return state
+}
+
 // ── 기본공격: 사거리 안 가장 가까운 적에게 자동 조준 ──
 export function castAttack(state, id) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
   if (!h || !canAct(h) || h.atkCd > 0) return state
-  const ref = findAttackTarget(state, h, CLASSES[h.cls].range)
+  const ref = findAttackTarget(state, h, heroRange(h))
   if (!ref) return state
   const tgt = targetEntity(state, ref)
   cancelRecall(h) // 공격하면 집중이 풀린다
-  h.atkCd = CLASSES[h.cls].atkCd
+  h.atkCd = CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed)
   h.atkSeq++
   h.dir = Math.atan2(tgt.z - h.z, tgt.x - h.x)
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
@@ -475,7 +562,7 @@ export function castSkill(state, id) {
   const ok = SKILLS[h.cls](state, h)
   if (ok === false) return state // 대상이 없으면 쿨다운을 안 쓴다
   cancelRecall(h) // 스킬을 쓰면 집중이 풀린다
-  h.skillCd = CLASSES[h.cls].skill.cd
+  h.skillCd = CLASSES[h.cls].skill.cd * (1 - itemBonus(h).cdr)
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
   return state
 }
@@ -490,13 +577,13 @@ const SKILLS = {
     h.x += Math.cos(dir) * d
     h.z += Math.sin(dir) * d
     resolveTerrain(h, HERO_RADIUS, state.towers)
-    const dmg = (60 + 12 * (h.lvl - 1)) * dmgMult(h)
+    const dmg = abilityDmg(h, 60 + 12 * (h.lvl - 1))
     aoeDamage(state, h, h.x, h.z, 3.5, dmg, 0.5)
     pushFx(state, 'dash', h.x, h.z, 3.5, h.team)
   },
   // 궁수 연속사격: 한 대상에게 화살 3발
   archer(state, h) {
-    const ref = findAttackTarget(state, h, CLASSES.archer.range + 1.5)
+    const ref = findAttackTarget(state, h, heroRange(h) + 1.5)
     if (!ref) return false
     const tgt = targetEntity(state, ref)
     h.dir = Math.atan2(tgt.z - h.z, tgt.x - h.x)
@@ -517,7 +604,7 @@ const SKILLS = {
     state.projectiles.push({
       id: state.nextId++, kind: 'fireball', team: h.team, owner: h.id,
       x: h.x, z: h.z, vx: Math.cos(dir) * FIREBALL_SPEED, vz: Math.sin(dir) * FIREBALL_SPEED,
-      dmg: (85 + 18 * (h.lvl - 1)) * dmgMult(h),
+      dmg: abilityDmg(h, 85 + 18 * (h.lvl - 1)),
       travel: 0,
     })
   },
@@ -531,7 +618,7 @@ const SKILLS = {
       if (missing > -worst && (!best || missing > best.maxHp - best.hp)) best = a
     }
     if (!best) return false
-    best.hp = Math.min(best.maxHp, best.hp + 90 + 20 * (h.lvl - 1))
+    best.hp = Math.min(best.maxHp, best.hp + 90 + 20 * (h.lvl - 1) + itemBonus(h).power)
     pushFx(state, 'heal', best.x, best.z, 3.5, h.team)
   },
   // 암살자 점멸습격: 보이는 적 영웅 등 뒤로 순간이동 + 일격
@@ -543,7 +630,7 @@ const SKILLS = {
     h.z = foe.z + ((foe.z - h.z) / d) * 1.8
     resolveTerrain(h, HERO_RADIUS, state.towers)
     h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
-    damageHero(state, foe, (80 + 16 * (h.lvl - 1)) * dmgMult(h), h)
+    damageHero(state, foe, abilityDmg(h, 80 + 16 * (h.lvl - 1)), h)
     pushFx(state, 'blink', h.x, h.z, 3, h.team)
   },
   // 탱커 방패막기: 잠시 받는 피해 크게 감소
@@ -561,7 +648,7 @@ export function castUlt(state, id) {
   const ok = ULTS[h.cls](state, h)
   if (ok === false) return state
   cancelRecall(h) // 궁극기를 쓰면 집중이 풀린다
-  h.ultCd = CLASSES[h.cls].ult.cd
+  h.ultCd = CLASSES[h.cls].ult.cd * (1 - itemBonus(h).cdr)
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
   return state
 }
@@ -569,26 +656,26 @@ export function castUlt(state, id) {
 const ULTS = {
   // 회전베기: 내 주변을 크게 휩쓴다
   warrior(state, h) {
-    aoeDamage(state, h, h.x, h.z, WHIRL_RADIUS, (120 + 20 * (h.lvl - 1)) * dmgMult(h), 0)
+    aoeDamage(state, h, h.x, h.z, WHIRL_RADIUS, abilityDmg(h, 120 + 20 * (h.lvl - 1)), 0)
     pushFx(state, 'whirl', h.x, h.z, WHIRL_RADIUS, h.team)
   },
   // 화살비: 보이는 적 영웅 머리 위로 폭격
   archer(state, h) {
     const foe = nearestFoeHero(state, h, RAIN_RANGE)
     if (!foe) return false
-    aoeDamage(state, h, foe.x, foe.z, RAIN_AOE, (130 + 22 * (h.lvl - 1)) * dmgMult(h), 0)
+    aoeDamage(state, h, foe.x, foe.z, RAIN_AOE, abilityDmg(h, 130 + 22 * (h.lvl - 1)), 0)
     pushFx(state, 'rain', foe.x, foe.z, RAIN_AOE, h.team)
   },
   // 번개폭풍: 내 주변 모든 적 감전 + 기절
   mage(state, h) {
-    aoeDamage(state, h, h.x, h.z, STORM_RADIUS, (150 + 26 * (h.lvl - 1)) * dmgMult(h), 1.2)
+    aoeDamage(state, h, h.x, h.z, STORM_RADIUS, abilityDmg(h, 150 + 26 * (h.lvl - 1)), 1.2)
     pushFx(state, 'storm', h.x, h.z, STORM_RADIUS, h.team)
   },
   // 성역: 주변 아군 모두 크게 회복 + 기절 해제
   healer(state, h) {
     for (const a of state.heroes) {
       if (a.team !== h.team || a.respawnT > 0 || dist(h, a) > HEAL_RANGE) continue
-      a.hp = Math.min(a.maxHp, a.hp + 180 + 30 * (h.lvl - 1))
+      a.hp = Math.min(a.maxHp, a.hp + 180 + 30 * (h.lvl - 1) + itemBonus(h).power)
       a.stunT = 0
     }
     pushFx(state, 'sanctuary', h.x, h.z, HEAL_RANGE, h.team)
@@ -597,7 +684,7 @@ const ULTS = {
   assassin(state, h) {
     const foe = nearestFoeHero(state, h, EXECUTE_RANGE)
     if (!foe) return false
-    let dmg = (160 + 26 * (h.lvl - 1)) * dmgMult(h)
+    let dmg = abilityDmg(h, 160 + 26 * (h.lvl - 1))
     if (foe.hp < foe.maxHp * 0.35) dmg *= 2
     pushFx(state, 'execute', foe.x, foe.z, 3, h.team)
     damageHero(state, foe, dmg, h)
@@ -605,7 +692,7 @@ const ULTS = {
   },
   // 대지강타: 주변을 길게 기절시킨다
   tank(state, h) {
-    aoeDamage(state, h, h.x, h.z, SLAM_RADIUS, (90 + 14 * (h.lvl - 1)) * dmgMult(h), 1.6)
+    aoeDamage(state, h, h.x, h.z, SLAM_RADIUS, abilityDmg(h, 90 + 14 * (h.lvl - 1)), 1.6)
     pushFx(state, 'slam', h.x, h.z, SLAM_RADIUS, h.team)
   },
 }
@@ -631,6 +718,7 @@ function aoeDamage(state, attacker, x, z, radius, dmg, stun) {
 function damageHero(state, victim, amount, attacker) {
   if (victim.respawnT > 0 || state.status !== 'playing') return
   amount *= CLASSES[victim.cls].def ?? 1 // 근접 직업은 기본 방어력이 높다
+  amount *= 1 - itemBonus(victim).def // 방어 아이템: 받는 피해 감소
   if (victim.shieldT > 0) amount *= SHIELD_CUT // 방패막기!
   victim.hp -= amount
   victim.lastHurt = state.time
@@ -655,6 +743,7 @@ function damageHero(state, victim, amount, attacker) {
     killer.kills++
     state.kills[killer.team]++
     awardXp(state, killer.team, victim, 90 + 15 * victim.lvl, killer)
+    awardGold(state, killer, GOLD_KILL, victim.x, victim.z)
     pushFeed(state, 'kill', `${emojiOf(killer.zodiacId)} ${killer.name} ⚔️ ${emojiOf(victim.zodiacId)} ${victim.name} 처치!`)
   } else {
     state.kills[enemyOf(victim.team)]++
@@ -667,6 +756,8 @@ function damageMinion(state, m, amount, attacker) {
   if (m.hp > 0) return
   state.minions = state.minions.filter((o) => o !== m)
   if (attacker?.team) awardXp(state, attacker.team, m, MINION_XP, attacker)
+  // 막타 골드는 영웅에게만 (미니언/타워가 잡으면 없음 — 막타 챙기는 재미)
+  if (attacker?.items) awardGold(state, attacker, m.ranged ? GOLD_MINION_RANGED : GOLD_MINION_MELEE, m.x, m.z)
 }
 
 function damageMonster(state, m, amount, attacker) {
@@ -682,8 +773,10 @@ function damageMonster(state, m, amount, attacker) {
   if (!attacker?.team) return
   if (m.kind === 'wolf') {
     awardXp(state, attacker.team, m, WOLF.xp, attacker)
+    if (attacker?.items) awardGold(state, attacker, GOLD_WOLF, m.x, m.z)
   } else {
-    // 용/바론: 팀 전체 경험치 + 버프
+    // 용/바론: 팀 전체 경험치 + 버프 + 골드
+    teamGold(state, attacker.team, m.kind === 'dragon' ? GOLD_DRAGON : GOLD_BARON)
     for (const h of state.heroes) {
       if (h.team !== attacker.team) continue
       giveXp(state, h, spec.xp)
@@ -710,6 +803,7 @@ function damageTower(state, t, amount, attacker) {
   const team = attacker?.team || enemyOf(t.team)
   state.towersDown[team]++
   for (const h of state.heroes) if (h.team === team) giveXp(state, h, TOWER_XP)
+  teamGold(state, team, GOLD_TOWER)
   const side = t.team === 'blue' ? '파랑' : '빨강'
   if (t.tier === 3) {
     pushFeed(state, 'tower', `💥 ${side} 최후의 포탑 파괴! 넥서스가 열렸다!`)
@@ -897,7 +991,7 @@ function stepHero(state, h, dt) {
       // 공격 직후엔 발이 무겁고, 탱커는 방패막기 중 돌진 가속
       const slow = h.slowT > 0 ? ATK_SLOW : 1
       const charge = h.cls === 'tank' && h.shieldT > 0 ? 1.45 : 1
-      const sp = CLASSES[h.cls].speed * slow * charge * Math.min(1, len)
+      const sp = heroSpeed(h) * slow * charge * Math.min(1, len)
       h.dir = Math.atan2(h.mz, h.mx)
       h.x += (h.mx / len) * sp * dt
       h.z += (h.mz / len) * sp * dt
@@ -916,6 +1010,10 @@ function stepHero(state, h, dt) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * REGEN_RATE * dt)
   }
   if (h.baronT > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.02 * dt)
+  // 아이템 체력 재생 (전투 중에도 항상)
+  if (itemBonus(h).regen > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * itemBonus(h).regen * dt)
+  // 골드 자동 수입
+  h.gold += GOLD_PASSIVE * dt
 }
 
 // 주변에서 공격받는 아군 영웅의 "가해자(적 영웅)"를 찾는다.
@@ -1278,6 +1376,11 @@ function stepProjectiles(state, dt) {
       remove.add(p.id)
       const owner = state.heroes.find((h) => h.id === p.owner) || { team: p.team }
       applyDamage(state, p.target, p.dmg, owner)
+      // 흡혈: 기본공격 탄(bolt)이 적 유닛에 적중하면 시전자가 회복 (구조물 제외)
+      const ls = p.kind === 'bolt' && owner.items ? itemBonus(owner).lifesteal : 0
+      if (ls > 0 && owner.respawnT <= 0 && (p.target.tk === 'hero' || p.target.tk === 'minion' || p.target.tk === 'monster')) {
+        owner.hp = Math.min(owner.maxHp, owner.hp + p.dmg * ls)
+      }
       continue
     }
     p.x += ((e.x - p.x) / d) * p.speed * dt
@@ -1291,6 +1394,30 @@ function stepProjectiles(state, dt) {
 // 평소엔 맡은 레인을 행군하며 지나는 길의 정글몹/용/바론도 사냥한다.
 const BOT_SIGHT = 18
 
+// 봇 직업별 아이템 우선순위 — 우물에 들어왔을 때 위에서부터 살 수 있는 걸 산다.
+// (사람 플레이어가 아이템으로 일방적 우위를 갖지 않게 봇도 장비를 갖춘다)
+const BOT_BUILD = {
+  warrior: ['longsword', 'vampire_scythe', 'plate', 'executioner'],
+  assassin: ['dagger', 'vampire_scythe', 'executioner', 'boots'],
+  archer: ['rage_gloves', 'longsword', 'executioner', 'boots'],
+  mage: ['orb', 'flame_core', 'void_staff', 'boots'],
+  healer: ['orb', 'wisdom_hat', 'frost_staff', 'plate'],
+  tank: ['leather', 'plate', 'giant_heart', 'thornmail'],
+}
+
+// 봇 자동 구매: 우물 안 + 빈 칸 있으면 빌드 우선순위에서 안 가진 첫 구매 가능 아이템을 산다.
+function botShop(state, h) {
+  if (h.items.length >= ITEM_SLOTS || !inFountain(h)) return
+  for (const itemId of BOT_BUILD[h.cls] || []) {
+    if (h.items.includes(itemId)) continue
+    const item = ITEMS_BY_ID[itemId]
+    if (item && h.gold >= item.cost) {
+      buyItem(state, h.id, itemId)
+      return
+    }
+  }
+}
+
 function stepBots(state, dt) {
   for (const h of state.heroes) {
     if (!h.isBot || h.respawnT > 0) continue
@@ -1299,6 +1426,7 @@ function stepBots(state, dt) {
       h.mz = 0
       continue
     }
+    if (inFountain(h)) botShop(state, h) // 우물에 있을 때 장비 보충
     const cls = CLASSES[h.cls]
     // 후퇴 판단 (탱커는 더 끈질기게 버틴다)
     const panic = h.cls === 'tank' ? 0.22 : 0.3
@@ -1599,6 +1727,8 @@ export function makeView(state) {
       lvl: h.lvl,
       xp: Math.floor(h.xp),
       xpNeed: h.lvl >= MAX_LEVEL ? 0 : xpNeed(h.lvl),
+      gold: Math.floor(h.gold),
+      items: h.items.slice(),
       atkCd: r2d(h.atkCd),
       atkSeq: h.atkSeq,
       skillCd: r2d(h.skillCd),
@@ -1662,6 +1792,7 @@ export function makeView(state) {
     })),
     fx: state.fx.map((n) => ({
       id: n.id, kind: n.kind, x: r1(n.x), z: r1(n.z), r: n.r, t: r2d(n.t), team: n.team,
+      ...(n.kind === 'gold' ? { n: n.n, owner: n.owner } : null),
     })),
     feed: state.feed.slice(-5),
   }
