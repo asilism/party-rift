@@ -94,12 +94,12 @@ const TOWER_AGGRO_TIME = 3 // 적 영웅을 때리면 타워가 이만큼 노린
 export const RECALL_TIME = 7 // 귀환 시전(채널링) 시간 — 방해 없이 버티면 우물로 복귀
 
 // ── 미니언 ──
-const WAVE_PERIOD = 28
+const WAVE_PERIOD = 22.4 // 스폰 간격 (이전 28의 0.8배)
 const FIRST_WAVE = 2
 const MINION_SPEED = 6.5
 const MINION_SIGHT = 11
-const MELEE = { hp: 150, dmg: 14, range: 2.4, cd: 1.1 }
-const RANGED = { hp: 110, dmg: 11, range: 8, cd: 1.4 }
+const MELEE = { hp: 150, dmg: 16.8, range: 2.4, cd: 1.1 } // 피해 1.2배 상향
+const RANGED = { hp: 110, dmg: 13.2, range: 8, cd: 1.4 } // 피해 1.2배 상향
 const MINION_HP_GROWTH = 8 // 분당 체력 증가
 const MINION_XP = 28
 const MINION_DEFEND_RANGE = 14 // 이 거리 안 아군 영웅이 적 영웅에게 맞으면 가해자를 노린다
@@ -793,7 +793,7 @@ export function step(state, dt) {
   return state
 }
 
-// 미니언 웨이브: 세 레인마다 근접 2 + 원거리 1
+// 미니언 웨이브: 세 레인마다 근접 2 + 원거리 2
 function stepWaves(state, dt) {
   state.waveT -= dt
   if (state.waveT > 0) return
@@ -801,8 +801,9 @@ function stepWaves(state, dt) {
   const grow = MINION_HP_GROWTH * (state.time / 60)
   for (const team of ['blue', 'red']) {
     for (const lane of LANE_IDS) {
-      for (let i = 0; i < 3; i++) {
-        const spec = i === 2 ? RANGED : MELEE
+      for (let i = 0; i < 4; i++) {
+        const ranged = i >= 2 // 0,1=근접 / 2,3=원거리 (원거리 1마리 증가)
+        const spec = ranged ? RANGED : MELEE
         const wps = LANES[lane]
         // 넥서스 충돌체에 끼지 않게, 본진에서 레인 쪽으로 살짝 나간 곳에서 출발
         const a = team === 'blue' ? wps[0] : wps[wps.length - 1]
@@ -812,7 +813,7 @@ function stepWaves(state, dt) {
           id: state.nextId++,
           team,
           lane,
-          ranged: i === 2,
+          ranged,
           x: a.x + ((b.x - a.x) / d) * 8 + (state.rng() - 0.5) * 3,
           z: a.z + ((b.z - a.z) / d) * 8 + (state.rng() - 0.5) * 3,
           hp: spec.hp + grow,
@@ -999,9 +1000,9 @@ function stepMinions(state, dt) {
           m.atkCd = spec.cd
           m.atkSeq++
           if (m.ranged) {
-            // 원거리 미니언은 화살을 쏜다 (모션과 함께 보이게)
+            // 원거리 미니언은 작은 화살을 쏜다 ('mbolt' — 영웅 탄과 구분되는 작은 투사체)
             state.projectiles.push({
-              id: state.nextId++, kind: 'bolt', team: m.team,
+              id: state.nextId++, kind: 'mbolt', team: m.team,
               x: m.x, z: m.z, target: tgt.ref, dmg: spec.dmg, speed: 26,
             })
           } else {
