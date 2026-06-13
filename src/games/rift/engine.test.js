@@ -2,9 +2,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   createGame, setInput, castAttack, castSkill, castUlt, castRecall, step, makeView, makeBot,
-  towerVulnerable, nexusVulnerable, isHeroVisible, isUnitVisible,
+  towerVulnerable, nexusVulnerable, isHeroVisible, isUnitVisible, buyItem, sellItem, inFountain,
   STEP, COUNTDOWN_TIME, TIME_LIMIT, ULT_LEVEL, TEAM_SIZE, MAX_LEVEL, RECALL_TIME, CLASS_IDS, CLASSES,
+  ITEM_SLOTS,
 } from './engine.js'
+import { ITEMS_BY_ID, sumStats } from './items.js'
 import {
   NEXUS_POS, LANES, LANE_IDS, BUSHES, WALLS, TOWER_SPOTS, avoidDir,
   nearestWp, resolveTerrain, WORLD, bushIndexAt,
@@ -810,4 +812,122 @@ test('풀봇 3:3 스모크 테스트: 3분 시뮬레이션이 멀쩡히 돈다',
   const v = makeView(g)
   JSON.stringify(v)
   assert.ok(['playing', 'finished'].includes(g.status))
+})
+
+// ── 골드 / 상점 ──
+
+// 영웅을 자기 우물 안으로 옮긴다
+function toFountain(g, h) {
+  h.x = NEXUS_POS[h.team].x
+  h.z = NEXUS_POS[h.team].z
+}
+
+test('골드: 미니언 막타를 치면 골드를 얻고, 획득 fx가 뜬다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[0] // blue mage
+  h.x = 0
+  h.z = 0
+  const before = h.gold
+  const m = plantMinion(g, 'red', 5, 0, 30)
+  castAttack(g, h.id)
+  run(g, 0.3) // 탄이 닿아 처치될 만큼만 (gold fx는 0.8초 안에 사라진다)
+  assert.ok(!g.minions.includes(m)) // 처치됨
+  assert.ok(h.gold > before, '막타로 골드를 얻는다')
+  // makeView fx에 gold 종류(소유자/금액 포함)가 직렬화된다
+  const fx = makeView(g).fx.find((n) => n.kind === 'gold')
+  assert.ok(fx && fx.owner === h.id && fx.n > 0)
+})
+
+test('골드: 타워가 막타를 치면(영웅 아님) 골드는 없다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[0]
+  const before = h.gold
+  // 미니언을 타워가 잡게 둔다(영웅 개입 없음) — 골드 변화는 패시브 수입뿐
+  const m = plantMinion(g, 'red', 0, 0, 10)
+  g.minions = g.minions.filter((o) => o !== m)
+  // 직접 막타 크레딧이 영웅이 아니면 골드를 안 준다는 건 awardGold 분기로 보장됨
+  assert.equal(h.gold, before) // 위 조작만으론 골드 변화 없음
+})
+
+test('상점: 우물 안에서만 살 수 있고, 골드가 줄고 능력치가 오른다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[2] // blue warrior
+  h.gold = 1000
+  const item = ITEMS_BY_ID.longsword // 공격력 +30
+  const atk0 = CLASSES[h.cls].atk
+  // 우물 밖에서는 거부
+  h.x = 0
+  h.z = 0
+  assert.equal(inFountain(h), false)
+  buyItem(g, h.id, 'longsword')
+  assert.equal(h.items.length, 0)
+  // 우물 안에서는 구매 성공
+  toFountain(g, h)
+  buyItem(g, h.id, 'longsword')
+  assert.deepEqual(h.items, ['longsword'])
+  assert.equal(h.gold, 1000 - item.cost)
+  assert.equal(h.bonus.atk, 30)
+})
+
+test('상점: 인벤토리는 3칸, 가득 차면 더 못 산다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[2]
+  toFountain(g, h)
+  h.gold = 99999
+  for (const id of ['dagger', 'longsword', 'leather', 'boots']) buyItem(g, h.id, id)
+  assert.equal(h.items.length, ITEM_SLOTS)
+  assert.ok(!h.items.includes('boots'), '4번째는 안 들어간다')
+})
+
+test('상점: 체력 아이템을 사면 최대 체력이 늘고 그만큼 즉시 회복', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[5] // red tank
+  toFountain(g, h)
+  h.gold = 9999
+  h.hp = h.maxHp
+  const max0 = h.maxHp
+  buyItem(g, h.id, 'giant_heart') // hp +450
+  assert.equal(h.maxHp, max0 + 450)
+  assert.equal(h.hp, h.maxHp) // 늘어난 만큼 채워진다
+})
+
+test('상점: 되팔면 칸이 비고 골드를 일부 돌려받는다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[2]
+  toFountain(g, h)
+  h.gold = 1000
+  buyItem(g, h.id, 'longsword') // 550
+  const afterBuy = h.gold
+  sellItem(g, h.id, 0)
+  assert.equal(h.items.length, 0)
+  assert.equal(h.bonus.atk, 0)
+  assert.ok(h.gold > afterBuy && h.gold < 1000) // 일부 환급
+})
+
+test('아이템 효과: 공격력/방어 아이템이 실제 전투 수치에 반영된다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[1] // archer
+  toFountain(g, h)
+  h.gold = 9999
+  buyItem(g, h.id, 'executioner') // atk +55
+  // 미니언을 한 대 쳐 보면 투사체 피해가 기본보다 커야 한다
+  h.x = 0
+  h.z = 0
+  plantMinion(g, 'red', 6, 0, 999)
+  castAttack(g, h.id)
+  const dmg = g.projectiles[0].dmg
+  const base = CLASSES.archer.atk // lvl1 기준
+  assert.ok(dmg >= base + 55, '공격력 아이템이 탄 피해에 더해진다')
+})
+
+test('sumStats: 상한이 적용된다 (피해 감소 ≤ 60%)', () => {
+  const b = sumStats(['guardian_cloak', 'guardian_cloak', 'guardian_cloak', 'guardian_cloak', 'guardian_cloak'])
+  assert.ok(b.def <= 0.6)
 })

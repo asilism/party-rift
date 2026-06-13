@@ -56,6 +56,28 @@ function nameSprite(text, color = '#ffffff') {
   return sp
 }
 
+// 골드 획득 표시: 떠오르며 사라지는 금색 "+N" 스프라이트 (내 영웅 막타 때만)
+function goldSprite(n) {
+  const c = document.createElement('canvas')
+  c.width = 128
+  c.height = 64
+  const ctx = c.getContext('2d')
+  ctx.font = '900 40px system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineWidth = 7
+  ctx.strokeStyle = 'rgba(60, 40, 0, 0.9)'
+  ctx.strokeText(`+${n.n}`, 64, 32)
+  ctx.fillStyle = '#ffd34d'
+  ctx.fillText(`+${n.n}`, 64, 32)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true }))
+  sp.scale.set(4, 2, 1)
+  sp.position.set(n.x, 5, n.z)
+  return sp
+}
+
 // "🛡 공격불가" 라벨 — 선행 구조물이 안 부서져 무적인 포탑/넥서스 위에 띄운다
 function lockLabel() {
   const c = document.createElement('canvas')
@@ -787,8 +809,10 @@ export function createRiftScene(canvas) {
       obj.position.x = p.x
       obj.position.z = p.z
     })
-    // 스킬/이벤트 이펙트 링 (퍼져나가며 사라진다)
-    syncPool(scene, fxPool, view.fx, (n) => {
+    // 스킬/이벤트 이펙트 링 (퍼져나가며 사라진다). 골드 표시는 내 막타만 보여 준다.
+    const fxList = view.fx.filter((n) => n.kind !== 'gold' || n.owner === myId)
+    syncPool(scene, fxPool, fxList, (n) => {
+      if (n.kind === 'gold') return goldSprite(n)
       const ring = new THREE.Mesh(
         new THREE.RingGeometry(0.8, 1, 36),
         new THREE.MeshBasicMaterial({
@@ -799,6 +823,11 @@ export function createRiftScene(canvas) {
       ring.position.set(n.x, 0.3, n.z)
       return ring
     }, (obj, n) => {
+      if (n.kind === 'gold') {
+        obj.position.y = 5 + n.t * 7 // 위로 떠오르며
+        obj.material.opacity = Math.max(0, 1 - n.t / 0.8) // 서서히 사라진다
+        return
+      }
       const f = Math.min(1, n.t / 0.6)
       obj.scale.setScalar(1 + f * (n.r || 4))
       obj.material.opacity = 1 - f

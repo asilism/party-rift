@@ -3,13 +3,16 @@ import RiftSetup from './RiftSetup.jsx'
 import Rift3D from './Rift3D.jsx'
 import RiftMiniMap from './RiftMiniMap.jsx'
 import RiftControls from './RiftControls.jsx'
+import RiftShop from './RiftShop.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import {
-  createGame, setInput, castAttack, castSkill, castUlt, castRecall, step, makeView, makeBot,
+  createGame, setInput, castAttack, castSkill, castUlt, castRecall, buyItem, sellItem, inFountain,
+  step, makeView, makeBot,
   STEP, TEAM_SIZE, ULT_LEVEL, CLASSES, CLASS_IDS,
 } from './engine.js'
 import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
+import { getItem } from './items.js'
 import { sound } from '../../shared/sound.js'
 import { useGameNet } from '../../net/useGameNet.js'
 import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
@@ -56,7 +59,8 @@ export default function RiftGame({ roster, onExit, net }) {
       else if (a.slot === 'skill') castSkill(st, a.playerId)
       else if (a.slot === 'ult') castUlt(st, a.playerId)
       else if (a.slot === 'recall') castRecall(st, a.playerId)
-    }
+    } else if (a.type === 'buy') buyItem(st, a.playerId, a.itemId)
+    else if (a.type === 'sell') sellItem(st, a.playerId, a.slot)
   }
 
   // 호스트: 셋업 중에도 게스트가 대기 화면을 보도록 phase 전파
@@ -195,6 +199,20 @@ export default function RiftGame({ roster, onExit, net }) {
     }
   }
 
+  function buy(itemId) {
+    if (!myId) return
+    const st = stateRef.current
+    if (isHost && st) buyItem(st, myId, itemId)
+    else sendAction({ type: 'buy', playerId: myId, itemId })
+  }
+
+  function sell(slot) {
+    if (!myId) return
+    const st = stateRef.current
+    if (isHost && st) sellItem(st, myId, slot)
+    else sendAction({ type: 'sell', playerId: myId, slot })
+  }
+
   function toggleSound() {
     const n = !soundOn
     setSoundOn(n)
@@ -225,6 +243,8 @@ export default function RiftGame({ roster, onExit, net }) {
         myId={myId}
         ctrlRef={ctrlRef}
         onCast={cast}
+        onBuy={buy}
+        onSell={sell}
         onRematch={null}
         onRestart={null}
         onExit={onExit}
@@ -246,6 +266,8 @@ export default function RiftGame({ roster, onExit, net }) {
       myId={myId}
       ctrlRef={ctrlRef}
       onCast={cast}
+      onBuy={buy}
+      onSell={sell}
       onRematch={() => startGame(...lastTeamsRef.current)} // 같은 팀/직업으로 즉시 한판 더!
       onRestart={() => setPhase('setup')} // 팀 다시 나누기
       onExit={onExit}
@@ -344,10 +366,11 @@ const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padSt
 
 // 전투 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function RiftPlay({
-  hud, sample, myId, ctrlRef, onCast, onRematch, onRestart, onExit, soundOn, onToggleSound,
+  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onRematch, onRestart, onExit, soundOn, onToggleSound,
 }) {
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
+  const [shopOpen, setShopOpen] = useState(false)
   // 배경음악(칩튠 루프): 경기 중에만 흐르고, 어느 한쪽 넥서스가 위태로우면 템포 업
   const bgmStatus = hud?.status
   const nexusCrisis = !!(
@@ -361,11 +384,16 @@ function RiftPlay({
     sound.musicSetFast(nexusCrisis)
   }, [bgmStatus, nexusCrisis, soundOn])
   useEffect(() => () => sound.musicStop(), [])
+  // 상점은 우물 안에서만 — 우물을 벗어나거나 죽으면 자동으로 닫힌다
+  const me = hud?.heroes?.find((h) => h.id === myId)
+  const meInFountain = !!(me && me.respawnT <= 0 && inFountain(me))
+  useEffect(() => {
+    if (!meInFountain) setShopOpen(false)
+  }, [meInFountain])
   if (!hud || hud.phase !== 'play') {
     return <NetWaiting text="전장을 준비하고 있어요... ⚔️" onExit={onExit} />
   }
 
-  const me = hud.heroes.find((h) => h.id === myId)
   const finished = hud.status === 'finished'
   const myTeam = me?.team
   const winnerLabel = hud.winner === 'blue' ? '🔵 파랑팀' : hud.winner === 'red' ? '🔴 빨강팀' : null
@@ -417,7 +445,7 @@ function RiftPlay({
               <span className="rift__me-emoji">{getZodiac(me.zodiacId)?.emoji}</span>
               <span className="rift__me-cls">{CLASSES[me.cls]?.icon}{CLASSES[me.cls]?.name}</span>
               <span className="rift__me-lvl">Lv.{me.lvl}</span>
-              <span className="rift__me-kd">⚔️{me.kills} 💀{me.deaths}</span>
+              <span className="rift__me-gold">💰 {me.gold}</span>
               {me.dragonT > 0 && <span title="용 버프">🐉</span>}
               {me.baronT > 0 && <span title="바론 버프">👹</span>}
             </div>
@@ -427,6 +455,19 @@ function RiftPlay({
             </div>
             <div className="rift__bar rift__bar--xp">
               <div style={{ width: me.xpNeed ? `${(me.xp / me.xpNeed) * 100}%` : '100%' }} />
+            </div>
+            <div className="rift__me-foot">
+              <span className="rift__me-kd">⚔️{me.kills} 💀{me.deaths}</span>
+              <span className="rift__me-items">
+                {Array.from({ length: 3 }).map((_, i) => {
+                  const it = (me.items || [])[i]
+                  return (
+                    <span key={i} className="rift__me-item">
+                      {it ? getItem(it)?.icon : '·'}
+                    </span>
+                  )
+                })}
+              </span>
             </div>
           </div>
         )}
@@ -448,10 +489,20 @@ function RiftPlay({
         )}
         {me && hud.status === 'playing' && hud.go && (
           <div className="rift__hint">
-            🕹️ 드래그로 이동 · ⚔️ 자동 조준 · 🌿 수풀에 숨기 · 궁극기는 Lv{ULT_LEVEL}부터!
+            🕹️ 드래그로 이동 · ⚔️ 자동 조준 · 🌿 수풀에 숨기 · 🏠 우물에서 🛒 상점!
           </div>
         )}
       </div>
+
+      {/* 넥서스 우물 안에서만 뜨는 상점 버튼 ("넥서스를 눌러 상점 열기") */}
+      {me && !finished && meInFountain && !shopOpen && (
+        <button className="rift-shop-fab" onClick={() => setShopOpen(true)}>
+          🛒 <small>넥서스 상점</small>
+        </button>
+      )}
+      {shopOpen && me && meInFountain && (
+        <RiftShop me={me} onBuy={onBuy} onSell={onSell} onClose={() => setShopOpen(false)} />
+      )}
 
       {finished && (
         <div className="win-modal">
@@ -471,6 +522,9 @@ function RiftPlay({
                       <span>Lv.{h.lvl}</span>
                       <span>⚔️{h.kills}</span>
                       <span>💀{h.deaths}</span>
+                      <span className="rift-result__items">
+                        {(h.items || []).map((it) => getItem(it)?.icon).join('')}
+                      </span>
                     </div>
                   ))}
                 </div>
