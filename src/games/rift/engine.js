@@ -94,13 +94,14 @@ const TOWER_AGGRO_TIME = 3 // 적 영웅을 때리면 타워가 이만큼 노린
 export const RECALL_TIME = 7 // 귀환 시전(채널링) 시간 — 방해 없이 버티면 우물로 복귀
 
 // ── 미니언 ──
-const WAVE_PERIOD = 22.4 // 스폰 간격 (이전 28의 0.8배)
+const WAVE_PERIOD = 14 // 스폰 간격 — 한 무리가 라인 중앙에 닿을 무렵 다음 무리가 나온다
 const FIRST_WAVE = 2
 const MINION_SPEED = 6.5
 const MINION_SIGHT = 11
-const MELEE = { hp: 150, dmg: 33.6, range: 2.4, cd: 1.1 } // 피해 상향 (이전의 2배)
-const RANGED = { hp: 110, dmg: 26.4, range: 8, cd: 1.4 } // 피해 상향 (이전의 2배)
-const MINION_HP_GROWTH = 8 // 분당 체력 증가
+// 타워 피해(TOWER_DMG_MINION=60) 기준: 원거리는 2대(≤120), 근접은 3대(120<hp≤180)에 죽는다
+const MELEE = { hp: 165, dmg: 33.6, range: 2.4, cd: 1.1 }
+const RANGED = { hp: 110, dmg: 26.4, range: 8, cd: 1.4 }
+const MINION_HP_GROWTH = 5 // 분당 체력 증가 (타워 피격 설계가 오래 유지되게 완만히)
 const MINION_XP = 28
 const MINION_DEFEND_RANGE = 14 // 이 거리 안 아군 영웅이 적 영웅에게 맞으면 가해자를 노린다
 const MINION_DEFEND_LEASH = 16 // 가해자를 쫓다 시작점에서 이만큼 벗어나면 포기하고 레인 복귀
@@ -824,13 +825,15 @@ function stepWaves(state, dt) {
         const a = team === 'blue' ? wps[0] : wps[wps.length - 1]
         const b = team === 'blue' ? wps[1] : wps[wps.length - 2]
         const d = Math.hypot(b.x - a.x, b.z - a.z) || 1
+        // 최후의 포탑(본진 앞) 너머 레인 쪽에서 출발 — 근접이 앞(중앙 쪽), 원거리가 뒤.
+        const off = ranged ? 11 : 14
         state.minions.push({
           id: state.nextId++,
           team,
           lane,
           ranged,
-          x: a.x + ((b.x - a.x) / d) * 8 + (state.rng() - 0.5) * 3,
-          z: a.z + ((b.z - a.z) / d) * 8 + (state.rng() - 0.5) * 3,
+          x: a.x + ((b.x - a.x) / d) * off + (state.rng() - 0.5) * 2.5,
+          z: a.z + ((b.z - a.z) / d) * off + (state.rng() - 0.5) * 2.5,
           hp: spec.hp + grow,
           maxHp: spec.hp + grow,
           atkCd: i * 0.3, // 줄지어 공격하게 살짝 어긋나게

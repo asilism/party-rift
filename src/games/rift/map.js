@@ -40,17 +40,17 @@ export const LANE_IDS = ['top', 'mid', 'bot']
 // 내곽 타워는 성벽 출입구 바로 앞 — 출입구 전체가 사거리(13) 안에 들어온다.
 export const TOWER_SPOTS = [
   { id: 'b-top-1', team: 'blue', lane: 'top', tier: 1, x: -34, z: -56 },
-  { id: 'b-top-2', team: 'blue', lane: 'top', tier: 2, x: -78, z: -40 },
+  { id: 'b-top-2', team: 'blue', lane: 'top', tier: 2, x: -78, z: -36 },
   { id: 'b-mid-1', team: 'blue', lane: 'mid', tier: 1, x: -34, z: 0 },
   { id: 'b-mid-2', team: 'blue', lane: 'mid', tier: 2, x: -74, z: 0 },
   { id: 'b-bot-1', team: 'blue', lane: 'bot', tier: 1, x: -34, z: 56 },
-  { id: 'b-bot-2', team: 'blue', lane: 'bot', tier: 2, x: -78, z: 40 },
+  { id: 'b-bot-2', team: 'blue', lane: 'bot', tier: 2, x: -78, z: 36 },
   { id: 'r-top-1', team: 'red', lane: 'top', tier: 1, x: 34, z: -56 },
-  { id: 'r-top-2', team: 'red', lane: 'top', tier: 2, x: 78, z: -40 },
+  { id: 'r-top-2', team: 'red', lane: 'top', tier: 2, x: 78, z: -36 },
   { id: 'r-mid-1', team: 'red', lane: 'mid', tier: 1, x: 34, z: 0 },
   { id: 'r-mid-2', team: 'red', lane: 'mid', tier: 2, x: 74, z: 0 },
   { id: 'r-bot-1', team: 'red', lane: 'bot', tier: 1, x: 34, z: 56 },
-  { id: 'r-bot-2', team: 'red', lane: 'bot', tier: 2, x: 78, z: 40 },
+  { id: 'r-bot-2', team: 'red', lane: 'bot', tier: 2, x: 78, z: 36 },
   // 넥서스 바로 앞 최후의 포탑 (tier 3) — 부서지기 전엔 넥서스 공격 불가
   { id: 'b-final', team: 'blue', lane: 'mid', tier: 3, x: -90, z: 0 },
   { id: 'r-final', team: 'red', lane: 'mid', tier: 3, x: 90, z: 0 },
@@ -58,24 +58,24 @@ export const TOWER_SPOTS = [
 export const TOWER_RADIUS = 2.4 // 통행 막는 몸통 반경
 
 // ── 성벽 ──
-// 본진 성벽(x=±82): 레인이 지나는 출입구 3곳(z≈-36/0/36)만 뚫려 있다.
-// 미드 협곡 벽(z=±9): 미드 레인을 골짜기로 만든다 (강/정글 입구는 열림).
+// 본진 성벽(x=±82): 레인이 지나는 출입구 3곳(z≈-36/0/36)만 뚫려 있다. (미니언이 끼지 않게 넓게)
+// 미드 협곡 벽(z=±12): 미드 레인을 골짜기로 만든다 (강/정글 입구는 열림).
 export const WALL_LINES = [
-  // 파랑 본진 성벽
-  { x1: -82, z1: -66, x2: -82, z2: -44 },
-  { x1: -82, z1: -28, x2: -82, z2: -8 },
-  { x1: -82, z1: 8, x2: -82, z2: 28 },
-  { x1: -82, z1: 44, x2: -82, z2: 66 },
+  // 파랑 본진 성벽 (출입구 폭 20)
+  { x1: -82, z1: -66, x2: -82, z2: -46 },
+  { x1: -82, z1: -26, x2: -82, z2: -10 },
+  { x1: -82, z1: 10, x2: -82, z2: 26 },
+  { x1: -82, z1: 46, x2: -82, z2: 66 },
   // 빨강 본진 성벽
-  { x1: 82, z1: -66, x2: 82, z2: -44 },
-  { x1: 82, z1: -28, x2: 82, z2: -8 },
-  { x1: 82, z1: 8, x2: 82, z2: 28 },
-  { x1: 82, z1: 44, x2: 82, z2: 66 },
-  // 미드 협곡 벽 (가운데 강 구간 x∈[-16,16]과 본진 근처는 열림)
-  { x1: -60, z1: -9, x2: -16, z2: -9 },
-  { x1: 16, z1: -9, x2: 60, z2: -9 },
-  { x1: -60, z1: 9, x2: -16, z2: 9 },
-  { x1: 16, z1: 9, x2: 60, z2: 9 },
+  { x1: 82, z1: -66, x2: 82, z2: -46 },
+  { x1: 82, z1: -26, x2: 82, z2: -10 },
+  { x1: 82, z1: 10, x2: 82, z2: 26 },
+  { x1: 82, z1: 46, x2: 82, z2: 66 },
+  // 미드 협곡 벽 (z=±12로 넓혀 미드 1차 타워 옆이 안 막히게)
+  { x1: -60, z1: -12, x2: -16, z2: -12 },
+  { x1: 16, z1: -12, x2: 60, z2: -12 },
+  { x1: -60, z1: 12, x2: -16, z2: 12 },
+  { x1: 16, z1: 12, x2: 60, z2: 12 },
 ]
 export const WALL_RADIUS = 3 // 벽 두께(충돌 원 반경)
 
@@ -105,8 +105,8 @@ export const BARON_PIT = { x: 0, z: -30 } // 위 강가
 export const ROCKS = [
   { x: -16, z: -38, r: 4 }, { x: 16, z: -38, r: 4 },
   { x: -16, z: 38, r: 4 }, { x: 16, z: 38, r: 4 },
-  { x: -54, z: -20, r: 3.5 }, { x: 54, z: 20, r: 3.5 },
-  { x: -54, z: 20, r: 3.5 }, { x: 54, z: -20, r: 3.5 },
+  { x: -54, z: -25, r: 3.5 }, { x: 54, z: 25, r: 3.5 },
+  { x: -54, z: 25, r: 3.5 }, { x: 54, z: -25, r: 3.5 },
 ]
 
 // 수풀 — 안에 들어가면 적에게 안 보인다 (180° 회전 대칭 배치)
