@@ -297,17 +297,25 @@ test('타워 공격 순서: 외곽이 살아 있으면 내곽 무적, 내곽이 
   assert.equal(nexusVulnerable(g, 'red'), true)
 })
 
-test('타워는 유저(영웅) 우선 — 사거리 안 적 영웅을 미니언보다 먼저 노린다', () => {
+test('타워는 미니언 우선 — 단, 우리 편을 때린 다이버는 반격으로 노린다', () => {
   const g = createGame(humans())
   startPlaying(g)
   const t = g.towers.find((o) => o.id === 'r-top-1')
   const h = g.heroes[0] // blue mage
   h.x = t.x - 8
   h.z = t.z
-  // 미니언 방패가 있어도 타워는 유저(영웅)를 먼저 때린다
-  plantMinion(g, 'blue', t.x - 6, t.z, 9999)
+  const m = plantMinion(g, 'blue', t.x - 6, t.z, 80)
   run(g, 1.5)
-  assert.ok(h.hp < h.maxHp, '사거리 안 영웅이 미니언보다 먼저 맞아야 한다')
+  assert.ok(m.hp < 80 || !g.minions.includes(m)) // 미니언이 먼저 맞는다
+  assert.equal(h.hp, h.maxHp) // 영웅은 미니언 뒤에서 안전 (철거 가능)
+  // 사거리 안에서 적 영웅을 때리면(아군 피격) → 타워가 그 다이버로 표적을 바꿔 반격
+  const victim = g.heroes[3] // red healer (타워와 같은 편)
+  victim.x = t.x - 6
+  victim.z = t.z + 2
+  plantMinion(g, 'blue', t.x - 6, t.z, 9999) // 미니언 방패가 있어도
+  castAttack(g, h.id) // h가 적 영웅을 때림 → 타워 어그로
+  run(g, 1.5)
+  assert.ok(h.hp < h.maxHp, '전투를 건 다이버는 타워에 맞아 물러나야 한다')
 })
 
 test('타워: 사거리에 영웅이 없으면 미니언을 때린다', () => {

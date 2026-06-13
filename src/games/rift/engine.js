@@ -1112,8 +1112,11 @@ function stepTowers(state, dt) {
     if (t.cd > 0) continue
     let ref = null
     let bd = r2
-    // 우선순위: 유저(영웅) > 미니언. 영웅 중에서도 우리 편을 때린 다이버를 먼저 응징한다.
-    // 1) 타워 사거리 안에서 우리 영웅을 때린 녀석 (타워 다이브 응징!)
+    // 우선순위: 평소엔 미니언 > 유저(영웅). 단, 사거리 안에서 우리 편 영웅을
+    // 때린 적 영웅(다이버)이 있으면 그 영웅으로 표적을 바꿔 반격한다.
+    //  → 평소엔 미니언 뒤에서 타워를 철거할 수 있지만, 전투가 벌어지면
+    //    타워에 맞아 물러나야 한다.
+    // 1) 우리 편 영웅을 때린 적 영웅 (반격 — 최우선)
     for (const h of state.heroes) {
       if (h.team === t.team || h.respawnT > 0 || h.aggroT <= 0) continue
       if (!isHeroVisible(state, h, t.team)) continue
@@ -1123,7 +1126,19 @@ function stepTowers(state, dt) {
         ref = { tk: 'hero', id: h.id }
       }
     }
-    // 2) 그 외 보이는 적 영웅 (미니언보다 우선)
+    // 2) 미니언
+    if (!ref) {
+      bd = r2
+      for (const m of state.minions) {
+        if (m.team === t.team) continue
+        const d = dist2(t, m)
+        if (d < bd) {
+          bd = d
+          ref = { tk: 'minion', id: m.id }
+        }
+      }
+    }
+    // 3) 미니언도 없으면 그제야 보이는 적 영웅
     if (!ref) {
       bd = r2
       for (const h of state.heroes) {
@@ -1133,18 +1148,6 @@ function stepTowers(state, dt) {
         if (d < bd) {
           bd = d
           ref = { tk: 'hero', id: h.id }
-        }
-      }
-    }
-    // 3) 영웅이 없으면 미니언
-    if (!ref) {
-      bd = r2
-      for (const m of state.minions) {
-        if (m.team === t.team) continue
-        const d = dist2(t, m)
-        if (d < bd) {
-          bd = d
-          ref = { tk: 'minion', id: m.id }
         }
       }
     }
@@ -1452,10 +1455,8 @@ function botLaneMove(state, h) {
   const dObj = dist(h, objective)
   if (objective.id && dObj < TOWER_RANGE + 8) {
     const shield = state.minions.some((m) => m.team === h.team && dist(m, objective) < TOWER_RANGE)
-    // 타워 응징 연사가 매서우니, 방패가 있어도 타워가 빈사이거나 탱커일 때만 마무리 다이브
-    const lowTower = objective.hp < objective.maxHp * 0.3
-    const beefy = h.cls === 'tank' || h.shieldT > 0
-    if (shield && (lowTower || beefy) && h.hp > h.maxHp * 0.5) {
+    // 미니언 방패가 있으면 타워는 미니언을 때리니 안전하게 들어가 타워를 친다.
+    if (shield) {
       if (dObj <= CLASSES[h.cls].range - 0.5) {
         h.mx = 0
         h.mz = 0
@@ -1464,7 +1465,7 @@ function botLaneMove(state, h) {
       }
       return
     }
-    // 들이박지 않는다 → 다른 할 일을 찾고, 없으면 안전거리에서 대기
+    // 방패가 없으면 들이박지 않는다 → 다른 할 일을 찾고, 없으면 안전거리에서 대기
     if (botSeekWork(state, h, lane, objective)) return
     botHoldOutside(state, h, objective)
     return
