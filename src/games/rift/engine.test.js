@@ -297,17 +297,25 @@ test('타워 공격 순서: 외곽이 살아 있으면 내곽 무적, 내곽이 
   assert.equal(nexusVulnerable(g, 'red'), true)
 })
 
-test('타워는 유저(영웅) 우선 — 사거리 안 적 영웅을 미니언보다 먼저 노린다', () => {
+test('타워는 미니언 우선 — 단, 우리 편을 때린 다이버는 반격으로 노린다', () => {
   const g = createGame(humans())
   startPlaying(g)
   const t = g.towers.find((o) => o.id === 'r-top-1')
   const h = g.heroes[0] // blue mage
   h.x = t.x - 8
   h.z = t.z
-  // 미니언 방패가 있어도 타워는 유저(영웅)를 먼저 때린다
-  plantMinion(g, 'blue', t.x - 6, t.z, 9999)
+  const m = plantMinion(g, 'blue', t.x - 6, t.z, 80)
   run(g, 1.5)
-  assert.ok(h.hp < h.maxHp, '사거리 안 영웅이 미니언보다 먼저 맞아야 한다')
+  assert.ok(m.hp < 80 || !g.minions.includes(m)) // 미니언이 먼저 맞는다
+  assert.equal(h.hp, h.maxHp) // 영웅은 미니언 뒤에서 안전 (철거 가능)
+  // 사거리 안에서 적 영웅을 때리면(아군 피격) → 타워가 그 다이버로 표적을 바꿔 반격
+  const victim = g.heroes[3] // red healer (타워와 같은 편)
+  victim.x = t.x - 6
+  victim.z = t.z + 2
+  plantMinion(g, 'blue', t.x - 6, t.z, 9999) // 미니언 방패가 있어도
+  castAttack(g, h.id) // h가 적 영웅을 때림 → 타워 어그로
+  run(g, 1.5)
+  assert.ok(h.hp < h.maxHp, '전투를 건 다이버는 타워에 맞아 물러나야 한다')
 })
 
 test('타워: 사거리에 영웅이 없으면 미니언을 때린다', () => {
@@ -615,6 +623,62 @@ test('미니언 방어: 주변 아군이 적 영웅에게 맞으면 가해자를
   run(g, 0.3)
   assert.equal(closer.hp, 50, '더 가까운 적 미니언이 아니라 가해자를 노린다')
   assert.ok(Math.hypot(m.x - foe.x, m.z - foe.z) < 4, '가해자(적 영웅) 쪽으로 다가간다')
+})
+
+test('미드 미니언: 경유지 위에 선 1차 타워를 돌아 라인이 멈추지 않고 전진한다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  g.waveT = 999 // 다른 웨이브 방해 없이
+  // 파랑 미드 1차 타워(-34,0) 칸을 향해 행군하는 파랑 미니언
+  const m = plantMinion(g, 'blue', -42, 0, 500)
+  m.lane = 'mid'
+  m.wpI = 2 // wps[2] = (-34,0) = 타워 위치
+  run(g, 6)
+  assert.ok(m.x > -20, `미드 타워에 끼지 않고 지나 전진해야 한다 (x=${m.x.toFixed(1)})`)
+})
+
+test('봇: 미니언 없이 적 타워 앞에 멈춰 있지 않고 다른 할 일(정글 등)을 찾아 간다', () => {
+  const players = humans().map((p) => ({ ...p, isBot: true }))
+  const g = createGame(players)
+  startPlaying(g)
+  g.waveT = 999 // 아군 미니언이 없는 상황을 만든다
+  g.minions.length = 0
+  const h = g.heroes.find((o) => o.team === 'blue' && o.cls === 'warrior')
+  h.role = 'mid'
+  const t = g.towers.find((o) => o.id === 'r-mid-1') // 적 미드 1차 타워 (34,0)
+  h.x = t.x - 4 // 타워 사거리 안
+  h.z = t.z
+  // 나머지 영웅은 멀리 치워 교전 변수 제거
+  for (const o of g.heroes) if (o !== h) { o.x = NEXUS_POS[o.team].x; o.z = NEXUS_POS[o.team].z }
+  // 지원할 아군은 우리 쪽(왼쪽)에 있다 → 봇은 타워를 떠나 아군 쪽으로 후퇴/이동해야 한다
+  const tower0 = Math.hypot(h.x - t.x, h.z - t.z)
+  const x0 = h.x
+  run(g, 1.5)
+  const towerNow = Math.hypot(h.x - t.x, h.z - t.z)
+  assert.ok(towerNow > tower0 + 8, `타워 앞에 얼어붙지 않고 벗어나야 한다 (${tower0.toFixed(1)}→${towerNow.toFixed(1)})`)
+  assert.ok(h.x < x0 - 8, `할 일을 찾아(아군 합류·지원) 우리 쪽으로 이동해야 한다 (x:${x0.toFixed(1)}→${h.x.toFixed(1)})`)
+})
+
+test('타워 응징: 저레벨 영웅이 사거리 안에 버티면 연사가 세져 금세 쓰러진다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  g.waveT = 999
+  g.minions.length = 0
+  const t = g.towers.find((o) => o.id === 'r-mid-1') // (34,0)
+  const h = g.heroes[0] // blue mage, 1레벨
+  h.x = t.x - 6
+  h.z = t.z
+  for (const o of g.heroes) if (o !== h) { o.x = NEXUS_POS[o.team].x; o.z = NEXUS_POS[o.team].z }
+  let maxStreak = 0
+  for (let i = 0; i < Math.round(4 / STEP) && h.respawnT <= 0; i++) {
+    step(g, STEP)
+    maxStreak = Math.max(maxStreak, t.streak || 0)
+  }
+  assert.ok(h.respawnT > 0, '사거리 안에 버틴 저레벨 영웅은 곧 쓰러진다')
+  assert.ok(maxStreak >= 1, '같은 영웅을 연달아 맞혀 응징 연사 게이지가 쌓인다')
+  // 표적이 빠지면(사망 후 본진 부활) 연사 게이지는 초기화된다
+  run(g, 1.5)
+  assert.equal(t.streak, 0, '표적이 사라지면 연사 게이지가 풀린다')
 })
 
 test('풀봇 3:3 스모크 테스트: 3분 시뮬레이션이 멀쩡히 돈다', () => {
