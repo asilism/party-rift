@@ -1,4 +1,4 @@
-import { LANES, LANE_IDS, WORLD, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT } from './map.js'
+import { LANES, LANE_IDS, WORLD, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT, NEXUS_POS } from './map.js'
 import { isHeroVisible, isUnitVisible, SIGHT_RANGE } from './engine.js'
 
 const TEAM_FILL = { blue: '#4f8cff', red: '#ff6b6b' }
@@ -19,7 +19,7 @@ function FogOverlay({ view, myTeam, pad }) {
   for (const t of view.towers || []) {
     if (t.team === myTeam && t.alive) vis.push({ x: t.x, z: t.z, r: SIGHT_RANGE * 0.9 })
   }
-  vis.push({ x: myTeam === 'blue' ? -96 : 96, z: 0, r: SIGHT_RANGE }) // 우물
+  vis.push({ x: NEXUS_POS[myTeam].x, z: NEXUS_POS[myTeam].z, r: SIGHT_RANGE }) // 우물
   return (
     <g>
       <defs>
@@ -102,7 +102,7 @@ export default function RiftMiniMap({ view, myId }) {
       {['blue', 'red'].map((team) => (
         <circle
           key={team}
-          cx={team === 'blue' ? -96 : 96} cy={0} r={6}
+          cx={NEXUS_POS[team].x} cy={NEXUS_POS[team].z} r={6}
           fill={view.nexus?.[team]?.hp > 0 ? TEAM_FILL[team] : 'rgba(120,126,140,0.5)'}
           stroke="#fff" strokeWidth={1.5}
         />

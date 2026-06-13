@@ -98,8 +98,8 @@ const WAVE_PERIOD = 22.4 // 스폰 간격 (이전 28의 0.8배)
 const FIRST_WAVE = 2
 const MINION_SPEED = 6.5
 const MINION_SIGHT = 11
-const MELEE = { hp: 150, dmg: 16.8, range: 2.4, cd: 1.1 } // 피해 1.2배 상향
-const RANGED = { hp: 110, dmg: 13.2, range: 8, cd: 1.4 } // 피해 1.2배 상향
+const MELEE = { hp: 150, dmg: 33.6, range: 2.4, cd: 1.1 } // 피해 상향 (이전의 2배)
+const RANGED = { hp: 110, dmg: 26.4, range: 8, cd: 1.4 } // 피해 상향 (이전의 2배)
 const MINION_HP_GROWTH = 8 // 분당 체력 증가
 const MINION_XP = 28
 const MINION_DEFEND_RANGE = 14 // 이 거리 안 아군 영웅이 적 영웅에게 맞으면 가해자를 노린다
@@ -107,7 +107,7 @@ const MINION_DEFEND_LEASH = 16 // 가해자를 쫓다 시작점에서 이만큼 
 const MINION_DEFEND_HURT_T = 1.5 // 아군이 최근 이 시간 안에 맞았어야 "공격받는 중"으로 본다
 
 // ── 타워/넥서스 ──
-const TOWER_HP = [0, 900, 1100] // tier 1(외곽) / 2(내곽)
+const TOWER_HP = [0, 900, 1100, 1500] // tier 1(외곽) / 2(내곽) / 3(넥서스 최후의 포탑)
 export const TOWER_RANGE = 13
 const TOWER_CD = 1.2
 const TOWER_DMG_HERO = 180 // 영웅 기본 피해 — 같은 영웅을 연속으로 맞히면 점점 세진다
@@ -136,7 +136,7 @@ export const BARON_BUFF_T = 75 // 바론 버프: 공격력 +40% + 빠른 회복
 const heroMaxHp = (h) => CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1)
 const heroAtk = (h) => CLASSES[h.cls].atk + CLASSES[h.cls].atkLvl * (h.lvl - 1)
 export const xpNeed = (lvl) => 60 + 40 * (lvl - 1)
-const respawnTime = (lvl) => 4 + 1.2 * lvl
+const respawnTime = (lvl) => 4 + 2 * lvl // 레벨이 높을수록 부활 대기 ↑ (Lv1 6초 → Lv10 24초)
 
 const dist2 = (a, b) => (a.x - b.x) ** 2 + (a.z - b.z) ** 2
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
@@ -146,7 +146,8 @@ const emojiOf = (zodiacId) => getZodiac(zodiacId)?.emoji || '🙂'
 function spawnPos(team, slot) {
   const n = NEXUS_POS[team]
   const side = team === 'blue' ? 1 : -1
-  return { x: n.x + side * 7, z: (slot - 1) * 5 }
+  // 넥서스와 최후의 포탑 사이(뒤쪽)에서 부활 — 둘 다와 안 겹치게
+  return { x: n.x + side * 5, z: (slot - 1) * 5 }
 }
 
 // players: [{ id, name, zodiacId, color, team, cls, isBot? }]
@@ -325,13 +326,22 @@ function inSight(snap, ent, team) {
   return false
 }
 
-// 이 타워를 지금 공격할 수 있나 (외곽 → 내곽 → 넥서스 순서)
+// 이 타워를 지금 공격할 수 있나 (외곽 → 내곽 → 최후의 포탑 → 넥서스 순서).
+//  · tier1(외곽): 항상 가능
+//  · tier2(내곽): 같은 라인 외곽이 부서져야
+//  · tier3(최후의 포탑): 내곽(tier2) 중 하나라도 부서져야
 export function towerVulnerable(state, tower) {
   if (tower.tier === 1) return true
+  if (tower.tier === 3) {
+    return state.towers.some((t) => t.team === tower.team && t.tier === 2 && !t.alive)
+  }
   const outer = state.towers.find((t) => t.team === tower.team && t.lane === tower.lane && t.tier === 1)
   return !outer?.alive
 }
+// 넥서스는 최후의 포탑(tier3)이 부서져야 공격할 수 있다.
 export function nexusVulnerable(state, team) {
+  const fin = state.towers.find((t) => t.team === team && t.tier === 3)
+  if (fin) return !fin.alive
   return state.towers.some((t) => t.team === team && t.tier === 2 && !t.alive)
 }
 
@@ -699,8 +709,13 @@ function damageTower(state, t, amount, attacker) {
   const team = attacker?.team || enemyOf(t.team)
   state.towersDown[team]++
   for (const h of state.heroes) if (h.team === team) giveXp(state, h, TOWER_XP)
-  const laneName = { top: '윗길', mid: '가운데길', bot: '아랫길' }[t.lane]
-  pushFeed(state, 'tower', `💥 ${t.team === 'blue' ? '파랑' : '빨강'} ${laneName} ${t.tier === 1 ? '외곽' : '내곽'} 타워 파괴!`)
+  const side = t.team === 'blue' ? '파랑' : '빨강'
+  if (t.tier === 3) {
+    pushFeed(state, 'tower', `💥 ${side} 최후의 포탑 파괴! 넥서스가 열렸다!`)
+  } else {
+    const laneName = { top: '윗길', mid: '가운데길', bot: '아랫길' }[t.lane]
+    pushFeed(state, 'tower', `💥 ${side} ${laneName} ${t.tier === 1 ? '외곽' : '내곽'} 타워 파괴!`)
+  }
 }
 
 function damageNexus(state, team, amount, attacker) {
@@ -1509,6 +1524,7 @@ function botLaneMove(state, h, dt) {
   const objective =
     state.towers.find((t) => t.team === en && t.lane === lane && t.tier === 1 && t.alive) ||
     state.towers.find((t) => t.team === en && t.lane === lane && t.tier === 2 && t.alive) ||
+    state.towers.find((t) => t.team === en && t.tier === 3 && t.alive) || // 최후의 포탑
     NEXUS_POS[en]
   // "딴 일" 모드: 타워 앞에서 못 밀 때 한번 정한 일을 잠시 유지한다.
   // (매 틱 라인 푸시로 되돌아가 타워 사거리 경계를 들락날락하던 진동을 막는다)

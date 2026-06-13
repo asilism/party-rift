@@ -10,8 +10,8 @@
 export const WORLD = { minX: -108, maxX: 108, minZ: -66, maxZ: 66 }
 
 export const NEXUS_POS = {
-  blue: { x: -96, z: 0 },
-  red: { x: 96, z: 0 },
+  blue: { x: -100, z: 0 },
+  red: { x: 100, z: 0 },
 }
 export const NEXUS_RADIUS = 4.5
 export const FOUNTAIN_RADIUS = 13 // 넥서스 주변 회복 지대
@@ -51,6 +51,9 @@ export const TOWER_SPOTS = [
   { id: 'r-mid-2', team: 'red', lane: 'mid', tier: 2, x: 74, z: 0 },
   { id: 'r-bot-1', team: 'red', lane: 'bot', tier: 1, x: 34, z: 56 },
   { id: 'r-bot-2', team: 'red', lane: 'bot', tier: 2, x: 78, z: 40 },
+  // 넥서스 바로 앞 최후의 포탑 (tier 3) — 부서지기 전엔 넥서스 공격 불가
+  { id: 'b-final', team: 'blue', lane: 'mid', tier: 3, x: -90, z: 0 },
+  { id: 'r-final', team: 'red', lane: 'mid', tier: 3, x: 90, z: 0 },
 ]
 export const TOWER_RADIUS = 2.4 // 통행 막는 몸통 반경
 

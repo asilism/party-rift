@@ -56,6 +56,27 @@ function nameSprite(text, color = '#ffffff') {
   return sp
 }
 
+// "🛡 공격불가" 라벨 — 선행 구조물이 안 부서져 무적인 포탑/넥서스 위에 띄운다
+function lockLabel() {
+  const c = document.createElement('canvas')
+  c.width = 256
+  c.height = 64
+  const ctx = c.getContext('2d')
+  ctx.font = '800 27px system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineWidth = 7
+  ctx.strokeStyle = 'rgba(10, 16, 32, 0.9)'
+  ctx.strokeText('🛡 공격불가', 128, 34)
+  ctx.fillStyle = '#ffd34d'
+  ctx.fillText('🛡 공격불가', 128, 34)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true }))
+  sp.scale.set(7, 1.75, 1)
+  return sp
+}
+
 // 체력바: 검정 배경 + 왼쪽 기준으로 줄어드는 색 막대 (스프라이트라 항상 카메라를 본다)
 function makeHpBar(width = 2.6, color = ALLY_HP) {
   const g = new THREE.Group()
@@ -152,7 +173,11 @@ function buildTower(team) {
   range.add(disc, edge)
   range.visible = false
   g.add(range)
-  g.userData = { crystal, body, rubble, bar, range, disc, edge }
+  const lock = lockLabel()
+  lock.position.y = 11.8
+  lock.visible = false
+  g.add(lock)
+  g.userData = { crystal, body, rubble, bar, range, disc, edge, lock }
   return g
 }
 
@@ -171,8 +196,11 @@ function buildNexus(team) {
   core.position.y = 6
   const bar = makeHpBar(7, col)
   bar.position.y = 11
-  g.add(base, core, bar)
-  g.userData = { core, bar }
+  const lock = lockLabel()
+  lock.position.y = 13
+  lock.visible = false
+  g.add(base, core, bar, lock)
+  g.userData = { core, bar, lock }
   return g
 }
 
@@ -630,13 +658,16 @@ export function createRiftScene(canvas) {
       if (t.alive) {
         u.crystal.rotation.y += 0.02
         setHpBar(u.bar, t.hp / t.maxHp)
-        // 아직 공격 못 하는 타워는 크리스탈이 흐릿하게
+        // 아직 공격 못 하는 타워는 크리스탈이 흐릿하게 + "공격불가" 라벨
         u.crystal.material.emissiveIntensity = t.vuln ? 0.45 : 0.15
       }
+      const dToMe = me ? Math.hypot(me.x - t.x, me.z - t.z) : Infinity
+      // "공격불가" 라벨: 무적인 적 구조물에 다가가면 띄운다 (관전이면 전부)
+      u.lock.visible =
+        t.alive && !t.vuln && (!myTeam || (t.team !== myTeam && dToMe < TOWER_RANGE + 16))
       // 적 타워 사거리 경고: 내 영웅이 가까워지면 미리 범위를 보여 준다
       let warn = false
       if (t.alive && me && myTeam && t.team !== myTeam) {
-        const dToMe = Math.hypot(me.x - t.x, me.z - t.z)
         const WARN_PAD = 9 // 사거리 밖 이만큼부터 미리 표시
         if (dToMe < TOWER_RANGE + WARN_PAD) {
           warn = true
@@ -658,6 +689,9 @@ export function createRiftScene(canvas) {
       u.core.visible = nx.hp > 0
       setHpBar(u.bar, nx.hp / nx.maxHp)
       u.core.material.emissiveIntensity = nx.vuln ? 0.7 : 0.4
+      const dToNexus = me ? Math.hypot(me.x - NEXUS_POS[team].x, me.z - NEXUS_POS[team].z) : Infinity
+      u.lock.visible =
+        nx.hp > 0 && !nx.vuln && (!myTeam || (team !== myTeam && dToNexus < 28))
       const low = nx.hp > 0 && nx.hp < nx.maxHp * 0.35
       u.core.scale.setScalar(low ? 1 + Math.sin(view.time * 10) * 0.06 : 1)
     }
