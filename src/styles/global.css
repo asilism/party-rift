@@ -2001,7 +2001,7 @@ body {
   background: rgba(155, 107, 214, 0.92);
 }
 .rift-btn--recall {
-  left: 22px; bottom: 20px; width: 84px; height: 84px; font-size: 30px;
+  left: calc(50% - 40px); bottom: 20px; width: 80px; height: 80px; font-size: 28px;
   background: rgba(40, 180, 196, 0.9);
 }
 .rift-btn--recall small { font-size: 11px; }

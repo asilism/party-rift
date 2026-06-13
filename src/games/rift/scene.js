@@ -311,11 +311,21 @@ function buildHero(h, mine, barColor) {
   recall.rotation.x = -Math.PI / 2
   recall.position.y = 0.14
   recall.visible = false
+  // 귀환 빛기둥: 하늘에서 캐릭터로 내리쬐는 빛 (적도 보고 "귀환 중이군" 알 수 있게)
+  const recallBeam = new THREE.Mesh(
+    new THREE.CylinderGeometry(4, 1, 34, 18, 1, true),
+    new THREE.MeshBasicMaterial({
+      color: 0x9af0ff, transparent: true, opacity: 0.28,
+      side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
+    })
+  )
+  recallBeam.position.y = 17
+  recallBeam.visible = false
   // 직업 무기 — 몸통에 붙여 바라보는 방향과 함께 돈다
   const weapon = buildWeapon(h.cls)
   body.add(weapon)
-  g.add(body, face, name, bar, ring, buff, shield, stun, recall)
-  g.userData = { body, face, bar, ring, buff, shield, stun, recall, weapon, lastAtkSeq: h.atkSeq, animT: 1 }
+  g.add(body, face, name, bar, ring, buff, shield, stun, recall, recallBeam)
+  g.userData = { body, face, bar, ring, buff, shield, stun, recall, recallBeam, weapon, lastAtkSeq: h.atkSeq, animT: 1 }
   return g
 }
 
@@ -361,6 +371,7 @@ function buildMonster(m) {
 
 const PROJ_LOOK = {
   bolt: { r: 0.4, y: 2.4, color: null }, // null → 팀 색
+  mbolt: { r: 0.26, y: 1.5, color: null }, // 원거리 미니언의 작은 화살 (낮고 작게)
   fireball: { r: 0.95, y: 2, color: 0xff8c2e },
   towerbolt: { r: 0.55, y: 4, color: null },
 }
@@ -664,7 +675,12 @@ export function createRiftScene(canvas) {
         setHpBar(u.bar, h.hp / h.maxHp)
         u.stun.visible = h.stunT > 0
         u.recall.visible = h.recallT > 0
-        if (u.recall.visible) u.recall.rotation.z = view.time * 3
+        u.recallBeam.visible = h.recallT > 0
+        if (h.recallT > 0) {
+          u.recall.rotation.z = view.time * 3
+          u.recallBeam.rotation.y = view.time * 1.2
+          u.recallBeam.material.opacity = 0.22 + Math.abs(Math.sin(view.time * 4)) * 0.22 // 깜빡이는 빛
+        }
         u.shield.visible = h.shieldT > 0
         u.buff.visible = h.dragonT > 0 || h.baronT > 0
         u.buff.material.color.set(h.baronT > 0 ? 0x9b6bd6 : 0xffa94d)
