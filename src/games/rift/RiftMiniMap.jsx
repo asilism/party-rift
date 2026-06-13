@@ -1,4 +1,4 @@
-import { LANES, LANE_IDS, WORLD, BUSHES, DRAGON_PIT, BARON_PIT } from './map.js'
+import { LANES, LANE_IDS, WORLD, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT } from './map.js'
 import { isHeroVisible, isUnitVisible } from './engine.js'
 
 const TEAM_FILL = { blue: '#4f8cff', red: '#ff6b6b' }
@@ -20,6 +20,14 @@ export default function RiftMiniMap({ view, myId }) {
       <rect x={-7} y={WORLD.minZ} width={14} height={WORLD.maxZ - WORLD.minZ} fill="rgba(108, 196, 232, 0.4)" />
       {LANE_IDS.map((l) => (
         <path key={l} d={laneD(l)} fill="none" stroke="rgba(217, 199, 154, 0.55)" strokeWidth={9} strokeLinejoin="round" />
+      ))}
+      {/* 성벽 */}
+      {WALL_LINES.map((w, i) => (
+        <line
+          key={i}
+          x1={w.x1} y1={w.z1} x2={w.x2} y2={w.z2}
+          stroke="rgba(125, 132, 148, 0.95)" strokeWidth={6} strokeLinecap="round"
+        />
       ))}
       {/* 수풀 */}
       {BUSHES.map((b, i) => (

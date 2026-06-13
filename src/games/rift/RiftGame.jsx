@@ -285,7 +285,7 @@ function interpolate(buf) {
     ...b.v,
     time: lerp(a.v.time ?? 0, b.v.time ?? 0),
     heroes: lerpList(a.v.heroes, b.v.heroes, (ea, eb) => ({ dir: lerpAng(ea.dir, eb.dir) })),
-    minions: lerpList(a.v.minions, b.v.minions),
+    minions: lerpList(a.v.minions, b.v.minions, (ea, eb) => ({ dir: lerpAng(ea.dir || 0, eb.dir || 0) })),
     monsters: lerpList(a.v.monsters, b.v.monsters),
     projectiles: lerpList(a.v.projectiles, b.v.projectiles),
   }

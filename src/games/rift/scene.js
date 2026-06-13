@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { getZodiac } from '../../shared/zodiac.js'
 import {
   WORLD, NEXUS_POS, NEXUS_RADIUS, FOUNTAIN_RADIUS, LANES, LANE_IDS, ROCKS, BUSHES,
-  DRAGON_PIT, BARON_PIT,
+  WALL_LINES, WALL_RADIUS, DRAGON_PIT, BARON_PIT,
 } from './map.js'
 import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE } from './engine.js'
 
@@ -162,6 +162,84 @@ function buildNexus(team) {
 // 직업별 몸집: 탱커는 듬직하게, 암살자는 날렵하게
 const CLS_SCALE = { tank: 1.25, warrior: 1.1, assassin: 0.9 }
 
+const ATK_ANIM_T = 0.35 // 공격 모션 길이 (초)
+
+// 직업별 무기: 몸통(바라보는 방향으로 회전하는 메시)에 붙어 함께 돈다.
+// userData.pose(t)로 공격 모션 진행도(0→1)를 그린다. 로컬 +x = 정면.
+function buildWeapon(cls) {
+  const g = new THREE.Group()
+  const metal = new THREE.MeshLambertMaterial({ color: 0xd9dee8 })
+  const wood = new THREE.MeshLambertMaterial({ color: 0x8a6242 })
+  const swing = (t) => Math.sin(Math.min(1, t) * Math.PI) // 0→1→0 펄스
+  if (cls === 'warrior') {
+    // 검: 크게 휘두른다
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.1, 0.3), metal)
+    blade.position.x = 1.2
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.2, 0.7), wood)
+    guard.position.x = 0.35
+    g.add(blade, guard)
+    g.position.set(0.3, 0.3, 0.9)
+    g.userData.pose = (t) => {
+      g.rotation.y = 1.1 - swing(t) * 2.2 // 바깥→안쪽으로 베기
+      g.rotation.z = swing(t) * 0.4
+    }
+  } else if (cls === 'assassin') {
+    // 쌍단검: 빠른 찌르기
+    for (const side of [0.55, -0.55]) {
+      const dagger = new THREE.Mesh(new THREE.ConeGeometry(0.12, 1.0, 5), metal)
+      dagger.rotation.z = -Math.PI / 2 // 칼끝이 +x(정면)
+      dagger.position.set(0.6, 0.2, side)
+      g.add(dagger)
+    }
+    g.userData.pose = (t) => {
+      g.position.x = swing(t) * 0.9 // 푹!
+    }
+  } else if (cls === 'tank') {
+    // 망치: 내려찍기
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.7), wood)
+    handle.position.y = 0.5
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.45, 0.8), metal)
+    head.position.y = 1.4
+    g.add(handle, head)
+    g.position.set(0.5, 0.2, 0.95)
+    g.userData.pose = (t) => {
+      g.rotation.z = 0.45 - swing(t) * 1.6 // 번쩍 들었다 쾅!
+    }
+  } else if (cls === 'archer') {
+    // 활: 시위를 당겼다 놓는다
+    const bow = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.07, 6, 14, Math.PI), wood)
+    bow.rotation.z = -Math.PI / 2 // 활이 정면을 향한 반원
+    bow.rotation.y = Math.PI / 2
+    const string = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.7, 0.04), metal)
+    g.add(bow, string)
+    g.position.set(1.0, 0.4, 0)
+    g.userData.pose = (t) => {
+      string.position.x = -swing(t) * 0.5 // 시위 당김
+      g.position.x = 1.0 - swing(t) * 0.25 // 반동
+    }
+  } else {
+    // 마법사/힐러: 지팡이 + 빛나는 구슬
+    const color = cls === 'healer' ? 0x6ee7a0 : 0xb07ef0
+    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 2.1), wood)
+    staff.position.y = 0.3
+    const orb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.3, 10, 8),
+      new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.5 })
+    )
+    orb.position.y = 1.5
+    g.add(staff, orb)
+    g.position.set(0.4, 0.2, 0.9)
+    g.userData.pose = (t) => {
+      const s = swing(t)
+      g.rotation.z = -s * 0.8 // 지팡이를 앞으로 겨눈다
+      orb.material.emissiveIntensity = 0.5 + s * 1.6 // 구슬 번쩍!
+      orb.scale.setScalar(1 + s * 0.7)
+    }
+  }
+  g.userData.pose(1)
+  return g
+}
+
 // 영웅: 팀 색 캡슐 몸통 + 12지신 이모지 얼굴 + 직업 아이콘 이름표 + 체력바
 function buildHero(h, mine, barColor) {
   const g = new THREE.Group()
@@ -208,8 +286,11 @@ function buildHero(h, mine, barColor) {
   const stun = emojiSprite('💫', 2)
   stun.position.y = 5.4 * s
   stun.visible = false
+  // 직업 무기 — 몸통에 붙여 바라보는 방향과 함께 돈다
+  const weapon = buildWeapon(h.cls)
+  body.add(weapon)
   g.add(body, face, name, bar, ring, buff, shield, stun)
-  g.userData = { body, face, bar, ring, buff, shield, stun }
+  g.userData = { body, face, bar, ring, buff, shield, stun, weapon, lastAtkSeq: h.atkSeq, animT: 1 }
   return g
 }
 
@@ -226,7 +307,7 @@ function buildMinion(m, barColor) {
   const bar = makeHpBar(1.6, barColor)
   bar.position.y = 3
   g.add(body, eye, bar)
-  g.userData = { bar }
+  g.userData = { bar, body, lastAtkSeq: m.atkSeq, animT: 1 }
   return g
 }
 
@@ -404,6 +485,22 @@ export function createRiftScene(canvas) {
     rock.rotation.set(r.x * 0.3, r.z * 0.3, 0)
     scene.add(rock)
   }
+  // 성벽: 길이 아닌 곳을 막는 바위 능선 (충돌 원들과 같은 라인)
+  const wallMat = new THREE.MeshLambertMaterial({ color: 0x7d8494 })
+  const wallTopMat = new THREE.MeshLambertMaterial({ color: 0x69b85e })
+  for (const w of WALL_LINES) {
+    const len = Math.hypot(w.x2 - w.x1, w.z2 - w.z1) + WALL_RADIUS * 2
+    const g = new THREE.Group()
+    const body = new THREE.Mesh(new THREE.BoxGeometry(len, 4.6, WALL_RADIUS * 2), wallMat)
+    body.position.y = 2.3
+    const top = new THREE.Mesh(new THREE.BoxGeometry(len, 0.7, WALL_RADIUS * 2 - 0.8), wallTopMat)
+    top.position.y = 4.7 // 능선 위 풀
+    g.add(body, top)
+    g.position.set((w.x1 + w.x2) / 2, 0, (w.z1 + w.z2) / 2)
+    g.rotation.y = -Math.atan2(w.z2 - w.z1, w.x2 - w.x1)
+    scene.add(g)
+  }
+
   // 수풀 (들어가면 은신!) — 잎뭉치 여러 개로 풍성하게
   const bushRnd = lcg(7)
   for (const b of BUSHES) {
@@ -469,8 +566,11 @@ export function createRiftScene(canvas) {
 
   const camTarget = new THREE.Vector3(0, 0, 0)
   let camInit = false
+  let lastT = null // 공격 모션 진행용 프레임 시간
 
   function render(view, myId) {
+    const dt = lastT == null ? 0 : Math.max(0, Math.min(0.1, view.time - lastT))
+    lastT = view.time
     const me = view.heroes.find((h) => h.id === myId)
     const myTeam = me?.team || null // 관전이면 모든 게 보인다
     const barColorOf = (team) =>
@@ -528,6 +628,13 @@ export function createRiftScene(canvas) {
         const hide = h.bushI >= 0
         u.body.material.opacity = hide ? 0.5 : 1
         u.face.material.opacity = hide ? 0.6 : 1
+        // 공격 모션: atkSeq가 바뀌면 무기를 휘두른다
+        if (h.atkSeq !== u.lastAtkSeq) {
+          u.lastAtkSeq = h.atkSeq
+          u.animT = 0
+        }
+        u.animT = Math.min(1, u.animT + dt / ATK_ANIM_T)
+        u.weapon.userData.pose(u.animT)
         if (h.id === myId) u.ring.rotation.z = view.time * 1.5
       }
     )
@@ -538,7 +645,20 @@ export function createRiftScene(canvas) {
       (obj, m) => {
         obj.visible = isUnitVisible(view, m, myTeam)
         obj.position.set(m.x, 0, m.z)
-        setHpBar(obj.userData.bar, m.hp / m.maxHp)
+        const u = obj.userData
+        setHpBar(u.bar, m.hp / m.maxHp)
+        // 공격 모션: 근접은 푹 찌르고(앞으로 쿵), 원거리는 반동으로 움찔
+        u.body.rotation.y = -(m.dir || 0)
+        if (m.atkSeq !== u.lastAtkSeq) {
+          u.lastAtkSeq = m.atkSeq
+          u.animT = 0
+        }
+        u.animT = Math.min(1, u.animT + dt / ATK_ANIM_T)
+        const pulse = Math.sin(u.animT * Math.PI)
+        const lunge = (m.ranged ? -0.3 : 0.55) * pulse // 원거리는 뒤로 반동
+        u.body.position.x = Math.cos(m.dir || 0) * lunge
+        u.body.position.z = Math.sin(m.dir || 0) * lunge
+        u.body.rotation.z = m.ranged ? pulse * 0.3 : -pulse * 0.35 // 기울이기
       }
     )
     // 정글몹/용/바론 (중립 — 늘 보인다)

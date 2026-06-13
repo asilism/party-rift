@@ -6,7 +6,7 @@
 //  - 호스트가 step()을 60Hz로 돌리고 makeView() 스냅샷을 전파한다.
 import {
   NEXUS_POS, FOUNTAIN_RADIUS, LANES, LANE_IDS, TOWER_SPOTS, WOLF_CAMPS,
-  DRAGON_PIT, BARON_PIT, enemyOf, nearestWp, resolveTerrain, bushIndexAt,
+  DRAGON_PIT, BARON_PIT, enemyOf, nearestWp, resolveTerrain, bushIndexAt, avoidDir,
 } from './map.js'
 import { getZodiac } from '../../shared/zodiac.js'
 
@@ -168,6 +168,7 @@ export function createGame(players, rng = Math.random) {
       hp: 0, // 아래에서 직업 최대치로 채운다
       maxHp: 0,
       atkCd: 0,
+      atkSeq: 0, // 공격할 때마다 +1 (렌더러의 휘두르기 모션 트리거)
       skillCd: 0,
       ultCd: 0,
       stunT: 0,
@@ -407,6 +408,7 @@ export function castAttack(state, id) {
   if (!ref) return state
   const tgt = targetEntity(state, ref)
   h.atkCd = CLASSES[h.cls].atkCd
+  h.atkSeq++
   h.dir = Math.atan2(tgt.z - h.z, tgt.x - h.x)
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
   h.slowT = Math.max(h.slowT, ATK_SLOW_T) // 쏘는 동안엔 발이 무겁다
@@ -776,6 +778,8 @@ function stepWaves(state, dt) {
           hp: spec.hp + grow,
           maxHp: spec.hp + grow,
           atkCd: i * 0.3, // 줄지어 공격하게 살짝 어긋나게
+          dir: team === 'blue' ? 0 : Math.PI, // 바라보는 방향 (공격 모션용)
+          atkSeq: 0, // 공격할 때마다 +1 (찌르기/사격 모션 트리거)
           wpI: team === 'blue' ? 1 : wps.length - 2,
         })
       }
@@ -881,12 +885,22 @@ function stepMinions(state, dt) {
     if (tgt) {
       const d = dist(m, tgt.e)
       if (d <= spec.range + 0.5) {
+        m.dir = Math.atan2(tgt.e.z - m.z, tgt.e.x - m.x) // 적을 바라본다
         if (m.atkCd <= 0) {
           m.atkCd = spec.cd
-          applyDamage(state, tgt.ref, spec.dmg, { team: m.team })
+          m.atkSeq++
+          if (m.ranged) {
+            // 원거리 미니언은 화살을 쏜다 (모션과 함께 보이게)
+            state.projectiles.push({
+              id: state.nextId++, kind: 'bolt', team: m.team,
+              x: m.x, z: m.z, target: tgt.ref, dmg: spec.dmg, speed: 26,
+            })
+          } else {
+            applyDamage(state, tgt.ref, spec.dmg, { team: m.team })
+          }
         }
       } else {
-        moveToward(m, tgt.e, MINION_SPEED, dt)
+        moveToward(state, m, tgt.e, MINION_SPEED, dt, 0.8)
       }
     } else {
       // 레인 행군
@@ -895,7 +909,7 @@ function stepMinions(state, dt) {
       const wp = wps[m.wpI]
       if (wp) {
         if (dist(m, wp) < 3) m.wpI += dirI
-        else moveToward(m, wp, MINION_SPEED, dt)
+        else moveToward(state, m, wp, MINION_SPEED, dt, 0.8)
       }
     }
     resolveTerrain(m, 0.8, state.towers)
@@ -921,10 +935,13 @@ function stepMinions(state, dt) {
   }
 }
 
-function moveToward(e, to, speed, dt) {
-  const d = dist(e, to) || 0.001
-  e.x += ((to.x - e.x) / d) * speed * dt
-  e.z += ((to.z - e.z) / d) * speed * dt
+// 목표를 향해 이동하되, 길을 막는 성벽/바위/타워는 접선으로 비켜 간다.
+// (자기 편 타워가 레인 위에 있어도 미니언이 끼지 않고 돌아간다)
+function moveToward(state, e, to, speed, dt, selfR = 1) {
+  const dir = avoidDir(e, to.x, to.z, state.towers, selfR)
+  e.x += dir.x * speed * dt
+  e.z += dir.z * speed * dt
+  if (dir.x || dir.z) e.dir = Math.atan2(dir.z, dir.x)
 }
 
 // 정글몹: 평소엔 얌전 — 맞으면 반격, 캠프에서 멀어지면 포기하고 복귀(회복)
@@ -949,7 +966,7 @@ function stepMonsters(state, dt) {
     if (!tgt || far || dist(m, tgt) > CAMP_LEASH) {
       m.aggro = null
       if (dist(m, m.camp) > 1) {
-        moveToward(m, m.camp, spec.speed * 1.5, dt)
+        moveToward(state, m, m.camp, spec.speed * 1.5, dt, 1.2)
         m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.5 * dt) // 복귀 중 쑥쑥 회복
       }
       continue
@@ -960,7 +977,7 @@ function stepMonsters(state, dt) {
         damageHero(state, tgt, spec.dmg, null)
       }
     } else {
-      moveToward(m, tgt, spec.speed, dt)
+      moveToward(state, m, tgt, spec.speed, dt, 1.2)
     }
   }
 }
@@ -1081,7 +1098,7 @@ function stepBots(state, dt) {
     if (h.botRetreat && h.hp > h.maxHp * 0.85) h.botRetreat = false
     if (h.botRetreat) {
       if (h.cls === 'tank' && h.skillCd <= 0) castSkill(state, h.id) // 방패 켜고 도망!
-      steerToward(h, NEXUS_POS[h.team])
+      steerToward(state, h, NEXUS_POS[h.team])
       castAttack(state, h.id) // 도망치면서도 사거리 안이면 반격
       continue
     }
@@ -1158,10 +1175,11 @@ function botCombatSkills(state, h, foe, d, nearCount) {
   }
 }
 
-function steerToward(h, to) {
-  const d = dist(h, to) || 0.001
-  h.mx = (to.x - h.x) / d
-  h.mz = (to.z - h.z) / d
+// 봇 조향: 직선이 막히면 접선으로 비켜 가는 방향을 입력으로 넣는다
+function steerToward(state, h, to) {
+  const dir = avoidDir(h, to.x, to.z, state.towers, 1.3)
+  h.mx = dir.x
+  h.mz = dir.z
 }
 
 // 정글 사냥: 지나는 길의 늑대, 아군이 모여 있으면 용/바론 도전
@@ -1173,7 +1191,7 @@ function botJungleMove(state, h) {
       (o) => o.team === h.team && o.respawnT <= 0 && dist(o, big) < 28
     ).length
     if (allies >= 2 && h.hp > h.maxHp * 0.55) {
-      if (dist(h, big) > CLASSES[h.cls].range - 1) steerToward(h, big)
+      if (dist(h, big) > CLASSES[h.cls].range - 1) steerToward(state, h, big)
       else {
         h.mx = 0
         h.mz = 0
@@ -1193,7 +1211,7 @@ function botJungleMove(state, h) {
     }
   }
   if (!camp || h.hp < h.maxHp * 0.6) return false
-  if (dist(h, camp) > CLASSES[h.cls].range - 1) steerToward(h, camp)
+  if (dist(h, camp) > CLASSES[h.cls].range - 1) steerToward(state, h, camp)
   else {
     h.mx = 0
     h.mz = 0
@@ -1225,7 +1243,7 @@ function botLaneMove(state, h) {
       h.mz = 0
       return
     }
-    steerToward(h, objective)
+    steerToward(state, h, objective)
     return
   }
   // 경유지 행군: 가장 가까운 경유지의 "다음 칸"을 향한다.
@@ -1235,11 +1253,11 @@ function botLaneMove(state, h) {
   const dirI = h.team === 'blue' ? 1 : -1
   const wp = wps[nearestWp(lane, h.x, h.z) + dirI]
   if (!wp) {
-    steerToward(h, objective)
+    steerToward(state, h, objective)
     return
   }
   // 경유지보다 목표가 더 가까우면 목표로 직행
-  steerToward(h, dist(h, objective) < dist(h, wp) + 6 ? objective : wp)
+  steerToward(state, h, dist(h, objective) < dist(h, wp) + 6 ? objective : wp)
 }
 
 const r1 = (v) => Math.round(v * 10) / 10
@@ -1273,6 +1291,7 @@ export function makeView(state) {
       xp: Math.floor(h.xp),
       xpNeed: h.lvl >= MAX_LEVEL ? 0 : xpNeed(h.lvl),
       atkCd: r2d(h.atkCd),
+      atkSeq: h.atkSeq,
       skillCd: r2d(h.skillCd),
       ultCd: r2d(h.ultCd),
       ultLocked: h.lvl < ULT_LEVEL,
@@ -1292,6 +1311,8 @@ export function makeView(state) {
       ranged: m.ranged,
       x: r1(m.x),
       z: r1(m.z),
+      dir: r2d(m.dir),
+      atkSeq: m.atkSeq,
       hp: Math.ceil(m.hp),
       maxHp: Math.ceil(m.maxHp),
     })),
