@@ -346,6 +346,19 @@ function RiftPlay({
 }) {
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
+  // 배경음악(칩튠 루프): 경기 중에만 흐르고, 어느 한쪽 넥서스가 위태로우면 템포 업
+  const bgmStatus = hud?.status
+  const nexusCrisis = !!(
+    hud?.nexus &&
+    (hud.nexus.blue.hp < hud.nexus.blue.maxHp * 0.35 ||
+      hud.nexus.red.hp < hud.nexus.red.maxHp * 0.35)
+  )
+  useEffect(() => {
+    if (bgmStatus === 'playing' && soundOn) sound.musicStart()
+    else sound.musicStop()
+    sound.musicSetFast(nexusCrisis)
+  }, [bgmStatus, nexusCrisis, soundOn])
+  useEffect(() => () => sound.musicStop(), [])
   if (!hud || hud.phase !== 'play') {
     return <NetWaiting text="전장을 준비하고 있어요... ⚔️" onExit={onExit} />
   }
