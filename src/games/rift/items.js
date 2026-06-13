@@ -48,6 +48,9 @@ export const STAT_LABEL = {
 // 합산 상한 (한 아이템에 몰빵 못하게 + 무한 누적 방지)
 const CAPS = { def: 0.6, atkSpeed: 0.5, cdr: 0.45 }
 
+// 아이템 효과 배율 — 장비 효과가 확실히 체감되게 표기값보다 강하게 적용.
+export const EFFECT_MULT = 1.5
+
 export const ITEMS = [
   // ── 마법 (주문 위력 / 쿨다운) ──
   { id: 'orb', cat: 'magic', name: '마력의 구슬', icon: '🔮', cost: 300,
@@ -101,13 +104,19 @@ export const ITEMS = [
 export const ITEMS_BY_ID = Object.fromEntries(ITEMS.map((it) => [it.id, it]))
 export const getItem = (id) => ITEMS_BY_ID[id] || null
 
-// 가진 아이템 id 목록 → 합산 보너스(능력치). 상한을 적용한다.
+// 가진 아이템 id 목록 → 합산 보너스(능력치). 효과 배율 후 상한을 적용한다.
 export function sumStats(itemIds) {
   const b = { atk: 0, power: 0, hp: 0, def: 0, speed: 0, atkSpeed: 0, cdr: 0, regen: 0, lifesteal: 0, range: 0 }
   for (const id of itemIds || []) {
     const it = ITEMS_BY_ID[id]
     if (!it) continue
     for (const k in it.stats) b[k] += it.stats[k]
+  }
+  // 정수형 능력치(공격력/체력 등)는 반올림해 깔끔하게
+  const round = new Set(['atk', 'power', 'hp'])
+  for (const k in b) {
+    b[k] *= EFFECT_MULT
+    if (round.has(k)) b[k] = Math.round(b[k])
   }
   for (const k in CAPS) b[k] = Math.min(CAPS[k], b[k])
   return b

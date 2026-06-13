@@ -110,14 +110,14 @@ const MINION_XP = 28
 // ── 골드 / 상점 ──
 // 미니언/정글몹/타워/적 영웅을 "처치(막타)"하면 골드를 얻어 우물 상점에서 아이템을 산다.
 const START_GOLD = 300 // 시작 골드 (싼 아이템 하나는 바로 살 수 있게)
-const GOLD_PASSIVE = 1.6 // 초당 자동 수입 (파밍이 안 풀려도 천천히 모이게)
-const GOLD_MINION_MELEE = 26 // 근접 미니언 막타
-const GOLD_MINION_RANGED = 22 // 원거리 미니언 막타
-const GOLD_WOLF = 48
-const GOLD_DRAGON = 90 // 용 — 팀 전원
-const GOLD_BARON = 130 // 바론 — 팀 전원
-const GOLD_TOWER = 95 // 타워 파괴 — 팀 전원
-const GOLD_KILL = 150 // 적 영웅 처치 — 킬러
+const GOLD_PASSIVE = 0.8 // 초당 자동 수입 (파밍이 안 풀려도 천천히 모이게)
+const GOLD_MINION_MELEE = 13 // 근접 미니언 막타
+const GOLD_MINION_RANGED = 11 // 원거리 미니언 막타
+const GOLD_WOLF = 24
+const GOLD_DRAGON = 45 // 용 — 팀 전원
+const GOLD_BARON = 65 // 바론 — 팀 전원
+const GOLD_TOWER = 48 // 타워 파괴 — 팀 전원
+const GOLD_KILL = 75 // 적 영웅 처치 — 킬러
 const MINION_DEFEND_RANGE = 14 // 이 거리 안 아군 영웅이 적 영웅에게 맞으면 가해자를 노린다
 const MINION_DEFEND_LEASH = 16 // 가해자를 쫓다 시작점에서 이만큼 벗어나면 포기하고 레인 복귀
 const MINION_DEFEND_HURT_T = 1.5 // 아군이 최근 이 시간 안에 맞았어야 "공격받는 중"으로 본다
@@ -473,9 +473,13 @@ export function castRecall(state, id) {
 }
 
 // ── 골드 / 상점 ──
-// 자기 우물(넥서스 회복 지대) 안인가? — 상점은 여기서만 연다.
+// 자기 우물(넥서스 회복 지대) 안인가?
 export function inFountain(h) {
   return dist2(h, NEXUS_POS[h.team]) <= FOUNTAIN_RADIUS * FOUNTAIN_RADIUS
+}
+// 상점을 열 수 있나 — 우물 안이거나, 죽어 있는(부활 대기) 동안에도 가능.
+export function canShop(h) {
+  return h.respawnT > 0 || inFountain(h)
 }
 
 // 골드 지급 + 획득 표시(fx). 미니언 막타 등 "내가 얻은 골드"만 본인에게 떠오른다.
@@ -495,21 +499,21 @@ function teamGold(state, team, amount) {
 }
 
 // 아이템 효과를 다시 계산해 영웅 능력치에 반영 (구매/판매 시).
-// 최대 체력이 늘면 그만큼 즉시 회복(우물에서 사니 자연스럽다).
+// 최대 체력이 늘면 그만큼 즉시 회복(우물/부활 대기 중이라 자연스럽다).
 function applyItems(h) {
   const before = h.maxHp
   h.bonus = sumStats(h.items)
   h.maxHp = heroMaxHp(h)
   const gain = h.maxHp - before
-  if (gain > 0) h.hp += gain
+  if (gain > 0 && h.respawnT <= 0) h.hp += gain // 살아 있으면 늘어난 만큼 즉시 회복
   h.hp = Math.min(h.maxHp, h.hp)
 }
 
-// 아이템 구매: 우물 안 + 빈 칸 + 골드 충분해야 한다 (호스트 권위로 검증).
+// 아이템 구매: (우물 안 또는 사망 중) + 빈 칸 + 골드 충분해야 한다 (호스트 권위로 검증).
 export function buyItem(state, id, itemId) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
-  if (!h || h.respawnT > 0 || !inFountain(h)) return state
+  if (!h || !canShop(h)) return state
   if (h.items.length >= ITEM_SLOTS) return state
   const item = ITEMS_BY_ID[itemId]
   if (!item || h.gold < item.cost) return state
@@ -519,11 +523,11 @@ export function buyItem(state, id, itemId) {
   return state
 }
 
-// 아이템 판매: 우물 안에서만, 가격의 일부를 돌려받는다.
+// 아이템 판매: 우물 안/사망 중에만, 가격의 일부를 돌려받는다.
 export function sellItem(state, id, slot) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
-  if (!h || h.respawnT > 0 || !inFountain(h)) return state
+  if (!h || !canShop(h)) return state
   const itemId = h.items[slot]
   const item = ITEMS_BY_ID[itemId]
   if (!item) return state
@@ -903,7 +907,7 @@ export function step(state, dt) {
   return state
 }
 
-// 미니언 웨이브: 세 레인마다 근접 2 + 원거리 2
+// 미니언 웨이브: 세 레인마다 근접 3 + 원거리 3
 function stepWaves(state, dt) {
   state.waveT -= dt
   if (state.waveT > 0) return
@@ -911,8 +915,8 @@ function stepWaves(state, dt) {
   const grow = MINION_HP_GROWTH * (state.time / 60)
   for (const team of ['blue', 'red']) {
     for (const lane of LANE_IDS) {
-      for (let i = 0; i < 4; i++) {
-        const ranged = i >= 2 // 0,1=근접 / 2,3=원거리 (원거리 1마리 증가)
+      for (let i = 0; i < 6; i++) {
+        const ranged = i >= 3 // 0,1,2=근접 / 3,4,5=원거리
         const spec = ranged ? RANGED : MELEE
         const wps = LANES[lane]
         // 넥서스 충돌체에 끼지 않게, 본진에서 레인 쪽으로 살짝 나간 곳에서 출발

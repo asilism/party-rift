@@ -7,7 +7,7 @@ import RiftShop from './RiftShop.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import {
-  createGame, setInput, castAttack, castSkill, castUlt, castRecall, buyItem, sellItem, inFountain,
+  createGame, setInput, castAttack, castSkill, castUlt, castRecall, buyItem, sellItem, canShop,
   step, makeView, makeBot,
   STEP, TEAM_SIZE, ULT_LEVEL, CLASSES, CLASS_IDS,
 } from './engine.js'
@@ -384,12 +384,12 @@ function RiftPlay({
     sound.musicSetFast(nexusCrisis)
   }, [bgmStatus, nexusCrisis, soundOn])
   useEffect(() => () => sound.musicStop(), [])
-  // 상점은 우물 안에서만 — 우물을 벗어나거나 죽으면 자동으로 닫힌다
+  // 상점은 우물 안에 있거나 사망(부활 대기) 중에 열 수 있다 — 그 밖이면 자동으로 닫힌다
   const me = hud?.heroes?.find((h) => h.id === myId)
-  const meInFountain = !!(me && me.respawnT <= 0 && inFountain(me))
+  const meCanShop = !!(me && canShop(me))
   useEffect(() => {
-    if (!meInFountain) setShopOpen(false)
-  }, [meInFountain])
+    if (!meCanShop) setShopOpen(false)
+  }, [meCanShop])
   if (!hud || hud.phase !== 'play') {
     return <NetWaiting text="전장을 준비하고 있어요... ⚔️" onExit={onExit} />
   }
@@ -485,6 +485,25 @@ function RiftPlay({
             <div className="rift__respawn">
               💀 부활까지 <b>{Math.ceil(me.respawnT)}</b>초...
             </div>
+            {/* 사망 중엔 양 팀 아이템/레벨 현황을 한눈에 (상대 빌드 파악용) */}
+            <div className="rift__dead-board">
+              {['blue', 'red'].map((team) => (
+                <div key={team} className={`rift-result__team rift-result__team--${team}`}>
+                  <h4>{team === 'blue' ? '🔵 파랑팀' : '🔴 빨강팀'}</h4>
+                  {hud.heroes.filter((h) => h.team === team).map((h) => (
+                    <div key={h.id} className="rift-result__row">
+                      <span>{getZodiac(h.zodiacId)?.emoji}</span>
+                      <span title={CLASSES[h.cls]?.name}>{CLASSES[h.cls]?.icon}</span>
+                      <span className="rift-result__name">{h.name}{h.isBot ? ' 🤖' : ''}</span>
+                      <span>Lv.{h.lvl}</span>
+                      <span className="rift-result__items">
+                        {(h.items || []).map((it) => getItem(it)?.icon).join('') || '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </>
         )}
         {me && hud.status === 'playing' && hud.go && (
@@ -494,13 +513,13 @@ function RiftPlay({
         )}
       </div>
 
-      {/* 넥서스 우물 안에서만 뜨는 상점 버튼 ("넥서스를 눌러 상점 열기") */}
-      {me && !finished && meInFountain && !shopOpen && (
+      {/* 우물 안 또는 사망 중에 뜨는 상점 버튼 */}
+      {me && !finished && meCanShop && !shopOpen && (
         <button className="rift-shop-fab" onClick={() => setShopOpen(true)}>
-          🛒 <small>넥서스 상점</small>
+          🛒 <small>{me.respawnT > 0 ? '상점 (대기중)' : '넥서스 상점'}</small>
         </button>
       )}
-      {shopOpen && me && meInFountain && (
+      {shopOpen && me && meCanShop && (
         <RiftShop me={me} onBuy={onBuy} onSell={onSell} onClose={() => setShopOpen(false)} />
       )}
 

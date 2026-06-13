@@ -35,13 +35,13 @@ function emojiSprite(emoji, scale = 2) {
   return sp
 }
 
-// 이름표 스프라이트 (흰 글씨 + 어두운 테두리)
-function nameSprite(text, color = '#ffffff') {
+// 이름표 텍스처 (흰/노란 글씨 + 어두운 테두리)
+function makeNameTexture(text, color) {
   const c = document.createElement('canvas')
   c.width = 256
   c.height = 64
   const ctx = c.getContext('2d')
-  ctx.font = '800 30px system-ui, sans-serif'
+  ctx.font = '800 27px system-ui, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.lineWidth = 7
@@ -51,9 +51,27 @@ function nameSprite(text, color = '#ffffff') {
   ctx.fillText(text, 128, 34)
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true }))
+  return tex
+}
+
+// 이름표 스프라이트 (레벨 + 직업 + 이름). 레벨이 오르면 setNameText로 다시 그린다.
+function nameSprite(text, color = '#ffffff') {
+  const sp = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: makeNameTexture(text, color), depthWrite: false, transparent: true })
+  )
   sp.scale.set(7, 1.75, 1)
   return sp
+}
+
+function setNameText(sp, text, color) {
+  sp.material.map?.dispose?.()
+  sp.material.map = makeNameTexture(text, color)
+  sp.material.needsUpdate = true
+}
+
+// 머리 위 이름표 문구: "Lv.3 ⚔️호랑이🤖" — 적·아군 모두 레벨이 항상 보인다
+function heroLabel(h) {
+  return `Lv.${h.lvl} ${CLASSES[h.cls]?.icon || ''}${h.name}${h.isBot ? '🤖' : ''}`
 }
 
 // 골드 획득 표시: 떠오르며 사라지는 금색 "+N" 스프라이트 (내 영웅 막타 때만)
@@ -319,11 +337,8 @@ function buildHero(h, mine, barColor) {
   body.position.y = 2.2 * s
   const face = emojiSprite(getZodiac(h.zodiacId)?.emoji || '🙂', 3.2)
   face.position.y = 4.4 * s
-  const cls = CLASSES[h.cls]
-  const name = nameSprite(
-    `${cls?.icon || ''}${h.name}${h.isBot ? '🤖' : ''}`,
-    mine ? '#ffe066' : '#ffffff'
-  )
+  const nameColor = mine ? '#ffe066' : '#ffffff'
+  const name = nameSprite(heroLabel(h), nameColor)
   name.position.y = 6.6
   const bar = makeHpBar(3, barColor)
   bar.position.y = 5.7
@@ -375,7 +390,10 @@ function buildHero(h, mine, barColor) {
   const weapon = buildWeapon(h.cls)
   body.add(weapon)
   g.add(body, face, name, bar, ring, buff, shield, stun, recall, recallBeam)
-  g.userData = { body, face, bar, ring, buff, shield, stun, recall, recallBeam, weapon, lastAtkSeq: h.atkSeq, animT: 1 }
+  g.userData = {
+    body, face, name, nameColor, nameLvl: h.lvl,
+    bar, ring, buff, shield, stun, recall, recallBeam, weapon, lastAtkSeq: h.atkSeq, animT: 1,
+  }
   return g
 }
 
@@ -728,6 +746,10 @@ export function createRiftScene(canvas) {
         obj.position.set(h.x, 0, h.z)
         const u = obj.userData
         u.body.rotation.y = -h.dir
+        if (h.lvl !== u.nameLvl) {
+          u.nameLvl = h.lvl
+          setNameText(u.name, heroLabel(h), u.nameColor) // 레벨이 오르면 이름표 갱신
+        }
         setHpBar(u.bar, h.hp / h.maxHp)
         u.stun.visible = h.stunT > 0
         u.recall.visible = h.recallT > 0
