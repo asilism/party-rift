@@ -769,6 +769,28 @@ test('부활 대기시간: 레벨이 높을수록 길어진다', () => {
   assert.ok(high.respawnT > lowT, `높은 레벨이 더 오래 기다린다 (Lv1 ${lowT.toFixed(1)} < Lv9 ${high.respawnT.toFixed(1)})`)
 })
 
+test('미니언 HP 설계: 원거리는 타워 2대, 근접은 3대에 죽는다', () => {
+  const TOWER_DMG_MINION = 60
+  const g = createGame(humans())
+  startPlaying(g)
+  run(g, 2.4) // 첫 웨이브
+  const ranged = g.minions.find((m) => m.ranged)
+  const melee = g.minions.find((m) => !m.ranged)
+  assert.equal(Math.ceil(ranged.maxHp / TOWER_DMG_MINION), 2, '원거리는 2대')
+  assert.equal(Math.ceil(melee.maxHp / TOWER_DMG_MINION), 3, '근접은 3대')
+})
+
+test('미니언 배치: 근접이 앞(중앙 쪽), 원거리가 뒤에 스폰된다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  run(g, 2.2) // 첫 웨이브 직후 (대형이 흐트러지기 전)
+  const mid = g.minions.filter((m) => m.team === 'blue' && m.lane === 'mid')
+  const avg = (arr) => arr.reduce((s, m) => s + m.x, 0) / arr.length
+  const meleeX = avg(mid.filter((m) => !m.ranged))
+  const rangedX = avg(mid.filter((m) => m.ranged))
+  assert.ok(meleeX > rangedX, `근접이 더 앞(+x)에 스폰 (근접 ${meleeX.toFixed(1)} > 원거리 ${rangedX.toFixed(1)})`)
+})
+
 test('풀봇 3:3 스모크 테스트: 3분 시뮬레이션이 멀쩡히 돈다', () => {
   const players = humans().map((p) => ({ ...p, isBot: true }))
   let seed = 42
