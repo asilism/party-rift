@@ -173,6 +173,8 @@ export function resolveTerrain(p, radius, towers) {
 
 // 장애물 회피 조향: (tx,tz)로 가는 직선 경로를 성벽/바위/타워/넥서스가 막으면
 // 원의 접선 쪽으로 방향을 꺾어 준다 (미니언이 자기 타워에 껴서 못 가는 문제 방지).
+// 길목의 장애물 "하나"만 보고 꺾으면 벽과 타워 틈에 끼었을 때 반대쪽에 다시 박혀
+// 제자리걸음을 한다 → 전방의 모든 장애물에서 받는 회피력을 합산해 한 번에 비껴 간다.
 // 반환: 정규화된 이동 방향 {x, z}.
 export function avoidDir(e, tx, tz, towers, selfR = 1) {
   let dx = tx - e.x
@@ -181,35 +183,34 @@ export function avoidDir(e, tx, tz, towers, selfR = 1) {
   if (d < 1e-6) return { x: 0, z: 0 }
   const ux = dx / d
   const uz = dz / d
-  let block = null
-  let blockT = Infinity
-  const check = (cx, cz, cr) => {
+  let steer = 0 // 진행 방향 기준 좌우로 꺾는 힘의 합 (부호 = 방향)
+  const consider = (cx, cz, cr) => {
     const reach = cr + selfR + 0.4
     // 목적지 자체가 그 원이면(타워를 때리러 가는 길) 피하지 않는다
     if ((tx - cx) ** 2 + (tz - cz) ** 2 <= (reach + 1.2) ** 2) return
     const rx = cx - e.x
     const rz = cz - e.z
     const t = rx * ux + rz * uz // 진행 방향으로의 거리
-    if (t <= 0 || t >= Math.min(d, reach + 7)) return // 등 뒤거나 아직 멀다
+    if (t <= -reach || t >= Math.min(d, reach + 8)) return // 등 뒤거나 아직 멀다
     const lat = ux * rz - uz * rx // 경로에서 원 중심까지의 옆 거리 (부호 = 방향)
-    if (Math.abs(lat) >= reach) return
-    if (t < blockT) {
-      blockT = t
-      block = { lat }
-    }
+    if (Math.abs(lat) >= reach + 0.6) return
+    // 가까울수록(전방 거리 작을수록), 경로에 가까울수록 더 세게 비킨다
+    const closeness = 1 - Math.max(0, t) / (reach + 8)
+    const lateral = reach + 0.6 - Math.abs(lat)
+    const side = lat >= 0 ? -1 : 1 // 중심이 왼쪽이면 오른쪽으로 꺾는다
+    steer += side * lateral * (0.5 + closeness)
   }
-  for (const o of WALLS) check(o.x, o.z, o.r)
-  for (const o of ROCKS) check(o.x, o.z, o.r)
-  for (const t of towers) if (t.alive) check(t.x, t.z, TOWER_RADIUS)
-  check(NEXUS_POS.blue.x, NEXUS_POS.blue.z, NEXUS_RADIUS)
-  check(NEXUS_POS.red.x, NEXUS_POS.red.z, NEXUS_RADIUS)
-  if (!block) return { x: ux, z: uz }
-  // 원 중심이 왼쪽이면 오른쪽 접선으로, 오른쪽이면 왼쪽 접선으로
-  const side = block.lat >= 0 ? -1 : 1
-  const px = -uz * side
-  const pz = ux * side
-  const nx = ux * 0.45 + px
-  const nz = uz * 0.45 + pz
+  for (const o of WALLS) consider(o.x, o.z, o.r)
+  for (const o of ROCKS) consider(o.x, o.z, o.r)
+  for (const t of towers) if (t.alive) consider(t.x, t.z, TOWER_RADIUS)
+  consider(NEXUS_POS.blue.x, NEXUS_POS.blue.z, NEXUS_RADIUS)
+  consider(NEXUS_POS.red.x, NEXUS_POS.red.z, NEXUS_RADIUS)
+  if (steer === 0) return { x: ux, z: uz }
+  // 접선(좌우) 방향 + 전진 방향을 합친다. 많이 꺾을수록 전진 비중은 줄인다.
+  const s = Math.max(-2.5, Math.min(2.5, steer))
+  const fwd = 1 / (1 + 0.4 * Math.abs(s))
+  const nx = ux * fwd + -uz * s
+  const nz = uz * fwd + ux * s
   const nd = Math.hypot(nx, nz) || 1
   return { x: nx / nd, z: nz / nd }
 }

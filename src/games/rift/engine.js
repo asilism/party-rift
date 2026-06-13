@@ -101,10 +101,13 @@ const MELEE = { hp: 150, dmg: 14, range: 2.4, cd: 1.1 }
 const RANGED = { hp: 110, dmg: 11, range: 8, cd: 1.4 }
 const MINION_HP_GROWTH = 8 // 분당 체력 증가
 const MINION_XP = 28
+const MINION_DEFEND_RANGE = 14 // 이 거리 안 아군 영웅이 적 영웅에게 맞으면 가해자를 노린다
+const MINION_DEFEND_LEASH = 16 // 가해자를 쫓다 시작점에서 이만큼 벗어나면 포기하고 레인 복귀
+const MINION_DEFEND_HURT_T = 1.5 // 아군이 최근 이 시간 안에 맞았어야 "공격받는 중"으로 본다
 
 // ── 타워/넥서스 ──
 const TOWER_HP = [0, 900, 1100] // tier 1(외곽) / 2(내곽)
-const TOWER_RANGE = 13
+export const TOWER_RANGE = 13
 const TOWER_CD = 1.2
 const TOWER_DMG_HERO = 85
 const TOWER_DMG_MINION = 60
@@ -112,9 +115,15 @@ const TOWER_XP = 90
 const NEXUS_HP = 1700
 
 // ── 정글 ──
-const WOLF = { hp: 260, dmg: 18, range: 2.6, cd: 1.2, speed: 7, xp: 70, respawn: 45 }
-const DRAGON = { hp: 850, dmg: 26, range: 4, cd: 1.4, speed: 6, xp: 110, spawn: 60, respawn: 100 }
-const BARON = { hp: 1500, dmg: 42, range: 5, cd: 1.5, speed: 5, xp: 150, spawn: 210, respawn: 120 }
+// 용/바론은 "분노(enrage)"를 쌓는다 — 교전이 길어질수록 피해/이동속도가 점점 오른다.
+//  - 초반(저레벨) 혼자서는 분노가 쌓이기 전에 못 잡고 되레 당한다 → 셋이 모여 빨리 끝내야 한다.
+//  - 6레벨쯤 딜이 붙으면 분노가 치명적이 되기 전에 혼자서도 용을 끝낼 수 있다.
+//  - 바론은 체력/분노가 훨씬 높아 10레벨이어도 혼자서는 분노에 먼저 쓰러진다.
+//  - 캠프를 벗어나(리시) 복귀하면 분노가 초기화된다.
+const WOLF = { hp: 260, dmg: 18, range: 2.6, cd: 1.2, speed: 7, xp: 70, respawn: 45, enrage: 0, rageSpd: 0 }
+const DRAGON = { hp: 1400, dmg: 26, range: 4, cd: 1.3, speed: 6, xp: 110, spawn: 60, respawn: 100, enrage: 0.5, rageSpd: 0.6 }
+const BARON = { hp: 3000, dmg: 46, range: 5, cd: 1.5, speed: 5, xp: 150, spawn: 210, respawn: 120, enrage: 0.9, rageSpd: 0.6 }
+const ENRAGE_MAX = 40 // 분노 누적 상한(초)
 const CAMP_LEASH = 24 // 캠프에서 이만큼 멀어지면 포기하고 복귀(회복)
 export const DRAGON_BUFF_T = 60 // 용 버프: 공격력 +25%
 export const BARON_BUFF_T = 75 // 바론 버프: 공격력 +40% + 빠른 회복
@@ -841,19 +850,70 @@ function stepHero(state, h, dt) {
   if (h.baronT > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.02 * dt)
 }
 
+// 주변에서 공격받는 아군 영웅의 "가해자(적 영웅)"를 찾는다.
+//  - 최근 맞은 아군이 가까이 있고, 그 가해자도 수비 사거리 안이면 그 적을 노린다.
+//  - 단, 처음 끼어든 지점(anchor)에서 너무 멀어지게 쫓기 시작하면 포기하고 레인으로 복귀한다.
+function findDefendTarget(state, m) {
+  if (m.returnT > 0) return null // 복귀 중엔 한눈팔지 않는다
+  const r2 = MINION_DEFEND_RANGE * MINION_DEFEND_RANGE
+  let best = null
+  let bd = r2
+  for (const ally of state.heroes) {
+    if (ally.team !== m.team || ally.respawnT > 0) continue
+    if (state.time - ally.lastHurt > MINION_DEFEND_HURT_T) continue
+    if (dist2(m, ally) > r2) continue
+    const foe = state.heroes.find(
+      (e) => e.id === ally.lastHitBy && e.team !== m.team && e.respawnT <= 0
+    )
+    if (!foe) continue
+    const d = dist2(m, foe)
+    if (d < bd) {
+      bd = d
+      best = foe
+    }
+  }
+  return best
+}
+
 function stepMinions(state, dt) {
   for (const m of [...state.minions]) {
     m.atkCd = Math.max(0, m.atkCd - dt)
+    m.returnT = Math.max(0, (m.returnT || 0) - dt)
     const spec = m.ranged ? RANGED : MELEE
-    // 시야 안 가장 가까운 적 (미니언 → 영웅 → 타워/넥서스 순으로 자연 타게팅)
+    const sx0 = m.x
+    const sz0 = m.z
+    let marched = false
+
+    // 0) 공격받는 아군 영웅 방어: 가해자(적 영웅)를 최우선으로 노린다
     let tgt = null
     let bd = MINION_SIGHT * MINION_SIGHT
-    for (const o of state.minions) {
-      if (o.team === m.team) continue
-      const d = dist2(m, o)
-      if (d < bd) {
-        bd = d
-        tgt = { ref: { tk: 'minion', id: o.id }, e: o }
+    const defender = findDefendTarget(state, m)
+    if (defender) {
+      // 처음 끼어들 때 시작점을 기억해 두고, 거기서 너무 멀어지면 포기한다
+      if (!m.defending) {
+        m.defending = true
+        m.anchorX = m.x
+        m.anchorZ = m.z
+      }
+      if (Math.hypot(m.x - m.anchorX, m.z - m.anchorZ) > MINION_DEFEND_LEASH) {
+        m.defending = false
+        m.returnT = 1.5 // 잠깐 레인으로 돌아간다 (다시 끌려가지 않게)
+      } else {
+        tgt = { ref: { tk: 'hero', id: defender.id }, e: defender }
+      }
+    } else {
+      m.defending = false
+    }
+
+    // 1) 평소 타게팅: 시야 안 미니언 → 영웅 → 타워/넥서스
+    if (!tgt) {
+      for (const o of state.minions) {
+        if (o.team === m.team) continue
+        const d = dist2(m, o)
+        if (d < bd) {
+          bd = d
+          tgt = { ref: { tk: 'minion', id: o.id }, e: o }
+        }
       }
     }
     if (!tgt) {
@@ -900,7 +960,8 @@ function stepMinions(state, dt) {
           }
         }
       } else {
-        moveToward(state, m, tgt.e, MINION_SPEED, dt, 0.8)
+        moveMinion(state, m, tgt.e, dt)
+        marched = true
       }
     } else {
       // 레인 행군
@@ -909,10 +970,27 @@ function stepMinions(state, dt) {
       const wp = wps[m.wpI]
       if (wp) {
         if (dist(m, wp) < 3) m.wpI += dirI
-        else moveToward(state, m, wp, MINION_SPEED, dt, 0.8)
+        else {
+          moveMinion(state, m, wp, dt)
+          marched = true
+        }
       }
     }
     resolveTerrain(m, 0.8, state.towers)
+    // 끼임 감지: 가려고 했는데 거의 못 움직였으면 분노 게이지를 올리고,
+    // 일정 이상 쌓이면 moveMinion이 옆으로 비껴 빠져나간다 (벽-타워 틈 탈출)
+    if (marched) {
+      const moved = Math.hypot(m.x - sx0, m.z - sz0)
+      if (moved < MINION_SPEED * dt * 0.3) {
+        if (!m.stuckT) m.stuckSide = state.rng() < 0.5 ? 1 : -1
+        m.stuckT = (m.stuckT || 0) + dt
+        if (m.stuckT > 1.6) m.stuckT = 0 // 한참 헤맸으면 반대쪽으로 다시 시도
+      } else {
+        m.stuckT = Math.max(0, (m.stuckT || 0) - dt * 1.5)
+      }
+    } else {
+      m.stuckT = 0
+    }
   }
   // 같은 자리에 겹치지 않게 서로 살짝 밀어내기
   const ms = state.minions
@@ -944,6 +1022,19 @@ function moveToward(state, e, to, speed, dt, selfR = 1) {
   if (dir.x || dir.z) e.dir = Math.atan2(dir.z, dir.x)
 }
 
+// 미니언 전용 이동: 평소엔 회피 조향을 쓰되, 끼임이 감지되면(stuckT)
+// 목표 방향에서 한쪽으로 크게 비껴 벽-타워 틈에서 빠져나간다.
+function moveMinion(state, m, to, dt) {
+  if ((m.stuckT || 0) > 0.4) {
+    const ang = Math.atan2(to.z - m.z, to.x - m.x) + (m.stuckSide || 1) * 1.9
+    m.x += Math.cos(ang) * MINION_SPEED * dt
+    m.z += Math.sin(ang) * MINION_SPEED * dt
+    m.dir = ang
+  } else {
+    moveToward(state, m, to, MINION_SPEED, dt, 0.8)
+  }
+}
+
 // 정글몹: 평소엔 얌전 — 맞으면 반격, 캠프에서 멀어지면 포기하고 복귀(회복)
 function stepMonsters(state, dt) {
   for (const m of state.monsters) {
@@ -954,6 +1045,7 @@ function stepMonsters(state, dt) {
         m.hp = m.maxHp
         m.x = m.camp.x
         m.z = m.camp.z
+        m.combatT = 0 // 분노 초기화
         if (m.kind === 'dragon') pushFeed(state, 'spawn', '🐉 용이 나타났다! (아래 강가)')
         else if (m.kind === 'baron') pushFeed(state, 'spawn', '👹 바론이 나타났다! (위 강가)')
       }
@@ -965,19 +1057,24 @@ function stepMonsters(state, dt) {
     const far = dist(m, m.camp) > CAMP_LEASH
     if (!tgt || far || dist(m, tgt) > CAMP_LEASH) {
       m.aggro = null
+      m.combatT = 0 // 캠프로 복귀 → 분노 초기화
       if (dist(m, m.camp) > 1) {
         moveToward(state, m, m.camp, spec.speed * 1.5, dt, 1.2)
         m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.5 * dt) // 복귀 중 쑥쑥 회복
       }
       continue
     }
+    // 교전이 길어질수록 분노가 쌓여 피해/이동속도가 오른다 (용·바론만)
+    m.combatT = Math.min(ENRAGE_MAX, (m.combatT || 0) + dt)
+    const rage = 1 + spec.enrage * m.combatT
     if (dist(m, tgt) <= spec.range + 1) {
       if (m.atkCd <= 0) {
         m.atkCd = spec.cd
-        damageHero(state, tgt, spec.dmg, null)
+        damageHero(state, tgt, spec.dmg * rage, null)
       }
     } else {
-      moveToward(state, m, tgt, spec.speed, dt, 1.2)
+      // 분노가 쌓이면 발도 빨라져 도망치는(카이팅) 사냥꾼을 따라잡는다
+      moveToward(state, m, tgt, spec.speed + spec.rageSpd * m.combatT, dt, 1.2)
     }
   }
 }
@@ -991,6 +1088,7 @@ function stepTowers(state, dt) {
     if (t.cd > 0) continue
     let ref = null
     let bd = r2
+    // 우선순위: 유저(영웅) > 미니언. 영웅 중에서도 우리 편을 때린 다이버를 먼저 응징한다.
     // 1) 타워 사거리 안에서 우리 영웅을 때린 녀석 (타워 다이브 응징!)
     for (const h of state.heroes) {
       if (h.team === t.team || h.respawnT > 0 || h.aggroT <= 0) continue
@@ -1001,19 +1099,9 @@ function stepTowers(state, dt) {
         ref = { tk: 'hero', id: h.id }
       }
     }
-    // 2) 미니언
+    // 2) 그 외 보이는 적 영웅 (미니언보다 우선)
     if (!ref) {
-      for (const m of state.minions) {
-        if (m.team === t.team) continue
-        const d = dist2(t, m)
-        if (d < bd) {
-          bd = d
-          ref = { tk: 'minion', id: m.id }
-        }
-      }
-    }
-    // 3) 영웅
-    if (!ref) {
+      bd = r2
       for (const h of state.heroes) {
         if (h.team === t.team || h.respawnT > 0) continue
         if (!isHeroVisible(state, h, t.team)) continue
@@ -1021,6 +1109,18 @@ function stepTowers(state, dt) {
         if (d < bd) {
           bd = d
           ref = { tk: 'hero', id: h.id }
+        }
+      }
+    }
+    // 3) 영웅이 없으면 미니언
+    if (!ref) {
+      bd = r2
+      for (const m of state.minions) {
+        if (m.team === t.team) continue
+        const d = dist2(t, m)
+        if (d < bd) {
+          bd = d
+          ref = { tk: 'minion', id: m.id }
         }
       }
     }
@@ -1184,13 +1284,16 @@ function steerToward(state, h, to) {
 
 // 정글 사냥: 지나는 길의 늑대, 아군이 모여 있으면 용/바론 도전
 function botJungleMove(state, h) {
-  // 아군이 근처에 있으면 용/바론 도전
+  // 용/바론 도전 — 분노 때문에 혼자서는 위험하다.
+  //  · 바론: 10레벨이어도 솔로 불가 → 셋이 모였을 때만
+  //  · 용: 6레벨부터 혼자 가능, 그 전엔 셋이 모였을 때만
   for (const big of state.monsters) {
     if (!big.alive || big.kind === 'wolf') continue
     const allies = state.heroes.filter(
       (o) => o.team === h.team && o.respawnT <= 0 && dist(o, big) < 28
     ).length
-    if (allies >= 2 && h.hp > h.maxHp * 0.55) {
+    const canSolo = big.kind === 'dragon' && h.lvl >= 6 && h.hp > h.maxHp * 0.7
+    if ((allies >= 3 || canSolo) && h.hp > h.maxHp * 0.6) {
       if (dist(h, big) > CLASSES[h.cls].range - 1) steerToward(state, h, big)
       else {
         h.mx = 0
@@ -1325,6 +1428,7 @@ export function makeView(state) {
       hp: Math.ceil(m.hp),
       maxHp: m.maxHp,
       respawnT: m.alive ? 0 : Math.ceil(m.respawnT),
+      enrage: r1(m.combatT || 0), // 분노 누적 시간(초) — 렌더러가 붉게 달아오르게
     })),
     towers: state.towers.map((t) => ({
       id: t.id,
