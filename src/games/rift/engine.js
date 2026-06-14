@@ -5,7 +5,7 @@
 //  - 수풀 은신 + 전장의 안개: 시야 밖 적은 안 보인다 (봇도 같은 규칙).
 //  - 호스트가 step()을 60Hz로 돌리고 makeView() 스냅샷을 전파한다.
 import {
-  NEXUS_POS, FOUNTAIN_RADIUS, LANE_IDS, enemyOf, buildMap,
+  NEXUS_POS, NEXUS_RADIUS, TOWER_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, enemyOf, buildMap,
 } from './map.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { ITEM_SLOTS, SELL_REFUND, ITEMS_BY_ID, sumStats } from './items.js'
@@ -261,6 +261,8 @@ export function createGame(players, opts = {}) {
       botRetreat: false,
       botStrafe: rng() * Math.PI * 2,
       botSeekT: 0, // >0이면 타워 앞에서 "딴 일"(합류/정글/지원)을 잠시 유지
+      botStuckT: 0, // 제자리에 박혀 못 움직인 누적 시간 (BOT_STUCK_T 넘으면 귀환)
+      botRecall: false, // 끼임 구제용 귀환을 스스로 시전 중인지
     }
   })
   for (const h of heroes) {
@@ -331,6 +333,8 @@ export function makeBot(state, id) {
   const taken = state.heroes.filter((o) => o.isBot && o.team === h.team && o !== h).map((o) => o.role)
   h.role = roles.find((r) => !taken.includes(r)) || 'mid'
   h.botStrafe = state.rng() * Math.PI * 2
+  h.botStuckT = 0
+  h.botRecall = false
   return h
 }
 
@@ -433,12 +437,15 @@ function nearestFoeHero(state, h, range) {
 function findAttackTarget(state, h, range) {
   const hero = nearestFoeHero(state, h, range)
   if (hero) return { tk: 'hero', id: hero.id }
-  const r2 = range * range
+  // 구조물(타워/넥서스)은 몸통 반경이 커서 중심까지 못 붙는다.
+  //  → 충돌체 표면까지의 거리(중심거리−반경)로 사거리를 재야 근접도 때릴 수 있다.
+  //    (안 그러면 넥서스 반경 4.5 + 영웅 반경 1.3 = 5.8까지밖에 못 붙는데
+  //     근접 사거리는 3.8~4.2라 영영 닿지 못한다.)
   let best = null
-  let bd = r2
+  let bd = range // 가장 가까운 표적까지의 "표면" 거리
   for (const m of state.minions) {
     if (m.team === h.team) continue
-    const d = dist2(h, m)
+    const d = dist(h, m)
     if (d < bd) {
       bd = d
       best = { tk: 'minion', id: m.id }
@@ -446,7 +453,7 @@ function findAttackTarget(state, h, range) {
   }
   for (const m of state.monsters) {
     if (!m.alive) continue
-    const d = dist2(h, m)
+    const d = dist(h, m)
     if (d < bd) {
       bd = d
       best = { tk: 'monster', id: m.id }
@@ -454,7 +461,7 @@ function findAttackTarget(state, h, range) {
   }
   for (const t of state.towers) {
     if (!t.alive || t.team === h.team || !towerVulnerable(state, t)) continue
-    const d = dist2(h, t)
+    const d = dist(h, t) - TOWER_RADIUS
     if (d < bd) {
       bd = d
       best = { tk: 'tower', id: t.id }
@@ -462,7 +469,7 @@ function findAttackTarget(state, h, range) {
   }
   const en = enemyOf(h.team)
   if (nexusVulnerable(state, en) && state.nexus[en].hp > 0) {
-    const d = dist2(h, state.map.NEXUS_POS[en])
+    const d = dist(h, state.map.NEXUS_POS[en]) - NEXUS_RADIUS
     if (d < bd) best = { tk: 'nexus', id: en }
   }
   return best
@@ -1209,7 +1216,9 @@ function stepMinions(state, dt) {
     }
     if (tgt) {
       const d = dist(m, tgt.e)
-      if (d <= spec.range + 0.5) {
+      // 구조물은 몸통 반경만큼 더해 줘야 근접 미니언도 넥서스/타워에 닿는다
+      const pad = tgt.ref.tk === 'tower' ? TOWER_RADIUS : tgt.ref.tk === 'nexus' ? NEXUS_RADIUS : 0
+      if (d <= spec.range + 0.5 + pad) {
         m.dir = Math.atan2(tgt.e.z - m.z, tgt.e.x - m.x) // 적을 바라본다
         if (m.atkCd <= 0) {
           m.atkCd = spec.cd
@@ -1503,6 +1512,7 @@ function stepProjectiles(state, dt) {
 // 체력이 낮으면 우물로 후퇴, "보이는" 적 영웅과는 직업 사거리에 맞춰 교전,
 // 평소엔 맡은 레인을 행군하며 지나는 길의 정글몹/용/바론도 사냥한다.
 const BOT_SIGHT = 18
+export const BOT_STUCK_T = 3 // 가려고도 싸우지도 못하고 이만큼 제자리면 "갈 곳 잃음"으로 보고 귀환
 
 // 봇 직업별 아이템 우선순위 — 우물에 들어왔을 때 위에서부터 살 수 있는 걸 산다.
 // (사람 플레이어가 아이템으로 일방적 우위를 갖지 않게 봇도 장비를 갖춘다)
@@ -1535,6 +1545,41 @@ function stepBots(state, dt) {
       h.mx = 0
       h.mz = 0
       continue
+    }
+    // ── 갈 곳 잃은 봇 구제: 끼임 감지 → 귀환으로 마을(우물) 복귀 ──
+    // 스스로 시작한 귀환을 채널링하는 중이면 가만히 기다린다.
+    if (h.botRecall) {
+      if (h.recallT > 0) {
+        h.mx = 0
+        h.mz = 0
+        continue
+      }
+      // 채널링 종료: 우물로 복귀(성공)했거나 피격으로 끊겼다(실패) — 어느 쪽이든 초기화
+      h.botRecall = false
+      h.botStuckT = 0
+    }
+    // 지난 틱 결과로 끼임을 누적한다: "가려고 했는데"(이동 입력) "싸우지도 못하고"
+    // (이번에 공격 안 함) 거의 못 움직였으면(벽/타워/넥서스에 박힘) 게이지를 올린다.
+    const wantedMove = Math.hypot(h.mx, h.mz) > 0.12
+    const attacked = h.atkSeq !== (h.botPrevSeq ?? h.atkSeq)
+    const moved = Math.hypot(h.x - (h.botPrevX ?? h.x), h.z - (h.botPrevZ ?? h.z))
+    if (wantedMove && !attacked && moved < heroSpeed(h) * dt * 0.25) {
+      h.botStuckT = (h.botStuckT || 0) + dt
+    } else {
+      h.botStuckT = Math.max(0, (h.botStuckT || 0) - dt * 2)
+    }
+    h.botPrevX = h.x
+    h.botPrevZ = h.z
+    h.botPrevSeq = h.atkSeq
+    // 너무 오래 헤맸으면(우물 밖에서) 귀환을 켜고 가만히 채널링 → 우물로 순간복귀
+    if ((h.botStuckT || 0) > BOT_STUCK_T && !inFountain(h)) {
+      castRecall(state, h.id)
+      if (h.recallT > 0) {
+        h.botRecall = true
+        h.mx = 0
+        h.mz = 0
+        continue
+      }
     }
     if (inFountain(h)) botShop(state, h) // 우물에 있을 때 장비 보충
     const cls = CLASSES[h.cls]

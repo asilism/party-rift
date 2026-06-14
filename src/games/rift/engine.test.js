@@ -4,7 +4,7 @@ import {
   createGame, setInput, castAttack, castSkill, castUlt, castRecall, step, makeView, makeBot,
   towerVulnerable, nexusVulnerable, isHeroVisible, isUnitVisible, buyItem, sellItem, canShop,
   STEP, COUNTDOWN_TIME, TIME_LIMIT, ULT_LEVEL, TEAM_SIZE, MAX_LEVEL, RECALL_TIME, CLASS_IDS, CLASSES,
-  ITEM_SLOTS,
+  ITEM_SLOTS, BOT_STUCK_T,
 } from './engine.js'
 import { ITEMS_BY_ID, sumStats } from './items.js'
 import {
@@ -366,6 +366,59 @@ test('넥서스가 터지면 게임 종료 + 승리 팀 확정', () => {
   run(g, 1)
   assert.equal(g.status, 'finished')
   assert.equal(g.winner, 'blue')
+})
+
+test('근접 영웅도 넥서스를 타격할 수 있다 (몸통 반경만큼 떨어져 있어도)', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  g.waveT = 999
+  g.minions.length = 0
+  for (const t of g.towers) if (t.team === 'red') t.alive = false
+  // 빨강 영웅들은 멀리 치워 자동 조준에 안 걸리게
+  for (const o of g.heroes) if (o.team === 'red') { o.x = 0; o.z = 55 }
+  const h = g.heroes.find((o) => o.cls === 'warrior') // blue 전사 (근접 3.8)
+  const hp0 = g.nexus.red.hp
+  // 충돌체 때문에 붙을 수 있는 최소 거리(반경 4.5 + 영웅 1.3 ≈ 5.8)에 둔다
+  h.x = NEXUS_POS.red.x - 6
+  h.z = NEXUS_POS.red.z
+  setInput(g, h.id, { mx: 0, mz: 0 })
+  castAttack(g, h.id)
+  run(g, 0.5)
+  assert.ok(g.nexus.red.hp < hp0, '근접 전사가 넥서스 체력을 깎는다')
+})
+
+test('갈 곳 잃은 봇: 한참 제자리에 박혀 있으면 귀환으로 우물 복귀', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  g.waveT = 999
+  g.minions.length = 0
+  const h = makeBot(g, g.heroes[0].id)
+  // 적/오브젝트가 시야·근처에 없게 멀리 치운다 (귀환이 끊기지 않도록)
+  for (const o of g.heroes) if (o !== h) { o.x = 0; o.z = -60 }
+  for (const m of g.monsters) m.alive = false
+  // 레인 한복판(우물 밖)에서 "오래 끼임" 상태를 만들어 준다
+  h.x = 0
+  h.z = 0
+  h.botStuckT = BOT_STUCK_T + 0.5 // 갈 곳을 잃고 한참 진동한 상태로 간주
+  run(g, RECALL_TIME + 0.5)
+  assert.ok(h.botStuckT < BOT_STUCK_T, '귀환 후 끼임 게이지 초기화')
+  assert.ok(
+    Math.hypot(h.x - NEXUS_POS.blue.x, h.z - NEXUS_POS.blue.z) < 15,
+    '끼였던 봇이 우물로 복귀했다'
+  )
+})
+
+test('갈 곳 잃은 봇 구제: 정상적으로 전진하는 봇은 끼임으로 오인하지 않는다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  g.waveT = 999
+  g.minions.length = 0
+  const h = makeBot(g, g.heroes[0].id)
+  for (const o of g.heroes) if (o !== h) { o.x = 0; o.z = -60 }
+  // 본진 근처에서 평범히 레인을 행군 → 끼임 게이지가 안 쌓이고 귀환도 안 켜진다
+  run(g, BOT_STUCK_T + 1)
+  assert.equal(h.botRecall, false, '전진 중인 봇은 귀환을 켜지 않는다')
+  assert.ok((h.botStuckT || 0) < BOT_STUCK_T, '끼임 게이지가 임계 미만으로 유지된다')
 })
 
 test('용을 잡으면 팀 전체가 버프 + 리스폰 대기', () => {
