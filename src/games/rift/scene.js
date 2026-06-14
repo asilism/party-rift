@@ -442,24 +442,149 @@ const PROJ_LOOK = {
   mbolt: { r: 0.26, y: 1.5, color: null }, // 원거리 미니언의 작은 화살 (낮고 작게)
   fireball: { r: 0.95, y: 2, color: 0xff8c2e },
   towerbolt: { r: 0.55, y: 4, color: null },
+  pierce: { r: 0.34, y: 2.2, color: 0xfff0a0 }, // 궁수 꿰뚫는 화살 (밝은 노랑)
 }
 
-// 스킬 이펙트 링 색 (kind → 색/높이)
+// 스킬 이펙트 색 + 파티클 모드 (kind → 색/파티클 움직임).
+//  mode: out(바깥으로) · rise(위로) · fall(위에서 아래로) · forward(앞으로, dir 방향)
 const FX_LOOK = {
-  whirl: { color: 0xffa94d },
-  storm: { color: 0x9b6bd6 },
-  rain: { color: 0xff5f5f },
-  slam: { color: 0xc9a06a },
-  sanctuary: { color: 0x6ee7a0 },
-  heal: { color: 0x6ee7a0 },
-  boom: { color: 0xff8c2e },
-  dash: { color: 0xffffff },
-  blink: { color: 0x6b6f8a },
-  execute: { color: 0xff3b3b },
-  level: { color: 0xffe066 },
-  death: { color: 0x39405c },
-  shield: { color: 0x9fd0ff },
-  recall: { color: 0x4ad6e0 },
+  whirl: { color: 0xffa94d, ring: true, mode: 'out', pcolor: 0xffe0b0 },
+  storm: { color: 0x9b6bd6, ring: true, mode: 'out', pcolor: 0xd0a0ff },
+  rain: { color: 0xff5f5f, ring: true, mode: 'fall', pcolor: 0xffc0c0 },
+  sanctuary: { color: 0x6ee7a0, ring: true, mode: 'rise', pcolor: 0xb6f5cf },
+  heal: { color: 0x6ee7a0, ring: true, mode: 'rise', pcolor: 0xb6f5cf },
+  boom: { color: 0xff8c2e, ring: true, mode: 'out', pcolor: 0xffd28a },
+  blink: { color: 0x9a7bff, ring: true, mode: 'out', pcolor: 0xc9b8ff },
+  execute: { color: 0xff3b3b, ring: true, mode: 'out', pcolor: 0xff9a9a },
+  level: { color: 0xffe066, ring: true, mode: 'rise', pcolor: 0xfff0a0 },
+  death: { color: 0x39405c, ring: true, mode: 'out' },
+  shield: { color: 0x9fd0ff, ring: true, mode: 'rise', pcolor: 0xd0eaff },
+  recall: { color: 0x4ad6e0, ring: true, mode: 'rise', pcolor: 0xa0f0f7 },
+  // 앞으로 뻗는 방향성 스킬
+  dash: { color: 0xffffff, line: true, mode: 'forward', pcolor: 0xffffff, w: 2.2 },
+  fissure: { color: 0xc9863c, line: true, mode: 'forward', pcolor: 0xffb060, w: 3.4, ground: true },
+  volley: { color: 0xfff0a0, line: true, mode: 'forward', pcolor: 0xfff4c0, w: 1.4 },
+}
+
+// 시드 고정 파티클 구름 — 호스트/게스트 모두 같은 fx(id)에서 같은 모양이 나오게 lcg 시드.
+//  fx.t(0→0.8s)에 따라 퍼지며 사라진다.
+function makeBurst(n, look) {
+  const count = look.mode === 'forward' ? 22 : 18
+  const reach = (n.r || 4) * (look.mode === 'forward' ? 1 : 0.9)
+  const rnd = lcg(((n.id | 0) + 1) * 2654435761 >>> 0)
+  const dir = new Float32Array(count * 3) // 단위 방향
+  const mag = new Float32Array(count) // 거리 배율 0.4~1
+  for (let i = 0; i < count; i++) {
+    let ax = 0
+    let ay = 0
+    let az = 0
+    if (look.mode === 'forward') {
+      const a = (n.dir || 0) + (rnd() - 0.5) * 0.5
+      ax = Math.cos(a)
+      az = Math.sin(a)
+      ay = rnd() * 0.5
+    } else if (look.mode === 'rise') {
+      const a = rnd() * Math.PI * 2
+      ax = Math.cos(a) * 0.4
+      az = Math.sin(a) * 0.4
+      ay = 0.7 + rnd() * 0.9
+    } else if (look.mode === 'fall') {
+      const a = rnd() * Math.PI * 2
+      ax = Math.cos(a) * rnd()
+      az = Math.sin(a) * rnd()
+      ay = 0 // 높이는 update에서 위→아래
+    } else { // out
+      const a = rnd() * Math.PI * 2
+      ax = Math.cos(a)
+      az = Math.sin(a)
+      ay = rnd() * 0.5
+    }
+    dir[i * 3] = ax
+    dir[i * 3 + 1] = ay
+    dir[i * 3 + 2] = az
+    mag[i] = 0.4 + rnd() * 0.6
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(count * 3), 3))
+  const mat = new THREE.PointsMaterial({
+    color: look.pcolor ?? look.color, size: look.mode === 'forward' ? 1 : 1.1,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  })
+  const pts = new THREE.Points(geo, mat)
+  pts.userData.update = (t) => {
+    const tn = Math.min(1, t / 0.8)
+    const ease = 1 - (1 - tn) * (1 - tn)
+    const pos = geo.attributes.position.array
+    for (let i = 0; i < count; i++) {
+      const rr = reach * mag[i] * ease
+      pos[i * 3] = dir[i * 3] * rr
+      if (look.mode === 'fall') pos[i * 3 + 1] = 1 + (1 - ease) * (n.r || 6) * 1.2
+      else pos[i * 3 + 1] = 1.2 + dir[i * 3 + 1] * reach * 0.55 * ease
+      pos[i * 3 + 2] = dir[i * 3 + 2] * rr
+    }
+    geo.attributes.position.needsUpdate = true
+    mat.opacity = 1 - tn
+  }
+  return pts
+}
+
+// fx 한 개를 3D 오브젝트(Group)로 — 동심원 링/방향성 직선 + 파티클.
+function buildFxObject(n) {
+  const look = FX_LOOK[n.kind] || { color: 0xffd34d, ring: true, mode: 'out' }
+  const g = new THREE.Group()
+  g.position.set(n.x, 0, n.z)
+  const ups = []
+  if (look.line) {
+    // 앞으로 뻗는 직선/균열 — 로컬 +x가 dir 방향이 되게 회전
+    g.rotation.y = -(n.dir || 0)
+    const len = n.r || 14
+    const bar = new THREE.Mesh(
+      new THREE.BoxGeometry(len, look.ground ? 0.4 : 0.9, look.w || 2),
+      new THREE.MeshBasicMaterial({ color: look.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })
+    )
+    bar.position.set(len / 2, look.ground ? 0.25 : 1.1, 0)
+    g.add(bar)
+    ups.push((t) => {
+      const tn = Math.min(1, t / 0.6)
+      bar.material.opacity = (1 - tn) * 0.85
+      bar.scale.x = Math.min(1, t / 0.1) // 앞으로 쭉 뻗어 나가는 느낌
+      if (!look.ground) bar.scale.y = 1 + tn * 1.5
+    })
+  }
+  if (look.ring) {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.8, 1, 36),
+      new THREE.MeshBasicMaterial({ color: look.color, transparent: true, side: THREE.DoubleSide })
+    )
+    ring.rotation.x = -Math.PI / 2
+    ring.position.y = 0.3
+    g.add(ring)
+    ups.push((t) => {
+      const f = Math.min(1, t / 0.6)
+      ring.scale.setScalar(1 + f * (n.r || 4))
+      ring.material.opacity = 1 - f
+    })
+  }
+  if (look.pcolor !== undefined || look.mode) {
+    const burst = makeBurst(n, look)
+    g.add(burst)
+    ups.push((t) => burst.userData.update(t))
+  }
+  g.userData.update = (t) => { for (const u of ups) u(t) }
+  return g
+}
+
+// 오브젝트의 geometry/material/texture를 정리 (풀에서 빠질 때 GPU 메모리 회수)
+function disposeObject(obj) {
+  obj.traverse?.((o) => {
+    o.geometry?.dispose?.()
+    if (o.material) {
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        m.map?.dispose?.()
+        m.dispose?.()
+      }
+    }
+  })
 }
 
 // id → 3D 오브젝트 풀 동기화: 스냅샷에 있으면 만들고/갱신, 없으면 치운다
@@ -478,6 +603,7 @@ function syncPool(scene, pool, items, create, update) {
   for (const [id, obj] of pool) {
     if (seen.has(id)) continue
     scene.remove(obj)
+    disposeObject(obj)
     pool.delete(id)
   }
 }
@@ -831,29 +957,18 @@ export function createRiftScene(canvas) {
       obj.position.x = p.x
       obj.position.z = p.z
     })
-    // 스킬/이벤트 이펙트 링 (퍼져나가며 사라진다). 골드 표시는 내 막타만 보여 준다.
+    // 스킬/이벤트 이펙트 (동심원 링 + 방향성 직선 + 파티클). 골드 표시는 내 막타만.
     const fxList = view.fx.filter((n) => n.kind !== 'gold' || n.owner === myId)
-    syncPool(scene, fxPool, fxList, (n) => {
-      if (n.kind === 'gold') return goldSprite(n)
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(0.8, 1, 36),
-        new THREE.MeshBasicMaterial({
-          color: FX_LOOK[n.kind]?.color ?? 0xffd34d, transparent: true, side: THREE.DoubleSide,
-        })
-      )
-      ring.rotation.x = -Math.PI / 2
-      ring.position.set(n.x, 0.3, n.z)
-      return ring
-    }, (obj, n) => {
-      if (n.kind === 'gold') {
-        obj.position.y = 5 + n.t * 7 // 위로 떠오르며
-        obj.material.opacity = Math.max(0, 1 - n.t / 0.8) // 서서히 사라진다
-        return
-      }
-      const f = Math.min(1, n.t / 0.6)
-      obj.scale.setScalar(1 + f * (n.r || 4))
-      obj.material.opacity = 1 - f
-    })
+    syncPool(scene, fxPool, fxList,
+      (n) => (n.kind === 'gold' ? goldSprite(n) : buildFxObject(n)),
+      (obj, n) => {
+        if (obj.isSprite) { // 골드 "+N"
+          obj.position.y = 5 + n.t * 7 // 위로 떠오르며
+          obj.material.opacity = Math.max(0, 1 - n.t / 0.8) // 서서히 사라진다
+          return
+        }
+        obj.userData.update?.(n.t)
+      })
 
     // 전장의 안개 (관전자는 안개 없음)
     fog.plane.visible = !!myTeam

@@ -1,7 +1,7 @@
 // 파티 리프트 순수 게임 로직 (호스트 권위) — 3:3 AOS.
 //  - 이동(조이스틱) + 버튼 3개: 기본공격 / 직업 스킬 / 궁극기.
 //  - 직업 6종(전사/궁수/마법사/힐러/암살자/탱커) — 한 팀에 같은 직업 금지.
-//  - 레벨 최대 10, 미니언·정글·용·바론으로 성장, 넥서스가 터지면 끝.
+//  - 레벨 최대 18, 미니언·정글·용·바론으로 성장, 넥서스가 터지면 끝.
 //  - 수풀 은신 + 전장의 안개: 시야 밖 적은 안 보인다 (봇도 같은 규칙).
 //  - 호스트가 step()을 60Hz로 돌리고 makeView() 스냅샷을 전파한다.
 import {
@@ -16,7 +16,7 @@ export { ITEM_SLOTS } from './items.js'
 export const STEP = 1 / 60
 export const COUNTDOWN_TIME = 3
 export const TIME_LIMIT = 600 // 10분 — 넥서스가 안 터지면 점수로 판정
-export const MAX_LEVEL = 10
+export const MAX_LEVEL = 18
 export const ULT_LEVEL = 3 // 궁극기가 열리는 레벨
 export const TEAM_SIZE = 3
 
@@ -27,13 +27,13 @@ export const CLASSES = {
   warrior: {
     name: '전사', icon: '⚔️', desc: '돌진해서 베는 근접 딜러',
     hp: 620, hpLvl: 70, atk: 62, atkLvl: 9, range: 3.8, atkCd: 0.7, speed: 14.2, def: 0.85,
-    skill: { name: '돌진', icon: '💨', cd: 7, desc: '적에게 돌진해 베고 잠깐 기절' },
+    skill: { name: '베며 돌진', icon: '💨', cd: 7, desc: '앞으로 돌진하며 길을 가르고 착지 지점을 후려쳐 기절' },
     ult: { name: '회전베기', icon: '🌪️', cd: 40, desc: '주변을 크게 휩쓴다' },
   },
   archer: {
     name: '궁수', icon: '🏹', desc: '제일 긴 사거리·제일 약한 몸의 원거리 딜러',
     hp: 360, hpLvl: 38, atk: 50, atkLvl: 9, range: 12.5, atkCd: 0.65, speed: 12.8,
-    skill: { name: '연속사격', icon: '🎯', cd: 6, desc: '화살 3발을 연달아 쏜다' },
+    skill: { name: '꿰뚫는 화살', icon: '🏹', cd: 6, desc: '앞으로 화살을 쏴 일직선의 적을 모두 관통' },
     ult: { name: '화살비', icon: '☄️', cd: 42, desc: '멀리 있는 적 머리 위로 화살 폭격' },
   },
   mage: {
@@ -58,7 +58,7 @@ export const CLASSES = {
     name: '탱커', icon: '🛡️', desc: '앞장서서 버티는 방패 — 느리지만 단단하다',
     hp: 800, hpLvl: 94, atk: 44, atkLvl: 6, range: 3.8, atkCd: 0.85, speed: 10.8, def: 0.8,
     skill: { name: '방패막기', icon: '🛡️', cd: 9, desc: '3초간 받는 피해 65% 감소 + 돌진 가속' },
-    ult: { name: '대지강타', icon: '💥', cd: 44, desc: '땅을 내려쳐 주변을 길게 기절' },
+    ult: { name: '대지균열', icon: '💥', cd: 44, desc: '앞으로 땅을 길게 갈라 길목의 적을 길게 기절' },
   },
 }
 export const CLASS_IDS = Object.keys(CLASSES)
@@ -71,6 +71,8 @@ const FIREBALL_SPEED = 30
 const FIREBALL_AOE = 5
 const DASH_DIST = 13
 const DASH_AIM = 16
+const DASH_HALF = 2.6 // 돌진 경로 피해 폭(반)
+const DASH_CONE = 5 // 착지 시 전방 베기 반경
 const BLINK_RANGE = 18
 const EXECUTE_RANGE = 9
 const SHIELD_TIME = 3
@@ -79,8 +81,11 @@ const HEAL_RANGE = 14
 const RAIN_RANGE = 26
 const RAIN_AOE = 7
 const STORM_RADIUS = 13
-const SLAM_RADIUS = 9
 const WHIRL_RADIUS = 9
+const VOLLEY_RANGE = 17 // 궁수 꿰뚫는 화살 사거리(앞으로 직선)
+const VOLLEY_HALF = 1.8 // 화살 직선 폭(반)
+const FISSURE_LEN = 18 // 탱커 대지균열 길이(앞으로 직선)
+const FISSURE_HALF = 3.5 // 대지균열 폭(반)
 
 export const SIGHT_RANGE = 24 // 아군 유닛 주변 이만큼이 우리 시야
 export const BUSH_REVEAL = 4 // 수풀 속 적도 이만큼 붙으면 보인다
@@ -94,7 +99,7 @@ const FOUNTAIN_HEAL = 0.12
 const FOUNTAIN_DMG = 90 // 적 우물에 들어가면 따끔!
 const XP_RANGE = 22 // 처치 경험치를 나눠 받는 거리
 const TOWER_AGGRO_TIME = 3 // 적 영웅을 때리면 타워가 이만큼 노린다
-export const RECALL_TIME = 7 // 귀환 시전(채널링) 시간 — 방해 없이 버티면 우물로 복귀
+export const RECALL_TIME = 4 // 귀환 시전(채널링) 시간 — 방해 없이 버티면 우물로 복귀
 
 // ── 미니언 ──
 const WAVE_PERIOD = 14 // 스폰 간격 — 한 무리가 라인 중앙에 닿을 무렵 다음 무리가 나온다
@@ -104,6 +109,11 @@ const MINION_SIGHT = 11
 // 타워 피해(TOWER_DMG_MINION=60) 기준: 원거리는 2대(≤120), 근접은 3대(120<hp≤180)에 죽는다
 const MELEE = { hp: 165, dmg: 33.6, range: 2.4, cd: 1.1 }
 const RANGED = { hp: 110, dmg: 26.4, range: 8, cd: 1.4 }
+// 미니언끼리는 피해를 크게 줄여(40%) 라인 교전이 천천히 진행되게 한다.
+//  → 미니언 vs 미니언만 붙으면 잘 안 죽고 웨이브가 쌓이지만,
+//    유저가 끼어들어 적 미니언을 빠르게 정리하면 살아남은 우리 웨이브가 타워를 민다.
+//  → 영웅/타워에게는 제값(부담은 되되 한 마리는 무시할 만하고, 여럿이면 위협).
+const MINION_VS_MINION = 0.4
 const MINION_HP_GROWTH = 5 // 분당 체력 증가 (타워 피격 설계가 오래 유지되게 완만히)
 const MINION_XP = 28
 
@@ -158,7 +168,7 @@ const heroAtk = (h) => CLASSES[h.cls].atk + CLASSES[h.cls].atkLvl * (h.lvl - 1) 
 const heroRange = (h) => CLASSES[h.cls].range + itemBonus(h).range
 const heroSpeed = (h) => CLASSES[h.cls].speed + itemBonus(h).speed
 export const xpNeed = (lvl) => 60 + 40 * (lvl - 1)
-const respawnTime = (lvl) => 4 + 2 * lvl // 레벨이 높을수록 부활 대기 ↑ (Lv1 6초 → Lv10 24초)
+const respawnTime = (lvl) => 4 + 1.5 * lvl // 레벨이 높을수록 부활 대기 ↑ (Lv1 5.5초 → Lv18 31초)
 
 const dist2 = (a, b) => (a.x - b.x) ** 2 + (a.z - b.z) ** 2
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
@@ -305,6 +315,11 @@ function pushFeed(state, t, msg) {
 
 function pushFx(state, kind, x, z, r, team = null) {
   state.fx.push({ id: state.nextId++, kind, x, z, r, t: 0, team })
+}
+
+// 방향성(앞으로 뻗는) 이펙트 — dir 방향, 길이 r. 렌더러가 콘/직선 + 파티클로 그린다.
+function pushFxDir(state, kind, x, z, r, dir, team = null) {
+  state.fx.push({ id: state.nextId++, kind, x, z, r, t: 0, team, dir })
 }
 
 const canAct = (h) => h.respawnT <= 0 && h.stunT <= 0
@@ -572,32 +587,46 @@ export function castSkill(state, id) {
 }
 
 const SKILLS = {
-  // 전사 돌진: 가까운 적 쪽으로 짧게 돌격, 도착 지점 휩쓸기 + 짧은 기절
+  // 전사 베며 돌진: 가까운 적 쪽으로 돌격하며 경로의 적을 베고(약하게),
+  //  착지 지점 전방을 크게 후려 강타 + 짧은 기절
   warrior(state, h) {
     const foe = nearestFoeHero(state, h, DASH_AIM)
     const dir = foe ? Math.atan2(foe.z - h.z, foe.x - h.x) : h.dir
     const d = foe ? Math.min(DASH_DIST, Math.max(0, dist(h, foe) - 1.5)) : DASH_DIST
+    const sx = h.x
+    const sz = h.z
     h.dir = dir
     h.x += Math.cos(dir) * d
     h.z += Math.sin(dir) * d
     resolveTerrain(h, HERO_RADIUS, state.towers)
     const dmg = abilityDmg(h, 60 + 12 * (h.lvl - 1))
-    aoeDamage(state, h, h.x, h.z, 3.5, dmg, 0.5)
-    pushFx(state, 'dash', h.x, h.z, 3.5, h.team)
+    lineDamage(state, h, sx, sz, dir, d + DASH_CONE, DASH_HALF, dmg * 0.6, 0) // 지나간 길의 적
+    coneDamage(state, h, h.x, h.z, dir, DASH_CONE, 1.0, dmg, 0.5) // 착지 전방 강타 + 기절
+    pushFxDir(state, 'dash', sx, sz, d + DASH_CONE, dir, h.team)
   },
-  // 궁수 연속사격: 한 대상에게 화살 3발
+  // 궁수 꿰뚫는 화살: 자동 조준 방향으로 직선 화살 — 일직선의 적을 모두 관통
   archer(state, h) {
-    const ref = findAttackTarget(state, h, heroRange(h) + 1.5)
-    if (!ref) return false
-    const tgt = targetEntity(state, ref)
-    h.dir = Math.atan2(tgt.z - h.z, tgt.x - h.x)
-    const dmg = atkOf(h) * 0.9
-    for (const sp of [34, 39, 44]) {
+    let dir = h.dir
+    const ref = findAttackTarget(state, h, VOLLEY_RANGE)
+    if (ref) {
+      const t = targetEntity(state, ref)
+      dir = Math.atan2(t.z - h.z, t.x - h.x)
+    } else {
+      const foe = nearestFoeHero(state, h, VOLLEY_RANGE)
+      if (!foe) return false // 겨눌 적이 없으면 쿨다운을 안 쓴다
+      dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    }
+    h.dir = dir
+    lineDamage(state, h, h.x, h.z, dir, VOLLEY_RANGE, VOLLEY_HALF, atkOf(h) * 1.2, 0)
+    // 시각: 앞으로 빠르게 날아가 사라지는 화살 3발(살짝 어긋나게)
+    for (const off of [-0.55, 0, 0.55]) {
       state.projectiles.push({
-        id: state.nextId++, kind: 'bolt', team: h.team, owner: h.id,
-        x: h.x, z: h.z, target: ref, dmg, speed: sp,
+        id: state.nextId++, kind: 'pierce', team: h.team, owner: h.id,
+        x: h.x - Math.sin(dir) * off, z: h.z + Math.cos(dir) * off,
+        vx: Math.cos(dir) * 46, vz: Math.sin(dir) * 46, travel: 0, max: VOLLEY_RANGE,
       })
     }
+    pushFxDir(state, 'volley', h.x, h.z, VOLLEY_RANGE, dir, h.team)
   },
   // 마법사 화염구: 직선으로 날아가 크게 폭발 (적 영웅 자동 조준)
   mage(state, h) {
@@ -694,28 +723,64 @@ const ULTS = {
     damageHero(state, foe, dmg, h)
     if (foe.respawnT > 0) h.skillCd = 0 // 처형 성공 → 점멸로 빠져나가라!
   },
-  // 대지강타: 주변을 길게 기절시킨다
+  // 대지균열: 앞으로 땅을 길게 갈라, 길목의 적을 길게 기절
   tank(state, h) {
-    aoeDamage(state, h, h.x, h.z, SLAM_RADIUS, abilityDmg(h, 90 + 14 * (h.lvl - 1)), 1.6)
-    pushFx(state, 'slam', h.x, h.z, SLAM_RADIUS, h.team)
+    const foe = nearestFoeHero(state, h, FISSURE_LEN)
+    const dir = foe ? Math.atan2(foe.z - h.z, foe.x - h.x) : h.dir
+    h.dir = dir
+    lineDamage(state, h, h.x, h.z, dir, FISSURE_LEN, FISSURE_HALF, abilityDmg(h, 90 + 14 * (h.lvl - 1)), 1.6)
+    pushFxDir(state, 'fissure', h.x, h.z, FISSURE_LEN, dir, h.team)
   },
 }
 
-// (x,z) 주변 적 영웅/미니언/정글몹에게 피해 (+기절)
-function aoeDamage(state, attacker, x, z, radius, dmg, stun) {
-  const r2 = radius * radius
-  const at = { x, z }
+// 술식 공통: 판정 함수 pred(e)에 걸리는 모든 적(영웅/미니언/정글몹)에게 피해(+기절)
+function damageInShape(state, attacker, pred, dmg, stun) {
   for (const e of state.heroes) {
-    if (e.team === attacker.team || e.respawnT > 0 || dist2(at, e) > r2) continue
+    if (e.team === attacker.team || e.respawnT > 0 || !pred(e)) continue
     if (stun > 0) e.stunT = Math.max(e.stunT, stun)
     damageHero(state, e, dmg, attacker)
   }
   for (const m of [...state.minions]) {
-    if (m.team !== attacker.team && dist2(at, m) <= r2) damageMinion(state, m, dmg, attacker)
+    if (m.team !== attacker.team && pred(m)) damageMinion(state, m, dmg, attacker)
   }
   for (const m of state.monsters) {
-    if (m.alive && dist2(at, m) <= r2) damageMonster(state, m, dmg, attacker)
+    if (m.alive && pred(m)) damageMonster(state, m, dmg, attacker)
   }
+}
+
+// (x,z) 주변 동심원 범위 피해
+function aoeDamage(state, attacker, x, z, radius, dmg, stun) {
+  const r2 = radius * radius
+  damageInShape(state, attacker, (e) => (e.x - x) ** 2 + (e.z - z) ** 2 <= r2, dmg, stun)
+}
+
+// 전방 직선(직사각형) 범위 피해 — (x,z)에서 dir 방향으로 length, 좌우 half폭
+function lineDamage(state, attacker, x, z, dir, length, half, dmg, stun) {
+  const ux = Math.cos(dir)
+  const uz = Math.sin(dir)
+  damageInShape(state, attacker, (e) => {
+    const rx = e.x - x
+    const rz = e.z - z
+    const along = rx * ux + rz * uz // 진행 방향 거리
+    if (along < -0.5 || along > length) return false
+    return Math.abs(-uz * rx + ux * rz) <= half // 경로에서 옆으로 벗어난 거리
+  }, dmg, stun)
+}
+
+// 전방 부채꼴(콘) 범위 피해 — (x,z)에서 dir 방향, 반경 range, 반각 halfAngle(rad)
+function coneDamage(state, attacker, x, z, dir, range, halfAngle, dmg, stun) {
+  const r2 = range * range
+  damageInShape(state, attacker, (e) => {
+    const rx = e.x - x
+    const rz = e.z - z
+    const d2 = rx * rx + rz * rz
+    if (d2 > r2) return false
+    if (d2 < 1) return true // 바로 앞(겹친) 적은 무조건
+    let dd = Math.atan2(rz, rx) - dir
+    while (dd > Math.PI) dd -= 2 * Math.PI
+    while (dd < -Math.PI) dd += 2 * Math.PI
+    return Math.abs(dd) <= halfAngle
+  }, dmg, stun)
 }
 
 // ── 피해 처리 ──
@@ -1119,14 +1184,16 @@ function stepMinions(state, dt) {
         if (m.atkCd <= 0) {
           m.atkCd = spec.cd
           m.atkSeq++
+          // 상대가 미니언이면 피해를 깎아 라인 교전이 천천히 풀리게 한다
+          const out = tgt.ref.tk === 'minion' ? spec.dmg * MINION_VS_MINION : spec.dmg
           if (m.ranged) {
             // 원거리 미니언은 작은 화살을 쏜다 ('mbolt' — 영웅 탄과 구분되는 작은 투사체)
             state.projectiles.push({
               id: state.nextId++, kind: 'mbolt', team: m.team,
-              x: m.x, z: m.z, target: tgt.ref, dmg: spec.dmg, speed: 26,
+              x: m.x, z: m.z, target: tgt.ref, dmg: out, speed: 26,
             })
           } else {
-            applyDamage(state, tgt.ref, spec.dmg, { team: m.team })
+            applyDamage(state, tgt.ref, out, { team: m.team })
           }
         }
       } else {
@@ -1367,6 +1434,15 @@ function stepProjectiles(state, dt) {
         pushFx(state, 'boom', p.x, p.z, FIREBALL_AOE, p.team)
         if (owner) aoeDamage(state, owner, p.x, p.z, FIREBALL_AOE, p.dmg, 0)
       }
+      continue
+    }
+    if (p.kind === 'pierce') {
+      // 궁수 꿰뚫는 화살의 시각용 탄 — 피해는 시전 때 lineDamage로 이미 적용됨.
+      // 앞으로 날아가다 사거리 끝에서 사라진다.
+      p.x += p.vx * dt
+      p.z += p.vz * dt
+      p.travel += Math.hypot(p.vx, p.vz) * dt
+      if (p.travel >= p.max) remove.add(p.id)
       continue
     }
     // 유도탄 (기본공격/타워) — 대상이 사라지면 같이 사라진다
@@ -1796,6 +1872,7 @@ export function makeView(state) {
     })),
     fx: state.fx.map((n) => ({
       id: n.id, kind: n.kind, x: r1(n.x), z: r1(n.z), r: n.r, t: r2d(n.t), team: n.team,
+      ...(n.dir != null ? { dir: r2d(n.dir) } : null),
       ...(n.kind === 'gold' ? { n: n.n, owner: n.owner } : null),
     })),
     feed: state.feed.slice(-5),
