@@ -5,8 +5,7 @@
 import * as THREE from 'three'
 import { getZodiac } from '../../shared/zodiac.js'
 import {
-  WORLD, NEXUS_POS, NEXUS_RADIUS, FOUNTAIN_RADIUS, LANES, LANE_IDS, ROCKS, BUSHES,
-  WALL_LINES, WALL_RADIUS, DRAGON_PIT, BARON_PIT,
+  NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, buildMap,
 } from './map.js'
 import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE } from './engine.js'
 
@@ -609,7 +608,8 @@ function syncPool(scene, pool, items, create, update) {
 }
 
 // 전장의 안개: 캔버스에 아군 시야만큼 구멍을 뚫어 어둠 텍스처로 쓴다
-function createFog() {
+function createFog(map) {
+  const WORLD = map.WORLD
   const c = document.createElement('canvas')
   c.width = 256
   c.height = 192
@@ -649,13 +649,14 @@ function createFog() {
     }
     for (const o of view.minions) if (o.team === myTeam) punch(o.x, o.z, SIGHT_RANGE * 0.75)
     for (const o of view.towers) if (o.team === myTeam && o.alive) punch(o.x, o.z, SIGHT_RANGE * 0.9)
-    punch(NEXUS_POS[myTeam].x, NEXUS_POS[myTeam].z, SIGHT_RANGE)
+    punch(map.NEXUS_POS[myTeam].x, map.NEXUS_POS[myTeam].z, SIGHT_RANGE)
     tex.needsUpdate = true
   }
   return { plane, update }
 }
 
-export function createRiftScene(canvas) {
+export function createRiftScene(canvas, map = buildMap('3v3')) {
+  const { WORLD, NEXUS_POS, LANES, ROCKS, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT } = map
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
   const scene = new THREE.Scene()
@@ -775,7 +776,7 @@ export function createRiftScene(canvas) {
   }
 
   // ── 전장의 안개 ──
-  const fog = createFog()
+  const fog = createFog(map)
   fog.plane.visible = false
   scene.add(fog.plane)
 

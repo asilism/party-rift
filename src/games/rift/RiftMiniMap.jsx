@@ -1,12 +1,14 @@
-import { LANES, LANE_IDS, WORLD, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT, NEXUS_POS } from './map.js'
+import { useMemo } from 'react'
+import { LANE_IDS, buildMap } from './map.js'
 import { isHeroVisible, isUnitVisible, SIGHT_RANGE } from './engine.js'
 
 const TEAM_FILL = { blue: '#4f8cff', red: '#ff6b6b' }
-const laneD = (lane) => `M ${LANES[lane].map((p) => `${p.x} ${p.z}`).join(' L ')}`
+const laneD = (map, lane) => `M ${map.LANES[lane].map((p) => `${p.x} ${p.z}`).join(' L ')}`
 
 // 미니맵 전장의 안개: 어두운 사각형을 깔고, 아군 시야 원만큼 구멍을 뚫는다.
 // (SVG 마스크 = 흰색이면 어둠이 보이고, 검정이면 가려진다 → 시야 원을 검정으로)
-function FogOverlay({ view, myTeam, pad }) {
+function FogOverlay({ view, myTeam, pad, map }) {
+  const { WORLD, NEXUS_POS } = map
   const W = WORLD.maxX - WORLD.minX
   const H = WORLD.maxZ - WORLD.minZ
   const vis = []
@@ -45,6 +47,8 @@ function FogOverlay({ view, myTeam, pad }) {
 // 우측 상단 미니맵: 3갈래 레인/타워/넥서스/수풀 위에 영웅·용·바론 위치 표시.
 // 내 팀 시야 규칙 그대로 — 안 보이는 적은 미니맵에도 안 찍힌다.
 export default function RiftMiniMap({ view, myId }) {
+  const map = useMemo(() => buildMap(view.mode), [view.mode])
+  const { WORLD, NEXUS_POS, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT } = map
   const pad = 8
   const vb = `${WORLD.minX - pad} ${WORLD.minZ - pad} ${WORLD.maxX - WORLD.minX + pad * 2} ${WORLD.maxZ - WORLD.minZ + pad * 2}`
   const myTeam = view.heroes?.find((h) => h.id === myId)?.team || null
@@ -57,7 +61,7 @@ export default function RiftMiniMap({ view, myId }) {
       />
       <rect x={-7} y={WORLD.minZ} width={14} height={WORLD.maxZ - WORLD.minZ} fill="rgba(108, 196, 232, 0.4)" />
       {LANE_IDS.map((l) => (
-        <path key={l} d={laneD(l)} fill="none" stroke="rgba(217, 199, 154, 0.55)" strokeWidth={9} strokeLinejoin="round" />
+        <path key={l} d={laneD(map, l)} fill="none" stroke="rgba(217, 199, 154, 0.55)" strokeWidth={9} strokeLinejoin="round" />
       ))}
       {/* 성벽 */}
       {WALL_LINES.map((w, i) => (
@@ -73,7 +77,7 @@ export default function RiftMiniMap({ view, myId }) {
       ))}
       {/* 전장의 안개: 아군 시야(영웅/미니언/타워/우물) 밖 지형은 어둡게 — 3D 화면과 동일 규칙.
           관전(myTeam 없음)이면 안개 없음. 지형 위에만 덮고 랜드마크/유닛은 위에 그려 또렷이 보인다. */}
-      {myTeam && <FogOverlay view={view} myTeam={myTeam} pad={pad} />}
+      {myTeam && <FogOverlay view={view} myTeam={myTeam} pad={pad} map={map} />}
       {/* 정글몹/용/바론 */}
       {view.monsters?.map((m) =>
         m.kind === 'wolf'

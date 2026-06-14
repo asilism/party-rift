@@ -2033,6 +2033,21 @@ body {
   padding-bottom: 10px; overflow-y: auto;
 }
 .rift-setup__hint { text-align: center; margin: 4px 12px; color: var(--muted); font-size: 14px; }
+.rift-setup__modes {
+  display: flex; gap: 10px; justify-content: center; padding: 6px 16px 0; flex-wrap: wrap;
+}
+.rift-setup__mode {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 150px; padding: 8px 16px; border-radius: 14px; cursor: pointer;
+  border: 2px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06);
+  color: var(--text); transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.rift-setup__mode strong { font-size: 17px; }
+.rift-setup__mode small { color: var(--muted); font-size: 12px; text-align: center; }
+.rift-setup__mode--on {
+  border-color: #ffd166; background: rgba(255, 209, 102, 0.16); transform: translateY(-1px);
+}
+.rift-setup__mode--on small { color: var(--text); }
 .rift-setup__teams {
   display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
   padding: 0 16px; flex: 1; min-height: 0;

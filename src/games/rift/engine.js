@@ -5,8 +5,7 @@
 //  - 수풀 은신 + 전장의 안개: 시야 밖 적은 안 보인다 (봇도 같은 규칙).
 //  - 호스트가 step()을 60Hz로 돌리고 makeView() 스냅샷을 전파한다.
 import {
-  NEXUS_POS, FOUNTAIN_RADIUS, LANES, LANE_IDS, TOWER_SPOTS, WOLF_CAMPS,
-  DRAGON_PIT, BARON_PIT, enemyOf, nearestWp, resolveTerrain, bushIndexAt, avoidDir,
+  NEXUS_POS, FOUNTAIN_RADIUS, LANE_IDS, enemyOf, buildMap,
 } from './map.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { ITEM_SLOTS, SELL_REFUND, ITEMS_BY_ID, sumStats } from './items.js'
@@ -18,7 +17,19 @@ export const COUNTDOWN_TIME = 3
 export const TIME_LIMIT = 600 // 10분 — 넥서스가 안 터지면 점수로 판정
 export const MAX_LEVEL = 18
 export const ULT_LEVEL = 3 // 궁극기가 열리는 레벨
-export const TEAM_SIZE = 3
+export const TEAM_SIZE = 3 // 기본(3:3) 팀 인원 — 하위호환용 별칭
+// 모드별 팀 인원. 5:5는 탑/미드/봇 + 봇을 지원하는 힐러 + 정글러 구성.
+export const TEAM_SIZES = { '3v3': 3, '5v5': 5 }
+export const GAME_MODES = ['3v3', '5v5']
+// 봇 역할 배정 우선순위(인원이 모자라면 앞에서부터 채운다).
+//  · support = 봇 레인에서 원거리 딜러를 지원(힐러 성향)
+//  · jungle  = 정글 캠프/오브젝트를 돌다 교전에 합류
+const BOT_ROLES = {
+  '3v3': ['mid', 'top', 'bot'],
+  '5v5': ['mid', 'jungle', 'bot', 'support', 'top'],
+}
+// 역할 → 행군할 레인 (jungle은 별도 로직, 기본값 mid)
+const laneOfRole = (role) => (role === 'support' ? 'bot' : LANE_IDS.includes(role) ? role : 'mid')
 
 // ── 직업 (한 팀에 같은 직업은 한 명만) ──
 // 기본공격은 모두 자동 조준이지만 사거리/속도/딜이 다르고,
@@ -174,23 +185,32 @@ const dist2 = (a, b) => (a.x - b.x) ** 2 + (a.z - b.z) ** 2
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
 const emojiOf = (zodiacId) => getZodiac(zodiacId)?.emoji || '🙂'
 
-// 진영별 출발 위치 (우물 안에 셋이 나란히)
-function spawnPos(team, slot) {
-  const n = NEXUS_POS[team]
+// 진영별 출발 위치 (우물 안에 나란히 — 인원수에 맞춰 중앙 정렬)
+function spawnPos(map, team, slot, teamSize) {
+  const n = map.NEXUS_POS[team]
   const side = team === 'blue' ? 1 : -1
   // 넥서스와 최후의 포탑 사이(뒤쪽)에서 부활 — 둘 다와 안 겹치게
-  return { x: n.x + side * 5, z: (slot - 1) * 5 }
+  return { x: n.x + side * 5, z: (slot - (teamSize - 1) / 2) * 5 }
 }
+
+// 시야 계산은 state(.map 보유)와 makeView 스냅샷(.nexusPos) 양쪽에서 호출된다.
+const nexusOf = (snap) => (snap.map ? snap.map.NEXUS_POS : snap.nexusPos) || NEXUS_POS
 
 // players: [{ id, name, zodiacId, color, team, cls, isBot? }]
 // 같은 팀에 같은 직업이 오면(또는 직업 미지정이면) 남은 직업으로 바꿔준다.
-export function createGame(players, rng = Math.random) {
+// opts: rng 함수 또는 { mode, rng } 객체 (하위호환을 위해 둘 다 받는다).
+export function createGame(players, opts = {}) {
+  const o = typeof opts === 'function' ? { rng: opts } : opts
+  const rng = o.rng || Math.random
+  const mode = TEAM_SIZES[o.mode] ? o.mode : '3v3'
+  const teamSize = TEAM_SIZES[mode]
+  const map = buildMap(mode)
   const slotCount = { blue: 0, red: 0 }
-  const botRoles = { blue: ['mid', 'top', 'bot'], red: ['mid', 'top', 'bot'] }
+  const botRoles = { blue: [...BOT_ROLES[mode]], red: [...BOT_ROLES[mode]] }
   const usedCls = { blue: new Set(), red: new Set() }
   const heroes = players.map((p) => {
     const slot = slotCount[p.team]++
-    const pos = spawnPos(p.team, slot)
+    const pos = spawnPos(map, p.team, slot, teamSize)
     let cls = p.cls
     if (!CLASSES[cls] || usedCls[p.team].has(cls)) {
       cls = CLASS_IDS.find((c) => !usedCls[p.team].has(c)) || 'warrior'
@@ -207,6 +227,8 @@ export function createGame(players, rng = Math.random) {
       role: p.isBot ? botRoles[p.team].shift() || 'mid' : null,
       x: pos.x,
       z: pos.z,
+      homeX: map.NEXUS_POS[p.team].x, // 우물(회복 지대) 중심 — inFountain 판정용
+      homeZ: map.NEXUS_POS[p.team].z,
       mx: 0, // 이동 입력 (-1~1)
       mz: 0,
       dir: p.team === 'blue' ? 0 : Math.PI, // 바라보는 방향 (적 본진 쪽)
@@ -246,28 +268,31 @@ export function createGame(players, rng = Math.random) {
     h.hp = h.maxHp
   }
   const monsters = [
-    ...WOLF_CAMPS.map((c, i) => ({
+    ...map.WOLF_CAMPS.map((c, i) => ({
       id: `wolf${i}`, kind: 'wolf', camp: c, x: c.x, z: c.z,
       hp: WOLF.hp, maxHp: WOLF.hp, alive: true, respawnT: 0, aggro: null,
     })),
     {
-      id: 'dragon', kind: 'dragon', camp: DRAGON_PIT, x: DRAGON_PIT.x, z: DRAGON_PIT.z,
+      id: 'dragon', kind: 'dragon', camp: map.DRAGON_PIT, x: map.DRAGON_PIT.x, z: map.DRAGON_PIT.z,
       hp: DRAGON.hp, maxHp: DRAGON.hp, alive: false, respawnT: DRAGON.spawn, aggro: null,
     },
     {
-      id: 'baron', kind: 'baron', camp: BARON_PIT, x: BARON_PIT.x, z: BARON_PIT.z,
+      id: 'baron', kind: 'baron', camp: map.BARON_PIT, x: map.BARON_PIT.x, z: map.BARON_PIT.z,
       hp: BARON.hp, maxHp: BARON.hp, alive: false, respawnT: BARON.spawn, aggro: null,
     },
   ]
   return {
     status: 'countdown', // 'countdown' | 'playing' | 'finished'
+    mode,
+    teamSize,
+    map,
     time: 0,
     countdown: COUNTDOWN_TIME,
     winner: null, // 'blue' | 'red' | null(무승부)
     heroes,
     minions: [],
     monsters,
-    towers: TOWER_SPOTS.map((t) => ({
+    towers: map.TOWER_SPOTS.map((t) => ({
       ...t, hp: TOWER_HP[t.tier], maxHp: TOWER_HP[t.tier], alive: true, cd: 0,
     })),
     nexus: {
@@ -301,9 +326,10 @@ export function makeBot(state, id) {
   h.isBot = true
   h.mx = 0
   h.mz = 0
-  // 비어 있는 레인부터 맡는다
+  // 비어 있는 역할(레인/정글/지원)부터 맡는다
+  const roles = BOT_ROLES[state.mode] || BOT_ROLES['3v3']
   const taken = state.heroes.filter((o) => o.isBot && o.team === h.team && o !== h).map((o) => o.role)
-  h.role = LANE_IDS.find((r) => !taken.includes(r)) || 'mid'
+  h.role = roles.find((r) => !taken.includes(r)) || 'mid'
   h.botStrafe = state.rng() * Math.PI * 2
   return h
 }
@@ -364,7 +390,7 @@ function inSight(snap, ent, team) {
   for (const t of snap.towers) {
     if (t.team === team && t.alive && dist2(t, ent) <= r2) return true
   }
-  if (dist2(NEXUS_POS[team], ent) <= r2) return true
+  if (dist2(nexusOf(snap)[team], ent) <= r2) return true
   return false
 }
 
@@ -436,7 +462,7 @@ function findAttackTarget(state, h, range) {
   }
   const en = enemyOf(h.team)
   if (nexusVulnerable(state, en) && state.nexus[en].hp > 0) {
-    const d = dist2(h, NEXUS_POS[en])
+    const d = dist2(h, state.map.NEXUS_POS[en])
     if (d < bd) best = { tk: 'nexus', id: en }
   }
   return best
@@ -458,7 +484,7 @@ function targetEntity(state, ref) {
     return t?.alive ? t : null
   }
   if (ref.tk === 'nexus') {
-    return state.nexus[ref.id].hp > 0 ? { ...NEXUS_POS[ref.id], team: ref.id } : null
+    return state.nexus[ref.id].hp > 0 ? { ...state.map.NEXUS_POS[ref.id], team: ref.id } : null
   }
   return null
 }
@@ -490,7 +516,10 @@ export function castRecall(state, id) {
 // ── 골드 / 상점 ──
 // 자기 우물(넥서스 회복 지대) 안인가?
 export function inFountain(h) {
-  return dist2(h, NEXUS_POS[h.team]) <= FOUNTAIN_RADIUS * FOUNTAIN_RADIUS
+  // 우물 중심은 영웅에 새겨 둔 home 좌표 (맵 크기와 무관하게 동작)
+  const cx = h.homeX ?? NEXUS_POS[h.team].x
+  const cz = h.homeZ ?? NEXUS_POS[h.team].z
+  return (h.x - cx) ** 2 + (h.z - cz) ** 2 <= FOUNTAIN_RADIUS * FOUNTAIN_RADIUS
 }
 // 상점을 열 수 있나 — 우물 안이거나, 죽어 있는(부활 대기) 동안에도 가능.
 export function canShop(h) {
@@ -598,7 +627,7 @@ const SKILLS = {
     h.dir = dir
     h.x += Math.cos(dir) * d
     h.z += Math.sin(dir) * d
-    resolveTerrain(h, HERO_RADIUS, state.towers)
+    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
     const dmg = abilityDmg(h, 60 + 12 * (h.lvl - 1))
     lineDamage(state, h, sx, sz, dir, d + DASH_CONE, DASH_HALF, dmg * 0.6, 0) // 지나간 길의 적
     coneDamage(state, h, h.x, h.z, dir, DASH_CONE, 1.0, dmg, 0.5) // 착지 전방 강타 + 기절
@@ -661,7 +690,7 @@ const SKILLS = {
     const d = dist(h, foe) || 1
     h.x = foe.x + ((foe.x - h.x) / d) * 1.8 // 등 뒤로
     h.z = foe.z + ((foe.z - h.z) / d) * 1.8
-    resolveTerrain(h, HERO_RADIUS, state.towers)
+    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
     h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
     damageHero(state, foe, abilityDmg(h, 80 + 16 * (h.lvl - 1)), h)
     pushFx(state, 'blink', h.x, h.z, 3, h.team)
@@ -983,7 +1012,7 @@ function stepWaves(state, dt) {
       for (let i = 0; i < 6; i++) {
         const ranged = i >= 3 // 0,1,2=근접 / 3,4,5=원거리
         const spec = ranged ? RANGED : MELEE
-        const wps = LANES[lane]
+        const wps = state.map.LANES[lane]
         // 넥서스 충돌체에 끼지 않게, 본진에서 레인 쪽으로 살짝 나간 곳에서 출발
         const a = team === 'blue' ? wps[0] : wps[wps.length - 1]
         const b = team === 'blue' ? wps[1] : wps[wps.length - 2]
@@ -1024,7 +1053,7 @@ function stepHero(state, h, dt) {
     h.respawnT = Math.max(0, h.respawnT - dt)
     if (h.respawnT === 0) {
       const slot = state.heroes.filter((o) => o.team === h.team).indexOf(h)
-      const pos = spawnPos(h.team, slot)
+      const pos = spawnPos(state.map, h.team, slot, state.teamSize)
       h.x = pos.x
       h.z = pos.z
       h.hp = h.maxHp
@@ -1044,11 +1073,11 @@ function stepHero(state, h, dt) {
       h.recallT = Math.max(0, h.recallT - dt)
       if (h.recallT === 0) {
         const slot = state.heroes.filter((o) => o.team === h.team).indexOf(h)
-        const pos = spawnPos(h.team, slot)
+        const pos = spawnPos(state.map, h.team, slot, state.teamSize)
         h.x = pos.x
         h.z = pos.z
         h.dir = h.team === 'blue' ? 0 : Math.PI
-        h.bushI = bushIndexAt(h.x, h.z)
+        h.bushI = state.map.bushIndexAt(h.x, h.z)
         pushFx(state, 'recall', h.x, h.z, 4, h.team)
       }
     }
@@ -1066,11 +1095,11 @@ function stepHero(state, h, dt) {
       h.z += (h.mz / len) * sp * dt
     }
   }
-  resolveTerrain(h, HERO_RADIUS, state.towers)
-  h.bushI = bushIndexAt(h.x, h.z) // 수풀 은신 판정
+  state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+  h.bushI = state.map.bushIndexAt(h.x, h.z) // 수풀 은신 판정
   // 우물: 우리 편이면 회복, 적이면 따끔!
   for (const team of ['blue', 'red']) {
-    if (dist2(h, NEXUS_POS[team]) > FOUNTAIN_RADIUS * FOUNTAIN_RADIUS) continue
+    if (dist2(h, state.map.NEXUS_POS[team]) > FOUNTAIN_RADIUS * FOUNTAIN_RADIUS) continue
     if (team === h.team) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * FOUNTAIN_HEAL * dt)
     else damageHero(state, h, FOUNTAIN_DMG * dt, null)
   }
@@ -1173,8 +1202,9 @@ function stepMinions(state, dt) {
       }
       const en = enemyOf(m.team)
       if (nexusVulnerable(state, en) && state.nexus[en].hp > 0) {
-        const d = dist2(m, NEXUS_POS[en])
-        if (d < bd) tgt = { ref: { tk: 'nexus', id: en }, e: NEXUS_POS[en] }
+        const np = state.map.NEXUS_POS[en]
+        const d = dist2(m, np)
+        if (d < bd) tgt = { ref: { tk: 'nexus', id: en }, e: np }
       }
     }
     if (tgt) {
@@ -1206,7 +1236,7 @@ function stepMinions(state, dt) {
       //  - 미드 1차 타워는 경유지(-34,0)/(34,0) 위에 서 있어 그 칸에 3 이내로
       //    못 들어간다 → 닿기만 기다리면 wpI가 안 넘어가 타워를 빙빙 돌며 라인이 멈춘다.
       //    "지나침" 판정을 더해 타워를 돌아 나가면 곧장 다음 칸을 향하게 한다.
-      const wps = LANES[m.lane]
+      const wps = state.map.LANES[m.lane]
       const dirI = m.team === 'blue' ? 1 : -1
       let guard = 0
       while (guard++ < wps.length) {
@@ -1233,7 +1263,7 @@ function stepMinions(state, dt) {
         marched = true
       }
     }
-    resolveTerrain(m, 0.8, state.towers)
+    state.map.resolveTerrain(m, 0.8, state.towers)
     // 끼임 감지: 가려고 했는데 거의 못 움직였으면 분노 게이지를 올리고,
     // 일정 이상 쌓이면 moveMinion이 옆으로 비껴 빠져나간다 (벽-타워 틈 탈출)
     if (marched) {
@@ -1273,7 +1303,7 @@ function stepMinions(state, dt) {
 // 목표를 향해 이동하되, 길을 막는 성벽/바위/타워는 접선으로 비켜 간다.
 // (자기 편 타워가 레인 위에 있어도 미니언이 끼지 않고 돌아간다)
 function moveToward(state, e, to, speed, dt, selfR = 1) {
-  const dir = avoidDir(e, to.x, to.z, state.towers, selfR)
+  const dir = state.map.avoidDir(e, to.x, to.z, state.towers, selfR)
   e.x += dir.x * speed * dt
   e.z += dir.z * speed * dt
   if (dir.x || dir.z) e.dir = Math.atan2(dir.z, dir.x)
@@ -1514,7 +1544,7 @@ function stepBots(state, dt) {
     if (h.botRetreat && h.hp > h.maxHp * 0.85) h.botRetreat = false
     if (h.botRetreat) {
       if (h.cls === 'tank' && h.skillCd <= 0) castSkill(state, h.id) // 방패 켜고 도망!
-      steerToward(state, h, NEXUS_POS[h.team])
+      steerToward(state, h, state.map.NEXUS_POS[h.team])
       castAttack(state, h.id) // 도망치면서도 사거리 안이면 반격
       continue
     }
@@ -1561,9 +1591,48 @@ function stepBots(state, dt) {
     }
     // 교전 상대가 없으면 임무 수행
     castAttack(state, h.id) // 미니언/정글/타워 등 사거리 안 아무거나
+    // 정글러: 캠프/오브젝트를 돌다 근처 교전에 합류(갱킹). 할 일이 없으면 레인 합류.
+    if (h.role === 'jungle') {
+      if (botJungleRole(state, h, dt)) continue
+    }
     if (h.botSeekT > 0 ? false : botJungleMove(state, h)) continue
     botLaneMove(state, h, dt)
   }
+}
+
+// 정글러 봇: ① 갱킹 — 가까운 레인에서 적과 싸우는 아군이 있으면 달려가 합류
+//            ② 정글링 — 용/바론(여건 되면)·늑대 캠프 사냥
+//            ③ 할 일이 없으면 false (호출부가 레인 합류로 넘긴다)
+function botJungleRole(state, h, dt) {
+  // ① 갱킹: 보이는 적 근처(28)에 싸우는 아군이 있으면 그쪽으로
+  let gankTo = null
+  let gbd = 48 * 48
+  for (const e of state.heroes) {
+    if (e.team === h.team || e.respawnT > 0) continue
+    if (!isHeroVisible(state, e, h.team)) continue
+    const ally = state.heroes.some(
+      (a) => a.team === h.team && a !== h && a.respawnT <= 0 && dist2(a, e) < 26 * 26
+    )
+    if (!ally) continue
+    const d = dist2(h, e)
+    if (d < gbd) {
+      gbd = d
+      gankTo = e
+    }
+  }
+  if (gankTo && h.hp > h.maxHp * 0.45) {
+    steerToward(state, h, gankTo)
+    return true
+  }
+  // ② 정글링 (지나는 길의 늑대 + 여건 되면 용/바론)
+  if (botJungleMove(state, h)) return true
+  // ③ 캠프가 다 비었으면 다음 캠프 부활을 기다리며 강(중앙)으로 — 거기서 다시 판단
+  const respawning = state.monsters.find((m) => m.kind === 'wolf' && !m.alive)
+  if (respawning) {
+    steerToward(state, h, respawning.camp)
+    return true
+  }
+  return false
 }
 
 // 직업별 교전 스킬 사용
@@ -1593,7 +1662,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
 
 // 봇 조향: 직선이 막히면 접선으로 비켜 가는 방향을 입력으로 넣는다
 function steerToward(state, h, to) {
-  const dir = avoidDir(h, to.x, to.z, state.towers, 1.3)
+  const dir = state.map.avoidDir(h, to.x, to.z, state.towers, 1.3)
   h.mx = dir.x
   h.mz = dir.z
 }
@@ -1730,13 +1799,13 @@ function botSeekWork(state, h, lane, objective) {
 // 아군 미니언이 받아주고 있을 때만 들어간다 (타워 다이브 금지).
 function botLaneMove(state, h, dt) {
   h.botSeekT = Math.max(0, (h.botSeekT || 0) - dt)
-  const lane = LANES[h.role] ? h.role : 'mid'
+  const lane = laneOfRole(h.role)
   const en = enemyOf(h.team)
   const objective =
     state.towers.find((t) => t.team === en && t.lane === lane && t.tier === 1 && t.alive) ||
     state.towers.find((t) => t.team === en && t.lane === lane && t.tier === 2 && t.alive) ||
     state.towers.find((t) => t.team === en && t.tier === 3 && t.alive) || // 최후의 포탑
-    NEXUS_POS[en]
+    state.map.NEXUS_POS[en]
   // "딴 일" 모드: 타워 앞에서 못 밀 때 한번 정한 일을 잠시 유지한다.
   // (매 틱 라인 푸시로 되돌아가 타워 사거리 경계를 들락날락하던 진동을 막는다)
   if (h.botSeekT > 0) {
@@ -1766,9 +1835,9 @@ function botLaneMove(state, h, dt) {
   // 경유지 행군: 가장 가까운 경유지의 "다음 칸"을 향한다.
   // (가까운 칸 자체를 향하면 본진 옆에서 출발 경유지(넥서스)와
   //  충돌체 경계 사이를 제자리 왕복하는 함정에 빠진다)
-  const wps = LANES[lane]
+  const wps = state.map.LANES[lane]
   const dirI = h.team === 'blue' ? 1 : -1
-  const wp = wps[nearestWp(lane, h.x, h.z) + dirI]
+  const wp = wps[state.map.nearestWp(lane, h.x, h.z) + dirI]
   if (!wp) {
     steerToward(state, h, objective)
     return
@@ -1785,6 +1854,8 @@ export function makeView(state) {
   return {
     phase: 'play',
     status: state.status,
+    mode: state.mode, // 렌더러/미니맵이 맞는 크기의 맵을 만들 수 있게
+    nexusPos: state.map.NEXUS_POS, // 시야(inSight) 계산용
     time: r2d(state.time),
     countdown: Math.ceil(state.countdown),
     go: state.status === 'playing' && state.time < COUNTDOWN_TIME + 1.2,
@@ -1799,6 +1870,9 @@ export function makeView(state) {
       team: h.team,
       cls: h.cls,
       isBot: h.isBot,
+      role: h.role,
+      homeX: h.homeX, // 우물 중심 (canShop/inFountain 판정용)
+      homeZ: h.homeZ,
       x: r1(h.x),
       z: r1(h.z),
       dir: r2d(h.dir),

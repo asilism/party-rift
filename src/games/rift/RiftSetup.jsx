@@ -1,11 +1,20 @@
 import { useMemo, useState } from 'react'
 import { getZodiac, ZODIAC } from '../../shared/zodiac.js'
-import { TEAM_SIZE, CLASSES, CLASS_IDS } from './engine.js'
+import { TEAM_SIZES, CLASSES, CLASS_IDS } from './engine.js'
+
+const MODE_INFO = {
+  '3v3': { label: '3:3', desc: '탑·미드·봇 솔로 — 빠른 한판' },
+  '5v5': { label: '5:5', desc: '탑·미드·봇 + 봇 지원 힐러 + 정글러 — 넓은 맵' },
+}
 
 // 팀/직업 고르기 화면 (호스트 전용):
+//  - 게임 모드(3:3 / 5:5)를 먼저 고른다 — 5:5는 더 큰 맵 + 정글 캠프가 늘어난다.
 //  - 참가자 이름을 탭하면 팀이 바뀌고, 직업 배지를 탭하면 직업이 바뀐다.
 //  - 한 팀에 같은 직업은 한 명만! 모자란 자리는 봇이 남은 직업으로 채운다.
 export default function RiftSetup({ racers, benched, onStart, onExit }) {
+  // 한 팀이 3명을 넘길 만큼(전체 7명 이상) 모이면 기본값을 5:5로 추천
+  const [mode, setMode] = useState(() => (racers.length > TEAM_SIZES['3v3'] * 2 ? '5v5' : '3v3'))
+  const TEAM_SIZE = TEAM_SIZES[mode]
   // 기본 배정: 번갈아 가며 파랑/빨강, 직업은 순서대로
   const [teams, setTeams] = useState(() => {
     const t = {}
@@ -97,6 +106,18 @@ export default function RiftSetup({ racers, benched, onStart, onExit }) {
         <div className="turn-indicator">⚔️ 파티 리프트 — 팀 & 직업</div>
         <div />
       </div>
+      <div className="rift-setup__modes">
+        {Object.entries(MODE_INFO).map(([m, info]) => (
+          <button
+            key={m}
+            className={`rift-setup__mode${mode === m ? ' rift-setup__mode--on' : ''}`}
+            onClick={() => setMode(m)}
+          >
+            <strong>⚔️ {info.label}</strong>
+            <small>{info.desc}</small>
+          </button>
+        ))}
+      </div>
       <p className="rift-setup__hint">
         이름을 탭하면 팀 이동, 직업 배지를 탭하면 직업 변경. 한 팀에 같은 직업은 한 명만!
       </p>
@@ -142,14 +163,17 @@ export default function RiftSetup({ racers, benched, onStart, onExit }) {
         <span>🗺️ 3갈래 길 — 타워를 부수고 넥서스를 터뜨리면 승리!</span>
         <span>🌿 수풀에 숨으면 적에게 안 보여요 (시야 밖 적도 안 보임)</span>
         <span>🐺 정글몹 · 🐉 용 · 👹 바론을 잡으면 강해져요</span>
+        {mode === '5v5' && (
+          <span>🧭 5:5 봇 구성 — 탑·미드·봇 + 봇 지원 💚힐러 + 🐺정글러 (정글 캠프 ↑, 더 큰 맵)</span>
+        )}
         <span>⏱️ 10분 안에 못 끝내면 타워/킬 점수로 판정</span>
       </div>
       <button
         className="btn btn--primary rift-setup__start"
         disabled={!ok}
-        onClick={() => onStart(teams, classes)}
+        onClick={() => onStart(teams, classes, mode)}
       >
-        🚀 전투 시작!
+        🚀 {MODE_INFO[mode].label} 전투 시작!
       </button>
     </div>
   )
