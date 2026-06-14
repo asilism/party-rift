@@ -9,7 +9,7 @@ import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import {
   createGame, setInput, castAttack, castSkill, castUlt, castRecall, buyItem, sellItem, canShop,
   step, makeView, makeBot,
-  STEP, TEAM_SIZE, ULT_LEVEL, CLASSES, CLASS_IDS,
+  STEP, TEAM_SIZE, TEAM_SIZES, ULT_LEVEL, CLASSES, CLASS_IDS,
 } from './engine.js'
 import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import { getItem } from './items.js'
@@ -150,10 +150,11 @@ export default function RiftGame({ roster, onExit, net }) {
   const sampleHost = useCallback(() => (stateRef.current ? makeView(stateRef.current) : null), [])
   const sampleGuest = useCallback(() => interpolate(bufRef.current), [])
 
-  function startGame(teams, classes) {
-    lastTeamsRef.current = [teams, classes]
+  function startGame(teams, classes, mode = '3v3') {
+    lastTeamsRef.current = [teams, classes, mode]
     sound.setEnabled(soundOn)
     sound.unlock()
+    const teamSize = TEAM_SIZES[mode] || TEAM_SIZE
     const humans = racers.map((p) => ({
       id: p.id,
       name: p.name,
@@ -162,14 +163,14 @@ export default function RiftGame({ roster, onExit, net }) {
       team: teams[p.id] || 'blue',
       cls: classes?.[p.id],
     }))
-    // 빈자리는 안 쓰는 12지신 봇 + 남은 직업으로 3:3을 채운다
+    // 빈자리는 안 쓰는 12지신 봇 + 남은 직업으로 팀 인원(3 또는 5)까지 채운다
     const used = new Set(roster.map((p) => p.zodiacId))
     const free = ZODIAC.filter((z) => !used.has(z.id))
     const bots = []
     for (const team of ['blue', 'red']) {
       const mine = humans.filter((h) => h.team === team)
       const takenCls = new Set(mine.map((h) => h.cls))
-      for (let i = mine.length; i < TEAM_SIZE; i++) {
+      for (let i = mine.length; i < teamSize; i++) {
         const z = free.shift()
         if (!z) break
         const cls = CLASS_IDS.find((c) => !takenCls.has(c))
@@ -180,7 +181,7 @@ export default function RiftGame({ roster, onExit, net }) {
         })
       }
     }
-    stateRef.current = createGame([...humans, ...bots], Math.random)
+    stateRef.current = createGame([...humans, ...bots], { mode, rng: Math.random })
     ctrlRef.current = { mx: 0, mz: 0 }
     setHud(makeView(stateRef.current))
     setPhase('play')
@@ -400,7 +401,7 @@ function RiftPlay({
 
   return (
     <div className="rift">
-      <Rift3D sample={sample} myId={myId} />
+      <Rift3D sample={sample} myId={myId} mode={hud.mode || '3v3'} />
 
       {me && !finished && (
         <RiftControls
