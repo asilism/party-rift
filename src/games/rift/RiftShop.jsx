@@ -3,11 +3,11 @@ import { CATEGORIES, ITEMS, getItem, sumStats, STAT_LABEL, ITEM_SLOTS } from './
 import { CLASSES } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 
-// 아이템 능력치를 한 줄 칩들로 (예: "공격력 +30")
+// 아이템 능력치를 한 줄 칩들로 (예: "공격력 +45"). 실제 적용되는(배율 포함) 값으로 보여 준다.
 function StatTags({ stats }) {
   return (
     <span className="rift-shop__stats">
-      {Object.entries(stats).map(([k, v]) => (
+      {Object.entries(stats).filter(([, v]) => v).map(([k, v]) => (
         <span key={k} className="rift-shop__stat">
           {STAT_LABEL[k]?.name} {STAT_LABEL[k]?.fmt(v)}
         </span>
@@ -98,7 +98,7 @@ export default function RiftShop({ me, onBuy, onSell, onClose }) {
                 <span className="rift-shop__item-icon">{it.icon}</span>
                 <span className="rift-shop__item-body">
                   <span className="rift-shop__item-name">{it.name}</span>
-                  <StatTags stats={it.stats} />
+                  <StatTags stats={sumStats([it.id])} />
                 </span>
                 <span className="rift-shop__item-cost">
                   {have ? '보유중' : <>💰 {it.cost}</>}

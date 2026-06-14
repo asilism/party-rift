@@ -1920,6 +1920,15 @@ body {
   font-weight: 800; font-size: clamp(16px, 3.4vh, 26px); white-space: nowrap;
 }
 .rift__respawn b { color: var(--accent); font-size: 1.3em; }
+/* 사망 중 양 팀 아이템/레벨 현황판 */
+.rift__dead-board {
+  position: absolute; left: 50%; top: 56%; transform: translateX(-50%);
+  width: min(680px, 94vw); display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  pointer-events: none;
+}
+.rift__dead-board .rift-result__team { background: rgba(12, 18, 36, 0.86); }
+.rift__dead-board .rift-result__team--blue { box-shadow: inset 0 0 0 2px rgba(79, 140, 255, 0.5); }
+.rift__dead-board .rift-result__team--red { box-shadow: inset 0 0 0 2px rgba(255, 107, 107, 0.5); }
 .rift__hint {
   position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
   color: #fff; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
