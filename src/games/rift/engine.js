@@ -1840,6 +1840,21 @@ function botSeekWork(state, h, lane, objective) {
   return false
 }
 
+// 그 레인에서 "목표(적 타워/넥서스)에 가장 가까운" 아군 미니언 = 우리 전선의 선두.
+function frontLaneMinion(state, team, lane, objective) {
+  let front = null
+  let bd = Infinity
+  for (const m of state.minions) {
+    if (m.team !== team || m.lane !== lane) continue
+    const d = dist(m, objective)
+    if (d < bd) {
+      bd = d
+      front = m
+    }
+  }
+  return front
+}
+
 // 레인 봇: 경유지를 따라 적 본진 쪽으로. 목표 타워 근처에선
 // 아군 미니언이 받아주고 있을 때만 들어간다 (타워 다이브 금지).
 function botLaneMove(state, h, dt) {
@@ -1875,6 +1890,20 @@ function botLaneMove(state, h, dt) {
     h.botSeekT = 2.5
     if (botSeekWork(state, h, lane, objective)) return
     botHoldOutside(state, h, objective)
+    return
+  }
+  // 전선 합류: 아군 미니언을 앞질러(타워 쪽으로) 달려나가지 않는다.
+  //  봇 발이 미니언보다 빨라 웨이브를 두고 타워 앞에서 멍하니 기다리던 문제를 막는다.
+  //  → 목표까지 남긴 거리가 "내 최전방 아군 미니언"보다 더 가까우면(앞서 나감)
+  //    싸우고 있는 미니언 전선으로 돌아가 함께 민다. (castAttack은 stepBots에서
+  //    이미 매 틱 호출되어, 전선에 붙으면 사거리 안 적 미니언을 자동 타격한다)
+  const front = frontLaneMinion(state, h.team, lane, objective)
+  if (front && dObj < dist(front, objective) - 3) {
+    if (dist(h, front) > Math.max(2.5, CLASSES[h.cls].range - 2)) steerToward(state, h, front)
+    else {
+      h.mx = 0
+      h.mz = 0
+    }
     return
   }
   // 경유지 행군: 가장 가까운 경유지의 "다음 칸"을 향한다.
