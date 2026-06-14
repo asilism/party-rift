@@ -330,7 +330,7 @@ function useRiftSounds(hud, myId) {
     if (me && p.respawnT > 0 && me.respawnT === 0) sound.ladderUp() // 부활!
     if (me && p.lvl != null && me.lvl > p.lvl) sound.ladderUp() // 레벨 업
     // 궁극기급 광역 이펙트가 터지면 우르릉!
-    const BIG_FX = new Set(['whirl', 'storm', 'rain', 'slam', 'boom', 'execute'])
+    const BIG_FX = new Set(['whirl', 'storm', 'rain', 'fissure', 'boom', 'execute'])
     const bigFx = (hud.fx || []).filter((n) => BIG_FX.has(n.kind)).length
     if (bigFx > 0 && (p.bigFx || 0) === 0) sound.thunder()
     if (hud.status === 'finished' && p.status && p.status !== 'finished') sound.win()
