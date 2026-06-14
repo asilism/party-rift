@@ -943,3 +943,129 @@ test('sumStats: 상한이 적용된다 (피해 감소 ≤ 60%)', () => {
   const b = sumStats(['guardian_cloak', 'guardian_cloak', 'guardian_cloak', 'guardian_cloak', 'guardian_cloak'])
   assert.ok(b.def <= 0.6)
 })
+
+// 다른 영웅/미니언 간섭 없이 한 영웅만 시험하기 좋게 정리한다
+function isolate(g, keep) {
+  for (const o of g.heroes) if (o !== keep) { o.x = 300; o.z = 300; o.respawnT = 999 }
+  g.minions.length = 0
+  g.waveT = 9999 // 새 웨이브 차단
+}
+
+test('특수효과 ▸ 공격속도: 광폭의 장갑이 공격 쿨다운을 줄인다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[1] // archer
+  isolate(g, h)
+  h.x = 0; h.z = 0
+  plantMinion(g, 'red', 5, 0, 9999)
+  castAttack(g, h.id)
+  const cd0 = h.atkCd // 기본 공격 쿨다운
+  h.atkCd = 0
+  toFountain(g, h); h.gold = 9999
+  buyItem(g, h.id, 'rage_gloves') // atkSpeed 0.25 ×1.5 = 0.375
+  h.x = 0; h.z = 0
+  g.minions.length = 0
+  plantMinion(g, 'red', 5, 0, 9999)
+  castAttack(g, h.id)
+  assert.ok(Math.abs(h.atkCd - cd0 * (1 - 0.375)) < 0.001, '쿨다운이 37.5% 짧아진다')
+})
+
+test('특수효과 ▸ 쿨감: 빛의 부적이 스킬 쿨다운을 줄인다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[2] // warrior (skill cd 7)
+  castSkill(g, h.id)
+  const cd0 = h.skillCd
+  h.skillCd = 0
+  toFountain(g, h); h.gold = 9999
+  buyItem(g, h.id, 'light_charm') // cdr 0.2 ×1.5 = 0.3
+  castSkill(g, h.id)
+  assert.ok(Math.abs(h.skillCd - cd0 * 0.7) < 0.01, '스킬 쿨다운이 30% 짧아진다')
+})
+
+test('특수효과 ▸ 사거리: 사냥꾼의 인장이 기본공격 사거리를 늘린다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[2] // warrior (range 3.8)
+  isolate(g, h)
+  h.x = 0; h.z = 0
+  const far = CLASSES.warrior.range + 3 // 기본 사거리 밖이지만 +4.5 안에는 든다
+  plantMinion(g, 'red', far, 0, 9999)
+  castAttack(g, h.id)
+  assert.equal(g.projectiles.length, 0) // 기본 사거리 밖이라 조준 실패
+  toFountain(g, h); h.gold = 9999
+  buyItem(g, h.id, 'hunter_seal') // range 3 ×1.5 = 4.5
+  h.x = 0; h.z = 0
+  castAttack(g, h.id)
+  assert.equal(g.projectiles.length, 1) // 사거리가 늘어 사격된다
+})
+
+test('특수효과 ▸ 흡혈: 흡혈낫은 때릴 때 체력을 회복한다 (자연회복분 이상)', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[1] // archer
+  isolate(g, h)
+  toFountain(g, h); h.gold = 9999
+  buyItem(g, h.id, 'vampire_scythe') // lifesteal 0.15 ×1.5 = 0.225
+  h.x = 0; h.z = 0
+  h.hp = 100
+  plantMinion(g, 'red', 5, 0, 9999)
+  const hp0 = h.hp
+  castAttack(g, h.id)
+  run(g, 0.25) // 탄이 명중하는 순간 흡혈
+  // 같은 0.25초 동안 자연회복은 maxHp*1.5%*0.25 ≈ 1~2뿐 → 5 이상이면 흡혈 덕분
+  assert.ok(h.hp - hp0 > 5, '기본공격 적중 시 흡혈로 회복')
+})
+
+test('특수효과 ▸ 재생: 재생의 목걸이는 전투 중에도 체력을 채운다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[5] // tank
+  isolate(g, h)
+  toFountain(g, h); h.gold = 9999
+  buyItem(g, h.id, 'regen_pendant') // regen 0.018 ×1.5 = 0.027 /s
+  h.x = 0; h.z = 0
+  h.hp = 100
+  h.lastHurt = g.time // 방금 맞은 셈 → 5초 자연회복은 꺼 둔다(아이템 재생만 분리 측정)
+  const hp0 = h.hp
+  run(g, 1)
+  const expect = h.maxHp * 0.027 * 1
+  assert.ok(h.hp - hp0 > expect * 0.8, '자연회복이 꺼진 동안에도 아이템 재생으로 회복')
+})
+
+test('특수효과 ▸ 이동속도: 신속의 장화로 같은 시간에 더 멀리 간다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[2] // warrior
+  isolate(g, h)
+  h.x = 0; h.z = 0
+  setInput(g, h.id, { mx: 0, mz: 1 })
+  run(g, 0.5)
+  const d0 = Math.hypot(h.x, h.z)
+  h.x = 0; h.z = 0
+  toFountain(g, h); h.gold = 9999
+  buyItem(g, h.id, 'boots') // speed +2.8 ×1.5 = 4.2
+  h.x = 0; h.z = 0
+  setInput(g, h.id, { mx: 0, mz: 1 })
+  run(g, 0.5)
+  const d1 = Math.hypot(h.x, h.z)
+  assert.ok(d1 > d0 + 1, '장화를 신으면 같은 시간에 더 멀리 이동')
+})
+
+test('특수효과 ▸ 주문 위력: 공허의 지팡이가 스킬 피해를 키운다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const h = g.heroes[0] // mage
+  isolate(g, h)
+  h.x = 0; h.z = 0
+  castSkill(g, h.id) // 화염구
+  const dmg0 = g.projectiles.find((p) => p.kind === 'fireball').dmg
+  g.projectiles.length = 0
+  h.skillCd = 0
+  toFountain(g, h); h.gold = 9999
+  buyItem(g, h.id, 'void_staff') // power 70 ×1.5 = 105
+  h.x = 0; h.z = 0
+  castSkill(g, h.id)
+  const dmg1 = g.projectiles.find((p) => p.kind === 'fireball').dmg
+  assert.ok(dmg1 - dmg0 > 100, '주문 위력이 스킬 피해에 더해진다')
+})
