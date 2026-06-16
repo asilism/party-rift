@@ -145,11 +145,122 @@ function lcg(seed) {
   }
 }
 
-// 레인 리본: 경유지를 따라 일정 폭의 길을 깐다
-function buildLane(wps, width, color, y = 0.03) {
+// ── 절차적 캔버스 텍스처 (단색 평면 대신 얼룩덜룩한 디테일을 입힌다) ──
+// 잔디밭: 톤이 다른 풀 얼룩 + 가는 풀결으로 단조로움을 없앤다
+function grassTexture(size = 512) {
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = '#69b85e'
+  ctx.fillRect(0, 0, size, size)
+  const rnd = lcg(1337)
+  const tones = ['#5fa854', '#74c266', '#62ad58', '#7cc96e', '#5aa251', '#83cf73']
+  for (let i = 0; i < 1500; i++) {
+    ctx.fillStyle = tones[(rnd() * tones.length) | 0]
+    ctx.globalAlpha = 0.14 + rnd() * 0.22
+    ctx.beginPath()
+    ctx.arc(rnd() * size, rnd() * size, 5 + rnd() * 26, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.globalAlpha = 0.22
+  ctx.strokeStyle = '#4f9447'
+  ctx.lineWidth = 1
+  for (let i = 0; i < 1000; i++) {
+    const x = rnd() * size
+    const y = rnd() * size
+    const h = 3 + rnd() * 7
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+    ctx.lineTo(x + (rnd() - 0.5) * 3, y - h)
+    ctx.stroke()
+  }
+  ctx.globalAlpha = 1
+  const tex = new THREE.CanvasTexture(c)
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+// 강물: 가로 그라데이션 + 물결 하이라이트 (offset을 굴려 흐르게 만든다)
+function waterTexture(size = 256) {
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d')
+  const g = ctx.createLinearGradient(0, 0, size, 0)
+  g.addColorStop(0, '#4fa9d6')
+  g.addColorStop(0.5, '#8ad6f2')
+  g.addColorStop(1, '#4fa9d6')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, size, size)
+  const rnd = lcg(909)
+  ctx.lineWidth = 2
+  for (let i = 0; i < 30; i++) {
+    ctx.strokeStyle = `rgba(255,255,255,${0.12 + rnd() * 0.25})`
+    const y = rnd() * size
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    for (let x = 0; x <= size; x += 14) {
+      ctx.lineTo(x, y + Math.sin((x / size) * Math.PI * 4 + i) * 4)
+    }
+    ctx.stroke()
+  }
+  const tex = new THREE.CanvasTexture(c)
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+// 흙길: 모래·자갈 얼룩이 섞인 길바닥 텍스처
+function laneTexture(size = 128) {
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d')
+  ctx.fillStyle = '#d9c79a'
+  ctx.fillRect(0, 0, size, size)
+  const rnd = lcg(555)
+  const tones = ['#cdb98a', '#e3d3a8', '#c7b282', '#d2c191', '#bda674']
+  for (let i = 0; i < 320; i++) {
+    ctx.fillStyle = tones[(rnd() * tones.length) | 0]
+    ctx.globalAlpha = 0.45
+    ctx.beginPath()
+    ctx.arc(rnd() * size, rnd() * size, 1.5 + rnd() * 6, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.globalAlpha = 1
+  const tex = new THREE.CanvasTexture(c)
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+// 인스턴싱 산포: 작은 장식(풀포기/꽃/자갈)을 한 번의 드로우콜로 흩뿌린다
+const _scatterDummy = new THREE.Object3D()
+const _scatterColor = new THREE.Color()
+function makeScatter(geo, mat, items) {
+  const mesh = new THREE.InstancedMesh(geo, mat, items.length)
+  for (let i = 0; i < items.length; i++) {
+    const p = items[i]
+    _scatterDummy.position.set(p.x, p.y || 0, p.z)
+    _scatterDummy.rotation.set(p.rx || 0, p.ry || 0, p.rz || 0)
+    _scatterDummy.scale.setScalar(p.s || 1)
+    _scatterDummy.updateMatrix()
+    mesh.setMatrixAt(i, _scatterDummy.matrix)
+    if (p.color != null) mesh.setColorAt(i, _scatterColor.set(p.color))
+  }
+  mesh.instanceMatrix.needsUpdate = true
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+  mesh.frustumCulled = false // 인스턴스가 맵 전체에 퍼져 있어 컬링하면 사라질 수 있다
+  return mesh
+}
+
+// 레인 리본: 경유지를 따라 일정 폭의 길을 깐다 (map을 주면 흙길 텍스처를 입힌다)
+function buildLane(wps, width, color, y = 0.03, map = null) {
   const pos = []
+  const uv = []
   const idx = []
+  let dist = 0
   for (let i = 0; i < wps.length; i++) {
+    if (i > 0) dist += Math.hypot(wps[i].x - wps[i - 1].x, wps[i].z - wps[i - 1].z)
     const prev = wps[Math.max(0, i - 1)]
     const next = wps[Math.min(wps.length - 1, i + 1)]
     let dx = next.x - prev.x
@@ -159,6 +270,8 @@ function buildLane(wps, width, color, y = 0.03) {
     const nz = dx / d
     pos.push(wps[i].x + nx * width, y, wps[i].z + nz * width)
     pos.push(wps[i].x - nx * width, y, wps[i].z - nz * width)
+    const u = dist / 12
+    uv.push(u, 0, u, 1)
     if (i > 0) {
       const a = (i - 1) * 2
       idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2)
@@ -166,9 +279,13 @@ function buildLane(wps, width, color, y = 0.03) {
   }
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3))
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2))
   geo.setIndex(idx)
   geo.computeVertexNormals()
-  return new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide }))
+  const mat = map
+    ? new THREE.MeshLambertMaterial({ map, side: THREE.DoubleSide })
+    : new THREE.MeshLambertMaterial({ color, side: THREE.DoubleSide })
+  return new THREE.Mesh(geo, mat)
 }
 
 function buildTower(team) {
@@ -683,8 +800,8 @@ function syncPool(scene, pool, items, create, update) {
 function createFog(map) {
   const WORLD = map.WORLD
   const c = document.createElement('canvas')
-  c.width = 256
-  c.height = 192
+  c.width = 512
+  c.height = 384
   const ctx = c.getContext('2d')
   const tex = new THREE.CanvasTexture(c)
   const w = WORLD.maxX - WORLD.minX + 60
@@ -743,55 +860,111 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
   scene.add(sun)
 
   // ── 지형 ──
+  const GW = WORLD.maxX - WORLD.minX + 80
+  const GH = WORLD.maxZ - WORLD.minZ + 80
+  const groundTex = grassTexture(512)
+  groundTex.repeat.set(Math.max(4, Math.round(GW / 60)), Math.max(4, Math.round(GH / 60)))
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(WORLD.maxX - WORLD.minX + 80, WORLD.maxZ - WORLD.minZ + 80),
-    new THREE.MeshLambertMaterial({ color: 0x69b85e })
+    new THREE.PlaneGeometry(GW, GH),
+    new THREE.MeshLambertMaterial({ map: groundTex })
   )
   ground.rotation.x = -Math.PI / 2
   scene.add(ground)
-  // 강 (가운데 세로 물길 — 용/바론 둥지를 잇는다)
+  // 강 (가운데 세로 물길 — 용/바론 둥지를 잇는다). 흐르는 물 텍스처(render에서 천천히 굴린다)
+  const waterTex = waterTexture(256)
+  waterTex.repeat.set(1, Math.max(2, Math.round((WORLD.maxZ - WORLD.minZ) / 30)))
   const river = new THREE.Mesh(
-    new THREE.PlaneGeometry(15, WORLD.maxZ - WORLD.minZ + 10),
-    new THREE.MeshLambertMaterial({ color: 0x6cc4e8 })
+    new THREE.PlaneGeometry(16, WORLD.maxZ - WORLD.minZ + 10, 1, 24),
+    new THREE.MeshLambertMaterial({ map: waterTex, transparent: true, opacity: 0.92 })
   )
   river.rotation.x = -Math.PI / 2
   river.position.y = 0.02
   scene.add(river)
-  // 레인 길 3갈래
-  for (const lane of LANE_IDS) scene.add(buildLane(LANES[lane], 5, 0xd9c79a))
-  // 우물 (회복 지대) 표시
+  // 강가 모래톱 (물길 양옆 젖은 둑)
+  for (const side of [-1, 1]) {
+    const bank = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.5, WORLD.maxZ - WORLD.minZ + 10),
+      new THREE.MeshLambertMaterial({ color: 0x88a98e })
+    )
+    bank.rotation.x = -Math.PI / 2
+    bank.position.set(side * 9.8, 0.015, 0)
+    scene.add(bank)
+  }
+  // 레인 길 3갈래 — 어두운 흙 둑 + 그 위 흙길 텍스처
+  const laneTex = laneTexture(128)
+  for (const lane of LANE_IDS) {
+    scene.add(buildLane(LANES[lane], 6.6, 0xb09a6c, 0.025)) // 가장자리(흙 둑)
+    scene.add(buildLane(LANES[lane], 5, 0xd9c79a, 0.035, laneTex)) // 길 바닥
+  }
+  // 우물 (회복 지대) 표시 — 원판 + 빛나는 테두리
   for (const team of ['blue', 'red']) {
     const pad = new THREE.Mesh(
-      new THREE.CircleGeometry(FOUNTAIN_RADIUS, 28),
+      new THREE.CircleGeometry(FOUNTAIN_RADIUS, 40),
       new THREE.MeshLambertMaterial({ color: TEAM_COLOR[team], transparent: true, opacity: 0.3 })
     )
     pad.rotation.x = -Math.PI / 2
     pad.position.set(NEXUS_POS[team].x, 0.04, NEXUS_POS[team].z)
-    scene.add(pad)
+    const rim = new THREE.Mesh(
+      new THREE.RingGeometry(FOUNTAIN_RADIUS - 0.9, FOUNTAIN_RADIUS, 48),
+      new THREE.MeshBasicMaterial({ color: TEAM_COLOR[team], transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+    )
+    rim.rotation.x = -Math.PI / 2
+    rim.position.set(NEXUS_POS[team].x, 0.05, NEXUS_POS[team].z)
+    scene.add(pad, rim)
   }
-  // 용/바론 둥지 (모래 바닥)
+  // 용/바론 둥지 (모래 바닥 + 테두리 돌무더기)
+  const pitRnd = lcg(4242)
   for (const pit of [DRAGON_PIT, BARON_PIT]) {
     const pad = new THREE.Mesh(
-      new THREE.CircleGeometry(8, 22),
+      new THREE.CircleGeometry(8, 32),
       new THREE.MeshLambertMaterial({ color: 0xc9b285 })
     )
     pad.rotation.x = -Math.PI / 2
     pad.position.set(pit.x, 0.05, pit.z)
     scene.add(pad)
+    const ringN = 14
+    for (let i = 0; i < ringN; i++) {
+      const a = (i / ringN) * Math.PI * 2
+      const rr = 0.6 + pitRnd() * 0.5
+      const rock = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(rr, 0),
+        new THREE.MeshLambertMaterial({ color: 0x8a8f9c, flatShading: true })
+      )
+      rock.position.set(pit.x + Math.cos(a) * 8, rr * 0.5, pit.z + Math.sin(a) * 8)
+      rock.rotation.set(pitRnd() * 3, pitRnd() * 3, pitRnd() * 3)
+      scene.add(rock)
+    }
   }
-  // 바위
+  // 바위 — 큰 돌 + 둘레에 작은 돌이 흩어진 군집 (저폴리 면처리로 거칠게)
+  const rockRnd = lcg(88)
   for (const r of ROCKS) {
-    const rock = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(r.r),
-      new THREE.MeshLambertMaterial({ color: 0x8a8f9c })
+    const g = new THREE.Group()
+    const main = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(r.r, 0),
+      new THREE.MeshLambertMaterial({ color: 0x8a8f9c, flatShading: true })
     )
-    rock.position.set(r.x, r.r * 0.5, r.z)
-    rock.rotation.set(r.x * 0.3, r.z * 0.3, 0)
-    scene.add(rock)
+    main.position.y = r.r * 0.5
+    main.rotation.set(rockRnd() * 3, rockRnd() * 3, rockRnd() * 3)
+    g.add(main)
+    const sat = 2 + ((rockRnd() * 3) | 0)
+    for (let i = 0; i < sat; i++) {
+      const sr = r.r * (0.35 + rockRnd() * 0.3)
+      const a = rockRnd() * Math.PI * 2
+      const m = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(sr, 0),
+        new THREE.MeshLambertMaterial({ color: rockRnd() > 0.5 ? 0x7c818d : 0x969cab, flatShading: true })
+      )
+      m.position.set(Math.cos(a) * r.r, sr * 0.4, Math.sin(a) * r.r)
+      m.rotation.set(rockRnd() * 3, rockRnd() * 3, rockRnd() * 3)
+      g.add(m)
+    }
+    g.position.set(r.x, 0, r.z)
+    scene.add(g)
   }
-  // 성벽: 길이 아닌 곳을 막는 바위 능선 (충돌 원들과 같은 라인)
+  // 성벽: 길이 아닌 곳을 막는 능선 + 윗면에 성가퀴(merlon) 톱니
   const wallMat = new THREE.MeshLambertMaterial({ color: 0x7d8494 })
   const wallTopMat = new THREE.MeshLambertMaterial({ color: 0x69b85e })
+  const merlonMat = new THREE.MeshLambertMaterial({ color: 0x6b7280 })
   for (const w of WALL_LINES) {
     const len = Math.hypot(w.x2 - w.x1, w.z2 - w.z1) + WALL_RADIUS * 2
     const g = new THREE.Group()
@@ -800,50 +973,125 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
     const top = new THREE.Mesh(new THREE.BoxGeometry(len, 0.7, WALL_RADIUS * 2 - 0.8), wallTopMat)
     top.position.y = 4.7 // 능선 위 풀
     g.add(body, top)
+    const n = Math.max(2, Math.floor(len / 3.2))
+    for (let i = 0; i <= n; i += 2) {
+      const mer = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.4, WALL_RADIUS * 2), merlonMat)
+      mer.position.set(-len / 2 + (i / n) * len, 5.4, 0)
+      g.add(mer)
+    }
     g.position.set((w.x1 + w.x2) / 2, 0, (w.z1 + w.z2) / 2)
     g.rotation.y = -Math.atan2(w.z2 - w.z1, w.x2 - w.x1)
     scene.add(g)
   }
 
-  // 수풀 (들어가면 은신!) — 잎뭉치 여러 개로 풍성하게
+  // 수풀 (들어가면 은신!) — 잎뭉치 + 작은 열매로 풍성하게
   const bushRnd = lcg(7)
   for (const b of BUSHES) {
     const g = new THREE.Group()
-    for (let i = 0; i < 5; i++) {
+    const blobs = 9
+    for (let i = 0; i < blobs; i++) {
       const blob = new THREE.Mesh(
-        new THREE.SphereGeometry(b.r * (0.45 + bushRnd() * 0.25), 8, 6),
-        new THREE.MeshLambertMaterial({ color: 0x2f7d3d, transparent: true, opacity: 0.92 })
+        new THREE.SphereGeometry(b.r * (0.4 + bushRnd() * 0.3), 10, 8),
+        new THREE.MeshLambertMaterial({ color: i % 3 === 0 ? 0x276b34 : 0x2f7d3d, transparent: true, opacity: 0.94 })
       )
-      blob.scale.y = 0.55
-      const ang = (i / 5) * Math.PI * 2
-      blob.position.set(Math.cos(ang) * b.r * 0.45, 0.8 + bushRnd() * 0.5, Math.sin(ang) * b.r * 0.45)
+      blob.scale.y = 0.6
+      const ring = i < 6 ? b.r * 0.5 : b.r * 0.22
+      const ang = (i / blobs) * Math.PI * 2 * 1.6
+      blob.position.set(Math.cos(ang) * ring, 0.7 + bushRnd() * 0.7, Math.sin(ang) * ring)
       g.add(blob)
+    }
+    for (let i = 0; i < 4; i++) {
+      const berry = new THREE.Mesh(
+        new THREE.SphereGeometry(0.22, 6, 5),
+        new THREE.MeshLambertMaterial({ color: [0xff5f7e, 0xffd34d, 0xffffff][(bushRnd() * 3) | 0] })
+      )
+      const ang = bushRnd() * Math.PI * 2
+      const rr = bushRnd() * b.r * 0.6
+      berry.position.set(Math.cos(ang) * rr, 1.2 + bushRnd() * 0.6, Math.sin(ang) * rr)
+      g.add(berry)
     }
     g.position.set(b.x, 0, b.z)
     scene.add(g)
   }
-  // 장식 나무 (맵 밖 둘레)
+
+  // ── 바닥 디테일: 풀포기 · 들꽃 · 자갈 (인스턴싱으로 가볍게 흩뿌린다) ──
+  const decoRnd = lcg(31337)
+  const inRiver = (x) => Math.abs(x) < 10
+  const spanX = WORLD.maxX - WORLD.minX
+  const spanZ = WORLD.maxZ - WORLD.minZ
+  const grassItems = []
+  const flowerItems = []
+  const pebbleItems = []
+  const FLOWER_COLORS = [0xffffff, 0xffe066, 0xff8fae, 0xb084ff, 0xff6b6b]
+  for (let i = 0; i < 520; i++) {
+    const x = WORLD.minX + decoRnd() * spanX
+    const z = WORLD.minZ + decoRnd() * spanZ
+    if (inRiver(x)) continue
+    grassItems.push({ x, y: 0.65, z, ry: decoRnd() * Math.PI, s: 0.7 + decoRnd() * 0.9,
+      color: decoRnd() > 0.5 ? 0x5aa251 : 0x74c266 })
+  }
+  for (let i = 0; i < 150; i++) {
+    const x = WORLD.minX + decoRnd() * spanX
+    const z = WORLD.minZ + decoRnd() * spanZ
+    if (inRiver(x)) continue
+    flowerItems.push({ x, y: 0.6, z, s: 0.7 + decoRnd() * 0.7,
+      color: FLOWER_COLORS[(decoRnd() * FLOWER_COLORS.length) | 0] })
+  }
+  for (let i = 0; i < 220; i++) {
+    pebbleItems.push({ x: WORLD.minX + decoRnd() * spanX, y: 0.18, z: WORLD.minZ + decoRnd() * spanZ,
+      rx: decoRnd() * 3, ry: decoRnd() * 3, s: 0.5 + decoRnd() * 0.8,
+      color: decoRnd() > 0.5 ? 0x9aa0ad : 0x7e8492 })
+  }
+  scene.add(makeScatter(
+    new THREE.ConeGeometry(0.35, 1.3, 4),
+    new THREE.MeshLambertMaterial({ color: 0xffffff }), grassItems))
+  scene.add(makeScatter(
+    new THREE.SphereGeometry(0.3, 6, 5),
+    new THREE.MeshLambertMaterial({ color: 0xffffff }), flowerItems))
+  scene.add(makeScatter(
+    new THREE.DodecahedronGeometry(0.4),
+    new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), pebbleItems))
+
+  // 장식 나무 (맵 밖 둘레) — 침엽수(원뿔 3겹)와 활엽수(둥근 잎뭉치)를 섞는다
   const rnd = lcg(20260612)
-  for (let i = 0; i < 70; i++) {
+  for (let i = 0; i < 140; i++) {
     const ang = rnd() * Math.PI * 2
-    const rad = 1.1 + rnd() * 0.35
-    const x = Math.cos(ang) * (WORLD.maxX + 8 + rnd() * 26)
-    const z = Math.sin(ang) * (WORLD.maxZ + 6 + rnd() * 20)
+    const rad = 1.05 + rnd() * 0.4
+    const x = Math.cos(ang) * (WORLD.maxX + 8 + rnd() * 30)
+    const z = Math.sin(ang) * (WORLD.maxZ + 6 + rnd() * 24)
     // 전장 안(직사각형)에 떨어지는 나무는 건너뛴다 — 유령 나무 방지
     if (x > WORLD.minX - 2 && x < WORLD.maxX + 2 && z > WORLD.minZ - 2 && z < WORLD.maxZ + 2) continue
     const tree = new THREE.Group()
     const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.5, 0.7, 3),
+      new THREE.CylinderGeometry(0.45, 0.7, 3),
       new THREE.MeshLambertMaterial({ color: 0x7a5a3a })
     )
     trunk.position.y = 1.5
-    const top = new THREE.Mesh(
-      new THREE.ConeGeometry(2.6 * rad, 6 * rad, 7),
-      new THREE.MeshLambertMaterial({ color: 0x2f7d3d })
-    )
-    top.position.y = 3 + 3 * rad
-    tree.add(trunk, top)
+    tree.add(trunk)
+    const leaf = rnd() > 0.4 ? 0x2f7d3d : 0x3c9150
+    if (rnd() > 0.35) {
+      for (let k = 0; k < 3; k++) {
+        const cone = new THREE.Mesh(
+          new THREE.ConeGeometry((2.6 - k * 0.6) * rad, 3.2 * rad, 7),
+          new THREE.MeshLambertMaterial({ color: leaf })
+        )
+        cone.position.y = 3 + k * 1.9 * rad
+        tree.add(cone)
+      }
+    } else {
+      const blobs = 3 + ((rnd() * 2) | 0)
+      for (let k = 0; k < blobs; k++) {
+        const ball = new THREE.Mesh(
+          new THREE.SphereGeometry((1.6 + rnd() * 0.8) * rad, 8, 6),
+          new THREE.MeshLambertMaterial({ color: leaf })
+        )
+        const a = (k / blobs) * Math.PI * 2
+        ball.position.set(Math.cos(a) * 1.1 * rad, 4 + rnd() * 1.6 * rad, Math.sin(a) * 1.1 * rad)
+        tree.add(ball)
+      }
+    }
     tree.position.set(x, 0, z)
+    tree.rotation.y = rnd() * Math.PI
     scene.add(tree)
   }
 
@@ -875,6 +1123,7 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
   function render(view, myId) {
     const dt = lastT == null ? 0 : Math.max(0, Math.min(0.1, view.time - lastT))
     lastT = view.time
+    waterTex.offset.y -= dt * 0.04 // 강물이 천천히 흐른다
     const me = view.heroes.find((h) => h.id === myId)
     const myTeam = me?.team || null // 관전이면 모든 게 보인다
     const barColorOf = (team) =>
