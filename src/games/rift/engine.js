@@ -159,12 +159,13 @@ const NEXUS_HP = 3400 // 넥서스도 2배 — 쉽게 터지지 않게
 // ── 정글 ──
 // 용/바론은 "분노(enrage)"를 쌓는다 — 교전이 길어질수록 피해/이동속도가 점점 오른다.
 //  - 초반(저레벨) 혼자서는 분노가 쌓이기 전에 못 잡고 되레 당한다 → 셋이 모여 빨리 끝내야 한다.
-//  - 6레벨쯤 딜이 붙으면 분노가 치명적이 되기 전에 혼자서도 용을 끝낼 수 있다.
-//  - 바론은 체력/분노가 훨씬 높아 10레벨이어도 혼자서는 분노에 먼저 쓰러진다.
+//  - 12레벨쯤 딜이 붙으면 분노가 치명적이 되기 전에 혼자서도 용을 끝낼 수 있다(쉽지 않게).
+//  - 바론은 체력/분노가 훨씬 높아 18레벨이어도 혼자서는 분노에 먼저 쓰러진다 → 팀 오브젝트.
 //  - 캠프를 벗어나(리시) 복귀하면 분노가 초기화된다.
-const WOLF = { hp: 260, dmg: 18, range: 2.6, cd: 1.2, speed: 7, xp: 70, respawn: 45, enrage: 0, rageSpd: 0 }
-const DRAGON = { hp: 1400, dmg: 26, range: 4, cd: 1.3, speed: 6, xp: 110, spawn: 60, respawn: 100, enrage: 0.5, rageSpd: 0.6 }
-const BARON = { hp: 3000, dmg: 46, range: 5, cd: 1.5, speed: 5, xp: 150, spawn: 210, respawn: 120, enrage: 0.9, rageSpd: 0.6 }
+const WOLF = { hp: 260, dmg: 18, range: 2.6, cd: 1.2, speed: 7, xp: 84, respawn: 45, enrage: 0, rageSpd: 0 }
+// 용/바론을 더 강력하게(체력↑·피해 약 2배). 용은 솔로 사냥이 Lv12쯤부터 가능하도록 튜닝, 바론 > 용 유지.
+const DRAGON = { hp: 2350, dmg: 56, range: 4, cd: 1.3, speed: 6, xp: 110, spawn: 60, respawn: 100, enrage: 0.5, rageSpd: 0.6 }
+const BARON = { hp: 4500, dmg: 92, range: 5, cd: 1.5, speed: 5, xp: 150, spawn: 210, respawn: 120, enrage: 0.9, rageSpd: 0.6 }
 const ENRAGE_MAX = 40 // 분노 누적 상한(초)
 const CAMP_LEASH = 24 // 캠프에서 이만큼 멀어지면 포기하고 복귀(회복)
 export const DRAGON_BUFF_T = 60 // 용 버프: 공격력 +25%
@@ -178,7 +179,9 @@ const heroMaxHp = (h) => CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1) 
 const heroAtk = (h) => CLASSES[h.cls].atk + CLASSES[h.cls].atkLvl * (h.lvl - 1) + itemBonus(h).atk
 const heroRange = (h) => CLASSES[h.cls].range + itemBonus(h).range
 const heroSpeed = (h) => CLASSES[h.cls].speed + itemBonus(h).speed
-export const xpNeed = (lvl) => 60 + 40 * (lvl - 1)
+// 레벨업 필요 경험치 — 전반적으로 상향(레벨링을 느리게).
+//  Lv1→Lv2 = 250 ≈ 적 미니언 1.5웨이브(미니언 28xp × 9마리). 정글러는 늑대 3마리(84×3)면 2렙.
+export const xpNeed = (lvl) => 250 + 110 * (lvl - 1)
 const respawnTime = (lvl) => 4 + 1.5 * lvl // 레벨이 높을수록 부활 대기 ↑ (Lv1 5.5초 → Lv18 31초)
 
 const dist2 = (a, b) => (a.x - b.x) ** 2 + (a.z - b.z) ** 2
@@ -236,6 +239,11 @@ export function createGame(players, opts = {}) {
       xp: 0,
       gold: START_GOLD,
       items: [], // 산 아이템 id (최대 ITEM_SLOTS칸)
+      // 상점 세션(우물/사망 중) 동안의 무료 취소용 — 진입 시점 스냅샷 + 그동안의 순지출
+      shopEntryItems: null, // 세션 진입 시점의 아이템(되돌리기 목표). null이면 세션 아님
+      shopSpent: 0, // 이번 세션의 순지출(구매 +, 판매 -). 되돌리면 이만큼 골드 환원
+      shopChanged: false, // 이번 세션에 변경이 있었나 (취소 버튼 활성화용)
+      couldShop: false, // 직전 틱의 canShop (세션 시작/종료 감지)
       bonus: sumStats([]), // 아이템 합산 보너스 (heroMaxHp가 참조하므로 먼저)
       hp: 0, // 아래에서 직업 최대치로 채운다
       maxHp: 0,
@@ -570,6 +578,8 @@ export function buyItem(state, id, itemId) {
   if (!item || h.gold < item.cost) return state
   h.gold -= item.cost
   h.items.push(itemId)
+  h.shopSpent += item.cost // 이번 세션 순지출 — 되돌리기로 환원
+  h.shopChanged = true
   applyItems(h)
   return state
 }
@@ -584,6 +594,23 @@ export function sellItem(state, id, slot) {
   if (!item) return state
   h.items.splice(slot, 1)
   h.gold += Math.floor(item.cost * SELL_REFUND)
+  h.shopSpent -= Math.floor(item.cost * SELL_REFUND)
+  h.shopChanged = true
+  applyItems(h)
+  return state
+}
+
+// 상점 되돌리기: 이번 세션(우물/사망) 진입 시점으로 아이템·골드를 무료 복원.
+//  - 그동안 구매/판매한 골드는 그대로 환원하되, 막타·패시브로 번 골드는 유지된다.
+//  - 세션을 벗어나면(스냅샷이 사라지면) 그 이전 구매는 더 이상 취소할 수 없다.
+export function resetShop(state, id) {
+  if (state.status !== 'playing') return state
+  const h = getHero(state, id)
+  if (!h || !canShop(h) || h.shopEntryItems == null) return state
+  h.gold += h.shopSpent // 순지출만큼 환원 (구매분 환불, 판매분 회수)
+  h.items = h.shopEntryItems.slice()
+  h.shopSpent = 0
+  h.shopChanged = false
   applyItems(h)
   return state
 }
@@ -1050,6 +1077,19 @@ function stepWaves(state, dt) {
 }
 
 function stepHero(state, h, dt) {
+  // 상점 세션 감지: 우물/사망으로 상점을 열 수 있게 되면 진입 시점을 스냅샷,
+  //   벗어나면(레인 복귀/부활 후 출발) 스냅샷을 버려 그 이전 구매는 취소 불가가 된다.
+  const cs = canShop(h)
+  if (cs && !h.couldShop) {
+    h.shopEntryItems = h.items.slice()
+    h.shopSpent = 0
+    h.shopChanged = false
+  } else if (!cs && h.couldShop) {
+    h.shopEntryItems = null
+    h.shopSpent = 0
+    h.shopChanged = false
+  }
+  h.couldShop = cs
   h.atkCd = Math.max(0, h.atkCd - dt)
   h.skillCd = Math.max(0, h.skillCd - dt)
   h.ultCd = Math.max(0, h.ultCd - dt)
@@ -1972,6 +2012,8 @@ export function makeView(state) {
       xpNeed: h.lvl >= MAX_LEVEL ? 0 : xpNeed(h.lvl),
       gold: Math.floor(h.gold),
       items: h.items.slice(),
+      shopUndo: !!h.shopChanged, // 이번 상점 세션에 무료 취소할 변경이 있나
+
       atkCd: r2d(h.atkCd),
       atkSeq: h.atkSeq,
       skillCd: r2d(h.skillCd),
