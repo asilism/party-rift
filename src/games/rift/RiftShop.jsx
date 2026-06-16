@@ -19,7 +19,7 @@ function StatTags({ stats }) {
 // 넥서스 우물 상점 (오버레이). 우물 안에 있을 때만 열 수 있고,
 //  - 골드로 아이템을 사면 인벤토리(3칸)에 들어가 능력치가 바로 오른다.
 //  - 칸이 꽉 차면 되팔아 자리를 비운다.
-export default function RiftShop({ me, onBuy, onSell, onClose }) {
+export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
   const [cat, setCat] = useState('attack')
   if (!me) return null
   const cls = CLASSES[me.cls]
@@ -37,7 +37,19 @@ export default function RiftShop({ me, onBuy, onSell, onClose }) {
             <span className="rift-shop__who">{getZodiac(me.zodiacId)?.emoji} {cls?.icon}{cls?.name}</span>
             <span className="rift-shop__gold">💰 {me.gold}</span>
           </div>
-          <button className="btn btn--ghost rift-shop__close" onClick={onClose}>✕ 닫기</button>
+          <div className="rift-shop__head-btns">
+            {onResetShop && (
+              <button
+                className="btn btn--ghost rift-shop__undo"
+                onClick={onResetShop}
+                disabled={!me.shopUndo}
+                title="상점에 들어온 시점으로 되돌립니다 (무료). 상점을 벗어나면 그 전 구매는 취소할 수 없어요."
+              >
+                ↺ 되돌리기
+              </button>
+            )}
+            <button className="btn btn--ghost rift-shop__close" onClick={onClose}>✕ 닫기</button>
+          </div>
         </div>
 
         {/* 인벤토리 3칸 */}
@@ -115,6 +127,7 @@ export default function RiftShop({ me, onBuy, onSell, onClose }) {
         <p className="rift-shop__foot">
           {full ? '🎒 인벤토리가 꽉 찼어요 — 되팔아 자리를 비우세요.'
             : '미니언·정글몹·타워·적 영웅을 처치해 골드를 모으세요!'}
+          <span className="rift-shop__foot-note"> · ↺ 되돌리기로 이번 구매를 무료 취소(상점을 벗어나기 전까지)</span>
         </p>
       </div>
     </div>

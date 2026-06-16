@@ -2157,6 +2157,10 @@ body {
 .rift-shop__who { font-size: clamp(15px, 2.6vh, 20px); }
 .rift-shop__gold { color: #ffd34d; font-size: clamp(16px, 3vh, 22px); }
 .rift-shop__close { flex: none; }
+.rift-shop__head-btns { display: flex; align-items: center; gap: 8px; flex: none; }
+.rift-shop__undo { flex: none; font-weight: 800; }
+.rift-shop__undo:disabled { opacity: 0.4; }
+.rift-shop__foot-note { color: var(--muted); }
 
 .rift-shop__inv {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;

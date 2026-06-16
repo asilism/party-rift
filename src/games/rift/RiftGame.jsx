@@ -7,7 +7,7 @@ import RiftShop from './RiftShop.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import {
-  createGame, setInput, castAttack, castSkill, castUlt, castRecall, buyItem, sellItem, canShop,
+  createGame, setInput, castAttack, castSkill, castUlt, castRecall, buyItem, sellItem, resetShop, canShop,
   step, makeView, makeBot,
   STEP, TEAM_SIZE, TEAM_SIZES, ULT_LEVEL, CLASSES, CLASS_IDS,
 } from './engine.js'
@@ -61,6 +61,7 @@ export default function RiftGame({ roster, onExit, net }) {
       else if (a.slot === 'recall') castRecall(st, a.playerId)
     } else if (a.type === 'buy') buyItem(st, a.playerId, a.itemId)
     else if (a.type === 'sell') sellItem(st, a.playerId, a.slot)
+    else if (a.type === 'resetShop') resetShop(st, a.playerId)
   }
 
   // 호스트: 셋업 중에도 게스트가 대기 화면을 보도록 phase 전파
@@ -214,6 +215,13 @@ export default function RiftGame({ roster, onExit, net }) {
     else sendAction({ type: 'sell', playerId: myId, slot })
   }
 
+  function resetShopBuys() {
+    if (!myId) return
+    const st = stateRef.current
+    if (isHost && st) resetShop(st, myId)
+    else sendAction({ type: 'resetShop', playerId: myId })
+  }
+
   function toggleSound() {
     const n = !soundOn
     setSoundOn(n)
@@ -246,6 +254,7 @@ export default function RiftGame({ roster, onExit, net }) {
         onCast={cast}
         onBuy={buy}
         onSell={sell}
+        onResetShop={resetShopBuys}
         onRematch={null}
         onRestart={null}
         onExit={onExit}
@@ -269,6 +278,7 @@ export default function RiftGame({ roster, onExit, net }) {
       onCast={cast}
       onBuy={buy}
       onSell={sell}
+      onResetShop={resetShopBuys}
       onRematch={() => startGame(...lastTeamsRef.current)} // 같은 팀/직업으로 즉시 한판 더!
       onRestart={() => setPhase('setup')} // 팀 다시 나누기
       onExit={onExit}
@@ -381,7 +391,7 @@ const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padSt
 
 // 전투 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function RiftPlay({
-  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onRematch, onRestart, onExit, soundOn, onToggleSound,
+  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onRematch, onRestart, onExit, soundOn, onToggleSound,
 }) {
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
@@ -545,7 +555,7 @@ function RiftPlay({
         </button>
       )}
       {shopOpen && me && meCanShop && (
-        <RiftShop me={me} onBuy={onBuy} onSell={onSell} onClose={() => setShopOpen(false)} />
+        <RiftShop me={me} onBuy={onBuy} onSell={onSell} onResetShop={onResetShop} onClose={() => setShopOpen(false)} />
       )}
 
       {finished && (
