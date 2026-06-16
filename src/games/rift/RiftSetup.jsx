@@ -95,7 +95,7 @@ export default function RiftSetup({ racers, benched, onStart, onExit }) {
       return bots
     }
     return { blue: make('blue'), red: make('red') }
-  }, [racers, teams, classes, counts])
+  }, [racers, teams, classes, counts, TEAM_SIZE])
 
   const ok = counts.blue <= TEAM_SIZE && counts.red <= TEAM_SIZE
 
@@ -166,7 +166,7 @@ export default function RiftSetup({ racers, benched, onStart, onExit }) {
         {mode === '5v5' && (
           <span>🧭 5:5 봇 구성 — 탑·미드·봇 + 봇 지원 💚힐러 + 🐺정글러 (정글 캠프 ↑, 더 큰 맵)</span>
         )}
-        <span>⏱️ 10분 안에 못 끝내면 타워/킬 점수로 판정</span>
+        <span>⏱️ 20분 안에 못 끝내면 타워/킬 점수로 판정</span>
       </div>
       <button
         className="btn btn--primary rift-setup__start"
