@@ -14,7 +14,7 @@ export { ITEM_SLOTS } from './items.js'
 
 export const STEP = 1 / 60
 export const COUNTDOWN_TIME = 3
-export const TIME_LIMIT = 600 // 10분 — 넥서스가 안 터지면 점수로 판정
+export const TIME_LIMIT = 1200 // 20분 — 넥서스가 안 터지면 점수로 판정
 export const MAX_LEVEL = 18
 export const ULT_LEVEL = 3 // 궁극기가 열리는 레벨
 export const TEAM_SIZE = 3 // 기본(3:3) 팀 인원 — 하위호환용 별칭
@@ -1769,16 +1769,17 @@ function steerToward(state, h, to) {
 
 // 정글 사냥: 지나는 길의 늑대, 아군이 모여 있으면 용/바론 도전
 function botJungleMove(state, h) {
-  // 용/바론 도전 — 분노 때문에 혼자서는 위험하다.
-  //  · 바론: 10레벨이어도 솔로 불가 → 셋이 모였을 때만
-  //  · 용: 6레벨부터 혼자 가능, 그 전엔 셋이 모였을 때만
+  // 용/바론 도전 — 분노 때문에 혼자서는 위험하다(용이 강해졌다).
+  //  · 바론: 어떤 레벨도 솔로 불가 → 팀(3명)이 모였을 때만
+  //  · 용: 12레벨부터 혼자 가능, 그 전엔 곁에 동료가 있을 때(2명+)만 도전
   for (const big of state.monsters) {
     if (!big.alive || big.kind === 'wolf') continue
-    const allies = state.heroes.filter(
+    const near = state.heroes.filter(
       (o) => o.team === h.team && o.respawnT <= 0 && dist(o, big) < 28
-    ).length
-    const canSolo = big.kind === 'dragon' && h.lvl >= 6 && h.hp > h.maxHp * 0.7
-    if ((allies >= 3 || canSolo) && h.hp > h.maxHp * 0.6) {
+    ).length // 나 포함 — 곁에 있는 아군 수
+    const needAllies = big.kind === 'baron' ? 3 : 2
+    const canSolo = big.kind === 'dragon' && h.lvl >= 12 && h.hp > h.maxHp * 0.7
+    if ((near >= needAllies || canSolo) && h.hp > h.maxHp * 0.6) {
       if (dist(h, big) > CLASSES[h.cls].range - 1) steerToward(state, h, big)
       else {
         h.mx = 0
