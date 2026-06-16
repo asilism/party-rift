@@ -952,7 +952,7 @@ function createFog(map) {
   function update(view, myTeam) {
     ctx.globalCompositeOperation = 'source-over'
     ctx.clearRect(0, 0, c.width, c.height)
-    ctx.fillStyle = 'rgba(8, 12, 28, 0.55)'
+    ctx.fillStyle = 'rgba(2, 4, 10, 0.94)' // 안개 = 거의 칠흑 (밖은 안 보인다)
     ctx.fillRect(0, 0, c.width, c.height)
     ctx.globalCompositeOperation = 'destination-out'
     const punch = (x, z, r) => {
@@ -983,15 +983,21 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x9fd4f0)
-  scene.fog = new THREE.Fog(0x9fd4f0, 120, 260)
+  // 무거운 황혼 분위기 — 어둑한 하늘 + 가까이 깔리는 대기 안개
+  scene.background = new THREE.Color(0x2b3550)
+  scene.fog = new THREE.Fog(0x2b3550, 95, 230)
   const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.5, 400)
   camera.position.set(0, 60, 50)
 
-  scene.add(new THREE.HemisphereLight(0xeaf4ff, 0x5e7a4e, 1.0))
-  const sun = new THREE.DirectionalLight(0xfff4d6, 1.4)
+  // 전체적으로 빛을 낮춰 음영을 깊게 (차가운 하늘빛 + 어두운 땅반사)
+  scene.add(new THREE.HemisphereLight(0x9aa8c4, 0x33402e, 0.62))
+  const sun = new THREE.DirectionalLight(0xffe6bf, 0.95)
   sun.position.set(60, 90, 30)
   scene.add(sun)
+  // 반대편 차가운 보조광 — 그림자 쪽을 살짝 살려 묵직한 입체감
+  const fill = new THREE.DirectionalLight(0x5b6c92, 0.32)
+  fill.position.set(-50, 40, -40)
+  scene.add(fill)
 
   // ── 지형 ──
   const GW = WORLD.maxX - WORLD.minX + 80
@@ -1326,6 +1332,22 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
     const myTeam = me?.team || null // 관전이면 모든 게 보인다
     const barColorOf = (team) =>
       myTeam ? (team === myTeam ? ALLY_HP : ENEMY_HP) : TEAM_COLOR[team]
+    // 안개 밖(아군 시야 없는 곳)인가? — 안개 구멍과 같은 규칙. 관전은 늘 보인다.
+    const SIGHT2 = SIGHT_RANGE * SIGHT_RANGE
+    const inVision = (x, z) => {
+      if (!myTeam) return true
+      for (const a of view.heroes) {
+        if (a.team === myTeam && a.respawnT <= 0 && (a.x - x) ** 2 + (a.z - z) ** 2 <= SIGHT2) return true
+      }
+      for (const m of view.minions) {
+        if (m.team === myTeam && (m.x - x) ** 2 + (m.z - z) ** 2 <= SIGHT2) return true
+      }
+      for (const t of view.towers) {
+        if (t.team === myTeam && t.alive && (t.x - x) ** 2 + (t.z - z) ** 2 <= SIGHT2) return true
+      }
+      const nx = NEXUS_POS[myTeam]
+      return (nx.x - x) ** 2 + (nx.z - z) ** 2 <= SIGHT2
+    }
 
     // 타워
     for (const t of view.towers) {
@@ -1474,6 +1496,7 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
       view.monsters.filter((m) => m.alive),
       buildMonster,
       (obj, m) => {
+        obj.visible = inVision(m.x, m.z) // 안개 속 정글몹은 안 보인다
         obj.position.set(m.x, Math.sin(view.time * 2 + m.x) * 0.15, m.z)
         setHpBar(obj.userData.bar, m.hp / m.maxHp)
         // 분노(enrage): 교전이 길어질수록 붉게 달아오르고 거칠게 떤다
@@ -1499,12 +1522,14 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
     }, (obj, p) => {
       obj.position.x = p.x
       obj.position.z = p.z
+      obj.visible = inVision(p.x, p.z) // 안개 속 투사체도 숨긴다
     })
     // 스킬/이벤트 이펙트 (동심원 링 + 방향성 직선 + 파티클). 골드 표시는 내 막타만.
     const fxList = view.fx.filter((n) => n.kind !== 'gold' || n.owner === myId)
     syncPool(scene, fxPool, fxList,
       (n) => (n.kind === 'gold' ? goldSprite(n) : buildFxObject(n)),
       (obj, n) => {
+        obj.visible = inVision(n.x, n.z) // 안개 속 이펙트도 숨긴다
         if (obj.isSprite) { // 골드 "+N"
           obj.position.y = 5 + n.t * 7 // 위로 떠오르며
           obj.material.opacity = Math.max(0, 1 - n.t / 0.8) // 서서히 사라진다
