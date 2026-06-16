@@ -1,0 +1,43 @@
+<!doctype html>
+<!-- 리프트 렌더러 미리보기: 방/로비 없이 createRiftScene만 띄워 맵·유닛 그래픽을 확인한다.
+     사용법: npm run dev:web 후
+       http://localhost:5173/scripts/rift-scene-preview.html?mode=3v3&sim=35
+     파라미터:
+       mode = 3v3 | 5v5         (맵 크기)
+       sim  = 렌더 전 진행시킬 초 (미니언 교전이 벌어진 중반을 보려면 30~45)
+       me   = 따라갈 영웅 id (b1·b2·… / r1·r2·…). 없으면 전체가 보이는 관전 시점 -->
+<html>
+  <body style="margin:0; background:#0b1020">
+    <canvas id="c" width="1280" height="720"></canvas>
+    <script type="module">
+      import { createRiftScene } from '/src/games/rift/scene.js'
+      import { buildMap } from '/src/games/rift/map.js'
+      import { createGame, makeView, step, STEP } from '/src/games/rift/engine.js'
+
+      const params = new URLSearchParams(location.search)
+      const mode = params.get('mode') === '5v5' ? '5v5' : '3v3'
+      const teamN = mode === '5v5' ? 5 : 3
+      const ZOD = ['rat','ox','tiger','rabbit','dragon','snake','horse','goat','monkey','rooster','dog','pig']
+      const players = []
+      for (const team of ['blue','red']) {
+        for (let i = 0; i < teamN; i++) {
+          const idx = (team === 'blue' ? 0 : teamN) + i
+          players.push({ id: `${team[0]}${i + 1}`, name: `${team[0].toUpperCase()}${i + 1}`,
+            zodiacId: ZOD[idx % ZOD.length], team, isBot: true })
+        }
+      }
+      const g = createGame(players, { mode })
+      const sim = Number(params.get('sim') ?? 35)
+      for (let i = 0; i < Math.round(60 * sim); i++) step(g, STEP)
+
+      const sc = createRiftScene(document.getElementById('c'), buildMap(mode))
+      sc.resize(1280, 720)
+      const me = params.get('me') || '__spectator__'
+      const iv = setInterval(() => {
+        step(g, STEP)
+        sc.render(makeView(g), me)
+        if (g.status === 'finished') clearInterval(iv)
+      }, 16)
+    </script>
+  </body>
+</html>

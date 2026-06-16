@@ -136,6 +136,22 @@ function setHpBar(bar, frac) {
   bar.userData.fg.scale.x = Math.max(0.001, bar.userData.width * Math.max(0, Math.min(1, frac)))
 }
 
+// 발밑 그림자: 유닛을 바닥에 붙여 보이게 하는 부드러운 어두운 원판
+function blobShadow(r) {
+  const m = new THREE.Mesh(
+    new THREE.CircleGeometry(r, 20),
+    new THREE.MeshBasicMaterial({ color: 0x0a1020, transparent: true, opacity: 0.26, depthWrite: false })
+  )
+  m.rotation.x = -Math.PI / 2
+  m.position.y = 0.06
+  return m
+}
+
+// 팀 색을 어둡게 (장식 트림/투구용)
+function darken(hex, f = 0.6) {
+  return new THREE.Color(hex).multiplyScalar(f).getHex()
+}
+
 // 시드 고정 난수 (장식 나무 배치가 모든 기기에서 동일하게)
 function lcg(seed) {
   let s = seed
@@ -291,16 +307,40 @@ function buildLane(wps, width, color, y = 0.03, map = null) {
 function buildTower(team) {
   const g = new THREE.Group()
   const col = TEAM_COLOR[team]
-  const body = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.7, 2.4, 7, 8),
-    new THREE.MeshLambertMaterial({ color: 0x8d99b5 })
-  )
-  body.position.y = 3.5
+  const stoneMat = new THREE.MeshLambertMaterial({ color: 0x8d99b5 })
+  const stoneDark = new THREE.MeshLambertMaterial({ color: 0x6f7a93 })
+  // body = 살아있을 때 보이는 석조 구조물 묶음 (파괴되면 통째로 숨긴다)
+  const body = new THREE.Group()
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 3.0, 1.6, 10), stoneDark)
+  base.position.y = 0.8
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 2.3, 5.2, 10), stoneMat)
+  shaft.position.y = 4.0
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 1.9, 0.8, 10), stoneDark)
+  cap.position.y = 6.9
+  body.add(base, shaft, cap)
+  // 흉벽 톱니
+  const merlonN = 8
+  for (let i = 0; i < merlonN; i++) {
+    const a = (i / merlonN) * Math.PI * 2
+    const mer = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.9, 0.7), stoneDark)
+    mer.position.set(Math.cos(a) * 1.95, 7.6, Math.sin(a) * 1.95)
+    mer.rotation.y = -a
+    body.add(mer)
+  }
+  // 팀 깃발 (양옆)
+  for (const sz of [1, -1]) {
+    const banner = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.3, 1.0),
+      new THREE.MeshLambertMaterial({ color: col, side: THREE.DoubleSide })
+    )
+    banner.position.set(0, 5.6, sz * 2.4)
+    body.add(banner)
+  }
   const crystal = new THREE.Mesh(
     new THREE.OctahedronGeometry(1.5),
     new THREE.MeshLambertMaterial({ color: col, emissive: col, emissiveIntensity: 0.45 })
   )
-  crystal.position.y = 8.2
+  crystal.position.y = 8.7
   g.add(body, crystal)
   const rubble = new THREE.Mesh(
     new THREE.CylinderGeometry(2.2, 2.5, 1.2, 8),
@@ -310,7 +350,7 @@ function buildTower(team) {
   rubble.visible = false
   g.add(rubble)
   const bar = makeHpBar(4, col)
-  bar.position.y = 10.4
+  bar.position.y = 10.8
   g.add(bar)
   // 적 타워 공격범위 경고 표시 — 가까이 가면 보인다 (붉은 원판 + 테두리)
   const range = new THREE.Group()
@@ -340,23 +380,60 @@ function buildTower(team) {
 function buildNexus(team) {
   const g = new THREE.Group()
   const col = TEAM_COLOR[team]
-  const base = new THREE.Mesh(
-    new THREE.CylinderGeometry(NEXUS_RADIUS + 1, NEXUS_RADIUS + 2, 2, 10),
-    new THREE.MeshLambertMaterial({ color: 0x768099 })
+  const stone = new THREE.MeshLambertMaterial({ color: 0x768099 })
+  const stoneDark = new THREE.MeshLambertMaterial({ color: 0x5b667e })
+  // 3단 받침
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(NEXUS_RADIUS + 2, NEXUS_RADIUS + 3, 1.4, 12), stoneDark)
+  base.position.y = 0.7
+  const mid = new THREE.Mesh(new THREE.CylinderGeometry(NEXUS_RADIUS + 0.6, NEXUS_RADIUS + 1.6, 1.2, 12), stone)
+  mid.position.y = 1.9
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(NEXUS_RADIUS - 0.4, NEXUS_RADIUS + 0.4, 1.0, 12), stoneDark)
+  top.position.y = 2.9
+  g.add(base, mid, top)
+  // 바닥 광휘 링 (팀색으로 은은하게 빛난다)
+  const glow = new THREE.Mesh(
+    new THREE.RingGeometry(NEXUS_RADIUS + 1, NEXUS_RADIUS + 3.4, 44),
+    new THREE.MeshBasicMaterial({
+      color: col, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    })
   )
-  base.position.y = 1
+  glow.rotation.x = -Math.PI / 2
+  glow.position.y = 0.09
+  g.add(glow)
+  // 코어를 감싸고 도는 빛의 고리 (장식)
+  const ring2 = new THREE.Mesh(
+    new THREE.TorusGeometry(4.4, 0.18, 8, 32),
+    new THREE.MeshBasicMaterial({
+      color: col, transparent: true, opacity: 0.7,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    })
+  )
+  ring2.position.y = 6.5
+  ring2.rotation.x = Math.PI / 2.3
+  g.add(ring2)
+  // 떠 있는 코어 + 둘레를 도는 파편(코어 자식 → 회전·생사에 같이 묶인다)
   const core = new THREE.Mesh(
     new THREE.OctahedronGeometry(3.4),
     new THREE.MeshLambertMaterial({ color: col, emissive: col, emissiveIntensity: 0.5 })
   )
-  core.position.y = 6
+  core.position.y = 6.5
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2
+    const shard = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.8),
+      new THREE.MeshLambertMaterial({ color: col, emissive: col, emissiveIntensity: 0.6 })
+    )
+    shard.position.set(Math.cos(a) * 3.0, 0, Math.sin(a) * 3.0)
+    core.add(shard)
+  }
   const bar = makeHpBar(7, col)
-  bar.position.y = 11
+  bar.position.y = 11.5
   const lock = lockLabel()
-  lock.position.y = 13
+  lock.position.y = 13.5
   lock.visible = false
-  g.add(base, core, bar, lock)
-  g.userData = { core, bar, lock }
+  g.add(core, bar, lock)
+  g.userData = { core, bar, lock, ring2, glow }
   return g
 }
 
@@ -451,6 +528,31 @@ function buildHero(h, mine, barColor) {
     new THREE.MeshLambertMaterial({ color: col, transparent: true })
   )
   body.position.y = 2.2 * s
+  // 갑옷 장식 (body 자식 → 바라보는 방향과 함께 돈다)
+  const accentMat = new THREE.MeshLambertMaterial({ color: darken(col, 0.55) })
+  const trimMat = new THREE.MeshLambertMaterial({ color: 0xffe8a8, emissive: 0x4a3a10, emissiveIntensity: 0.25 })
+  for (const sz of [1, -1]) {
+    const pad = new THREE.Mesh(new THREE.SphereGeometry(0.55 * s, 8, 6), accentMat)
+    pad.scale.y = 0.7
+    pad.position.set(0, 1.15 * s, sz * 1.0 * s)
+    body.add(pad)
+  }
+  const emblem = new THREE.Mesh(new THREE.SphereGeometry(0.34 * s, 8, 6), trimMat)
+  emblem.scale.set(0.45, 1, 1)
+  emblem.position.set(0.98 * s, 0.35 * s, 0)
+  body.add(emblem)
+  const belt = new THREE.Mesh(new THREE.TorusGeometry(1.05 * s, 0.16 * s, 6, 16), accentMat)
+  belt.rotation.x = Math.PI / 2
+  belt.position.y = -0.25 * s
+  body.add(belt)
+  const cape = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.7 * s, 2.4 * s),
+    new THREE.MeshLambertMaterial({ color: darken(col, 0.5), side: THREE.DoubleSide })
+  )
+  cape.rotation.y = Math.PI / 2
+  cape.position.set(-0.85 * s, 0.2 * s, 0)
+  body.add(cape)
+  const shadow = blobShadow(2.0 * s)
   const face = emojiSprite(getZodiac(h.zodiacId)?.emoji || '🙂', 3.2)
   face.position.y = 4.4 * s
   const nameColor = mine ? '#ffe066' : '#ffffff'
@@ -529,9 +631,10 @@ function buildHero(h, mine, barColor) {
     dpStartY[i] = 1.2 * s + rnd() * 2.6 * s
     dpPeak[i] = 0.3 + rnd() * 1.2
   }
-  g.add(body, face, name, bar, ring, buff, shield, stun, recall, recallBeam, deathPts)
+  g.add(shadow, body, face, name, bar, ring, buff, shield, stun, recall, recallBeam, deathPts)
   g.userData = {
-    body, face, name, nameColor, nameLvl: h.lvl, isMine: mine,
+    body, face, name, nameColor, nameLvl: h.lvl, isMine: mine, shadow,
+    bodyBaseY: 2.2 * s, bobPhase: (hashStr(h.id) % 628) / 100,
     bar, ring, buff, shield, stun, recall, recallBeam, weapon, lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
@@ -555,6 +658,7 @@ function setHeroDead(u, dead) {
   u.name.visible = !dead
   u.bar.visible = !dead
   u.ring.visible = !dead && u.isMine
+  u.shadow.visible = !dead
   u.deathPts.visible = dead
   if (dead) {
     u.buff.visible = false
@@ -584,16 +688,45 @@ function updateHeroDeathParticles(u) {
 function buildMinion(m, barColor) {
   const g = new THREE.Group()
   const col = TEAM_COLOR[m.team]
-  const body = new THREE.Mesh(
-    m.ranged ? new THREE.ConeGeometry(0.8, 1.9, 6) : new THREE.BoxGeometry(1.2, 1.5, 1.2),
+  const dark = darken(col, 0.6)
+  // body = 작은 병사 묶음 (애니메이션이 위치/회전을 준다)
+  const body = new THREE.Group()
+  const torso = new THREE.Mesh(
+    m.ranged ? new THREE.ConeGeometry(0.7, 1.5, 7) : new THREE.CapsuleGeometry(0.55, 0.7, 3, 8),
     new THREE.MeshLambertMaterial({ color: col })
   )
-  body.position.y = 0.95
-  const eye = emojiSprite(m.ranged ? '🏹' : '🗡️', 1.2)
-  eye.position.y = 2.2
+  torso.position.y = 0.85
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.42, 8, 7),
+    new THREE.MeshLambertMaterial({ color: 0xe8c9a0 })
+  )
+  head.position.y = 1.6
+  // 팀색 투구 (윗머리 반구)
+  const helm = new THREE.Mesh(
+    new THREE.SphereGeometry(0.47, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshLambertMaterial({ color: dark })
+  )
+  helm.position.y = 1.62
+  body.add(torso, head, helm)
+  if (m.ranged) {
+    // 등에 멘 화살통
+    const quiver = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.8, 7), new THREE.MeshLambertMaterial({ color: dark }))
+    quiver.rotation.x = 0.5
+    quiver.position.set(-0.35, 1.0, -0.15)
+    body.add(quiver)
+  } else {
+    // 손에 든 둥근 방패
+    const shield = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.12, 12), new THREE.MeshLambertMaterial({ color: dark }))
+    shield.rotation.z = Math.PI / 2
+    shield.position.set(0.55, 0.9, 0.3)
+    body.add(shield)
+  }
+  const eye = emojiSprite(m.ranged ? '🏹' : '🗡️', 1.1)
+  eye.position.y = 2.35
   const bar = makeHpBar(1.6, barColor)
   bar.position.y = 3
-  g.add(body, eye, bar)
+  const shadow = blobShadow(0.95)
+  g.add(shadow, body, eye, bar)
   g.userData = { bar, body, lastAtkSeq: m.atkSeq, animT: 1 }
   return g
 }
@@ -616,7 +749,8 @@ function buildMonster(m) {
   face.position.y = look.r * 2 + look.size * 0.4
   const bar = makeHpBar(look.r * 2.2, 0xffd34d)
   bar.position.y = look.r * 2 + look.size * 0.9
-  g.add(body, face, bar)
+  const shadow = blobShadow(look.r * 1.3)
+  g.add(shadow, body, face, bar)
   g.userData = { bar, body }
   return g
 }
@@ -875,7 +1009,7 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
   waterTex.repeat.set(1, Math.max(2, Math.round((WORLD.maxZ - WORLD.minZ) / 30)))
   const river = new THREE.Mesh(
     new THREE.PlaneGeometry(16, WORLD.maxZ - WORLD.minZ + 10, 1, 24),
-    new THREE.MeshLambertMaterial({ map: waterTex, transparent: true, opacity: 0.92 })
+    new THREE.MeshLambertMaterial({ map: waterTex }) // 불투명 — 투명 정렬로 캐릭터를 덮지 않게
   )
   river.rotation.x = -Math.PI / 2
   river.position.y = 0.02
@@ -896,6 +1030,35 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
     scene.add(buildLane(LANES[lane], 6.6, 0xb09a6c, 0.025)) // 가장자리(흙 둑)
     scene.add(buildLane(LANES[lane], 5, 0xd9c79a, 0.035, laneTex)) // 길 바닥
   }
+  // 길가 돌멩이 — 길 양옆을 따라 작은 돌을 늘어놓아 경계를 또렷하게
+  const laneStoneRnd = lcg(606)
+  const laneStoneItems = []
+  for (const lane of LANE_IDS) {
+    const wps = LANES[lane]
+    for (let i = 0; i < wps.length - 1; i++) {
+      const a = wps[i]
+      const b = wps[i + 1]
+      const dx = b.x - a.x
+      const dz = b.z - a.z
+      const d = Math.hypot(dx, dz) || 1
+      const nx = -dz / d
+      const nz = dx / d
+      for (let k = 0; k < 3; k++) {
+        const t = (k + laneStoneRnd()) / 3
+        const px = a.x + dx * t
+        const pz = a.z + dz * t
+        for (const sdir of [1, -1]) {
+          if (laneStoneRnd() > 0.55) continue
+          const off = 5.1 + laneStoneRnd() * 0.9
+          laneStoneItems.push({ x: px + nx * off * sdir, y: 0.15, z: pz + nz * off * sdir,
+            ry: laneStoneRnd() * 3, s: 0.4 + laneStoneRnd() * 0.6, color: laneStoneRnd() > 0.5 ? 0x9aa0ad : 0x8a8f9c })
+        }
+      }
+    }
+  }
+  scene.add(makeScatter(
+    new THREE.DodecahedronGeometry(0.5),
+    new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), laneStoneItems))
   // 우물 (회복 지대) 표시 — 원판 + 빛나는 테두리
   for (const team of ['blue', 'red']) {
     const pad = new THREE.Mesh(
@@ -946,6 +1109,14 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
     main.position.y = r.r * 0.5
     main.rotation.set(rockRnd() * 3, rockRnd() * 3, rockRnd() * 3)
     g.add(main)
+    // 바위 위 이끼 캡 (윗부분 반구를 납작하게)
+    const moss = new THREE.Mesh(
+      new THREE.SphereGeometry(r.r * 0.82, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2.3),
+      new THREE.MeshLambertMaterial({ color: 0x4a7a3e })
+    )
+    moss.position.y = r.r * 0.72
+    moss.scale.y = 0.5
+    g.add(moss)
     const sat = 2 + ((rockRnd() * 3) | 0)
     for (let i = 0; i < sat; i++) {
       const sr = r.r * (0.35 + rockRnd() * 0.3)
@@ -1100,6 +1271,26 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
   fog.plane.visible = false
   scene.add(fog.plane)
 
+  // ── 떠다니는 빛 입자 (반딧불/꽃가루) — 전장에 생기를 준다 ──
+  const MOTE_N = 130
+  const moteGeo = new THREE.BufferGeometry()
+  const motePos = new Float32Array(MOTE_N * 3)
+  const moteBaseY = new Float32Array(MOTE_N)
+  const moteRnd = lcg(99)
+  for (let i = 0; i < MOTE_N; i++) {
+    motePos[i * 3] = WORLD.minX + moteRnd() * (WORLD.maxX - WORLD.minX)
+    moteBaseY[i] = 2 + moteRnd() * 11
+    motePos[i * 3 + 1] = moteBaseY[i]
+    motePos[i * 3 + 2] = WORLD.minZ + moteRnd() * (WORLD.maxZ - WORLD.minZ)
+  }
+  moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3))
+  const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({
+    color: 0xfff3c0, size: 0.7, transparent: true, opacity: 0.55,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }))
+  motes.frustumCulled = false
+  scene.add(motes)
+
   // ── 동적 오브젝트 ──
   const towerObjs = new Map() // id → group (스냅샷 towers 순서 고정)
   const nexusObjs = {
@@ -1124,6 +1315,13 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
     const dt = lastT == null ? 0 : Math.max(0, Math.min(0.1, view.time - lastT))
     lastT = view.time
     waterTex.offset.y -= dt * 0.04 // 강물이 천천히 흐른다
+    // 빛 입자: 위아래로 흔들리며 옆으로 살랑인다
+    const mp = moteGeo.attributes.position.array
+    for (let i = 0; i < MOTE_N; i++) {
+      mp[i * 3] += Math.sin(view.time * 0.2 + i) * 0.02
+      mp[i * 3 + 1] = moteBaseY[i] + Math.sin(view.time * 0.6 + i * 1.3) * 1.2
+    }
+    moteGeo.attributes.position.needsUpdate = true
     const me = view.heroes.find((h) => h.id === myId)
     const myTeam = me?.team || null // 관전이면 모든 게 보인다
     const barColorOf = (team) =>
@@ -1147,7 +1345,8 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
         u.crystal.rotation.y += 0.02
         setHpBar(u.bar, t.hp / t.maxHp)
         // 아직 공격 못 하는 타워는 크리스탈이 흐릿하게 + "공격불가" 라벨
-        u.crystal.material.emissiveIntensity = t.vuln ? 0.45 : 0.15
+        // 공격 가능 타워는 크리스탈이 은은하게 명멸한다
+        u.crystal.material.emissiveIntensity = t.vuln ? 0.4 + Math.sin(view.time * 3 + t.x) * 0.15 : 0.15
       }
       const dToMe = me ? Math.hypot(me.x - t.x, me.z - t.z) : Infinity
       // "공격불가" 라벨: 무적인 적 구조물에 다가가면 띄운다 (관전이면 전부)
@@ -1174,6 +1373,9 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
       const nx = view.nexus[team]
       const u = nexusObjs[team].userData
       u.core.rotation.y += 0.015
+      u.core.position.y = 6.5 + Math.sin(view.time * 1.6) * 0.3 // 둥실
+      u.ring2.rotation.z = view.time * 0.8 // 빛 고리가 돈다
+      u.glow.material.opacity = 0.3 + Math.sin(view.time * 2) * 0.08 // 바닥 광휘 맥동
       u.core.visible = nx.hp > 0
       setHpBar(u.bar, nx.hp / nx.maxHp)
       u.core.material.emissiveIntensity = nx.vuln ? 0.7 : 0.4
@@ -1211,6 +1413,8 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
         if (!obj.visible) return
         obj.position.set(h.x, 0, h.z)
         u.body.rotation.y = -h.dir
+        // 미세한 숨쉬기/제자리 둥실 모션
+        u.body.position.y = u.bodyBaseY + Math.sin(view.time * 2.2 + u.bobPhase) * 0.12
         if (h.lvl !== u.nameLvl) {
           u.nameLvl = h.lvl
           setNameText(u.name, heroLabel(h), u.nameColor) // 레벨이 오르면 이름표 갱신
