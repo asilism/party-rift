@@ -2030,6 +2030,7 @@ export function makeView(state) {
       baronT: r1(h.baronT),
       kills: h.kills,
       deaths: h.deaths,
+      mvSpeed: r2d(heroSpeed(h)), // 클라 이동 예측용(현재 이동속도)
     })),
     minions: state.minions.map((m) => ({
       id: m.id,

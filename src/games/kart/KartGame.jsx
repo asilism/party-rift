@@ -1,177 +1,40 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import KartSetup from './KartSetup.jsx'
 import Kart3D from './Kart3D.jsx'
 import MiniMap from './MiniMap.jsx'
 import TouchControls from './TouchControls.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
-import {
-  createGame, setInput, fireItem, step, makeView, makeBot, STEP, LAPS, COUNTDOWN_TIME,
-} from './engine.js'
-import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
+import { LAPS, COUNTDOWN_TIME } from './engine.js'
+import { getZodiac } from '../../shared/zodiac.js'
+import { racers } from '../../net/realtime/roster.js'
 import { sound } from '../../shared/sound.js'
-import { useGameNet } from '../../net/useGameNet.js'
+import { useRealtimeGame } from '../../net/useRealtimeGame.js'
+import { kartNet } from './netgame.js'
 import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
 
 // 파티 카트 — 3D 레이싱. 온라인 방 전용(기기마다 조이스틱이 필요해서).
-//  - 호스트 권위: 호스트가 60Hz로 물리를 돌리고 20Hz로 스냅샷을 publish.
-//  - 게스트: 조향/브레이크를 15Hz action으로 보내고, 스냅샷을 보간해 그린다.
+//  - 서버 권위(④): 서버가 60Hz로 물리를 돌리고 20Hz로 바이너리 델타 스냅샷을 방송.
+//  - 클라(①③): 내 카트는 입력을 즉시 반영(예측)하고 권위값으로 보정,
+//      남의 카트는 보간으로 부드럽게. 모든 배관은 useRealtimeGame이 담당.
 //  - 카트는 기기당 1대: 각 기기의 첫 번째 참가자가 달리고 나머지는 관전.
-const PUBLISH_MS = 50 // 호스트 스냅샷 전파 주기
-const INPUT_MS = 66 // 게스트 입력 전송 주기
-const INTERP_DELAY = 120 // 게스트 렌더 지연(보간용, ms)
-const RACE_SIZE = 4 // 레이스 정원 — 모자라면 CPU가 채운다
-
 export default function KartGame({ roster, onExit, net }) {
-  const { online, isHost, remote, publish, sendAction, ownerDevice } = useGameNet(net, handleAction)
-
-  // 기기당 1대 — 각 기기의 첫 참가자만 주행
-  const racers = useMemo(() => {
-    const seen = new Set()
-    return roster.filter((p) => {
-      const dev = p.deviceId ?? p.id
-      if (seen.has(dev)) return false
-      seen.add(dev)
-      return true
-    })
-  }, [roster])
-  const myId = (online && racers.find((p) => p.deviceId === net.deviceId)?.id) || null
-
-  const [phase, setPhase] = useState('setup') // 'setup' | 'play'
-  const [hud, setHud] = useState(null) // 20Hz로 갱신되는 HUD용 뷰
-  const [soundOn, setSoundOn] = useState(true)
-  const stateRef = useRef(null) // 호스트 권위 게임 상태 (렌더 루프가 직접 읽음)
+  const online = !!net?.online
   const ctrlRef = useRef({ steer: 0, brake: false, drift: false })
+  const { view, sample, myId, isHost, start, stop, sendAction } = useRealtimeGame(net, kartNet, ctrlRef)
+  const [soundOn, setSoundOn] = useState(true)
   const lastTrackRef = useRef(null) // "한판 더!" 즉시 리매치용
-  const bufRef = useRef([]) // 게스트: 스냅샷 보간 버퍼
-  const lastSentRef = useRef('')
-
-  // 게스트 입력(호스트에서만 호출). 자기 기기의 참가자만 인정.
-  function handleAction(a, fromDevice) {
-    const st = stateRef.current
-    if (!st || ownerDevice(a.playerId) !== fromDevice) return
-    if (a.type === 'input') setInput(st, a.playerId, a)
-    else if (a.type === 'item') fireItem(st, a.playerId)
-  }
-
-  // 호스트: 셋업 중에도 게스트가 대기 화면을 보도록 phase 전파
-  useEffect(() => {
-    if (!online || !isHost) return
-    if (phase !== 'play') publish({ phase: 'setup' })
-  }, [online, isHost, phase, publish])
-
-  // 호스트: 60Hz 시뮬레이션 + 20Hz publish/HUD
-  useEffect(() => {
-    if (!isHost || phase !== 'play') return
-    let raf
-    let last = performance.now()
-    let acc = 0
-    let pub = PUBLISH_MS // 첫 프레임에 바로 전파
-    const loop = (now) => {
-      raf = requestAnimationFrame(loop)
-      const ms = Math.min(100, now - last)
-      last = now
-      acc += ms
-      pub += ms
-      const st = stateRef.current
-      if (!st) return
-      if (myId) setInput(st, myId, ctrlRef.current)
-      while (acc >= STEP * 1000) {
-        step(st, STEP)
-        acc -= STEP * 1000
-      }
-      if (pub >= PUBLISH_MS) {
-        pub = 0
-        const v = makeView(st)
-        if (online) publish(v)
-        setHud(v)
-      }
-    }
-    raf = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(raf)
-  }, [isHost, phase, online, publish, myId])
-
-  // 게스트: 스냅샷 버퍼 적재 + HUD 갱신
-  useEffect(() => {
-    if (isHost || !remote) return
-    if (remote.phase !== 'play') {
-      bufRef.current = []
-      setHud(null)
-      return
-    }
-    bufRef.current.push({ at: performance.now(), v: remote })
-    if (bufRef.current.length > 12) bufRef.current.shift()
-    setHud(remote)
-  }, [isHost, remote])
-
-  // 새 레이스가 시작되면(다시하기 포함) 남아 있던 입력을 깨끗이 비운다
-  const lastStatusRef = useRef(null)
-  useEffect(() => {
-    if (hud?.status === 'countdown' && lastStatusRef.current !== 'countdown') {
-      ctrlRef.current = { steer: 0, brake: false, drift: false }
-      lastSentRef.current = ''
-    }
-    lastStatusRef.current = hud?.status ?? null
-  }, [hud])
-
-  // 게스트: 조향/브레이크를 주기적으로 전송 (변했을 때만)
-  useEffect(() => {
-    if (!online || isHost || !myId) return
-    const t = setInterval(() => {
-      const c = ctrlRef.current
-      const sig = `${c.steer.toFixed(2)}|${c.brake}|${c.drift}`
-      if (sig === lastSentRef.current) return
-      lastSentRef.current = sig
-      sendAction({ type: 'input', playerId: myId, steer: c.steer, brake: c.brake, drift: c.drift })
-    }, INPUT_MS)
-    return () => clearInterval(t)
-  }, [online, isHost, myId, sendAction])
-
-  // 게스트가 레이스 도중 방을 나가거나 연결이 끊기면 그 카트는 봇이 이어받는다
-  // (서버가 이탈한 기기의 참가자를 명단에서 빼므로 roster 변화로 감지)
-  useEffect(() => {
-    if (!online || !isHost || phase !== 'play') return
-    const st = stateRef.current
-    if (!st) return
-    const ids = new Set(roster.map((p) => p.id))
-    for (const k of st.karts) {
-      if (!k.isBot && !ids.has(k.id)) makeBot(st, k.id)
-    }
-  }, [online, isHost, phase, roster])
-
-  const sampleHost = useCallback(() => (stateRef.current ? makeView(stateRef.current) : null), [])
-  const sampleGuest = useCallback(() => interpolate(bufRef.current), [])
 
   function startGame(trackId) {
     lastTrackRef.current = trackId
     sound.setEnabled(soundOn)
     sound.unlock()
-    const humans = racers.map((p) => ({
-      id: p.id,
-      name: p.name,
-      zodiacId: p.zodiacId,
-      color: getZodiac(p.zodiacId)?.color,
-    }))
-    // 정원이 안 차면 안 쓰는 12지신 중에서 CPU를 뽑아 채운다
-    const used = new Set(roster.map((p) => p.zodiacId))
-    const free = ZODIAC.filter((z) => !used.has(z.id)).sort(() => Math.random() - 0.5)
-    const bots = free.slice(0, Math.max(0, RACE_SIZE - humans.length)).map((z) => ({
-      id: `bot-${z.id}`,
-      name: `${z.name}봇`,
-      zodiacId: z.id,
-      color: z.color,
-      isBot: true,
-    }))
-    stateRef.current = createGame([...humans, ...bots], Math.random, trackId)
     ctrlRef.current = { steer: 0, brake: false, drift: false }
-    setHud(makeView(stateRef.current))
-    setPhase('play')
+    start({ trackId }) // 서버가 레이스를 생성·시작 → 모두에게 스냅샷 방송
   }
 
   function onItem() {
-    if (!myId) return
-    if (isHost) fireItem(stateRef.current, myId)
-    else sendAction({ type: 'item', playerId: myId })
+    sendAction({ type: 'item' }) // 소유권은 서버가 판정(내 카트에만 적용)
   }
 
   function toggleSound() {
@@ -192,85 +55,36 @@ export default function KartGame({ roster, onExit, net }) {
     )
   }
 
-  // ── 게스트 ──
-  if (!isHost) {
-    if (!hud) {
-      return <NetWaiting text="호스트가 레이스를 준비하고 있어요... 🏎️" onExit={onExit} />
-    }
-    return (
-      <KartPlay
-        hud={hud}
-        sample={sampleGuest}
-        myId={myId}
-        ctrlRef={ctrlRef}
-        onItem={onItem}
-        onRematch={null}
-        onRestart={null}
-        onExit={onExit}
-        soundOn={soundOn}
-        onToggleSound={toggleSound}
-      />
-    )
+  // 아직 서버 스냅샷을 못 받았을 때
+  if (!view) {
+    return <NetWaiting text="레이스에 접속하고 있어요... 🏎️" onExit={onExit} />
   }
 
-  // ── 호스트 ──
-  if (phase === 'setup') {
-    const benched = roster.filter((p) => !racers.includes(p))
-    return <KartSetup racers={racers} benched={benched} onStart={startGame} onExit={onExit} />
+  // ── 셋업 단계 ──
+  if (view.phase !== 'play') {
+    if (isHost) {
+      const racing = racers(roster)
+      const benched = roster.filter((p) => !racing.includes(p))
+      return <KartSetup racers={racing} benched={benched} onStart={startGame} onExit={onExit} />
+    }
+    return <NetWaiting text="호스트가 레이스를 준비하고 있어요... 🏎️" onExit={onExit} />
   }
+
+  // ── 주행 단계 (호스트/게스트 공용) ──
   return (
     <KartPlay
-      hud={hud}
-      sample={sampleHost}
+      hud={view}
+      sample={sample}
       myId={myId}
       ctrlRef={ctrlRef}
       onItem={onItem}
-      onRematch={() => startGame(lastTrackRef.current)} // 같은 맵으로 즉시 한판 더!
-      onRestart={() => setPhase('setup')} // 맵 바꾸기 = 맵 선택부터
+      onRematch={isHost ? () => startGame(lastTrackRef.current) : null} // 같은 맵으로 한판 더!
+      onRestart={isHost ? () => stop() : null} // 맵 바꾸기 = 셋업으로 복귀
       onExit={onExit}
       soundOn={soundOn}
       onToggleSound={toggleSound}
     />
   )
-}
-
-// 게스트 렌더용: 스냅샷 두 장 사이를 보간해 카트/오브젝트를 부드럽게
-function interpolate(buf) {
-  if (!buf.length) return null
-  const t = performance.now() - INTERP_DELAY
-  let a = null
-  let b = buf[buf.length - 1]
-  for (let i = buf.length - 1; i >= 0; i--) {
-    if (buf[i].at <= t) {
-      a = buf[i]
-      b = buf[i + 1] || buf[i]
-      break
-    }
-  }
-  if (!a || a === b || b.at <= a.at) return b.v
-  const f = Math.min(1, (t - a.at) / (b.at - a.at))
-  const lerp = (x, y) => x + (y - x) * f
-  // 장애물은 시간의 함수로 그려지므로 time도 보간해 부드럽게
-  const time = lerp(a.v.time ?? 0, b.v.time ?? 0)
-  const karts = b.v.karts.map((kb) => {
-    const ka = a.v.karts.find((k) => k.id === kb.id)
-    if (!ka) return kb
-    return {
-      ...kb,
-      x: lerp(ka.x, kb.x),
-      z: lerp(ka.z, kb.z),
-      y: lerp(ka.y || 0, kb.y || 0), // 언덕/점프/추락 높이를 부드럽게
-      heading: lerp(ka.heading, kb.heading),
-      spin: lerp(ka.spin || 0, kb.spin || 0),
-      flyT: lerp(ka.flyT || 0, kb.flyT || 0), // 회오리 비행 포물선을 부드럽게
-    }
-  })
-  const objects = (b.v.objects || []).map((ob) => {
-    const oa = a.v.objects?.find((o) => o.id === ob.id)
-    if (!oa) return ob
-    return { ...ob, x: lerp(oa.x, ob.x), z: lerp(oa.z, ob.z) }
-  })
-  return { ...b.v, time, karts, objects }
 }
 
 // HUD 효과음: 스냅샷 변화를 보고 호스트/게스트 동일하게 재생

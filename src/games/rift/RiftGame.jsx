@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import RiftSetup from './RiftSetup.jsx'
 import Rift3D from './Rift3D.jsx'
 import RiftMiniMap from './RiftMiniMap.jsx'
@@ -6,220 +6,48 @@ import RiftControls from './RiftControls.jsx'
 import RiftShop from './RiftShop.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
-import {
-  createGame, setInput, castAttack, castSkill, castUlt, castRecall, buyItem, sellItem, resetShop, canShop,
-  step, makeView, makeBot,
-  STEP, TEAM_SIZE, TEAM_SIZES, ULT_LEVEL, CLASSES, CLASS_IDS,
-} from './engine.js'
-import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
+import { canShop, CLASSES } from './engine.js'
+import { getZodiac } from '../../shared/zodiac.js'
 import { getItem } from './items.js'
+import { racers } from '../../net/realtime/roster.js'
 import { sound } from '../../shared/sound.js'
-import { useGameNet } from '../../net/useGameNet.js'
+import { useRealtimeGame } from '../../net/useRealtimeGame.js'
+import { riftNet } from './netgame.js'
 import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
 
 // 파티 리프트 — 3:3 AOS. 온라인 방 전용(기기마다 조이스틱이 필요해서).
-//  - 호스트 권위: 호스트가 60Hz로 시뮬레이션을 돌리고 20Hz로 스냅샷을 publish.
-//  - 게스트: 이동을 15Hz action으로, 버튼은 누를 때마다 보낸다. 스냅샷은 보간해 그린다.
+//  - 서버 권위(④): 서버가 60Hz로 시뮬레이션을 돌리고 20Hz로 바이너리 델타 스냅샷을 방송.
+//  - 클라(①③): 내 영웅은 입력 즉시 반영(예측)·권위 보정, 남의 유닛은 보간으로 부드럽게.
+//      모든 동기화 배관은 useRealtimeGame이 담당.
 //  - 영웅은 기기당 1명: 각 기기의 첫 번째 참가자가 싸우고 나머지는 관전.
-const PUBLISH_MS = 50
-const INPUT_MS = 66
-const INTERP_DELAY = 120
-
 export default function RiftGame({ roster, onExit, net }) {
-  const { online, isHost, remote, publish, sendAction, ownerDevice } = useGameNet(net, handleAction)
-
-  // 기기당 1명 — 각 기기의 첫 참가자만 전투
-  const racers = useMemo(() => {
-    const seen = new Set()
-    return roster.filter((p) => {
-      const dev = p.deviceId ?? p.id
-      if (seen.has(dev)) return false
-      seen.add(dev)
-      return true
-    })
-  }, [roster])
-  const myId = (online && racers.find((p) => p.deviceId === net.deviceId)?.id) || null
-
-  const [phase, setPhase] = useState('setup') // 'setup' | 'play'
-  const [hud, setHud] = useState(null)
-  const [soundOn, setSoundOn] = useState(true)
-  const stateRef = useRef(null)
+  const online = !!net?.online
   const ctrlRef = useRef({ mx: 0, mz: 0 })
+  const { view, sample, myId, isHost, start, stop, sendAction } = useRealtimeGame(net, riftNet, ctrlRef)
+  const [soundOn, setSoundOn] = useState(true)
   const lastTeamsRef = useRef(null) // "한판 더!" 즉시 리매치용
-  const bufRef = useRef([]) // 게스트: 스냅샷 보간 버퍼
-  const lastSentRef = useRef('')
-
-  // 게스트 입력(호스트에서만 호출). 자기 기기의 참가자만 인정.
-  function handleAction(a, fromDevice) {
-    const st = stateRef.current
-    if (!st || ownerDevice(a.playerId) !== fromDevice) return
-    if (a.type === 'input') setInput(st, a.playerId, a)
-    else if (a.type === 'cast') {
-      if (a.slot === 'atk') castAttack(st, a.playerId)
-      else if (a.slot === 'skill') castSkill(st, a.playerId)
-      else if (a.slot === 'ult') castUlt(st, a.playerId)
-      else if (a.slot === 'recall') castRecall(st, a.playerId)
-    } else if (a.type === 'buy') buyItem(st, a.playerId, a.itemId)
-    else if (a.type === 'sell') sellItem(st, a.playerId, a.slot)
-    else if (a.type === 'resetShop') resetShop(st, a.playerId)
-  }
-
-  // 호스트: 셋업 중에도 게스트가 대기 화면을 보도록 phase 전파
-  useEffect(() => {
-    if (!online || !isHost) return
-    if (phase !== 'play') publish({ phase: 'setup' })
-  }, [online, isHost, phase, publish])
-
-  // 호스트: 60Hz 시뮬레이션 + 20Hz publish/HUD
-  useEffect(() => {
-    if (!isHost || phase !== 'play') return
-    let raf
-    let last = performance.now()
-    let acc = 0
-    let pub = PUBLISH_MS
-    const loop = (now) => {
-      raf = requestAnimationFrame(loop)
-      const ms = Math.min(100, now - last)
-      last = now
-      acc += ms
-      pub += ms
-      const st = stateRef.current
-      if (!st) return
-      if (myId) setInput(st, myId, ctrlRef.current)
-      while (acc >= STEP * 1000) {
-        step(st, STEP)
-        acc -= STEP * 1000
-      }
-      if (pub >= PUBLISH_MS) {
-        pub = 0
-        const v = makeView(st)
-        if (online) publish(v)
-        setHud(v)
-      }
-    }
-    raf = requestAnimationFrame(loop)
-    return () => cancelAnimationFrame(raf)
-  }, [isHost, phase, online, publish, myId])
-
-  // 게스트: 스냅샷 버퍼 적재 + HUD 갱신
-  useEffect(() => {
-    if (isHost || !remote) return
-    if (remote.phase !== 'play') {
-      bufRef.current = []
-      setHud(null)
-      return
-    }
-    bufRef.current.push({ at: performance.now(), v: remote })
-    if (bufRef.current.length > 12) bufRef.current.shift()
-    setHud(remote)
-  }, [isHost, remote])
-
-  // 새 판이 시작되면 남아 있던 입력을 깨끗이 비운다
-  const lastStatusRef = useRef(null)
-  useEffect(() => {
-    if (hud?.status === 'countdown' && lastStatusRef.current !== 'countdown') {
-      ctrlRef.current = { mx: 0, mz: 0 }
-      lastSentRef.current = ''
-    }
-    lastStatusRef.current = hud?.status ?? null
-  }, [hud])
-
-  // 게스트: 이동 입력을 주기적으로 전송 (변했을 때만)
-  useEffect(() => {
-    if (!online || isHost || !myId) return
-    const t = setInterval(() => {
-      const c = ctrlRef.current
-      const sig = `${c.mx.toFixed(2)}|${c.mz.toFixed(2)}`
-      if (sig === lastSentRef.current) return
-      lastSentRef.current = sig
-      sendAction({ type: 'input', playerId: myId, mx: c.mx, mz: c.mz })
-    }, INPUT_MS)
-    return () => clearInterval(t)
-  }, [online, isHost, myId, sendAction])
-
-  // 게스트가 전투 도중 방을 나가면 그 영웅은 봇이 이어받는다
-  useEffect(() => {
-    if (!online || !isHost || phase !== 'play') return
-    const st = stateRef.current
-    if (!st) return
-    const ids = new Set(roster.map((p) => p.id))
-    for (const h of st.heroes) {
-      if (!h.isBot && !ids.has(h.id)) makeBot(st, h.id)
-    }
-  }, [online, isHost, phase, roster])
-
-  const sampleHost = useCallback(() => (stateRef.current ? makeView(stateRef.current) : null), [])
-  const sampleGuest = useCallback(() => interpolate(bufRef.current), [])
 
   function startGame(teams, classes, mode = '3v3') {
     lastTeamsRef.current = [teams, classes, mode]
     sound.setEnabled(soundOn)
     sound.unlock()
-    const teamSize = TEAM_SIZES[mode] || TEAM_SIZE
-    const humans = racers.map((p) => ({
-      id: p.id,
-      name: p.name,
-      zodiacId: p.zodiacId,
-      color: getZodiac(p.zodiacId)?.color,
-      team: teams[p.id] || 'blue',
-      cls: classes?.[p.id],
-    }))
-    // 빈자리는 안 쓰는 12지신 봇 + 남은 직업으로 팀 인원(3 또는 5)까지 채운다
-    const used = new Set(roster.map((p) => p.zodiacId))
-    const free = ZODIAC.filter((z) => !used.has(z.id))
-    const bots = []
-    for (const team of ['blue', 'red']) {
-      const mine = humans.filter((h) => h.team === team)
-      const takenCls = new Set(mine.map((h) => h.cls))
-      for (let i = mine.length; i < teamSize; i++) {
-        const z = free.shift()
-        if (!z) break
-        const cls = CLASS_IDS.find((c) => !takenCls.has(c))
-        takenCls.add(cls)
-        bots.push({
-          id: `bot-${z.id}`, name: `${z.name}봇`, zodiacId: z.id, color: z.color,
-          team, cls, isBot: true,
-        })
-      }
-    }
-    stateRef.current = createGame([...humans, ...bots], { mode, rng: Math.random })
     ctrlRef.current = { mx: 0, mz: 0 }
-    setHud(makeView(stateRef.current))
-    setPhase('play')
+    start({ teams, classes, mode }) // 서버가 전장을 생성·시작
   }
 
+  // 버튼/상점 — 소유권은 서버가 판정(내 영웅에만 적용)
   function cast(slot) {
-    if (!myId) return
-    const st = stateRef.current
-    if (isHost && st) {
-      if (slot === 'atk') castAttack(st, myId)
-      else if (slot === 'skill') castSkill(st, myId)
-      else if (slot === 'ult') castUlt(st, myId)
-      else if (slot === 'recall') castRecall(st, myId)
-    } else {
-      sendAction({ type: 'cast', playerId: myId, slot })
-    }
+    sendAction({ type: 'cast', slot })
   }
-
   function buy(itemId) {
-    if (!myId) return
-    const st = stateRef.current
-    if (isHost && st) buyItem(st, myId, itemId)
-    else sendAction({ type: 'buy', playerId: myId, itemId })
+    sendAction({ type: 'buy', itemId })
   }
-
   function sell(slot) {
-    if (!myId) return
-    const st = stateRef.current
-    if (isHost && st) sellItem(st, myId, slot)
-    else sendAction({ type: 'sell', playerId: myId, slot })
+    sendAction({ type: 'sell', slot })
   }
 
   function resetShopBuys() {
-    if (!myId) return
-    const st = stateRef.current
-    if (isHost && st) resetShop(st, myId)
-    else sendAction({ type: 'resetShop', playerId: myId })
+    sendAction({ type: 'resetShop' }) // 소유권은 서버가 판정(내 영웅에만 적용)
   }
 
   function toggleSound() {
@@ -240,90 +68,39 @@ export default function RiftGame({ roster, onExit, net }) {
     )
   }
 
-  // ── 게스트 ──
-  if (!isHost) {
-    if (!hud) {
-      return <NetWaiting text="호스트가 전장을 준비하고 있어요... ⚔️" onExit={onExit} />
-    }
-    return (
-      <RiftPlay
-        hud={hud}
-        sample={sampleGuest}
-        myId={myId}
-        ctrlRef={ctrlRef}
-        onCast={cast}
-        onBuy={buy}
-        onSell={sell}
-        onResetShop={resetShopBuys}
-        onRematch={null}
-        onRestart={null}
-        onExit={onExit}
-        soundOn={soundOn}
-        onToggleSound={toggleSound}
-      />
-    )
+  // 아직 서버 스냅샷을 못 받았을 때
+  if (!view) {
+    return <NetWaiting text="전장에 접속하고 있어요... ⚔️" onExit={onExit} />
   }
 
-  // ── 호스트 ──
-  if (phase === 'setup') {
-    const benched = roster.filter((p) => !racers.includes(p))
-    return <RiftSetup racers={racers} benched={benched} onStart={startGame} onExit={onExit} />
+  // ── 셋업 단계 ──
+  if (view.phase !== 'play') {
+    if (isHost) {
+      const racing = racers(roster)
+      const benched = roster.filter((p) => !racing.includes(p))
+      return <RiftSetup racers={racing} benched={benched} onStart={startGame} onExit={onExit} />
+    }
+    return <NetWaiting text="호스트가 전장을 준비하고 있어요... ⚔️" onExit={onExit} />
   }
+
+  // ── 전투 단계 (호스트/게스트 공용) ──
   return (
     <RiftPlay
-      hud={hud}
-      sample={sampleHost}
+      hud={view}
+      sample={sample}
       myId={myId}
       ctrlRef={ctrlRef}
       onCast={cast}
       onBuy={buy}
       onSell={sell}
       onResetShop={resetShopBuys}
-      onRematch={() => startGame(...lastTeamsRef.current)} // 같은 팀/직업으로 즉시 한판 더!
-      onRestart={() => setPhase('setup')} // 팀 다시 나누기
+      onRematch={isHost ? () => startGame(...lastTeamsRef.current) : null} // 같은 팀/직업으로 한판 더!
+      onRestart={isHost ? () => stop() : null} // 팀 다시 나누기 = 셋업으로 복귀
       onExit={onExit}
       soundOn={soundOn}
       onToggleSound={toggleSound}
     />
   )
-}
-
-// 게스트 렌더용: 스냅샷 두 장 사이를 보간해 움직임을 부드럽게
-function interpolate(buf) {
-  if (!buf.length) return null
-  const t = performance.now() - INTERP_DELAY
-  let a = null
-  let b = buf[buf.length - 1]
-  for (let i = buf.length - 1; i >= 0; i--) {
-    if (buf[i].at <= t) {
-      a = buf[i]
-      b = buf[i + 1] || buf[i]
-      break
-    }
-  }
-  if (!a || a === b || b.at <= a.at) return b.v
-  const f = Math.min(1, (t - a.at) / (b.at - a.at))
-  const lerp = (x, y) => x + (y - x) * f
-  const lerpAng = (x, y) => {
-    let d = y - x
-    while (d > Math.PI) d -= 2 * Math.PI
-    while (d < -Math.PI) d += 2 * Math.PI
-    return x + d * f
-  }
-  const lerpList = (la, lb, extra) =>
-    lb.map((eb) => {
-      const ea = la?.find((o) => o.id === eb.id)
-      if (!ea) return eb
-      return { ...eb, x: lerp(ea.x, eb.x), z: lerp(ea.z, eb.z), ...(extra ? extra(ea, eb) : null) }
-    })
-  return {
-    ...b.v,
-    time: lerp(a.v.time ?? 0, b.v.time ?? 0),
-    heroes: lerpList(a.v.heroes, b.v.heroes, (ea, eb) => ({ dir: lerpAng(ea.dir, eb.dir) })),
-    minions: lerpList(a.v.minions, b.v.minions, (ea, eb) => ({ dir: lerpAng(ea.dir || 0, eb.dir || 0) })),
-    monsters: lerpList(a.v.monsters, b.v.monsters),
-    projectiles: lerpList(a.v.projectiles, b.v.projectiles),
-  }
 }
 
 // HUD 효과음: 스냅샷 변화를 보고 호스트/게스트 동일하게 재생

@@ -12,6 +12,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer } from 'ws'
 import { createRoomStore } from './rooms.js'
+import { createRealtimeSession } from './realtime.js'
+import { isRealtimeGame } from './games.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -47,8 +49,39 @@ const store = createRoomStore()
 // deviceId -> { ws, room } (한 기기당 연결 1개)
 const conns = new Map()
 
+// room.code -> 실시간 게임 세션(④ 서버 권위). 실시간 게임 화면일 때만 존재.
+const rtSessions = new Map()
+
 const send = (ws, msg) => {
   if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg))
+}
+
+// 실시간 스냅샷(바이너리 프레임)을 한 기기로 전송
+function sendBytes(devId, bytes) {
+  const c = conns.get(devId)
+  if (c && c.ws.readyState === c.ws.OPEN) c.ws.send(bytes)
+}
+
+function ensureSession(room, gameId) {
+  const cur = rtSessions.get(room.code)
+  if (cur && cur.gameId === gameId) return cur
+  if (cur) cur.end()
+  const s = createRealtimeSession(gameId, room, sendBytes)
+  if (!s) {
+    rtSessions.delete(room.code)
+    return null
+  }
+  rtSessions.set(room.code, s)
+  s.begin()
+  return s
+}
+
+function dropSession(room) {
+  const s = rtSessions.get(room.code)
+  if (s) {
+    s.end()
+    rtSessions.delete(room.code)
+  }
 }
 
 function broadcastRoom(room) {
@@ -60,6 +93,7 @@ function broadcastRoom(room) {
 }
 
 function closeRoom(room, reason) {
+  dropSession(room)
   for (const devId of [...room.devices.keys()]) {
     const c = conns.get(devId)
     if (c) {
@@ -68,6 +102,19 @@ function closeRoom(room, reason) {
     }
   }
   store.rooms.delete(room.code)
+}
+
+// 한 기기가 방에서 빠질 때(나가기/연결 끊김) 공통 처리:
+// 방이 닫히면 세션 정리, 아니면 그 기기의 엔티티를 봇이 인계한다.
+function handleDeparture(room, deviceId) {
+  const leftIds = (room.devices.get(deviceId)?.players || []).map((p) => p.id)
+  if (store.leave(room, deviceId) === 'closed') {
+    closeRoom(room, deviceId === room.hostId ? '호스트가 방을 나갔어요.' : '방이 닫혔어요.')
+    return 'closed'
+  }
+  broadcastRoom(room)
+  rtSessions.get(room.code)?.takeOver(leftIds)
+  return 'left'
 }
 
 wss.on('connection', (ws) => {
@@ -99,6 +146,8 @@ wss.on('connection', (ws) => {
       conns.set(deviceId, { ws, room: prev?.room || null })
       if (prev?.room) {
         send(ws, { t: 'room', room: store.snapshot(prev.room) })
+        // 재연결: 실시간 게임 중이면 다음 틱에 full 스냅샷을 받아 델타 누적을 재동기화
+        rtSessions.get(prev.room.code)?.deviceJoined(deviceId)
       }
       return
     }
@@ -107,7 +156,10 @@ wss.on('connection', (ws) => {
 
     switch (msg.t) {
       case 'create': {
-        if (conn.room) store.leave(conn.room, deviceId)
+        if (conn.room) {
+          const old = conn.room
+          if (store.leave(old, deviceId) === 'closed') dropSession(old)
+        }
         conn.room = store.create(deviceId)
         broadcastRoom(conn.room)
         break
@@ -118,14 +170,15 @@ wss.on('connection', (ws) => {
         broadcastRoom(room)
         // 게임 중간에 들어온 기기도 화면을 그릴 수 있게 마지막 상태를 보내준다
         if (room.lastState != null) send(ws, { t: 'state', data: room.lastState })
+        // 실시간 게임 진행 중이면 다음 틱에 full 스냅샷 한 장을 받도록 표시
+        rtSessions.get(room.code)?.deviceJoined(deviceId)
         break
       }
       case 'leave': {
         if (!conn.room) break
         const room = conn.room
         conn.room = null
-        if (store.leave(room, deviceId) === 'closed') closeRoom(room, '호스트가 방을 나갔어요.')
-        else broadcastRoom(room)
+        handleDeparture(room, deviceId)
         break
       }
       case 'addPlayer': {
@@ -145,6 +198,30 @@ wss.on('connection', (ws) => {
         store.setScreen(conn.room, deviceId, msg.screen)
         conn.room.lastState = null // 새 화면 → 이전 게임 상태 폐기
         broadcastRoom(conn.room)
+        // 실시간 게임 화면이면 서버 권위 세션을 띄우고, 아니면 정리한다.
+        if (isRealtimeGame(msg.screen)) ensureSession(conn.room, msg.screen)
+        else dropSession(conn.room)
+        break
+      }
+      // ── 실시간 게임(④ 서버 권위) ──
+      case 'rtStart': {
+        const s = conn.room && rtSessions.get(conn.room.code)
+        if (s && conn.room.hostId === deviceId) s.start(msg.config)
+        break
+      }
+      case 'rtStop': {
+        const s = conn.room && rtSessions.get(conn.room.code)
+        if (s && conn.room.hostId === deviceId) s.reset()
+        break
+      }
+      case 'rtInput': {
+        const s = conn.room && rtSessions.get(conn.room.code)
+        if (s) s.input(deviceId, msg.input)
+        break
+      }
+      case 'rtAction': {
+        const s = conn.room && rtSessions.get(conn.room.code)
+        if (s) s.action(deviceId, msg.action)
         break
       }
       case 'state': {
@@ -179,8 +256,7 @@ wss.on('connection', (ws) => {
     conns.delete(deviceId)
     const room = conn.room
     if (!room) return
-    if (store.leave(room, deviceId) === 'closed') closeRoom(room, '호스트 연결이 끊어졌어요.')
-    else broadcastRoom(room)
+    handleDeparture(room, deviceId)
   })
 })
 
