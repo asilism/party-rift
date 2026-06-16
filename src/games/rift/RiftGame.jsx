@@ -326,7 +326,9 @@ function useRiftSounds(hud, myId) {
     if (hud.status === 'countdown' && hud.countdown > 0 && hud.countdown !== p.countdown) sound.count()
     if (hud.status === 'playing' && p.status === 'countdown') sound.go()
     const feedSeq = hud.feed?.length ? hud.feed[hud.feed.length - 1].seq : 0
-    if (p.feedSeq != null && feedSeq > p.feedSeq) sound.key()
+    // 새 판(한판 더!)에선 feedSeq가 1부터 다시 시작하므로 이전 값보다 작아진다 → 0으로 보고 비교
+    const prevFeedSeq = feedSeq >= (p.feedSeq || 0) ? (p.feedSeq || 0) : 0
+    if (p.feedSeq != null && feedSeq > prevFeedSeq) sound.key()
     if (me && p.respawnT === 0 && me.respawnT > 0) sound.chuteDown() // 내 영웅 사망
     if (me && p.respawnT > 0 && me.respawnT === 0) sound.ladderUp() // 부활!
     if (me && p.lvl != null && me.lvl > p.lvl) sound.ladderUp() // 레벨 업
@@ -334,6 +336,13 @@ function useRiftSounds(hud, myId) {
     const BIG_FX = new Set(['whirl', 'storm', 'rain', 'fissure', 'boom', 'execute'])
     const bigFx = (hud.fx || []).filter((n) => BIG_FX.has(n.kind)).length
     if (bigFx > 0 && (p.bigFx || 0) === 0) sound.thunder()
+    // 우리 넥서스가 공격받기 시작하면 경고음
+    const myTeam = me?.team
+    const nexusAlert = !!(hud.nexus && (
+      myTeam ? hud.nexus[myTeam]?.underAttack
+        : (hud.nexus.blue?.underAttack || hud.nexus.red?.underAttack)
+    ))
+    if (nexusAlert && !p.nexusAlert) sound.thunder()
     if (hud.status === 'finished' && p.status && p.status !== 'finished') sound.win()
     prev.current = {
       countdown: hud.countdown,
@@ -342,6 +351,7 @@ function useRiftSounds(hud, myId) {
       respawnT: me?.respawnT ?? 0,
       lvl: me?.lvl,
       bigFx,
+      nexusAlert,
     }
   }, [hud, myId])
 }
@@ -354,7 +364,11 @@ function useFeedBanner(hud) {
   useEffect(() => () => clearTimeout(timerRef.current), [])
   useEffect(() => {
     const last = hud?.feed?.[hud.feed.length - 1]
-    if (!last || last.seq <= lastSeq.current) return
+    if (!last) return
+    // "한판 더!"로 새 판이 시작되면 feedSeq가 1부터 다시 시작 → 이전 값보다 작아진다.
+    // 이때 추적값을 초기화하지 않으면 새 판의 이벤트 메시지가 전부 무시된다(버그).
+    if (last.seq < lastSeq.current) lastSeq.current = 0
+    if (last.seq <= lastSeq.current) return
     lastSeq.current = last.seq
     setMsg({ text: last.msg, key: last.seq })
     clearTimeout(timerRef.current)
@@ -398,6 +412,11 @@ function RiftPlay({
   const finished = hud.status === 'finished'
   const myTeam = me?.team
   const winnerLabel = hud.winner === 'blue' ? '🔵 파랑팀' : hud.winner === 'red' ? '🔴 빨강팀' : null
+  // 우리 넥서스가 공격받고 있으면 경고 (관전자는 양 팀 모두 표시)
+  const nexusUnderAttack = !finished && !!(hud.nexus && (
+    myTeam ? hud.nexus[myTeam]?.underAttack
+      : (hud.nexus.blue?.underAttack || hud.nexus.red?.underAttack)
+  ))
 
   return (
     <div className="rift">
@@ -479,6 +498,11 @@ function RiftPlay({
         {hud.go && <div className="rift__count rift__count--go">전투 개시!</div>}
         {banner && (
           <div className="rift__banner" key={banner.key}>{banner.text}</div>
+        )}
+        {nexusUnderAttack && (
+          <div className="rift__nexus-alert">
+            ⚠️ {myTeam ? '우리' : ''} 넥서스가 공격받고 있어요!
+          </div>
         )}
         {me && me.respawnT > 0 && !finished && (
           <>

@@ -529,7 +529,11 @@ function makeBurst(n, look) {
 
 // fx 한 개를 3D 오브젝트(Group)로 — 동심원 링/방향성 직선 + 파티클.
 function buildFxObject(n) {
-  const look = FX_LOOK[n.kind] || { color: 0xffd34d, ring: true, mode: 'out' }
+  let look = FX_LOOK[n.kind] || { color: 0xffd34d, ring: true, mode: 'out' }
+  // 사망 분해 효과는 쓰러진 유닛(또는 정글몹을 잡은 팀) 색으로 물들여 누가 쓰러졌는지 알린다.
+  if (n.kind === 'death' && n.team != null) {
+    look = { ...look, color: TEAM_COLOR[n.team], pcolor: TEAM_COLOR[n.team] }
+  }
   const g = new THREE.Group()
   g.position.set(n.x, 0, n.z)
   const ups = []

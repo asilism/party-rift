@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CATEGORIES, ITEMS, getItem, sumStats, STAT_LABEL, ITEM_SLOTS } from './items.js'
+import { CATEGORIES, ITEMS, getItem, sumStats, STAT_LABEL, ITEM_SLOTS, SELL_REFUND } from './items.js'
 import { CLASSES } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 
@@ -44,13 +44,18 @@ export default function RiftShop({ me, onBuy, onSell, onClose }) {
         <div className="rift-shop__inv">
           {Array.from({ length: ITEM_SLOTS }).map((_, i) => {
             const it = getItem(items[i])
+            const sellPrice = it ? Math.floor(it.cost * SELL_REFUND) : 0
             return (
               <div key={i} className={`rift-shop__slot ${it ? 'rift-shop__slot--filled' : ''}`}>
                 {it ? (
-                  <button className="rift-shop__sell" onClick={() => onSell(i)} title={`${it.name} 되팔기`}>
+                  <button
+                    className="rift-shop__sell"
+                    onClick={() => onSell(i)}
+                    title={`${it.name} 되팔기 — 💰${sellPrice} 돌려받음`}
+                  >
                     <span className="rift-shop__slot-icon">{it.icon}</span>
                     <small>{it.name}</small>
-                    <span className="rift-shop__sell-tag">↩ 판매</span>
+                    <span className="rift-shop__sell-tag">↩ 💰{sellPrice}</span>
                   </button>
                 ) : (
                   <span className="rift-shop__slot-empty">＋</span>

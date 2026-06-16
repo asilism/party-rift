@@ -61,7 +61,7 @@ export const CLASSES = {
   },
   assassin: {
     name: '암살자', icon: '🥷', desc: '제일 빠른 발·높은 공격력이지만 몸이 약한 기습 딜러',
-    hp: 430, hpLvl: 44, atk: 70, atkLvl: 10, range: 4.2, atkCd: 0.55, speed: 15, def: 0.9,
+    hp: 430, hpLvl: 44, atk: 64, atkLvl: 9, range: 4.2, atkCd: 0.55, speed: 15, def: 0.9,
     skill: { name: '점멸습격', icon: '🌀', cd: 8, desc: '적 등 뒤로 순간이동해 벤다' },
     ult: { name: '그림자처형', icon: '☠️', cd: 38, desc: '빈사 상태 적에게 2배 일격, 처치 시 점멸 초기화' },
   },
@@ -118,8 +118,8 @@ const FIRST_WAVE = 2
 const MINION_SPEED = 6.5
 const MINION_SIGHT = 11
 // 타워 피해(TOWER_DMG_MINION=60) 기준: 원거리는 2대(≤120), 근접은 3대(120<hp≤180)에 죽는다
-const MELEE = { hp: 165, dmg: 33.6, range: 2.4, cd: 1.1 }
-const RANGED = { hp: 110, dmg: 26.4, range: 8, cd: 1.4 }
+const MELEE = { hp: 175, dmg: 33.6, range: 2.4, cd: 1.1 }
+const RANGED = { hp: 110, dmg: 29, range: 8, cd: 1.4 }
 // 미니언끼리는 피해를 크게 줄여(40%) 라인 교전이 천천히 진행되게 한다.
 //  → 미니언 vs 미니언만 붙으면 잘 안 죽고 웨이브가 쌓이지만,
 //    유저가 끼어들어 적 미니언을 빠르게 정리하면 살아남은 우리 웨이브가 타워를 민다.
@@ -134,9 +134,9 @@ const START_GOLD = 300 // 시작 골드 (싼 아이템 하나는 바로 살 수 
 const GOLD_PASSIVE = 0.8 // 초당 자동 수입 (파밍이 안 풀려도 천천히 모이게)
 const GOLD_MINION_MELEE = 13 // 근접 미니언 막타
 const GOLD_MINION_RANGED = 11 // 원거리 미니언 막타
-const GOLD_WOLF = 24
-const GOLD_DRAGON = 45 // 용 — 팀 전원
-const GOLD_BARON = 65 // 바론 — 팀 전원
+const GOLD_WOLF = 36 // 정글몹 보상 +50% (정글이 더 매력적이게)
+const GOLD_DRAGON = 68 // 용 — 팀 전원 (+50%)
+const GOLD_BARON = 98 // 바론 — 팀 전원 (+50%)
 const GOLD_TOWER = 48 // 타워 파괴 — 팀 전원
 const GOLD_KILL = 75 // 적 영웅 처치 — 킬러
 const MINION_DEFEND_RANGE = 14 // 이 거리 안 아군 영웅이 적 영웅에게 맞으면 가해자를 노린다
@@ -699,7 +699,7 @@ const SKILLS = {
     h.z = foe.z + ((foe.z - h.z) / d) * 1.8
     state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
     h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
-    damageHero(state, foe, abilityDmg(h, 80 + 16 * (h.lvl - 1)), h)
+    damageHero(state, foe, abilityDmg(h, 72 + 13 * (h.lvl - 1)), h)
     pushFx(state, 'blink', h.x, h.z, 3, h.team)
   },
   // 탱커 방패막기: 잠시 받는 피해 크게 감소
@@ -753,7 +753,7 @@ const ULTS = {
   assassin(state, h) {
     const foe = nearestFoeHero(state, h, EXECUTE_RANGE)
     if (!foe) return false
-    let dmg = abilityDmg(h, 160 + 26 * (h.lvl - 1))
+    let dmg = abilityDmg(h, 145 + 22 * (h.lvl - 1))
     if (foe.hp < foe.maxHp * 0.35) dmg *= 2
     pushFx(state, 'execute', foe.x, foe.z, 3, h.team)
     damageHero(state, foe, dmg, h)
@@ -860,6 +860,7 @@ function damageMinion(state, m, amount, attacker) {
   m.hp -= amount
   if (m.hp > 0) return
   state.minions = state.minions.filter((o) => o !== m)
+  pushFx(state, 'death', m.x, m.z, 2, m.team) // 그 자리에서 파티클로 분해
   if (attacker?.team) awardXp(state, attacker.team, m, MINION_XP, attacker)
   // 막타 골드는 영웅에게만 (미니언/타워가 잡으면 없음 — 막타 챙기는 재미)
   if (attacker?.items) awardGold(state, attacker, m.ranged ? GOLD_MINION_RANGED : GOLD_MINION_MELEE, m.x, m.z)
@@ -873,6 +874,8 @@ function damageMonster(state, m, amount, attacker) {
   if (m.hp > 0) return
   m.alive = false
   m.aggro = null
+  // 그 자리에서 파티클로 분해 — 정글몹은 처치한 팀 색으로 (큰 오브젝트는 더 크게)
+  pushFx(state, 'death', m.x, m.z, m.kind === 'wolf' ? 2.5 : 4.5, attacker?.team || null)
   const spec = m.kind === 'wolf' ? WOLF : m.kind === 'dragon' ? DRAGON : BARON
   m.respawnT = spec.respawn
   if (!attacker?.team) return
@@ -922,6 +925,7 @@ function damageNexus(state, team, amount, attacker) {
   if (!nexusVulnerable(state, team)) return
   const nx = state.nexus[team]
   if (nx.hp <= 0) return
+  nx.lastHurt = state.time // 공격받는 중 — HUD 경고용
   nx.hp -= amount
   if (nx.hp > 0) return
   nx.hp = 0
@@ -1376,78 +1380,89 @@ function stepMonsters(state, dt) {
 }
 
 // 타워: 깐족거린 영웅(아군 영웅을 때린 적) → 미니언 → 영웅 순으로 조준
+// 타워 표적 한 개 고르기 (used에 든 표적은 제외 — 한 타워가 두 발 쏠 때 서로 다른 적을 노리게).
+// 우선순위: 평소엔 미니언 > 유저(영웅). 단, 사거리 안에서 우리 편 영웅을
+// 때린 적 영웅(다이버)이 있으면 그 영웅으로 표적을 바꿔 반격한다.
+//  → 평소엔 미니언 뒤에서 타워를 철거할 수 있지만, 전투가 벌어지면 타워에 맞아 물러나야 한다.
+function pickTowerTarget(state, t, r2, used) {
+  let ref = null
+  let bd = r2
+  // 1) 우리 편 영웅을 때린 적 영웅 (반격 — 최우선)
+  for (const h of state.heroes) {
+    if (h.team === t.team || h.respawnT > 0 || h.aggroT <= 0) continue
+    if (used.has('hero:' + h.id) || !isHeroVisible(state, h, t.team)) continue
+    const d = dist2(t, h)
+    if (d < bd) { bd = d; ref = { tk: 'hero', id: h.id } }
+  }
+  if (ref) return ref
+  // 2) 미니언
+  bd = r2
+  for (const m of state.minions) {
+    if (m.team === t.team || used.has('minion:' + m.id)) continue
+    const d = dist2(t, m)
+    if (d < bd) { bd = d; ref = { tk: 'minion', id: m.id } }
+  }
+  if (ref) return ref
+  // 3) 미니언도 없으면 그제야 보이는 적 영웅
+  bd = r2
+  for (const h of state.heroes) {
+    if (h.team === t.team || h.respawnT > 0) continue
+    if (used.has('hero:' + h.id) || !isHeroVisible(state, h, t.team)) continue
+    const d = dist2(t, h)
+    if (d < bd) { bd = d; ref = { tk: 'hero', id: h.id } }
+  }
+  return ref
+}
+
 function stepTowers(state, dt) {
   const r2 = TOWER_RANGE * TOWER_RANGE
   for (const t of state.towers) {
     if (!t.alive) continue
     t.cd = Math.max(0, t.cd - dt)
     if (t.cd > 0) continue
-    let ref = null
-    let bd = r2
-    // 우선순위: 평소엔 미니언 > 유저(영웅). 단, 사거리 안에서 우리 편 영웅을
-    // 때린 적 영웅(다이버)이 있으면 그 영웅으로 표적을 바꿔 반격한다.
-    //  → 평소엔 미니언 뒤에서 타워를 철거할 수 있지만, 전투가 벌어지면
-    //    타워에 맞아 물러나야 한다.
-    // 1) 우리 편 영웅을 때린 적 영웅 (반격 — 최우선)
-    for (const h of state.heroes) {
-      if (h.team === t.team || h.respawnT > 0 || h.aggroT <= 0) continue
-      if (!isHeroVisible(state, h, t.team)) continue
-      const d = dist2(t, h)
-      if (d < bd) {
-        bd = d
-        ref = { tk: 'hero', id: h.id }
-      }
+    // 최후의 포탑(tier3)은 더 강력하게 — 미사일을 두 발 쏜다. 표적이 둘 이상이면 각자 다른 적을 노린다.
+    const shots = t.tier === 3 ? 2 : 1
+    const used = new Set()
+    const refs = []
+    for (let i = 0; i < shots; i++) {
+      const ref = pickTowerTarget(state, t, r2, used)
+      if (!ref) break
+      used.add(ref.tk + ':' + ref.id)
+      refs.push(ref)
     }
-    // 2) 미니언
-    if (!ref) {
-      bd = r2
-      for (const m of state.minions) {
-        if (m.team === t.team) continue
-        const d = dist2(t, m)
-        if (d < bd) {
-          bd = d
-          ref = { tk: 'minion', id: m.id }
-        }
-      }
-    }
-    // 3) 미니언도 없으면 그제야 보이는 적 영웅
-    if (!ref) {
-      bd = r2
-      for (const h of state.heroes) {
-        if (h.team === t.team || h.respawnT > 0) continue
-        if (!isHeroVisible(state, h, t.team)) continue
-        const d = dist2(t, h)
-        if (d < bd) {
-          bd = d
-          ref = { tk: 'hero', id: h.id }
-        }
-      }
-    }
-    if (!ref) {
+    if (refs.length === 0) {
       // 표적이 없으면(영웅이 빠지면) 응징 연사 게이지 초기화
       t.streak = 0
       t.streakTarget = null
       continue
     }
     t.cd = TOWER_CD
-    let dmg
-    if (ref.tk === 'hero') {
-      // 같은 영웅을 연달아 맞히면 점점 세진다 (다이브 응징)
-      if (t.streakTarget === ref.id) t.streak = (t.streak || 0) + 1
+    // 응징 연사(다이브 처벌) 가중은 주 표적(첫 발)이 영웅일 때만 누적한다.
+    const primary = refs[0]
+    if (primary.tk === 'hero') {
+      if (t.streakTarget === primary.id) t.streak = (t.streak || 0) + 1
       else {
         t.streak = 0
-        t.streakTarget = ref.id
+        t.streakTarget = primary.id
       }
-      dmg = TOWER_DMG_HERO * Math.min(TOWER_RAMP_MAX, 1 + TOWER_RAMP * t.streak)
     } else {
       t.streak = 0
       t.streakTarget = null
-      dmg = TOWER_DMG_MINION
     }
-    state.projectiles.push({
-      id: state.nextId++, kind: 'towerbolt', team: t.team,
-      x: t.x, z: t.z, target: ref, dmg, speed: 34,
-    })
+    for (const ref of refs) {
+      let dmg
+      if (ref.tk === 'hero') {
+        // 주 표적만 연사 가중을 받고, 두 번째 표적은 기본 피해
+        const ramp = ref === primary ? Math.min(TOWER_RAMP_MAX, 1 + TOWER_RAMP * t.streak) : 1
+        dmg = TOWER_DMG_HERO * ramp
+      } else {
+        dmg = TOWER_DMG_MINION
+      }
+      state.projectiles.push({
+        id: state.nextId++, kind: 'towerbolt', team: t.team,
+        x: t.x, z: t.z, target: ref, dmg, speed: 34,
+      })
+    }
   }
 }
 
@@ -2008,8 +2023,14 @@ export function makeView(state) {
       vuln: t.alive && towerVulnerable(state, t),
     })),
     nexus: {
-      blue: { hp: Math.ceil(state.nexus.blue.hp), maxHp: NEXUS_HP, vuln: nexusVulnerable(state, 'blue') },
-      red: { hp: Math.ceil(state.nexus.red.hp), maxHp: NEXUS_HP, vuln: nexusVulnerable(state, 'red') },
+      blue: {
+        hp: Math.ceil(state.nexus.blue.hp), maxHp: NEXUS_HP, vuln: nexusVulnerable(state, 'blue'),
+        underAttack: state.nexus.blue.lastHurt != null && state.time - state.nexus.blue.lastHurt < 2.5,
+      },
+      red: {
+        hp: Math.ceil(state.nexus.red.hp), maxHp: NEXUS_HP, vuln: nexusVulnerable(state, 'red'),
+        underAttack: state.nexus.red.lastHurt != null && state.time - state.nexus.red.lastHurt < 2.5,
+      },
     },
     projectiles: state.projectiles.map((p) => ({
       id: p.id,
