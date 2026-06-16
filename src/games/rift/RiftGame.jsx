@@ -46,6 +46,10 @@ export default function RiftGame({ roster, onExit, net }) {
     sendAction({ type: 'sell', slot })
   }
 
+  function resetShopBuys() {
+    sendAction({ type: 'resetShop' }) // 소유권은 서버가 판정(내 영웅에만 적용)
+  }
+
   function toggleSound() {
     const n = !soundOn
     setSoundOn(n)
@@ -89,6 +93,7 @@ export default function RiftGame({ roster, onExit, net }) {
       onCast={cast}
       onBuy={buy}
       onSell={sell}
+      onResetShop={resetShopBuys}
       onRematch={isHost ? () => startGame(...lastTeamsRef.current) : null} // 같은 팀/직업으로 한판 더!
       onRestart={isHost ? () => stop() : null} // 팀 다시 나누기 = 셋업으로 복귀
       onExit={onExit}
@@ -163,7 +168,7 @@ const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padSt
 
 // 전투 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function RiftPlay({
-  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onRematch, onRestart, onExit, soundOn, onToggleSound,
+  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onRematch, onRestart, onExit, soundOn, onToggleSound,
 }) {
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
@@ -327,7 +332,7 @@ function RiftPlay({
         </button>
       )}
       {shopOpen && me && meCanShop && (
-        <RiftShop me={me} onBuy={onBuy} onSell={onSell} onClose={() => setShopOpen(false)} />
+        <RiftShop me={me} onBuy={onBuy} onSell={onSell} onResetShop={onResetShop} onClose={() => setShopOpen(false)} />
       )}
 
       {finished && (
