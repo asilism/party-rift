@@ -37,11 +37,17 @@ export function createRoomClient({ url = wsUrl(), deviceId = getDeviceId() } = {
   function connect() {
     closedByUser = false
     ws = new WebSocket(url)
+    ws.binaryType = 'arraybuffer' // 실시간 스냅샷은 바이너리 프레임으로 온다
     ws.onopen = () => {
       send({ t: 'hello', deviceId })
       emit('open')
     }
     ws.onmessage = (ev) => {
+      // 바이너리 프레임 = 실시간 게임 스냅샷(델타/full). JSON 파싱하지 않고 그대로 넘긴다.
+      if (typeof ev.data !== 'string') {
+        emit('rt', new Uint8Array(ev.data))
+        return
+      }
       let msg
       try {
         msg = JSON.parse(ev.data)
@@ -88,5 +94,10 @@ export function createRoomClient({ url = wsUrl(), deviceId = getDeviceId() } = {
     setScreen: (screen) => send({ t: 'setScreen', screen }),
     sendState: (data) => send({ t: 'state', data }),
     sendAction: (data) => send({ t: 'action', data }),
+    // 실시간 게임(④ 서버 권위)
+    rtStart: (config) => send({ t: 'rtStart', config }),
+    rtStop: () => send({ t: 'rtStop' }),
+    rtInput: (input) => send({ t: 'rtInput', input }),
+    rtAction: (action) => send({ t: 'rtAction', action }),
   }
 }

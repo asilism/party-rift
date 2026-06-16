@@ -86,6 +86,12 @@ export function RoomProvider({ intent, onLeft, children }) {
             sendAction: client.sendAction,
             subscribeState: (fn) => client.on('state', ({ data }) => fn(data)),
             subscribeAction: (fn) => client.on('action', ({ data, deviceId }) => fn(data, deviceId)),
+            // 실시간 게임(④ 서버 권위): 바이너리 스냅샷 구독 + 시작/입력/액션
+            subscribeSnapshot: (fn) => client.on('rt', (bytes) => fn(bytes)),
+            rtStart: client.rtStart,
+            rtStop: client.rtStop,
+            rtInput: client.rtInput,
+            rtAction: client.rtAction,
           }
         : null,
     }
