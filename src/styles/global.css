@@ -1910,6 +1910,17 @@ body {
   pointer-events: none; white-space: nowrap;
   animation: kart-lapmsg 2.6s ease;
 }
+.rift__nexus-alert {
+  position: absolute; top: 12%; left: 50%; transform: translateX(-50%);
+  background: rgba(176, 30, 30, 0.86); color: #fff; border-radius: 999px;
+  padding: 7px 20px; font-weight: 900; font-size: clamp(14px, 3vh, 24px);
+  white-space: nowrap; pointer-events: none; box-shadow: 0 0 22px rgba(255, 60, 60, 0.6);
+  animation: rift-nexus-alert 0.9s ease-in-out infinite;
+}
+@keyframes rift-nexus-alert {
+  0%, 100% { opacity: 0.65; transform: translateX(-50%) scale(0.98); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.04); }
+}
 .rift__dead {
   position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(ellipse at center, rgba(10, 10, 18, 0.25), rgba(8, 8, 16, 0.72));
@@ -2168,7 +2179,7 @@ body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rift-shop__sell-tag {
   position: absolute; top: -7px; right: -7px; font-size: 9px; font-weight: 900;
-  background: #d65f31; color: #fff; border-radius: 8px; padding: 1px 5px; opacity: 0;
+  background: #d65f31; color: #fff; border-radius: 8px; padding: 1px 5px; opacity: 0.85;
 }
 .rift-shop__sell:hover .rift-shop__sell-tag { opacity: 1; }
 .rift-shop__totals { flex: 1; min-width: 120px; }

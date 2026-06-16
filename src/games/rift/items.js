@@ -1,7 +1,7 @@
 // 파티 리프트 아이템 상점 데이터 (순수 JS — three.js / 엔진 의존 없음).
 //  - 미니언/정글몹/타워/적 영웅을 처치하면 골드를 얻는다.
 //  - 넥서스 회복 지대(우물)에서 상점을 열어 아이템을 산다 (인벤토리 3칸).
-//  - 카테고리 4종(마법/공격/방어/유틸) × 5개 = 20종. 조합은 없음(초안).
+//  - 카테고리 4종(마법/공격/방어/유틸) × 6개 = 24종 (각 타입에 2천 골드 이상 최종 장비 1개). 조합은 없음(초안).
 //
 // 각 아이템은 stats로 영웅 능력치에 더해진다(패시브):
 //   atk        기본공격 공격력 +
@@ -63,6 +63,8 @@ export const ITEMS = [
     desc: '주문 위력 + 단단함.', stats: { power: 35, hp: 150 } },
   { id: 'void_staff', cat: 'magic', name: '공허의 지팡이', icon: '🌌', cost: 1150,
     desc: '주문 위력을 폭발적으로 올린다.', stats: { power: 70 } },
+  { id: 'archmage_staff', cat: 'magic', name: '대마법사의 홀', icon: '🪄', cost: 2400,
+    desc: '주문 위력 + 쿨다운 + 체력. 마법 최종 장비.', stats: { power: 90, cdr: 0.2, hp: 200 } },
 
   // ── 공격 (기본공격 위주) ──
   { id: 'dagger', cat: 'attack', name: '단검', icon: '🗡️', cost: 250,
@@ -75,6 +77,8 @@ export const ITEMS = [
     desc: '공격 속도를 크게 올린다.', stats: { atkSpeed: 0.25, atk: 12 } },
   { id: 'executioner', cat: 'attack', name: '처형자의 대검', icon: '💀', cost: 1150,
     desc: '압도적인 공격력.', stats: { atk: 55 } },
+  { id: 'dragon_blade', cat: 'attack', name: '용살자의 대검', icon: '🐲', cost: 2300,
+    desc: '엄청난 공격력 + 공격 속도 + 흡혈. 공격 최종 장비.', stats: { atk: 75, atkSpeed: 0.2, lifesteal: 0.12 } },
 
   // ── 방어 (체력 / 피해 감소) ──
   { id: 'leather', cat: 'defense', name: '가죽 갑옷', icon: '🧥', cost: 300,
@@ -87,6 +91,8 @@ export const ITEMS = [
     desc: '엄청난 체력.', stats: { hp: 450 } },
   { id: 'thornmail', cat: 'defense', name: '가시 갑옷', icon: '🌵', cost: 1000,
     desc: '체력 + 피해 감소 + 재생.', stats: { hp: 200, def: 0.1, regen: 0.01 } },
+  { id: 'immortal_plate', cat: 'defense', name: '불멸의 갑주', icon: '🏰', cost: 2200,
+    desc: '거대한 체력 + 피해 감소 + 재생. 방어 최종 장비.', stats: { hp: 500, def: 0.18, regen: 0.015 } },
 
   // ── 유틸 (속도 / 쿨다운 / 재생 / 사거리) ──
   { id: 'boots', cat: 'util', name: '신속의 장화', icon: '👟', cost: 300,
@@ -99,6 +105,8 @@ export const ITEMS = [
     desc: '체력이 꾸준히 차오른다.', stats: { regen: 0.018, hp: 100 } },
   { id: 'sage_stone', cat: 'util', name: '현자의 돌', icon: '💎', cost: 1300,
     desc: '모든 능력치를 조금씩.', stats: { power: 15, atk: 10, hp: 120, cdr: 0.12, speed: 1 } },
+  { id: 'time_hourglass', cat: 'util', name: '시간의 모래시계', icon: '⏳', cost: 2500,
+    desc: '쿨다운·이동 속도·위력·체력을 두루. 유틸 최종 장비.', stats: { cdr: 0.25, speed: 3, power: 30, hp: 150 } },
 ]
 
 export const ITEMS_BY_ID = Object.fromEntries(ITEMS.map((it) => [it.id, it]))
