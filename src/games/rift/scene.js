@@ -388,12 +388,80 @@ function buildHero(h, mine, barColor) {
   // 직업 무기 — 몸통에 붙여 바라보는 방향과 함께 돈다
   const weapon = buildWeapon(h.cls)
   body.add(weapon)
-  g.add(body, face, name, bar, ring, buff, shield, stun, recall, recallBeam)
+  // 사망 시 분해 파티클: 몸에서 튀어 올랐다가 바닥에 쌓여 부활까지 남는다 (공중에서 사라지지 않게)
+  const DEATH_N = 28
+  const deathGeo = new THREE.BufferGeometry()
+  deathGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(DEATH_N * 3), 3))
+  const deathPts = new THREE.Points(
+    deathGeo,
+    new THREE.PointsMaterial({ color: col, size: 1.15, transparent: true, opacity: 0.92, depthWrite: false })
+  )
+  deathPts.visible = false
+  deathPts.frustumCulled = false
+  // 파티클별 고정 파라미터 (영웅 id 시드 — 같은 죽음이면 어느 기기에서나 같은 모양)
+  const rnd = lcg((hashStr(h.id) + 1) >>> 0)
+  const dpDir = new Float32Array(DEATH_N * 2)
+  const dpRad = new Float32Array(DEATH_N)
+  const dpStartY = new Float32Array(DEATH_N)
+  const dpPeak = new Float32Array(DEATH_N)
+  for (let i = 0; i < DEATH_N; i++) {
+    const a = rnd() * Math.PI * 2
+    dpDir[i * 2] = Math.cos(a)
+    dpDir[i * 2 + 1] = Math.sin(a)
+    dpRad[i] = 0.4 + rnd() * 2.1
+    dpStartY[i] = 1.2 * s + rnd() * 2.6 * s
+    dpPeak[i] = 0.3 + rnd() * 1.2
+  }
+  g.add(body, face, name, bar, ring, buff, shield, stun, recall, recallBeam, deathPts)
   g.userData = {
-    body, face, name, nameColor, nameLvl: h.lvl,
+    body, face, name, nameColor, nameLvl: h.lvl, isMine: mine,
     bar, ring, buff, shield, stun, recall, recallBeam, weapon, lastAtkSeq: h.atkSeq, animT: 1,
+    deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
+}
+
+// 문자열 id → 32비트 정수 시드 (사망 파티클 모양 고정용)
+function hashStr(str) {
+  let h = 2166136261
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+// 사망 시: 일반 부위는 숨기고 파티클만, 부활 시: 반대로
+function setHeroDead(u, dead) {
+  u.body.visible = !dead
+  u.face.visible = !dead
+  u.name.visible = !dead
+  u.bar.visible = !dead
+  u.ring.visible = !dead && u.isMine
+  u.deathPts.visible = dead
+  if (dead) {
+    u.buff.visible = false
+    u.shield.visible = false
+    u.stun.visible = false
+    u.recall.visible = false
+    u.recallBeam.visible = false
+  }
+}
+
+// 사망 파티클 위치 갱신: deathT(초)에 따라 튀어올랐다 바닥(y≈0.18)에 쌓인다
+function updateHeroDeathParticles(u) {
+  const SETTLE = 0.7
+  const GROUND = 0.18
+  const tn = Math.min(1, u.deathT / SETTLE)
+  const ease = 1 - (1 - tn) * (1 - tn) // 바깥으로 퍼졌다가 멈춤
+  const pos = u.deathGeo.attributes.position.array
+  for (let i = 0; i < u.deathN; i++) {
+    const hr = u.dpRad[i] * ease
+    pos[i * 3] = u.dpDir[i * 2] * hr
+    pos[i * 3 + 1] = GROUND + (u.dpStartY[i] - GROUND) * (1 - tn) + u.dpPeak[i] * 4 * tn * (1 - tn)
+    pos[i * 3 + 2] = u.dpDir[i * 2 + 1] * hr
+  }
+  u.deathGeo.attributes.position.needsUpdate = true
 }
 
 function buildMinion(m, barColor) {
@@ -872,10 +940,27 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
       (h) => buildHero(h, h.id === myId, barColorOf(h.team)),
       (obj, h) => {
         const dead = h.respawnT > 0
-        obj.visible = !dead && isHeroVisible(view, h, myTeam)
+        const u = obj.userData
+        // 사망: 그 자리에서 파티클로 분해되어 바닥에 쌓이고 부활까지 남는다
+        if (dead) {
+          obj.visible = true // 시체 파티클은 늘 보인다 (쓰러뜨렸음을 알림)
+          obj.position.set(h.x, 0, h.z)
+          if (!u.dead) {
+            u.dead = true
+            u.deathT = 0
+          }
+          u.deathT += dt
+          updateHeroDeathParticles(u)
+          setHeroDead(u, true)
+          return
+        }
+        if (u.dead) {
+          u.dead = false
+          setHeroDead(u, false) // 부활 — 파티클 제거하고 영웅 복원
+        }
+        obj.visible = isHeroVisible(view, h, myTeam)
         if (!obj.visible) return
         obj.position.set(h.x, 0, h.z)
-        const u = obj.userData
         u.body.rotation.y = -h.dir
         if (h.lvl !== u.nameLvl) {
           u.nameLvl = h.lvl

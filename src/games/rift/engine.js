@@ -144,7 +144,7 @@ const MINION_DEFEND_LEASH = 16 // 가해자를 쫓다 시작점에서 이만큼 
 const MINION_DEFEND_HURT_T = 1.5 // 아군이 최근 이 시간 안에 맞았어야 "공격받는 중"으로 본다
 
 // ── 타워/넥서스 ──
-const TOWER_HP = [0, 900, 1100, 1500] // tier 1(외곽) / 2(내곽) / 3(넥서스 최후의 포탑)
+const TOWER_HP = [0, 1800, 2200, 3000] // tier 1(외곽) / 2(내곽) / 3(넥서스 최후의 포탑) — 건물이 쉽게 안 터지게 2배
 export const TOWER_RANGE = 13
 const TOWER_CD = 1.2
 const TOWER_DMG_HERO = 180 // 영웅 기본 피해 — 같은 영웅을 연속으로 맞히면 점점 세진다
@@ -154,7 +154,7 @@ const TOWER_DMG_MINION = 60
 const TOWER_RAMP = 0.9
 const TOWER_RAMP_MAX = 4
 const TOWER_XP = 90
-const NEXUS_HP = 1700
+const NEXUS_HP = 3400 // 넥서스도 2배 — 쉽게 터지지 않게
 
 // ── 정글 ──
 // 용/바론은 "분노(enrage)"를 쌓는다 — 교전이 길어질수록 피해/이동속도가 점점 오른다.
@@ -842,7 +842,7 @@ function damageHero(state, victim, amount, attacker) {
   victim.shieldT = 0
   victim.dragonT = 0
   victim.baronT = 0
-  pushFx(state, 'death', victim.x, victim.z, 3, victim.team)
+  // 영웅은 공중 분해 버스트 대신, 렌더러가 시체를 바닥에 쌓이는 파티클로 표현한다(부활까지 유지).
   const killer = state.heroes.find((h) => h.id === victim.lastHitBy && h.team !== victim.team)
   if (killer) {
     killer.kills++
