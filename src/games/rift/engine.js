@@ -31,6 +31,27 @@ const BOT_ROLES = {
 // 역할 → 행군할 레인 (jungle은 별도 로직, 기본값 mid)
 const laneOfRole = (role) => (role === 'support' ? 'bot' : LANE_IDS.includes(role) ? role : 'mid')
 
+// 직업이 선호하는 역할(앞에서부터). 같은 역할이 겹치거나 그 모드에 없으면 다음 후보로.
+//  · 🔮마법사 미드 · 🛡️탱커 탑 · 🏹궁수 봇 · 💚힐러 봇(지원) · 🥷암살자·⚔️전사 정글(없으면 빈 레인)
+const ROLE_PREF = {
+  mage: ['mid', 'top', 'bot'],
+  tank: ['top', 'bot', 'mid'],
+  archer: ['bot', 'mid', 'top'],
+  healer: ['support', 'bot', 'top', 'mid'],
+  assassin: ['jungle', 'mid', 'bot', 'top'],
+  warrior: ['jungle', 'top', 'mid', 'bot'],
+}
+// 한 봇에게 그 모드의 역할 풀에서 직업 선호에 맞는 빈 역할을 고른다(겹치면 다음 후보 → 남은 자리).
+function pickRole(cls, mode, taken) {
+  const slots = BOT_ROLES[mode] || BOT_ROLES['3v3']
+  const prefs = ROLE_PREF[cls] || slots
+  return (
+    prefs.find((r) => slots.includes(r) && !taken.includes(r)) ||
+    slots.find((r) => !taken.includes(r)) ||
+    'mid'
+  )
+}
+
 // ── 직업 (한 팀에 같은 직업은 한 명만) ──
 // 기본공격은 모두 자동 조준이지만 사거리/속도/딜이 다르고,
 // 스킬과 궁극기는 직업마다 완전히 다르다.
@@ -126,6 +147,7 @@ const REGEN_RATE = 0.015 // 초당 최대 HP 비율
 const FOUNTAIN_HEAL = 0.12
 const FOUNTAIN_DMG = 90 // 적 우물에 들어가면 따끔!
 const XP_RANGE = 22 // 처치 경험치를 나눠 받는 거리
+const KILL_CREDIT_T = 7 // 마지막으로 때린 적 영웅이 이 시간 안에 죽어야 그의 킬 (지나면 미니언/타워 처형)
 const TOWER_AGGRO_TIME = 3 // 적 영웅을 때리면 타워가 이만큼 노린다
 export const RECALL_TIME = 4 // 귀환 시전(채널링) 시간 — 방해 없이 버티면 우물로 복귀
 
@@ -226,7 +248,6 @@ export function createGame(players, opts = {}) {
   const teamSize = TEAM_SIZES[mode]
   const map = buildMap(mode)
   const slotCount = { blue: 0, red: 0 }
-  const botRoles = { blue: [...BOT_ROLES[mode]], red: [...BOT_ROLES[mode]] }
   const usedCls = { blue: new Set(), red: new Set() }
   const heroes = players.map((p) => {
     const slot = slotCount[p.team]++
@@ -244,7 +265,7 @@ export function createGame(players, opts = {}) {
       team: p.team,
       cls,
       isBot: !!p.isBot,
-      role: p.isBot ? botRoles[p.team].shift() || 'mid' : null,
+      role: null, // 봇 역할은 아래에서 직업 기준으로 배정 (사람은 null로 자유 이동)
       x: pos.x,
       z: pos.z,
       homeX: map.NEXUS_POS[p.team].x, // 우물(회복 지대) 중심 — inFountain 판정용
@@ -280,7 +301,8 @@ export function createGame(players, opts = {}) {
       revealT: 0, // 공격 직후 모습이 드러나는 시간
       aggroT: 0, // 적 영웅을 때린 직후 — 타워가 우선 조준
       lastHurt: -99,
-      lastHitBy: null, // 마지막으로 나를 때린 영웅 (킬 크레딧)
+      lastHitBy: null, // 마지막으로 나를 때린 적 영웅 (킬 크레딧)
+      lastHitT: -99, // 그 적 영웅에게 맞은 시각 (KILL_CREDIT_T 안이어야 킬 인정)
       dragonT: 0, // 용 버프 남은 시간
       baronT: 0, // 바론 버프 남은 시간
       kills: 0,
@@ -300,6 +322,16 @@ export function createGame(players, opts = {}) {
   for (const h of heroes) {
     h.maxHp = heroMaxHp(h)
     h.hp = h.maxHp
+  }
+  // 봇 역할 배정(팀별): 직업이 선호하는 라인을 잡되, 겹치면 남은 자리를 채워 라인 공백을 막는다.
+  //  → 마법사 미드 / 탱커 탑 / 궁수·힐러 봇 / 전사·암살자 정글(5:5)
+  for (const team of ['blue', 'red']) {
+    const taken = []
+    for (const h of heroes) {
+      if (!h.isBot || h.team !== team) continue
+      h.role = pickRole(h.cls, mode, taken)
+      taken.push(h.role)
+    }
   }
   const monsters = [
     ...map.WOLF_CAMPS.map((c, i) => ({
@@ -361,10 +393,9 @@ export function makeBot(state, id) {
   h.isBot = true
   h.mx = 0
   h.mz = 0
-  // 비어 있는 역할(레인/정글/지원)부터 맡는다
-  const roles = BOT_ROLES[state.mode] || BOT_ROLES['3v3']
+  // 직업 선호에 맞는 역할을 맡되, 이미 다른 봇이 가진 역할은 피한다
   const taken = state.heroes.filter((o) => o.isBot && o.team === h.team && o !== h).map((o) => o.role)
-  h.role = roles.find((r) => !taken.includes(r)) || 'mid'
+  h.role = pickRole(h.cls, state.mode, taken)
   h.botStrafe = state.rng() * Math.PI * 2
   h.botStuckT = 0
   h.botRecall = false
@@ -569,13 +600,12 @@ export function canShop(h) {
 
 // 골드 지급 + 획득 표시(fx). 미니언 막타 등 "내가 얻은 골드"만 본인에게 떠오른다.
 function awardGold(state, h, amount, x, z) {
+  if (h.respawnT > 0) return // 죽어 있는 동안엔 골드를 받지 못한다
   h.gold += amount
-  if (h.respawnT <= 0) {
-    state.fx.push({
-      id: state.nextId++, kind: 'gold', x: x ?? h.x, z: z ?? h.z,
-      r: 0, t: 0, team: h.team, owner: h.id, n: Math.round(amount),
-    })
-  }
+  state.fx.push({
+    id: state.nextId++, kind: 'gold', x: x ?? h.x, z: z ?? h.z,
+    r: 0, t: 0, team: h.team, owner: h.id, n: Math.round(amount),
+  })
 }
 
 // 팀 전원에게 골드 (용/바론/타워 같은 오브젝트)
@@ -912,6 +942,7 @@ function damageHero(state, victim, amount, attacker) {
   if (victim.recallT > 0) victim.recallT = 0 // 피해를 받으면 귀환이 끊긴다
   if (attacker?.id) {
     victim.lastHitBy = attacker.id
+    victim.lastHitT = state.time // 킬 크레딧 시한 판정용 (미니언/타워/우물은 attacker가 없어 안 바뀐다)
     attacker.aggroT = TOWER_AGGRO_TIME // 타워 앞에서 깐족이면 타워가 노린다
     victim.revealT = Math.max(victim.revealT, 0.8) // 맞으면 잠깐 드러난다
   }
@@ -927,7 +958,12 @@ function damageHero(state, victim, amount, attacker) {
   victim.dragonT = 0
   victim.baronT = 0
   // 영웅은 공중 분해 버스트 대신, 렌더러가 시체를 바닥에 쌓이는 파티클로 표현한다(부활까지 유지).
-  const killer = state.heroes.find((h) => h.id === victim.lastHitBy && h.team !== victim.team)
+  // 킬 크레딧: 마지막으로 때린 적 영웅이 최근(KILL_CREDIT_T 초)일 때만. 오래됐으면
+  //  미니언/타워에 의한 처형으로 보고 개인 크레딧/킬 보상 없이 처리한다.
+  const recent = state.time - victim.lastHitT <= KILL_CREDIT_T
+  const killer = recent
+    ? state.heroes.find((h) => h.id === victim.lastHitBy && h.team !== victim.team)
+    : null
   if (killer) {
     killer.kills++
     state.kills[killer.team]++
@@ -1046,6 +1082,7 @@ function awardXp(state, team, at, amount, killer) {
 }
 
 function giveXp(state, h, amount) {
+  if (h.respawnT > 0) return // 죽어 있는 동안엔 경험치를 받지 못한다
   if (h.lvl >= MAX_LEVEL) return
   h.xp += amount
   let up = false
@@ -1169,6 +1206,7 @@ function stepHero(state, h, dt) {
       h.z = pos.z
       h.hp = h.maxHp
       h.lastHitBy = null
+      h.lastHitT = -99
       h.bushI = -1
       h.dir = h.team === 'blue' ? 0 : Math.PI
     }
