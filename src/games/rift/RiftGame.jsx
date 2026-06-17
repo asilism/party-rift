@@ -107,8 +107,9 @@ export default function RiftGame({ roster, onExit, net }) {
 const FX_SOUND = {
   dash: 'melee', blink: 'melee', execute: 'melee', whirl: 'melee', // 근접 타격
   volley: 'ranged', lightarrow: 'ranged', // 원거리 타격
-  boom: 'magic', meteorhit: 'magic', fissure: 'magic', // 마법 타격
+  boom: 'magic', meteorhit: 'magic', fissure: 'magic', chain: 'magic', // 마법 타격
   heal: 'heal', holylight: 'heal', shield: 'shield', // 보조
+  berserk: 'melee', taunt: 'shield', haste: 'heal', stealth: 'shield', hawk: 'ranged', // 보조 스킬
   towerfall: 'tower', nexusfall: 'nexus', // 건물 파괴
 }
 const FX_PLAY = {
@@ -247,6 +248,7 @@ function RiftPlay({
           }}
           onAttack={() => onCast('atk')}
           onSkill={() => onCast('skill')}
+          onSkill2={() => onCast('skill2')}
           onUlt={() => onCast('ult')}
           onRecall={() => onCast('recall')}
           me={me}

@@ -1,6 +1,6 @@
 // 파티 리프트 — 실시간 네트코드 어댑터(서버 권위 + 클라 예측/보간 공용).
 import {
-  createGame, setInput, castAttack, castSkill, castUlt, castRecall, buyItem, sellItem, resetShop,
+  createGame, setInput, castAttack, castSkill, castSkill2, castUlt, castRecall, buyItem, sellItem, resetShop,
   step, makeView, makeBot, STEP, TEAM_SIZE, TEAM_SIZES, CLASS_IDS,
 } from './engine.js'
 import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
@@ -44,6 +44,7 @@ export const riftNet = {
     if (action.type === 'cast') {
       if (action.slot === 'atk') castAttack(state, pid)
       else if (action.slot === 'skill') castSkill(state, pid)
+      else if (action.slot === 'skill2') castSkill2(state, pid)
       else if (action.slot === 'ult') castUlt(state, pid)
       else if (action.slot === 'recall') castRecall(state, pid)
     } else if (action.type === 'buy') buyItem(state, pid, action.itemId)

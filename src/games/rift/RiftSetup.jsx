@@ -135,7 +135,7 @@ export default function RiftSetup({ racers, benched, onStart, onExit }) {
                   <button
                     className="rift-setup__cls"
                     onClick={() => cycleClass(p)}
-                    title={`${cls.desc} — 스킬: ${cls.skill.name}(${cls.skill.desc}) / 궁극기: ${cls.ult.name}(${cls.ult.desc})`}
+                    title={`${cls.desc} — 스킬: ${cls.skill.name}(${cls.skill.desc})${cls.skill2 ? ` / 보조(Lv3): ${cls.skill2.name}(${cls.skill2.desc})` : ''} / 궁극기(Lv5): ${cls.ult.name}(${cls.ult.desc})`}
                   >
                     {cls.icon} {cls.name}
                   </button>

@@ -766,6 +766,7 @@ const PROJ_LOOK = {
   towerbolt: { r: 0.55, y: 4, color: null },
   pierce: { r: 0.34, y: 2.2, color: 0xfff0a0 }, // 궁수 꿰뚫는 화살 (밝은 노랑)
   lightarrow: { r: 0.6, y: 2.2, color: 0xfff4b0 }, // 빛의 화살 궁극기 (크고 환한 빛)
+  hawk: { r: 0.7, y: 5.5, color: 0xffe066 }, // 궁수 사냥매 (높이 떠 날아가는 빛점)
 }
 
 // 스킬 이펙트 색 + 파티클 모드 (kind → 색/파티클 움직임).
@@ -787,10 +788,17 @@ const FX_LOOK = {
   death: { color: 0x39405c, ring: true, mode: 'out' },
   shield: { color: 0x9fd0ff, ring: true, mode: 'rise', pcolor: 0xd0eaff },
   recall: { color: 0x4ad6e0, ring: true, mode: 'rise', pcolor: 0xa0f0f7 },
+  // 보조 스킬(Lv3) 이펙트
+  berserk: { color: 0xff3b30, ring: true, mode: 'out', pcolor: 0xff8a7a }, // 전사 광폭화 — 붉은 폭발
+  taunt: { color: 0xff5fa0, ring: true, mode: 'out', pcolor: 0xffb0d0 }, // 탱커 도발 — 퍼지는 동심원
+  haste: { color: 0x7ad8ff, ring: true, mode: 'rise', pcolor: 0xc0f0ff }, // 힐러 가속 — 시원한 바람
+  stealth: { color: 0x8a8fb0, ring: true, mode: 'rise', pcolor: 0xcfd4f0 }, // 암살자 은신 — 연기처럼 사라짐
+  hawk: { color: 0xffe066, ring: true, mode: 'rise', pcolor: 0xfff0a0 }, // 궁수 사냥매 — 날아오르는 깃털
   // 앞으로 뻗는 방향성 스킬
   dash: { color: 0xffffff, line: true, mode: 'forward', pcolor: 0xffffff, w: 2.2 },
   fissure: { color: 0xc9863c, line: true, mode: 'forward', pcolor: 0xffb060, w: 3.4, ground: true },
   volley: { color: 0xfff0a0, line: true, mode: 'forward', pcolor: 0xfff4c0, w: 1.4 },
+  chain: { color: 0x9fd6ff, line: true, mode: 'forward', pcolor: 0xe0f2ff, w: 1.0 }, // 마법사 체인 라이트닝 — 푸른 번개 줄기
   lightarrow: { color: 0xfff4b0, line: true, mode: 'forward', pcolor: 0xfffbe0, w: 7 }, // 화면 끝까지 관통하는 넓은 빛줄기
 }
 
@@ -1036,6 +1044,7 @@ function createFog(map) {
     }
     for (const o of view.minions) if (o.team === myTeam) punch(o.x, o.z, SIGHT_RANGE * 0.75)
     for (const o of view.towers) if (o.team === myTeam && o.alive) punch(o.x, o.z, SIGHT_RANGE * 0.9)
+    for (const rv of view.reveals || []) if (rv.team === myTeam) punch(rv.x, rv.z, rv.r) // 사냥매가 걷은 안개
     punch(map.NEXUS_POS[myTeam].x, map.NEXUS_POS[myTeam].z, SIGHT_RANGE)
     tex.needsUpdate = true
   }
@@ -1411,7 +1420,12 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
         if (t.team === myTeam && t.alive && (t.x - x) ** 2 + (t.z - z) ** 2 <= SIGHT2) return true
       }
       const nx = NEXUS_POS[myTeam]
-      return (nx.x - x) ** 2 + (nx.z - z) ** 2 <= SIGHT2
+      if ((nx.x - x) ** 2 + (nx.z - z) ** 2 <= SIGHT2) return true
+      // 사냥매가 걷어 둔 안개 흔적 안이면 보인다
+      for (const rv of view.reveals || []) {
+        if (rv.team === myTeam && (rv.x - x) ** 2 + (rv.z - z) ** 2 <= rv.r * rv.r) return true
+      }
+      return false
     }
 
     // 타워
@@ -1511,11 +1525,17 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
         // 기절: 머리 위 💫가 빙글빙글 돈다 (어지러운 상태 표시)
         u.stun.visible = h.stunT > 0
         if (h.stunT > 0) u.stun.material.rotation = view.time * 6
-        // 빙결: 머리 위 ❄️ + 몸이 푸르게 얼어붙는다
+        // 빙결: 머리 위 ❄️ + 몸이 푸르게 얼어붙는다 / 광폭화: 몸이 빨갛게 달아오른다
         const frozen = h.freezeT > 0
         u.freeze.visible = frozen
         if (frozen) u.freeze.material.rotation = Math.sin(view.time * 4) * 0.4
-        u.body.material.emissive?.setRGB(frozen ? 0.18 : 0, frozen ? 0.35 : 0, frozen ? 0.6 : 0)
+        if (frozen) u.body.material.emissive?.setRGB(0.18, 0.35, 0.6)
+        else if (h.berserkT > 0) {
+          // 첫 3초 전력(1) → 이후 서서히 잦아듦. 빨갛게 + 살짝 맥동
+          const st = h.berserkT > 3 ? 1 : h.berserkT / 3
+          const pulse = 0.85 + Math.sin(view.time * 12) * 0.15
+          u.body.material.emissive?.setRGB(0.7 * st * pulse, 0.05 * st, 0)
+        } else u.body.material.emissive?.setRGB(0, 0, 0)
         u.recall.visible = h.recallT > 0
         u.recallBeam.visible = h.recallT > 0
         if (h.recallT > 0) {
@@ -1526,10 +1546,10 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
         u.shield.visible = h.shieldT > 0
         u.buff.visible = h.dragonT > 0 || h.baronT > 0
         u.buff.material.color.set(h.baronT > 0 ? 0x9b6bd6 : 0xffa94d)
-        // 아군이 수풀에 숨으면 반투명하게 (적에겐 아예 안 보인다)
-        const hide = h.bushI >= 0
-        u.body.material.opacity = hide ? 0.5 : 1
-        u.face.material.opacity = hide ? 0.6 : 1
+        // 아군이 수풀에 숨거나 은신하면 반투명하게 (적에겐 아예 안 보인다)
+        const hide = h.bushI >= 0 || h.stealthT > 0
+        u.body.material.opacity = hide ? 0.45 : 1
+        u.face.material.opacity = hide ? 0.55 : 1
         // 공격 모션: atkSeq가 바뀌면 무기를 휘두른다
         if (h.atkSeq !== u.lastAtkSeq) {
           u.lastAtkSeq = h.atkSeq

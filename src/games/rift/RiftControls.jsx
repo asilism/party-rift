@@ -5,7 +5,7 @@ const JOY_RADIUS = 60 // px. 이만큼 끌면 풀 스피드
 const ATK_REPEAT_MS = 220 // 공격 버튼을 누르고 있으면 연타해 준다
 
 // 이동 조작: 화면 아무 데나 드래그하면 그 자리에 조이스틱이 생기고(8방향 이동),
-// 오른쪽 아래에 기본공격 + 직업 스킬 + 궁극기 버튼 (스킬 이름 표시).
+// 오른쪽 아래에 기본공격 + 직업 스킬 + 보조 스킬 + 궁극기 버튼 (스킬 이름 표시).
 const KEYS = {
   left: new Set(['ArrowLeft', 'a', 'A']),
   right: new Set(['ArrowRight', 'd', 'D']),
@@ -65,7 +65,7 @@ function RecallButton({ recallT, onPress }) {
   )
 }
 
-export default function RiftControls({ onMove, onAttack, onSkill, onUlt, onRecall, me, disabled }) {
+export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUlt, onRecall, me, disabled }) {
   const [joy, setJoy] = useState(null) // {ox, oy, dx, dy}
   const joyPointer = useRef(null)
   const onMoveRef = useRef(onMove)
@@ -77,6 +77,8 @@ export default function RiftControls({ onMove, onAttack, onSkill, onUlt, onRecal
   // 눌린 키 집합(held)이 초기화돼 대각(동시키) 입력이 사라진다.
   const onSkillRef = useRef(onSkill)
   onSkillRef.current = onSkill
+  const onSkill2Ref = useRef(onSkill2)
+  onSkill2Ref.current = onSkill2
   const onUltRef = useRef(onUlt)
   onUltRef.current = onUlt
   const onRecallRef = useRef(onRecall)
@@ -84,7 +86,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onUlt, onRecal
   const atkTimer = useRef(null)
   const cls = CLASSES[me?.cls] || CLASSES.warrior
 
-  // 키보드: WASD/화살표 이동(대각 포함), Space/J 공격, K 스킬, L 궁극기, B 귀환
+  // 키보드: WASD/화살표 이동(대각 포함), Space/J 공격, K 스킬, I 보조 스킬, L 궁극기, B 귀환
   useEffect(() => {
     const held = new Set()
     const apply = () => {
@@ -103,6 +105,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onUlt, onRecal
         return
       }
       if (e.key === 'k' || e.key === 'K') return onSkillRef.current?.()
+      if (e.key === 'i' || e.key === 'I') return onSkill2Ref.current?.()
       if (e.key === 'l' || e.key === 'L') return onUltRef.current?.()
       if (e.key === 'b' || e.key === 'B') return onRecallRef.current?.()
       for (const set of Object.values(KEYS)) {
@@ -191,9 +194,21 @@ export default function RiftControls({ onMove, onAttack, onSkill, onUlt, onRecal
         cd={me?.ultCd ?? 0}
         cdMax={cls.ult.cd}
         locked={me?.ultLocked}
-        lockText="Lv3 해금"
+        lockText="Lv5 해금"
         onPress={onUlt}
       />
+      {cls.skill2 && (
+        <CdButton
+          className="rift-btn--skill2"
+          icon={cls.skill2.icon}
+          label={cls.skill2.name}
+          cd={me?.skill2Cd ?? 0}
+          cdMax={cls.skill2.cd}
+          locked={me?.skill2Locked}
+          lockText="Lv3 해금"
+          onPress={onSkill2}
+        />
+      )}
       <CdButton
         className="rift-btn--skill"
         icon={cls.skill.icon}
