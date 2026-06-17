@@ -31,6 +31,27 @@ const BOT_ROLES = {
 // 역할 → 행군할 레인 (jungle은 별도 로직, 기본값 mid)
 const laneOfRole = (role) => (role === 'support' ? 'bot' : LANE_IDS.includes(role) ? role : 'mid')
 
+// 직업이 선호하는 역할(앞에서부터). 같은 역할이 겹치거나 그 모드에 없으면 다음 후보로.
+//  · 🔮마법사 미드 · 🛡️탱커 탑 · 🏹궁수 봇 · 💚힐러 봇(지원) · 🥷암살자·⚔️전사 정글(없으면 빈 레인)
+const ROLE_PREF = {
+  mage: ['mid', 'top', 'bot'],
+  tank: ['top', 'bot', 'mid'],
+  archer: ['bot', 'mid', 'top'],
+  healer: ['support', 'bot', 'top', 'mid'],
+  assassin: ['jungle', 'mid', 'bot', 'top'],
+  warrior: ['jungle', 'top', 'mid', 'bot'],
+}
+// 한 봇에게 그 모드의 역할 풀에서 직업 선호에 맞는 빈 역할을 고른다(겹치면 다음 후보 → 남은 자리).
+function pickRole(cls, mode, taken) {
+  const slots = BOT_ROLES[mode] || BOT_ROLES['3v3']
+  const prefs = ROLE_PREF[cls] || slots
+  return (
+    prefs.find((r) => slots.includes(r) && !taken.includes(r)) ||
+    slots.find((r) => !taken.includes(r)) ||
+    'mid'
+  )
+}
+
 // ── 직업 (한 팀에 같은 직업은 한 명만) ──
 // 기본공격은 모두 자동 조준이지만 사거리/속도/딜이 다르고,
 // 스킬과 궁극기는 직업마다 완전히 다르다.
@@ -227,7 +248,6 @@ export function createGame(players, opts = {}) {
   const teamSize = TEAM_SIZES[mode]
   const map = buildMap(mode)
   const slotCount = { blue: 0, red: 0 }
-  const botRoles = { blue: [...BOT_ROLES[mode]], red: [...BOT_ROLES[mode]] }
   const usedCls = { blue: new Set(), red: new Set() }
   const heroes = players.map((p) => {
     const slot = slotCount[p.team]++
@@ -245,7 +265,7 @@ export function createGame(players, opts = {}) {
       team: p.team,
       cls,
       isBot: !!p.isBot,
-      role: p.isBot ? botRoles[p.team].shift() || 'mid' : null,
+      role: null, // 봇 역할은 아래에서 직업 기준으로 배정 (사람은 null로 자유 이동)
       x: pos.x,
       z: pos.z,
       homeX: map.NEXUS_POS[p.team].x, // 우물(회복 지대) 중심 — inFountain 판정용
@@ -302,6 +322,16 @@ export function createGame(players, opts = {}) {
   for (const h of heroes) {
     h.maxHp = heroMaxHp(h)
     h.hp = h.maxHp
+  }
+  // 봇 역할 배정(팀별): 직업이 선호하는 라인을 잡되, 겹치면 남은 자리를 채워 라인 공백을 막는다.
+  //  → 마법사 미드 / 탱커 탑 / 궁수·힐러 봇 / 전사·암살자 정글(5:5)
+  for (const team of ['blue', 'red']) {
+    const taken = []
+    for (const h of heroes) {
+      if (!h.isBot || h.team !== team) continue
+      h.role = pickRole(h.cls, mode, taken)
+      taken.push(h.role)
+    }
   }
   const monsters = [
     ...map.WOLF_CAMPS.map((c, i) => ({
@@ -363,10 +393,9 @@ export function makeBot(state, id) {
   h.isBot = true
   h.mx = 0
   h.mz = 0
-  // 비어 있는 역할(레인/정글/지원)부터 맡는다
-  const roles = BOT_ROLES[state.mode] || BOT_ROLES['3v3']
+  // 직업 선호에 맞는 역할을 맡되, 이미 다른 봇이 가진 역할은 피한다
   const taken = state.heroes.filter((o) => o.isBot && o.team === h.team && o !== h).map((o) => o.role)
-  h.role = roles.find((r) => !taken.includes(r)) || 'mid'
+  h.role = pickRole(h.cls, state.mode, taken)
   h.botStrafe = state.rng() * Math.PI * 2
   h.botStuckT = 0
   h.botRecall = false
