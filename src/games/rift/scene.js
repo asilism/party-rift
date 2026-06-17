@@ -782,6 +782,8 @@ const FX_LOOK = {
   blink: { color: 0x9a7bff, ring: true, mode: 'out', pcolor: 0xc9b8ff },
   execute: { color: 0xff3b3b, ring: true, mode: 'out', pcolor: 0xff9a9a },
   level: { color: 0xffe066, ring: true, mode: 'rise', pcolor: 0xfff0a0 },
+  towerfall: { color: 0xff8c2e, ring: true, mode: 'out', pcolor: 0xffcaa0 }, // 포탑 붕괴
+  nexusfall: { color: 0xffe066, ring: true, mode: 'out', pcolor: 0xfff3b0 }, // 넥서스 폭발
   death: { color: 0x39405c, ring: true, mode: 'out' },
   shield: { color: 0x9fd0ff, ring: true, mode: 'rise', pcolor: 0xd0eaff },
   recall: { color: 0x4ad6e0, ring: true, mode: 'rise', pcolor: 0xa0f0f7 },
