@@ -321,4 +321,72 @@ export const sound = {
     setTimeout(() => beep(280, 0.14, 'sawtooth', 0.06), 90)
     setTimeout(() => beep(120, 0.3, 'sawtooth', 0.07), 200)
   },
+
+  // ── 전투 타격음 (Rift): 근접 / 원거리 / 마법 / 건물 파괴 ──
+  // 근접 타격: 퍽! 하고 둔탁하게 꽂히는 물리 가격
+  meleeHit() {
+    beep(170, 0.05, 'square', 0.07)
+    setTimeout(() => beep(95, 0.07, 'square', 0.06), 26)
+    setTimeout(() => beep(320, 0.03, 'triangle', 0.04), 8)
+  },
+  // 원거리 타격: 슉~ 날아와 탁 꽂히는 화살/탄
+  rangedHit() {
+    beep(1150, 0.05, 'sawtooth', 0.045)
+    setTimeout(() => beep(640, 0.05, 'sawtooth', 0.05), 45)
+    setTimeout(() => beep(250, 0.05, 'square', 0.05), 95)
+  },
+  // 마법 타격: 낮은 붐 + 디튠 화음 + 반짝이는 잔향
+  magicHit() {
+    beep(185, 0.18, 'sine', 0.06)
+    beep(415, 0.14, 'sawtooth', 0.03)
+    beep(622, 0.14, 'sawtooth', 0.025)
+    setTimeout(() => beep(1245, 0.1, 'sine', 0.04), 70)
+    setTimeout(() => beep(1661, 0.12, 'sine', 0.03), 150)
+  },
+  // 포탑 파괴: 낮은 럼블 + 돌 파편이 부서지는 소리
+  towerFall() {
+    if (!enabled) return
+    const ac = getCtx()
+    beep(120, 0.3, 'sawtooth', 0.07)
+    setTimeout(() => beep(80, 0.35, 'sawtooth', 0.06), 120)
+    setTimeout(() => beep(55, 0.4, 'sawtooth', 0.05), 260)
+    if (ac) cymbal(ac, ac.currentTime, 0.05, 3000, 0.25) // 파편
+  },
+  // 넥서스 파괴: 거대한 폭발 — 하강하는 굉음 + 무너지는 파편
+  nexusFall() {
+    if (!enabled) return
+    const ac = getCtx()
+    if (ac) {
+      const osc = ac.createOscillator()
+      const g = ac.createGain()
+      osc.type = 'sine'
+      const now = ac.currentTime
+      osc.frequency.setValueAtTime(160, now)
+      osc.frequency.exponentialRampToValueAtTime(35, now + 0.7)
+      osc.connect(g)
+      g.connect(ac.destination)
+      g.gain.setValueAtTime(0.12, now)
+      g.gain.exponentialRampToValueAtTime(0.0001, now + 0.9)
+      osc.start(now)
+      osc.stop(now + 0.9)
+      cymbal(ac, now, 0.07, 2000, 0.5)
+      setTimeout(() => {
+        const a = getCtx()
+        if (a) cymbal(a, a.currentTime, 0.05, 4000, 0.3)
+      }, 150)
+    }
+    beep(300, 0.4, 'sawtooth', 0.06)
+    setTimeout(() => beep(150, 0.5, 'sawtooth', 0.05), 200)
+  },
+  // 회복/성광: 부드럽게 차오르는 차임
+  healChime() {
+    beep(659, 0.12, 'sine', 0.05)
+    setTimeout(() => beep(880, 0.12, 'sine', 0.05), 90)
+    setTimeout(() => beep(1175, 0.16, 'sine', 0.05), 180)
+  },
+  // 보호막: 금속성 반짝임
+  shield() {
+    beep(740, 0.08, 'triangle', 0.05)
+    setTimeout(() => beep(988, 0.12, 'triangle', 0.04), 60)
+  },
 }

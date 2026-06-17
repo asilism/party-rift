@@ -103,9 +103,30 @@ export default function RiftGame({ roster, onExit, net }) {
   )
 }
 
+// 전투 FX(종류) → 효과음 카테고리. 근접/원거리/마법/건물파괴 + 보조.
+const FX_SOUND = {
+  dash: 'melee', blink: 'melee', execute: 'melee', whirl: 'melee', // 근접 타격
+  volley: 'ranged', lightarrow: 'ranged', // 원거리 타격
+  boom: 'magic', meteorhit: 'magic', fissure: 'magic', // 마법 타격
+  heal: 'heal', holylight: 'heal', shield: 'shield', // 보조
+  towerfall: 'tower', nexusfall: 'nexus', // 건물 파괴
+}
+const FX_PLAY = {
+  melee: () => sound.meleeHit(),
+  ranged: () => sound.rangedHit(),
+  magic: () => sound.magicHit(),
+  heal: () => sound.healChime(),
+  shield: () => sound.shield(),
+  tower: () => sound.towerFall(),
+  nexus: () => sound.nexusFall(),
+}
+const FX_THROTTLE_MS = 110 // 같은 카테고리는 이 간격 안에선 한 번만 (동시 타격/연속 틱 스팸 방지)
+
 // HUD 효과음: 스냅샷 변화를 보고 호스트/게스트 동일하게 재생
 function useRiftSounds(hud, myId) {
   const prev = useRef({})
+  const fxSeen = useRef(0) // 마지막으로 사운드를 낸 fx의 최대 id
+  const fxLast = useRef({}) // 카테고리별 마지막 재생 시각(ms)
   useEffect(() => {
     if (!hud) return
     const p = prev.current
@@ -119,10 +140,20 @@ function useRiftSounds(hud, myId) {
     if (me && p.respawnT === 0 && me.respawnT > 0) sound.chuteDown() // 내 영웅 사망
     if (me && p.respawnT > 0 && me.respawnT === 0) sound.ladderUp() // 부활!
     if (me && p.lvl != null && me.lvl > p.lvl) sound.ladderUp() // 레벨 업
-    // 궁극기급 광역 이펙트가 터지면 우르릉!
-    const BIG_FX = new Set(['whirl', 'storm', 'rain', 'fissure', 'boom', 'execute'])
-    const bigFx = (hud.fx || []).filter((n) => BIG_FX.has(n.kind)).length
-    if (bigFx > 0 && (p.bigFx || 0) === 0) sound.thunder()
+    // 전투 FX → 카테고리별 효과음. 새로 등장한 fx만, 카테고리별 throttle.
+    const fxs = hud.fx || []
+    const curMax = fxs.reduce((m, f) => (f.id > m ? f.id : m), 0)
+    if (curMax < fxSeen.current) fxSeen.current = 0 // 새 판: fx id가 작아지면 추적 리셋
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    for (const f of fxs) {
+      if (f.id <= fxSeen.current) continue
+      const cat = FX_SOUND[f.kind]
+      if (!cat) continue
+      if (now - (fxLast.current[cat] || 0) < FX_THROTTLE_MS) continue
+      fxLast.current[cat] = now
+      FX_PLAY[cat]()
+    }
+    fxSeen.current = Math.max(fxSeen.current, curMax)
     // 우리 넥서스가 공격받기 시작하면 경고음
     const myTeam = me?.team
     const nexusAlert = !!(hud.nexus && (
@@ -137,7 +168,6 @@ function useRiftSounds(hud, myId) {
       feedSeq,
       respawnT: me?.respawnT ?? 0,
       lvl: me?.lvl,
-      bigFx,
       nexusAlert,
     }
   }, [hud, myId])

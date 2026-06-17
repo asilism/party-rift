@@ -1028,6 +1028,7 @@ function damageTower(state, t, amount, attacker) {
   if (t.hp > 0) return
   t.hp = 0
   t.alive = false
+  pushFx(state, 'towerfall', t.x, t.z, TOWER_RADIUS + 3, t.team) // 무너지는 포탑
   const team = attacker?.team || enemyOf(t.team)
   state.towersDown[team]++
   for (const h of state.heroes) if (h.team === team) giveXp(state, h, TOWER_XP)
@@ -1049,6 +1050,8 @@ function damageNexus(state, team, amount, attacker) {
   nx.hp -= amount
   if (nx.hp > 0) return
   nx.hp = 0
+  const np = state.map.NEXUS_POS[team]
+  pushFx(state, 'nexusfall', np.x, np.z, NEXUS_RADIUS + 4, team) // 폭발하는 넥서스
   finish(state, attacker?.team || enemyOf(team))
 }
 
