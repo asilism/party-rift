@@ -181,7 +181,7 @@ function RiftPlay({
       hud.nexus.red.hp < hud.nexus.red.maxHp * 0.35)
   )
   useEffect(() => {
-    if (bgmStatus === 'playing' && soundOn) sound.musicStart()
+    if (bgmStatus === 'playing' && soundOn) sound.musicStartLift()
     else sound.musicStop()
     sound.musicSetFast(nexusCrisis)
   }, [bgmStatus, nexusCrisis, soundOn])
