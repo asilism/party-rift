@@ -38,26 +38,26 @@ export const CLASSES = {
   warrior: {
     name: '전사', icon: '⚔️', desc: '돌진해서 베는 근접 딜러',
     hp: 620, hpLvl: 70, atk: 62, atkLvl: 9, range: 3.8, atkCd: 0.7, speed: 14.2, def: 0.85,
-    skill: { name: '베며 돌진', icon: '💨', cd: 7, desc: '앞으로 돌진하며 길을 가르고 착지 지점을 후려쳐 기절' },
-    ult: { name: '회전베기', icon: '🌪️', cd: 40, desc: '주변을 크게 휩쓴다' },
+    skill: { name: '베며 돌진', icon: '💨', cd: 7, desc: '앞으로 돌진하며 길을 가르고 착지 지점을 후려쳐 1초 기절' },
+    ult: { name: '회전베기', icon: '🌪️', cd: 40, desc: '2초간 팽이처럼 돌며(이동 가능) 주변 적을 계속 후린다' },
   },
   archer: {
     name: '궁수', icon: '🏹', desc: '제일 긴 사거리·제일 약한 몸의 원거리 딜러',
     hp: 360, hpLvl: 38, atk: 50, atkLvl: 9, range: 12.5, atkCd: 0.65, speed: 12.8,
     skill: { name: '꿰뚫는 화살', icon: '🏹', cd: 6, desc: '앞으로 화살을 쏴 일직선의 적을 모두 관통' },
-    ult: { name: '화살비', icon: '☄️', cd: 42, desc: '멀리 있는 적 머리 위로 화살 폭격' },
+    ult: { name: '빛의 화살', icon: '🌠', cd: 42, desc: '화면 끝까지 관통하는 넓은 빛줄기 — 직선상의 적 모두 피해' },
   },
   mage: {
     name: '마법사', icon: '🔮', desc: '폭발 마법의 광역 딜러',
     hp: 430, hpLvl: 46, atk: 42, atkLvl: 7, range: 10.5, atkCd: 0.9, speed: 12.5,
-    skill: { name: '화염구', icon: '🔥', cd: 6, desc: '크게 터지는 불덩이를 날린다' },
-    ult: { name: '번개폭풍', icon: '⛈️', cd: 45, desc: '주변 모든 적 감전 + 기절' },
+    skill: { name: '화염구', icon: '🔥', cd: 6, desc: '크게 터지는 불덩이 — 맞으면 1초 빙결(이동/공격 둔화)' },
+    ult: { name: '운석', icon: '☄️', cd: 45, desc: '조준한 자리에 0.5초 뒤 운석 낙하 — 아주 넓게 강타' },
   },
   healer: {
     name: '힐러', icon: '💚', desc: '아군을 살리는 서포터',
     hp: 470, hpLvl: 52, atk: 38, atkLvl: 6, range: 9.5, atkCd: 0.9, speed: 12.8,
     skill: { name: '치유', icon: '💞', cd: 8, desc: '제일 아픈 아군(나 포함)을 회복' },
-    ult: { name: '성역', icon: '✨', cd: 50, desc: '주변 아군 모두 크게 회복 + 기절 해제' },
+    ult: { name: '성역', icon: '✨', cd: 50, desc: '하늘에서 성광이 내려와 아군 전원(거리 무관) 회복 + 기절/빙결 해제' },
   },
   assassin: {
     name: '암살자', icon: '🥷', desc: '제일 빠른 발·높은 공격력이지만 몸이 약한 기습 딜러',
@@ -97,6 +97,23 @@ const VOLLEY_RANGE = 17 // 궁수 꿰뚫는 화살 사거리(앞으로 직선)
 const VOLLEY_HALF = 1.8 // 화살 직선 폭(반)
 const FISSURE_LEN = 18 // 탱커 대지균열 길이(앞으로 직선)
 const FISSURE_HALF = 3.5 // 대지균열 폭(반)
+// 캐릭터 폭 기준(지름 2*HERO_RADIUS = 2.6)으로 "캐릭터 N마리 분량" 범위를 잡는다.
+const CHAR_W = HERO_RADIUS * 2
+// 마법사 운석(궁극기): 땅에 조준점이 찍히고 잠시 뒤 하늘에서 운석이 떨어진다.
+const METEOR_DELAY = 0.5 // 조준 후 낙하까지 (초)
+const METEOR_RADIUS = CHAR_W * 2 // 지름 캐릭터 4마리 분량 → 반경 = 캐릭터 2마리
+const METEOR_RANGE = 22 // 조준 가능 거리(가까운 적 영웅을 노린다)
+const METEOR_AIM = 14 // 노릴 적이 없을 때 바라보는 방향으로 이만큼 앞에 떨군다
+// 마법사 화염구(기본 스킬) 빙결: 맞으면 잠시 이동/공격이 느려진다.
+const FREEZE_TIME = 1 // 빙결 지속(초)
+const FREEZE_MOVE = 0.5 // 빙결 중 이동 속도 배율
+const FREEZE_ATK = 1.7 // 빙결 중 공격 쿨다운 배율(느린 평타)
+// 궁수 빛의 화살(궁극기): 화면 끝까지 관통하는 넓은 빛줄기.
+const LIGHTARROW_LEN = 240 // 사실상 맵 끝까지
+const LIGHTARROW_HALF = CHAR_W * 1.5 // 너비 캐릭터 3마리 분량 → 반폭 = 1.5마리
+// 전사 회전베기(궁극기): 2초간 팽이처럼 돌며 반경 안을 계속 후린다(이동 가능).
+const WHIRL_TIME = 2 // 회전 지속(초)
+const WHIRL_TICK = 0.34 // 피해 판정 간격(초)
 
 export const SIGHT_RANGE = 24 // 아군 유닛 주변 이만큼이 우리 시야
 export const BUSH_REVEAL = 4 // 수풀 속 적도 이만큼 붙으면 보인다
@@ -252,6 +269,9 @@ export function createGame(players, opts = {}) {
       skillCd: 0,
       ultCd: 0,
       stunT: 0,
+      freezeT: 0, // 빙결(마법사 화염구) 남은 시간 — 이동/공격이 느려진다
+      whirlT: 0, // 회전베기(전사 궁극기) 남은 시간 — 팽이처럼 돌며 주변 피해
+      whirlTickT: 0, // 회전베기 다음 피해 판정까지 남은 시간
       shieldT: 0, // 탱커 방패막기 남은 시간
       slowT: 0, // 공격 직후 무거운 발 남은 시간
       recallT: 0, // 귀환 채널링 남은 시간 (>0이면 시전 중)
@@ -314,6 +334,7 @@ export function createGame(players, opts = {}) {
       red: { hp: NEXUS_HP, maxHp: NEXUS_HP },
     },
     projectiles: [], // {id, kind:'bolt'|'fireball'|'towerbolt', ...}
+    zones: [], // 예고 후 발동하는 지면 범위 {id, kind:'meteor', x, z, r, t, delay, dmg, ...}
     fx: [], // 시각 효과 {id, kind, x, z, r, t, team}
     kills: { blue: 0, red: 0 },
     towersDown: { blue: 0, red: 0 }, // 그 팀이 "부순" 적 타워 수
@@ -630,6 +651,7 @@ export function castAttack(state, id) {
   const tgt = targetEntity(state, ref)
   cancelRecall(h) // 공격하면 집중이 풀린다
   h.atkCd = CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed)
+  if (h.freezeT > 0) h.atkCd *= FREEZE_ATK // 빙결 중엔 평타도 굼뜨다
   h.atkSeq++
   h.dir = Math.atan2(tgt.z - h.z, tgt.x - h.x)
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
@@ -669,7 +691,7 @@ const SKILLS = {
     state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
     const dmg = abilityDmg(h, 60 + 12 * (h.lvl - 1))
     lineDamage(state, h, sx, sz, dir, d + DASH_CONE, DASH_HALF, dmg * 0.6, 0) // 지나간 길의 적
-    coneDamage(state, h, h.x, h.z, dir, DASH_CONE, 1.0, dmg, 0.5) // 착지 전방 강타 + 기절
+    coneDamage(state, h, h.x, h.z, dir, DASH_CONE, 1.0, dmg, 1) // 착지 전방 강타 + 1초 기절
     pushFxDir(state, 'dash', sx, sz, d + DASH_CONE, dir, h.team)
   },
   // 궁수 꿰뚫는 화살: 자동 조준 방향으로 직선 화살 — 일직선의 적을 모두 관통
@@ -755,31 +777,58 @@ export function castUlt(state, id) {
 }
 
 const ULTS = {
-  // 회전베기: 내 주변을 크게 휩쓴다
+  // 회전베기: 2초간 팽이처럼 돌며(이동 가능) 반경 안 모든 적을 반복해서 후린다.
+  //  실제 피해/회전 시각은 stepHero의 회전 처리에서 매 틱(WHIRL_TICK 간격) 일어난다.
   warrior(state, h) {
-    aoeDamage(state, h, h.x, h.z, WHIRL_RADIUS, abilityDmg(h, 120 + 20 * (h.lvl - 1)), 0)
-    pushFx(state, 'whirl', h.x, h.z, WHIRL_RADIUS, h.team)
+    h.whirlT = WHIRL_TIME
+    h.whirlTickT = 0 // 시전 즉시 첫 타가 나가게
   },
-  // 화살비: 보이는 적 영웅 머리 위로 폭격
+  // 빛의 화살: 바라보는 방향으로 화면 끝까지 관통하는 넓은 빛줄기 — 닿는 적 모두 피해
   archer(state, h) {
-    const foe = nearestFoeHero(state, h, RAIN_RANGE)
-    if (!foe) return false
-    aoeDamage(state, h, foe.x, foe.z, RAIN_AOE, abilityDmg(h, 130 + 22 * (h.lvl - 1)), 0)
-    pushFx(state, 'rain', foe.x, foe.z, RAIN_AOE, h.team)
-  },
-  // 번개폭풍: 내 주변 모든 적 감전 + 기절
-  mage(state, h) {
-    aoeDamage(state, h, h.x, h.z, STORM_RADIUS, abilityDmg(h, 150 + 26 * (h.lvl - 1)), 1.2)
-    pushFx(state, 'storm', h.x, h.z, STORM_RADIUS, h.team)
-  },
-  // 성역: 주변 아군 모두 크게 회복 + 기절 해제
-  healer(state, h) {
-    for (const a of state.heroes) {
-      if (a.team !== h.team || a.respawnT > 0 || dist(h, a) > HEAL_RANGE) continue
-      a.hp = Math.min(a.maxHp, a.hp + 180 + 30 * (h.lvl - 1) + itemBonus(h).power)
-      a.stunT = 0
+    let dir = h.dir
+    const foe = nearestFoeHero(state, h, LIGHTARROW_LEN)
+    const ref = foe ? null : findAttackTarget(state, h, LIGHTARROW_LEN)
+    if (foe) dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    else if (ref) {
+      const t = targetEntity(state, ref)
+      if (t) dir = Math.atan2(t.z - h.z, t.x - h.x)
     }
-    pushFx(state, 'sanctuary', h.x, h.z, HEAL_RANGE, h.team)
+    h.dir = dir
+    lineDamage(state, h, h.x, h.z, dir, LIGHTARROW_LEN, LIGHTARROW_HALF, abilityDmg(h, 130 + 22 * (h.lvl - 1)), 0)
+    pushFxDir(state, 'lightarrow', h.x, h.z, LIGHTARROW_LEN, dir, h.team)
+    // 빛줄기 폭만큼 줄지어 빠르게 날아가 사라지는 화살 — 화면 끝까지 통과
+    for (const off of [-LIGHTARROW_HALF * 0.7, 0, LIGHTARROW_HALF * 0.7]) {
+      state.projectiles.push({
+        id: state.nextId++, kind: 'lightarrow', team: h.team, owner: h.id,
+        x: h.x - Math.sin(dir) * off, z: h.z + Math.cos(dir) * off,
+        vx: Math.cos(dir) * 90, vz: Math.sin(dir) * 90, travel: 0, max: LIGHTARROW_LEN,
+      })
+    }
+  },
+  // 운석: 가까운 적 영웅(없으면 바라보는 앞) 자리에 조준점 → 0.5초 뒤 하늘에서 운석 낙하 + 광역 피해
+  mage(state, h) {
+    const foe = nearestFoeHero(state, h, METEOR_RANGE)
+    let tx = foe ? foe.x : h.x + Math.cos(h.dir) * METEOR_AIM
+    let tz = foe ? foe.z : h.z + Math.sin(h.dir) * METEOR_AIM
+    const W = state.map.WORLD
+    tx = Math.max(W.minX, Math.min(W.maxX, tx))
+    tz = Math.max(W.minZ, Math.min(W.maxZ, tz))
+    state.zones.push({
+      id: state.nextId++, kind: 'meteor', team: h.team, owner: h.id,
+      x: tx, z: tz, r: METEOR_RADIUS, t: 0, delay: METEOR_DELAY,
+      dmg: abilityDmg(h, 150 + 26 * (h.lvl - 1)),
+    })
+  },
+  // 성역: 하늘에서 성스러운 빛이 내려와 아군 전원(거리 무관)을 크게 회복 + 기절/빙결 해제
+  healer(state, h) {
+    const heal = 180 + 30 * (h.lvl - 1) + itemBonus(h).power
+    for (const a of state.heroes) {
+      if (a.team !== h.team || a.respawnT > 0) continue
+      a.hp = Math.min(a.maxHp, a.hp + heal)
+      a.stunT = 0
+      a.freezeT = 0
+      pushFx(state, 'holylight', a.x, a.z, 4, h.team) // 각자 머리 위로 내리쬐는 성광
+    }
   },
   // 그림자처형: 가까운 적 영웅 일격 — 빈사(35% 미만)면 2배, 처치하면 점멸 초기화
   assassin(state, h) {
@@ -801,11 +850,12 @@ const ULTS = {
   },
 }
 
-// 술식 공통: 판정 함수 pred(e)에 걸리는 모든 적(영웅/미니언/정글몹)에게 피해(+기절)
-function damageInShape(state, attacker, pred, dmg, stun) {
+// 술식 공통: 판정 함수 pred(e)에 걸리는 모든 적(영웅/미니언/정글몹)에게 피해(+기절/빙결)
+function damageInShape(state, attacker, pred, dmg, stun, freeze = 0) {
   for (const e of state.heroes) {
     if (e.team === attacker.team || e.respawnT > 0 || !pred(e)) continue
     if (stun > 0) e.stunT = Math.max(e.stunT, stun)
+    if (freeze > 0) e.freezeT = Math.max(e.freezeT, freeze)
     damageHero(state, e, dmg, attacker)
   }
   for (const m of [...state.minions]) {
@@ -817,9 +867,9 @@ function damageInShape(state, attacker, pred, dmg, stun) {
 }
 
 // (x,z) 주변 동심원 범위 피해
-function aoeDamage(state, attacker, x, z, radius, dmg, stun) {
+function aoeDamage(state, attacker, x, z, radius, dmg, stun, freeze = 0) {
   const r2 = radius * radius
-  damageInShape(state, attacker, (e) => (e.x - x) ** 2 + (e.z - z) ** 2 <= r2, dmg, stun)
+  damageInShape(state, attacker, (e) => (e.x - x) ** 2 + (e.z - z) ** 2 <= r2, dmg, stun, freeze)
 }
 
 // 전방 직선(직사각형) 범위 피해 — (x,z)에서 dir 방향으로 length, 좌우 half폭
@@ -871,6 +921,8 @@ function damageHero(state, victim, amount, attacker) {
   victim.deaths++
   victim.respawnT = respawnTime(victim.lvl)
   victim.stunT = 0
+  victim.freezeT = 0
+  victim.whirlT = 0
   victim.shieldT = 0
   victim.dragonT = 0
   victim.baronT = 0
@@ -1030,6 +1082,7 @@ export function step(state, dt) {
   stepMonsters(state, dt)
   stepTowers(state, dt)
   stepProjectiles(state, dt)
+  stepZones(state, dt)
   state.fx = state.fx.filter((n) => (n.t += dt) < 0.8)
   // 시간 초과: 부순 타워 → 킬 → 넥서스 체력으로 판정
   if (state.status === 'playing' && state.time >= COUNTDOWN_TIME + TIME_LIMIT) {
@@ -1103,6 +1156,7 @@ function stepHero(state, h, dt) {
   h.baronT = Math.max(0, h.baronT - dt)
   h.shieldT = Math.max(0, h.shieldT - dt)
   h.slowT = Math.max(0, h.slowT - dt)
+  h.freezeT = Math.max(0, h.freezeT - dt)
   h.revealT = Math.max(0, h.revealT - dt)
   h.aggroT = Math.max(0, h.aggroT - dt)
   // 부활 대기 → 우물에서 부활
@@ -1143,10 +1197,11 @@ function stepHero(state, h, dt) {
   if (h.stunT <= 0) {
     const len = Math.hypot(h.mx, h.mz)
     if (len > 0.12) {
-      // 공격 직후엔 발이 무겁고, 탱커는 방패막기 중 돌진 가속
+      // 공격 직후엔 발이 무겁고, 탱커는 방패막기 중 돌진 가속, 빙결 중엔 굼뜨다
       const slow = h.slowT > 0 ? ATK_SLOW : 1
       const charge = h.cls === 'tank' && h.shieldT > 0 ? 1.45 : 1
-      const sp = heroSpeed(h) * slow * charge * Math.min(1, len)
+      const frz = h.freezeT > 0 ? FREEZE_MOVE : 1
+      const sp = heroSpeed(h) * slow * charge * frz * Math.min(1, len)
       h.dir = Math.atan2(h.mz, h.mx)
       h.x += (h.mx / len) * sp * dt
       h.z += (h.mz / len) * sp * dt
@@ -1169,6 +1224,17 @@ function stepHero(state, h, dt) {
   if (itemBonus(h).regen > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * itemBonus(h).regen * dt)
   // 골드 자동 수입
   h.gold += GOLD_PASSIVE * dt
+  // 회전베기(전사 궁극기): 도는 동안 WHIRL_TICK 간격으로 반경 안을 후린다 (이동은 위에서 이미 처리)
+  if (h.whirlT > 0) {
+    h.whirlT = Math.max(0, h.whirlT - dt)
+    h.whirlTickT -= dt
+    if (h.whirlTickT <= 0) {
+      h.whirlTickT += WHIRL_TICK
+      aoeDamage(state, h, h.x, h.z, WHIRL_RADIUS, abilityDmg(h, 30 + 5 * (h.lvl - 1)), 0)
+      pushFx(state, 'whirl', h.x, h.z, WHIRL_RADIUS, h.team)
+      h.revealT = Math.max(h.revealT, 0.4)
+    }
+  }
 }
 
 // 주변에서 공격받는 아군 영웅의 "가해자(적 영웅)"를 찾는다.
@@ -1532,12 +1598,12 @@ function stepProjectiles(state, dt) {
       if (hit) {
         remove.add(p.id)
         pushFx(state, 'boom', p.x, p.z, FIREBALL_AOE, p.team)
-        if (owner) aoeDamage(state, owner, p.x, p.z, FIREBALL_AOE, p.dmg, 0)
+        if (owner) aoeDamage(state, owner, p.x, p.z, FIREBALL_AOE, p.dmg, 0, FREEZE_TIME) // 맞으면 1초 빙결
       }
       continue
     }
-    if (p.kind === 'pierce') {
-      // 궁수 꿰뚫는 화살의 시각용 탄 — 피해는 시전 때 lineDamage로 이미 적용됨.
+    if (p.kind === 'pierce' || p.kind === 'lightarrow') {
+      // 꿰뚫는 화살/빛의 화살의 시각용 탄 — 피해는 시전 때 lineDamage로 이미 적용됨.
       // 앞으로 날아가다 사거리 끝에서 사라진다.
       p.x += p.vx * dt
       p.z += p.vz * dt
@@ -1567,6 +1633,23 @@ function stepProjectiles(state, dt) {
     p.z += ((e.z - p.z) / d) * p.speed * dt
   }
   if (remove.size) state.projectiles = state.projectiles.filter((p) => !remove.has(p.id))
+}
+
+// 예고형 지면 범위(운석 등): delay 동안 조준점만 보이다가, 다 차면 발동(광역 피해)하고 사라진다.
+function stepZones(state, dt) {
+  if (!state.zones.length) return
+  const remove = new Set()
+  for (const z of state.zones) {
+    z.t += dt
+    if (z.t < z.delay) continue
+    const owner = state.heroes.find((h) => h.id === z.owner) || { team: z.team }
+    if (z.kind === 'meteor') {
+      aoeDamage(state, owner, z.x, z.z, z.r, z.dmg, 0)
+      pushFx(state, 'meteorhit', z.x, z.z, z.r, z.team)
+    }
+    remove.add(z.id)
+  }
+  if (remove.size) state.zones = state.zones.filter((z) => !remove.has(z.id))
 }
 
 // ── 봇 AI ──
@@ -2057,6 +2140,8 @@ export function makeView(state) {
       ultCd: r2d(h.ultCd),
       ultLocked: h.lvl < ULT_LEVEL,
       stunT: r2d(h.stunT),
+      freezeT: r2d(h.freezeT),
+      whirlT: r2d(h.whirlT),
       shieldT: r2d(h.shieldT),
       recallT: r2d(h.recallT),
       respawnT: r2d(h.respawnT),
@@ -2118,6 +2203,10 @@ export function makeView(state) {
       team: p.team,
       x: r1(p.x),
       z: r1(p.z),
+    })),
+    zones: state.zones.map((z) => ({
+      id: z.id, kind: z.kind, team: z.team, x: r1(z.x), z: r1(z.z),
+      r: z.r, t: r2d(z.t), delay: z.delay,
     })),
     fx: state.fx.map((n) => ({
       id: n.id, kind: n.kind, x: r1(n.x), z: r1(n.z), r: n.r, t: r2d(n.t), team: n.team,
