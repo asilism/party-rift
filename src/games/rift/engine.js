@@ -265,12 +265,16 @@ export function createGame(players, opts = {}) {
       baronT: 0, // 바론 버프 남은 시간
       kills: 0,
       deaths: 0,
+      // 사람 플레이어 자동평타: 버튼을 안 눌러도 사거리 안 적 영웅에게 평타를 이어 준다
+      // (봇은 매 틱 평타를 박는데 사람은 손가락 연타에 의존 → 평타 cadence가 불리하던 문제 보정)
+      autoAttack: true,
       // 봇 상태
       botRetreat: false,
       botStrafe: rng() * Math.PI * 2,
       botSeekT: 0, // >0이면 타워 앞에서 "딴 일"(합류/정글/지원)을 잠시 유지
       botStuckT: 0, // 제자리에 박혀 못 움직인 누적 시간 (BOT_STUCK_T 넘으면 귀환)
       botRecall: false, // 끼임 구제용 귀환을 스스로 시전 중인지
+      botReact: -1, // 평타 반응 지연 타이머 (쿨이 돌아온 뒤 사람처럼 잠깐 뜸들이고 친다)
     }
   })
   for (const h of heroes) {
@@ -343,6 +347,7 @@ export function makeBot(state, id) {
   h.botStrafe = state.rng() * Math.PI * 2
   h.botStuckT = 0
   h.botRecall = false
+  h.botReact = -1
   return h
 }
 
@@ -1020,6 +1025,7 @@ export function step(state, dt) {
   stepWaves(state, dt)
   stepBots(state, dt)
   for (const h of state.heroes) stepHero(state, h, dt)
+  stepAutoAttack(state) // 사람 영웅: 갱신된 위치/수풀/쿨다운 기준으로 사거리 안 적 영웅에게 평타 이어치기
   stepMinions(state, dt)
   stepMonsters(state, dt)
   stepTowers(state, dt)
@@ -1568,6 +1574,36 @@ function stepProjectiles(state, dt) {
 // 평소엔 맡은 레인을 행군하며 지나는 길의 정글몹/용/바론도 사냥한다.
 const BOT_SIGHT = 18
 export const BOT_STUCK_T = 3 // 가려고도 싸우지도 못하고 이만큼 제자리면 "갈 곳 잃음"으로 보고 귀환
+// 봇 평타 반응 지연: 쿨이 돌아온 뒤 이만큼(초) 뜸들이고 평타를 친다.
+// 봇이 프레임 단위로 칼같이 평타를 박아 "딜레이 없이 쉴 새 없이 맞는" 느낌을 주던 걸 완화 —
+// 사람처럼 약간의 반응 시간을 두되, 쿨다운(0.7초 등) 자체는 그대로라 봇은 여전히 제 몫을 한다.
+const BOT_REACT_MIN = 0.13
+const BOT_REACT_MAX = 0.3
+
+// 봇 평타: 쿨이 끝나면 곧장 쏘지 않고 짧은 반응 지연을 굴린 뒤 친다.
+function botAttack(state, h, dt) {
+  if (h.atkCd > 0) {
+    h.botReact = -1 // 쿨 도는 중 — 다음에 쿨이 끝나면 반응 지연을 새로 뽑는다
+    return
+  }
+  if (h.botReact < 0) h.botReact = BOT_REACT_MIN + state.rng() * (BOT_REACT_MAX - BOT_REACT_MIN)
+  h.botReact -= dt
+  if (h.botReact <= 0) {
+    castAttack(state, h.id) // 사거리 안 표적이 없으면 castAttack이 알아서 거른다(쿨 안 씀)
+    h.botReact = -1
+  }
+}
+
+// 사람 영웅 자동평타: 버튼을 안 눌러도 사거리 안에 보이는 적 영웅이 있으면 쿨마다 평타.
+// (미니언/타워/넥서스는 자동으로 안 친다 — 막타·타워 어그로는 플레이어가 직접 조절하게)
+function stepAutoAttack(state) {
+  for (const h of state.heroes) {
+    if (h.isBot || h.autoAttack === false) continue
+    if (h.respawnT > 0 || h.atkCd > 0 || h.recallT > 0 || !canAct(h)) continue
+    if (h.bushI >= 0) continue // 수풀에 매복 중이면 자동평타로 모습을 들키지 않게 (직접 공격은 가능)
+    if (nearestFoeHero(state, h, heroRange(h))) castAttack(state, h.id)
+  }
+}
 
 // 봇 직업별 아이템 우선순위 — 우물에 들어왔을 때 위에서부터 살 수 있는 걸 산다.
 // (사람 플레이어가 아이템으로 일방적 우위를 갖지 않게 봇도 장비를 갖춘다)
@@ -1645,7 +1681,7 @@ function stepBots(state, dt) {
     if (h.botRetreat) {
       if (h.cls === 'tank' && h.skillCd <= 0) castSkill(state, h.id) // 방패 켜고 도망!
       steerToward(state, h, state.map.NEXUS_POS[h.team])
-      castAttack(state, h.id) // 도망치면서도 사거리 안이면 반격
+      botAttack(state, h, dt) // 도망치면서도 사거리 안이면 반격
       continue
     }
     // 힐러: 아픈 아군이 보이면 우선 치유
@@ -1685,12 +1721,12 @@ function stepBots(state, dt) {
       const wob = chasing ? 0 : 0.25
       h.mx = Math.cos(ang) * (1 - wob) + Math.cos(h.botStrafe) * wob
       h.mz = Math.sin(ang) * (1 - wob) + Math.sin(h.botStrafe) * wob
-      castAttack(state, h.id)
+      botAttack(state, h, dt)
       botCombatSkills(state, h, foe, d, nearCount)
       continue
     }
     // 교전 상대가 없으면 임무 수행
-    castAttack(state, h.id) // 미니언/정글/타워 등 사거리 안 아무거나
+    botAttack(state, h, dt) // 미니언/정글/타워 등 사거리 안 아무거나
     // 정글러: 캠프/오브젝트를 돌다 근처 교전에 합류(갱킹). 할 일이 없으면 레인 합류.
     if (h.role === 'jungle') {
       if (botJungleRole(state, h, dt)) continue

@@ -253,6 +253,69 @@ test('수풀 은신: 적에겐 안 보이고, 자동 조준에도 안 잡힌다 
   assert.equal(isHeroVisible(g, hider, 'red'), true)
 })
 
+test('사람 자동평타: 버튼을 안 눌러도 사거리 안 적 영웅에게 평타가 나간다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const me = g.heroes[2] // blue warrior (range 3.8)
+  const foe = g.heroes[3] // red healer
+  me.x = 0; me.z = 0
+  foe.x = 3; foe.z = 0 // 사거리 안 + 수풀 밖
+  assert.equal(me.atkCd, 0)
+  step(g, STEP) // 아무 입력(cast) 없이 한 틱
+  // 내가 쏜 평타 탄이 생기고 쿨다운이 돈다
+  assert.ok(g.projectiles.some((p) => p.kind === 'bolt' && p.owner === me.id))
+  assert.ok(me.atkCd > 0)
+})
+
+test('사람 자동평타: 쿨다운을 지키고, autoAttack=false면 안 나간다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const me = g.heroes[2] // blue warrior
+  const foe = g.heroes[3]
+  me.x = 0; me.z = 0
+  foe.x = 3; foe.z = 0
+  step(g, STEP)
+  const after = g.projectiles.filter((p) => p.owner === me.id).length
+  step(g, STEP) // 바로 다음 틱엔 쿨 때문에 추가 평타 없음
+  assert.equal(g.projectiles.filter((p) => p.owner === me.id).length, after)
+  // 끄면 사거리 안이어도 자동으로 안 친다
+  me.autoAttack = false
+  me.atkCd = 0
+  const before = g.projectiles.filter((p) => p.owner === me.id).length
+  step(g, STEP)
+  assert.equal(g.projectiles.filter((p) => p.owner === me.id).length, before)
+})
+
+test('사람 자동평타: 수풀에 매복 중이면 자동평타로 안 들킨다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const me = g.heroes[0] // blue mage (range 10.5)
+  const foe = g.heroes[3] // red healer
+  const bush = BUSHES[9]
+  me.x = bush.x; me.z = bush.z
+  foe.x = bush.x + 6; foe.z = bush.z // 사거리 안이지만 수풀 밖
+  step(g, STEP)
+  assert.ok(me.bushI >= 0)
+  assert.ok(!g.projectiles.some((p) => p.owner === me.id)) // 자동평타 불발
+  assert.equal(isHeroVisible(g, me, 'red'), false) // 들키지 않음
+})
+
+test('봇 반응 지연: 쿨이 끝나도 그 즉시 평타를 박지 않는다(사람 같은 뜸)', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const bot = makeBot(g, g.heroes[3].id) // red 힐러를 봇으로
+  bot.autoAttack = false // 사람 자동평타 경로와 섞이지 않게 (봇이라 어차피 무관하지만 명시)
+  const foe = g.heroes[0] // blue mage
+  bot.x = 0; bot.z = 0
+  foe.x = 5; foe.z = 0 // 봇 힐러 사거리(9.5) 안 + 시야 안
+  assert.equal(bot.atkCd, 0)
+  step(g, STEP) // 첫 틱: 반응 지연을 굴리는 중 — 아직 평타 없음
+  assert.ok(!g.projectiles.some((p) => p.owner === bot.id))
+  assert.ok(bot.botReact > 0)
+  run(g, 0.4) // 반응 지연(최대 0.3초)이 지나면 평타가 나간다
+  assert.ok(g.projectiles.some((p) => p.owner === bot.id) || bot.atkCd > 0)
+})
+
 test('전장의 안개: 아군 유닛 시야 밖의 적은 안 보인다', () => {
   const g = createGame(humans())
   startPlaying(g) // 아직 미니언 없음
