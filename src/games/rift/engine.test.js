@@ -183,23 +183,100 @@ test('탱커 방패막기: 받는 피해가 크게 줄어든다', () => {
   assert.ok(lossShield < lossNoShield * 0.55, `${lossShield} vs ${lossNoShield}`)
 })
 
-test(`궁극기: 레벨 ${ULT_LEVEL} 전엔 잠겨 있고, 마법사 번개폭풍은 광역 기절`, () => {
+test(`궁극기: 레벨 ${ULT_LEVEL} 전엔 잠겨 있고, 마법사 운석은 0.5초 뒤 광역 낙하`, () => {
   const g = createGame(humans())
   startPlaying(g)
   const a = g.heroes[0] // blue mage
   const b = g.heroes[3] // red healer
   a.x = 0
   a.z = 0
-  b.x = 5
+  b.x = 15 // 운석 사거리(22) 안 + 평타 사거리(10.5) 밖 → 자동평타 간섭 없이 운석만 검증
   b.z = 0
   castUlt(g, a.id)
-  assert.equal(g.fx.length, 0) // 아직 잠김
+  assert.equal(g.zones.length, 0) // 아직 잠김
   a.lvl = ULT_LEVEL
   castUlt(g, a.id)
-  assert.ok(g.fx.some((n) => n.kind === 'storm'))
-  assert.ok(b.hp < b.maxHp)
-  assert.ok(b.stunT > 0)
+  assert.equal(g.zones.length, 1) // 조준점(예고)이 깔린다
+  assert.equal(g.zones[0].kind, 'meteor')
   assert.ok(a.ultCd > 0)
+  const hp0 = b.hp
+  run(g, 0.3) // 아직 낙하 전 — 피해 없음
+  assert.equal(b.hp, hp0)
+  assert.ok(g.zones.length === 1)
+  run(g, 0.4) // 0.5초 경과 → 운석 낙하
+  assert.equal(g.zones.length, 0)
+  assert.ok(b.hp < hp0) // 광역 피해
+  assert.ok(g.fx.some((n) => n.kind === 'meteorhit'))
+})
+
+test('마법사 화염구 빙결: 맞으면 1초간 이동/공격이 느려진다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const a = g.heroes[0] // blue mage
+  const b = g.heroes[3] // red healer
+  a.x = 0; a.z = 0; a.dir = 0
+  b.x = 6; b.z = 0
+  castSkill(g, a.id) // 화염구 발사
+  run(g, 0.4) // 날아가 명중
+  assert.ok(b.freezeT > 0) // 빙결 상태
+  assert.ok(b.hp < b.maxHp)
+})
+
+test('전사 회전베기: 2초간 돌며 주변을 반복 타격 (이동 가능)', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const w = g.heroes[2] // warrior (blue)
+  const e = g.heroes[3] // healer (red)
+  w.lvl = ULT_LEVEL
+  w.x = 0; w.z = 0
+  e.x = 4; e.z = 0 // 회전 반경 안
+  castUlt(g, w.id)
+  assert.ok(w.whirlT > 0)
+  assert.ok(w.ultCd > 0)
+  const hp0 = e.hp
+  run(g, 0.4)
+  assert.ok(e.hp < hp0) // 회전 타격으로 피해 누적
+  const hp1 = e.hp
+  run(g, 0.5)
+  assert.ok(e.hp < hp1) // 도는 동안 계속 깎인다
+  run(g, 2) // 회전 종료
+  assert.equal(w.whirlT, 0)
+})
+
+test('궁수 빛의 화살: 바라보는 방향으로 멀리 관통, 직선상 적 모두 피해', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const a = g.heroes[1] // archer (blue)
+  const e1 = g.heroes[3] // red
+  const e2 = g.heroes[4] // red
+  a.lvl = ULT_LEVEL
+  a.x = 0; a.z = 0
+  e1.x = 20; e1.z = 0 // 일직선
+  e2.x = 60; e2.z = 0.5 // 훨씬 멀리, 같은 직선상
+  castUlt(g, a.id)
+  assert.ok(e1.hp < e1.maxHp)
+  assert.ok(e2.hp < e2.maxHp) // 화면 끝까지 관통
+  assert.ok(g.projectiles.some((p) => p.kind === 'lightarrow'))
+})
+
+test('힐러 성역: 거리에 상관없이 아군 전원 회복 + 기절/빙결 해제', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const heal = g.heroes[3] // healer (red)
+  const near = g.heroes[4] // assassin (red)
+  const far = g.heroes[5] // tank (red)
+  heal.lvl = ULT_LEVEL
+  heal.x = 0; heal.z = 0
+  near.x = 5; near.z = 0
+  far.x = 80; far.z = 40 // 아주 멀리
+  near.hp = 100; near.stunT = 2
+  far.hp = 100; far.freezeT = 2
+  castUlt(g, heal.id)
+  assert.ok(near.hp > 100)
+  assert.equal(near.stunT, 0) // 기절 해제
+  assert.ok(far.hp > 100) // 거리 무관 회복
+  assert.equal(far.freezeT, 0) // 빙결 해제
+  assert.ok(g.fx.some((n) => n.kind === 'holylight'))
 })
 
 test('암살자 그림자처형: 빈사 적에게 2배 — 처치하면 점멸 초기화', () => {

@@ -586,6 +586,9 @@ function buildHero(h, mine, barColor) {
   const stun = emojiSprite('💫', 2)
   stun.position.y = 5.4 * s
   stun.visible = false
+  const freeze = emojiSprite('❄️', 1.7)
+  freeze.position.y = 5.0 * s
+  freeze.visible = false
   // 귀환 채널링 링 (발밑에서 청록색으로 돈다)
   const recall = new THREE.Mesh(
     new THREE.RingGeometry(1.7, 2.4, 28),
@@ -631,11 +634,11 @@ function buildHero(h, mine, barColor) {
     dpStartY[i] = 1.2 * s + rnd() * 2.6 * s
     dpPeak[i] = 0.3 + rnd() * 1.2
   }
-  g.add(shadow, body, face, name, bar, ring, buff, shield, stun, recall, recallBeam, deathPts)
+  g.add(shadow, body, face, name, bar, ring, buff, shield, stun, freeze, recall, recallBeam, deathPts)
   g.userData = {
     body, face, name, nameColor, nameLvl: h.lvl, isMine: mine, shadow,
     bodyBaseY: 2.2 * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, buff, shield, stun, recall, recallBeam, weapon, lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, buff, shield, stun, freeze, recall, recallBeam, weapon, lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
@@ -664,6 +667,7 @@ function setHeroDead(u, dead) {
     u.buff.visible = false
     u.shield.visible = false
     u.stun.visible = false
+    u.freeze.visible = false
     u.recall.visible = false
     u.recallBeam.visible = false
   }
@@ -761,6 +765,7 @@ const PROJ_LOOK = {
   fireball: { r: 0.95, y: 2, color: 0xff8c2e },
   towerbolt: { r: 0.55, y: 4, color: null },
   pierce: { r: 0.34, y: 2.2, color: 0xfff0a0 }, // 궁수 꿰뚫는 화살 (밝은 노랑)
+  lightarrow: { r: 0.6, y: 2.2, color: 0xfff4b0 }, // 빛의 화살 궁극기 (크고 환한 빛)
 }
 
 // 스킬 이펙트 색 + 파티클 모드 (kind → 색/파티클 움직임).
@@ -771,6 +776,8 @@ const FX_LOOK = {
   rain: { color: 0xff5f5f, ring: true, mode: 'fall', pcolor: 0xffc0c0 },
   sanctuary: { color: 0x6ee7a0, ring: true, mode: 'rise', pcolor: 0xb6f5cf },
   heal: { color: 0x6ee7a0, ring: true, mode: 'rise', pcolor: 0xb6f5cf },
+  holylight: { color: 0xfff3b0, ring: true, mode: 'rise', pcolor: 0xfff7d0, beam: true }, // 하늘에서 내리쬐는 성광
+  meteorhit: { color: 0xff7a2e, ring: true, mode: 'out', pcolor: 0xffd28a }, // 운석 낙하 충격
   boom: { color: 0xff8c2e, ring: true, mode: 'out', pcolor: 0xffd28a },
   blink: { color: 0x9a7bff, ring: true, mode: 'out', pcolor: 0xc9b8ff },
   execute: { color: 0xff3b3b, ring: true, mode: 'out', pcolor: 0xff9a9a },
@@ -782,6 +789,7 @@ const FX_LOOK = {
   dash: { color: 0xffffff, line: true, mode: 'forward', pcolor: 0xffffff, w: 2.2 },
   fissure: { color: 0xc9863c, line: true, mode: 'forward', pcolor: 0xffb060, w: 3.4, ground: true },
   volley: { color: 0xfff0a0, line: true, mode: 'forward', pcolor: 0xfff4c0, w: 1.4 },
+  lightarrow: { color: 0xfff4b0, line: true, mode: 'forward', pcolor: 0xfffbe0, w: 7 }, // 화면 끝까지 관통하는 넓은 빛줄기
 }
 
 // 시드 고정 파티클 구름 — 호스트/게스트 모두 같은 fx(id)에서 같은 모양이 나오게 lcg 시드.
@@ -887,12 +895,66 @@ function buildFxObject(n) {
       ring.material.opacity = 1 - f
     })
   }
+  if (look.beam) {
+    // 하늘에서 내리쬐는 빛기둥 (성광) — 위에서 쏟아져 서서히 옅어진다
+    const beam = new THREE.Mesh(
+      new THREE.CylinderGeometry((n.r || 4) * 0.5, (n.r || 4) * 0.32, 30, 18, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: look.color, transparent: true, opacity: 0.4,
+        side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
+      })
+    )
+    beam.position.y = 15
+    g.add(beam)
+    ups.push((t) => {
+      const tn = Math.min(1, t / 0.8)
+      beam.material.opacity = (1 - tn) * 0.5
+      beam.scale.set(1 + tn * 0.3, 1, 1 + tn * 0.3)
+    })
+  }
   if (look.pcolor !== undefined || look.mode) {
     const burst = makeBurst(n, look)
     g.add(burst)
     ups.push((t) => burst.userData.update(t))
   }
   g.userData.update = (t) => { for (const u of ups) u(t) }
+  return g
+}
+
+// 운석 예고/낙하 — zone(예고형 지면 범위) 한 개를 3D로. zone.t/zone.delay로 진행.
+//  땅엔 점점 또렷해지는 조준 링, 하늘에선 운석이 떨어져 바닥에 닿을 때 충격(meteorhit fx)로 이어진다.
+function buildMeteorZone(z) {
+  const g = new THREE.Group()
+  g.position.set(z.x, 0, z.z)
+  // 지면 조준 링 (목표 반경)
+  const mark = new THREE.Mesh(
+    new THREE.RingGeometry(z.r * 0.82, z.r, 40),
+    new THREE.MeshBasicMaterial({ color: 0xff7a2e, transparent: true, opacity: 0.8, side: THREE.DoubleSide })
+  )
+  mark.rotation.x = -Math.PI / 2
+  mark.position.y = 0.3
+  // 위험 표시 안쪽 원판
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(z.r, 32),
+    new THREE.MeshBasicMaterial({ color: 0xff5a1e, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false })
+  )
+  disc.rotation.x = -Math.PI / 2
+  disc.position.y = 0.22
+  // 떨어지는 운석
+  const rock = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(z.r * 0.5, 0),
+    new THREE.MeshStandardMaterial({ color: 0x4a3320, emissive: 0xff5a1e, emissiveIntensity: 0.9, flatShading: true })
+  )
+  g.add(mark, disc, rock)
+  g.userData.update = (zz) => {
+    const f = Math.max(0, Math.min(1, zz.t / (zz.delay || 0.5))) // 0→1 진행
+    mark.material.opacity = 0.45 + 0.45 * f
+    mark.scale.setScalar(1 + (1 - f) * 0.6) // 바깥에서 좁혀 들어오는 조준
+    disc.material.opacity = 0.12 + 0.2 * f
+    rock.position.y = 42 * (1 - f) + (z.r * 0.5) // 하늘 → 지면
+    rock.rotation.x += 0.3
+    rock.rotation.z += 0.22
+  }
   return g
 }
 
@@ -1311,6 +1373,7 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
   const minionPool = new Map()
   const monsterPool = new Map()
   const projPool = new Map()
+  const zonePool = new Map()
   const fxPool = new Map()
 
   const camTarget = new THREE.Vector3(0, 0, 0)
@@ -1434,7 +1497,8 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
         obj.visible = isHeroVisible(view, h, myTeam)
         if (!obj.visible) return
         obj.position.set(h.x, 0, h.z)
-        u.body.rotation.y = -h.dir
+        // 회전베기(궁극기) 중엔 팽이처럼 빠르게 돈다, 평소엔 바라보는 방향
+        u.body.rotation.y = h.whirlT > 0 ? -view.time * 16 : -h.dir
         // 미세한 숨쉬기/제자리 둥실 모션
         u.body.position.y = u.bodyBaseY + Math.sin(view.time * 2.2 + u.bobPhase) * 0.12
         if (h.lvl !== u.nameLvl) {
@@ -1442,7 +1506,14 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
           setNameText(u.name, heroLabel(h), u.nameColor) // 레벨이 오르면 이름표 갱신
         }
         setHpBar(u.bar, h.hp / h.maxHp)
+        // 기절: 머리 위 💫가 빙글빙글 돈다 (어지러운 상태 표시)
         u.stun.visible = h.stunT > 0
+        if (h.stunT > 0) u.stun.material.rotation = view.time * 6
+        // 빙결: 머리 위 ❄️ + 몸이 푸르게 얼어붙는다
+        const frozen = h.freezeT > 0
+        u.freeze.visible = frozen
+        if (frozen) u.freeze.material.rotation = Math.sin(view.time * 4) * 0.4
+        u.body.material.emissive?.setRGB(frozen ? 0.18 : 0, frozen ? 0.35 : 0, frozen ? 0.6 : 0)
         u.recall.visible = h.recallT > 0
         u.recallBeam.visible = h.recallT > 0
         if (h.recallT > 0) {
@@ -1523,6 +1594,11 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
       obj.position.x = p.x
       obj.position.z = p.z
       obj.visible = inVision(p.x, p.z) // 안개 속 투사체도 숨긴다
+    })
+    // 예고형 지면 범위(운석 조준+낙하)
+    syncPool(scene, zonePool, view.zones || [], buildMeteorZone, (obj, z) => {
+      obj.visible = inVision(z.x, z.z) // 안개 속 조준점은 숨긴다
+      obj.userData.update?.(z)
     })
     // 스킬/이벤트 이펙트 (동심원 링 + 방향성 직선 + 파티클). 골드 표시는 내 막타만.
     const fxList = view.fx.filter((n) => n.kind !== 'gold' || n.owner === myId)
