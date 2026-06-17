@@ -798,6 +798,7 @@ const FX_LOOK = {
   dash: { color: 0xffffff, line: true, mode: 'forward', pcolor: 0xffffff, w: 2.2 },
   fissure: { color: 0xc9863c, line: true, mode: 'forward', pcolor: 0xffb060, w: 3.4, ground: true },
   volley: { color: 0xfff0a0, line: true, mode: 'forward', pcolor: 0xfff4c0, w: 1.4 },
+  chain: { color: 0x9fd6ff, line: true, mode: 'forward', pcolor: 0xe0f2ff, w: 1.0 }, // 마법사 체인 라이트닝 — 푸른 번개 줄기
   lightarrow: { color: 0xfff4b0, line: true, mode: 'forward', pcolor: 0xfffbe0, w: 7 }, // 화면 끝까지 관통하는 넓은 빛줄기
 }
 

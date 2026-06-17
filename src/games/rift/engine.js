@@ -75,6 +75,7 @@ export const CLASSES = {
     name: '마법사', icon: '🔮', desc: '폭발 마법의 광역 딜러',
     hp: 430, hpLvl: 46, atk: 42, atkLvl: 7, range: 10.5, atkCd: 0.9, speed: 12.5,
     skill: { name: '화염구', icon: '🔥', cd: 6, desc: '크게 터지는 불덩이 — 맞으면 1초 빙결(이동/공격 둔화)' },
+    skill2: { name: '체인 라이트닝', icon: '⚡', cd: 9, desc: '가까운 적에게 번개 → 근처 적으로 최대 3회 연쇄(튕길수록 약해짐). 뭉친 적을 동시에 긁는다' },
     ult: { name: '운석', icon: '☄️', cd: 60, desc: '조준한 자리에 운석 3발이 차례로 낙하 — 아주 넓게 강타' },
   },
   healer: {
@@ -168,6 +169,11 @@ const HAWK_LEN = 200 // 사실상 맵 끝까지
 const HAWK_REVEAL_R = 11 // 시야 흔적 반경
 const HAWK_REVEAL_LIFE = 4 // 안개가 걷힌 채 남는 시간(초)
 const HAWK_DROP = 6 // 이만큼 날아갈 때마다 시야 흔적을 남긴다
+// 마법사 체인 라이트닝: 가까운 적에게 번개 → 근처 적으로 연쇄(점프마다 감쇠).
+const CHAIN_RANGE = 11 // 첫 표적 탐색 거리
+const CHAIN_JUMP = 7 // 표적 사이 점프 거리
+const CHAIN_HITS = 3 // 최대 적중 수(첫 표적 포함)
+const CHAIN_FALLOFF = 0.75 // 점프할 때마다 피해 배율
 
 export const SIGHT_RANGE = 24 // 아군 유닛 주변 이만큼이 우리 시야
 export const BUSH_REVEAL = 4 // 수풀 속 적도 이만큼 붙으면 보인다
@@ -1011,6 +1017,51 @@ const SKILLS2 = {
     h.stealthT = STEALTH_TIME
     h.revealT = 0 // 직전 행동으로 드러난 상태를 지우고 즉시 은신
     pushFx(state, 'stealth', h.x, h.z, 3, h.team)
+  },
+  // 체인 라이트닝: 가까운 적에게 번개 → 매번 가장 가까운 다른 적으로 점프(최대 CHAIN_HITS회).
+  //  같은 표적은 두 번 안 맞고, 점프마다 피해가 줄어든다. 보이는 적만 노린다.
+  mage(state, h) {
+    const hit = { hero: new Set(), minion: new Set(), monster: new Set() }
+    // 한 점(from)에서 가장 가까운 '아직 안 맞은' 적 유닛을 찾는다
+    const nearestFoeUnit = (from, range) => {
+      let best = null
+      let bd = range * range
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || hit.hero.has(e.id)) continue
+        if (!isHeroVisible(state, e, h.team)) continue
+        const d = dist2(from, e)
+        if (d < bd) { bd = d; best = { e, kind: 'hero' } }
+      }
+      for (const m of state.minions) {
+        if (m.team === h.team || hit.minion.has(m.id)) continue
+        const d = dist2(from, m)
+        if (d < bd) { bd = d; best = { e: m, kind: 'minion' } }
+      }
+      for (const m of state.monsters) {
+        if (!m.alive || hit.monster.has(m.id)) continue
+        const d = dist2(from, m)
+        if (d < bd) { bd = d; best = { e: m, kind: 'monster' } }
+      }
+      return best
+    }
+    let from = { x: h.x, z: h.z }
+    let dmg = abilityDmg(h, 60 + 12 * (h.lvl - 1))
+    let chained = false
+    for (let i = 0; i < CHAIN_HITS; i++) {
+      const found = nearestFoeUnit(from, i === 0 ? CHAIN_RANGE : CHAIN_JUMP)
+      if (!found) break
+      const { e, kind } = found
+      if (i === 0) h.dir = Math.atan2(e.z - h.z, e.x - h.x)
+      // 직전 지점 → 표적으로 번개 줄기(지그재그 누적)
+      pushFxDir(state, 'chain', from.x, from.z, dist(from, e), Math.atan2(e.z - from.z, e.x - from.x), h.team)
+      if (kind === 'hero') { hit.hero.add(e.id); damageHero(state, e, dmg, h) }
+      else if (kind === 'minion') { hit.minion.add(e.id); damageMinion(state, e, dmg, h) }
+      else { hit.monster.add(e.id); damageMonster(state, e, dmg, h) }
+      from = { x: e.x, z: e.z }
+      dmg *= CHAIN_FALLOFF
+      chained = true
+    }
+    if (!chained) return false // 맞출 적이 없으면 쿨다운을 안 쓴다
   },
 }
 
@@ -2103,6 +2154,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     if (h.cls === 'warrior' && (nearCount >= 1 || d < DASH_AIM)) castSkill2(state, h.id) // 광폭화로 들이친다
     else if (h.cls === 'tank' && d < TAUNT_RADIUS - 1) castSkill2(state, h.id) // 붙으면 도발
     else if (h.cls === 'healer') castSkill2(state, h.id) // 가속으로 교전 보조
+    else if (h.cls === 'mage' && d < CHAIN_RANGE) castSkill2(state, h.id) // 사거리 안이면 체인 라이트닝
     else if (h.cls === 'assassin' && h.hp < h.maxHp * 0.4) castSkill2(state, h.id) // 위기엔 은신으로 빠진다
   }
   const ready = h.skillCd <= 0
