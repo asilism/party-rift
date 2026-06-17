@@ -279,6 +279,62 @@ test('힐러 성역: 거리에 상관없이 아군 전원 회복 + 기절/빙결
   assert.ok(g.fx.some((n) => n.kind === 'holylight'))
 })
 
+test('죽은 영웅은 처치 경험치/골드를 받지 못한다 (죽은 자리에서 획득 X)', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const killer = g.heroes[0] // blue mage — 용을 막타
+  const dead = g.heroes[1] // blue archer — 죽어 있는 아군 (킬 지점 근처)
+  const alive = g.heroes[2] // blue warrior — 살아 있는 아군
+  const drg = g.monsters.find((m) => m.kind === 'dragon')
+  drg.alive = true; drg.respawnT = 0; drg.hp = 1; drg.maxHp = 1; drg.x = 0; drg.z = 0
+  killer.x = 3; killer.z = 0
+  dead.x = 5; dead.z = 0; dead.respawnT = 10; dead.xp = 0; dead.gold = 500; dead.lvl = 1
+  alive.x = 5; alive.z = 2
+  const aliveGold0 = alive.gold
+  castAttack(g, killer.id)
+  run(g, 0.3) // 막타 명중 → 용 처치 (팀 전체 골드/경험치)
+  assert.equal(drg.alive, false)
+  assert.equal(dead.xp, 0) // 죽어 있었으니 경험치 0
+  assert.equal(dead.gold, 500) // 골드도 그대로
+  assert.ok(alive.gold > aliveGold0) // 살아 있는 아군은 받는다
+})
+
+test('킬 크레딧 시한: 7초 지나 미니언/포탑에 죽으면 개인 킬이 아니다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const poker = g.heroes[0] // blue mage — 오래 전에 한 대 때림
+  const victim = g.heroes[3] // red healer
+  // 다른 영웅들은 기본 스폰(맵 가장자리)이라 중앙(0,0)의 victim과 멀어 간섭하지 않는다
+  victim.x = 0; victim.z = 0; victim.hp = 1
+  // poker가 한참 전에 마지막 타격을 한 상황을 만든다
+  victim.lastHitBy = poker.id
+  victim.lastHitT = g.time
+  g.time += 8 // 8초 경과 (KILL_CREDIT_T=7 초과)
+  const kills0 = g.kills.blue
+  // 적(파랑) 미니언이 막타 — 미니언은 attacker가 없어 킬 크레딧을 안 남긴다
+  plantMinion(g, 'blue', 1.5, 0, 9999)
+  run(g, 2)
+  assert.ok(victim.respawnT > 0) // 죽었다
+  assert.equal(poker.kills, 0) // 7초 지났으니 poker의 킬이 아니다
+  assert.equal(g.kills.blue, kills0 + 1) // 팀 킬 점수는 올라간다
+  assert.ok(g.feed.some((f) => f.msg.includes('쓰러짐'))) // "처치"가 아니라 "쓰러짐"
+})
+
+test('킬 크레딧: 7초 안에 죽으면 마지막으로 때린 영웅의 킬', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const killer = g.heroes[0] // blue mage
+  const victim = g.heroes[3] // red healer
+  victim.x = 0; victim.z = 0; victim.hp = 1
+  victim.lastHitBy = killer.id
+  victim.lastHitT = g.time // 방금 때림
+  plantMinion(g, 'blue', 1.5, 0, 9999) // 미니언이 막타를 쳐도
+  run(g, 2)
+  assert.ok(victim.respawnT > 0)
+  assert.equal(killer.kills, 1) // 7초 안이라 killer의 킬로 인정
+  assert.ok(g.feed.some((f) => f.msg.includes('처치')))
+})
+
 test('암살자 그림자처형: 빈사 적에게 2배 — 처치하면 점멸 초기화', () => {
   const g = createGame(humans())
   startPlaying(g)

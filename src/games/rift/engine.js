@@ -126,6 +126,7 @@ const REGEN_RATE = 0.015 // 초당 최대 HP 비율
 const FOUNTAIN_HEAL = 0.12
 const FOUNTAIN_DMG = 90 // 적 우물에 들어가면 따끔!
 const XP_RANGE = 22 // 처치 경험치를 나눠 받는 거리
+const KILL_CREDIT_T = 7 // 마지막으로 때린 적 영웅이 이 시간 안에 죽어야 그의 킬 (지나면 미니언/타워 처형)
 const TOWER_AGGRO_TIME = 3 // 적 영웅을 때리면 타워가 이만큼 노린다
 export const RECALL_TIME = 4 // 귀환 시전(채널링) 시간 — 방해 없이 버티면 우물로 복귀
 
@@ -280,7 +281,8 @@ export function createGame(players, opts = {}) {
       revealT: 0, // 공격 직후 모습이 드러나는 시간
       aggroT: 0, // 적 영웅을 때린 직후 — 타워가 우선 조준
       lastHurt: -99,
-      lastHitBy: null, // 마지막으로 나를 때린 영웅 (킬 크레딧)
+      lastHitBy: null, // 마지막으로 나를 때린 적 영웅 (킬 크레딧)
+      lastHitT: -99, // 그 적 영웅에게 맞은 시각 (KILL_CREDIT_T 안이어야 킬 인정)
       dragonT: 0, // 용 버프 남은 시간
       baronT: 0, // 바론 버프 남은 시간
       kills: 0,
@@ -569,13 +571,12 @@ export function canShop(h) {
 
 // 골드 지급 + 획득 표시(fx). 미니언 막타 등 "내가 얻은 골드"만 본인에게 떠오른다.
 function awardGold(state, h, amount, x, z) {
+  if (h.respawnT > 0) return // 죽어 있는 동안엔 골드를 받지 못한다
   h.gold += amount
-  if (h.respawnT <= 0) {
-    state.fx.push({
-      id: state.nextId++, kind: 'gold', x: x ?? h.x, z: z ?? h.z,
-      r: 0, t: 0, team: h.team, owner: h.id, n: Math.round(amount),
-    })
-  }
+  state.fx.push({
+    id: state.nextId++, kind: 'gold', x: x ?? h.x, z: z ?? h.z,
+    r: 0, t: 0, team: h.team, owner: h.id, n: Math.round(amount),
+  })
 }
 
 // 팀 전원에게 골드 (용/바론/타워 같은 오브젝트)
@@ -912,6 +913,7 @@ function damageHero(state, victim, amount, attacker) {
   if (victim.recallT > 0) victim.recallT = 0 // 피해를 받으면 귀환이 끊긴다
   if (attacker?.id) {
     victim.lastHitBy = attacker.id
+    victim.lastHitT = state.time // 킬 크레딧 시한 판정용 (미니언/타워/우물은 attacker가 없어 안 바뀐다)
     attacker.aggroT = TOWER_AGGRO_TIME // 타워 앞에서 깐족이면 타워가 노린다
     victim.revealT = Math.max(victim.revealT, 0.8) // 맞으면 잠깐 드러난다
   }
@@ -927,7 +929,12 @@ function damageHero(state, victim, amount, attacker) {
   victim.dragonT = 0
   victim.baronT = 0
   // 영웅은 공중 분해 버스트 대신, 렌더러가 시체를 바닥에 쌓이는 파티클로 표현한다(부활까지 유지).
-  const killer = state.heroes.find((h) => h.id === victim.lastHitBy && h.team !== victim.team)
+  // 킬 크레딧: 마지막으로 때린 적 영웅이 최근(KILL_CREDIT_T 초)일 때만. 오래됐으면
+  //  미니언/타워에 의한 처형으로 보고 개인 크레딧/킬 보상 없이 처리한다.
+  const recent = state.time - victim.lastHitT <= KILL_CREDIT_T
+  const killer = recent
+    ? state.heroes.find((h) => h.id === victim.lastHitBy && h.team !== victim.team)
+    : null
   if (killer) {
     killer.kills++
     state.kills[killer.team]++
@@ -1046,6 +1053,7 @@ function awardXp(state, team, at, amount, killer) {
 }
 
 function giveXp(state, h, amount) {
+  if (h.respawnT > 0) return // 죽어 있는 동안엔 경험치를 받지 못한다
   if (h.lvl >= MAX_LEVEL) return
   h.xp += amount
   let up = false
@@ -1169,6 +1177,7 @@ function stepHero(state, h, dt) {
       h.z = pos.z
       h.hp = h.maxHp
       h.lastHitBy = null
+      h.lastHitT = -99
       h.bushI = -1
       h.dir = h.team === 'blue' ? 0 : Math.PI
     }
