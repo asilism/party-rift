@@ -2008,20 +2008,22 @@ body {
 .rift-btn small { font-size: 12px; font-weight: 800; }
 .rift-btn__icon { display: block; line-height: 1; }
 .rift-btn:active { transform: scale(0.93); filter: brightness(1.15); }
+/* 평타(발바닥 패드)는 우하단 고정. 스킬들은 이 버튼을 중심으로 한 호 위에
+   왼쪽(약함) → 오른쪽/위(강함) 순서로 배치한다 — 강아지 발바닥 모양 🐾 */
 .rift-btn--atk {
   right: 22px; width: 118px; height: 118px; font-size: 44px;
   background: rgba(214, 96, 49, 0.92);
 }
 .rift-btn--skill {
-  right: 152px; bottom: 96px; width: 92px; height: 92px; font-size: 32px;
+  right: 193px; bottom: 55px; width: 92px; height: 92px; font-size: 32px;
   background: rgba(54, 130, 230, 0.9);
 }
 .rift-btn--skill2 {
-  right: 332px; bottom: 96px; width: 84px; height: 84px; font-size: 28px;
+  right: 152px; bottom: 150px; width: 84px; height: 84px; font-size: 28px;
   background: rgba(46, 196, 150, 0.92);
 }
 .rift-btn--ult {
-  right: 252px; bottom: 22px; width: 92px; height: 92px; font-size: 32px;
+  right: 57px; bottom: 191px; width: 92px; height: 92px; font-size: 32px;
   background: rgba(155, 107, 214, 0.92);
 }
 .rift-btn--recall {
