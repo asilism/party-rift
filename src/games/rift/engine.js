@@ -125,6 +125,8 @@ const VOLLEY_RANGE = 17 // 궁수 꿰뚫는 화살 사거리(앞으로 직선)
 const VOLLEY_HALF = 1.8 // 화살 직선 폭(반)
 const FISSURE_LEN = 18 // 탱커 대지균열 길이(앞으로 직선)
 const FISSURE_HALF = 3.5 // 대지균열 폭(반)
+const FISSURE_WAVES = 3 // 대지균열을 3파로 끊어 앞으로 뻗는다 (파파팍)
+const FISSURE_WAVE_GAP = 0.12 // 파 사이 간격(초)
 // 캐릭터 폭 기준(지름 2*HERO_RADIUS = 2.6)으로 "캐릭터 N마리 분량" 범위를 잡는다.
 const CHAR_W = HERO_RADIUS * 2
 // 마법사 운석(궁극기): 땅에 조준점이 찍히고 잠시 뒤 하늘에서 운석이 떨어진다.
@@ -139,12 +141,13 @@ const FREEZE_ATK = 1.7 // 빙결 중 공격 쿨다운 배율(느린 평타)
 // 궁수 빛의 화살(궁극기): 화면 끝까지 관통하는 넓은 빛줄기.
 const LIGHTARROW_LEN = 240 // 사실상 맵 끝까지
 const LIGHTARROW_HALF = CHAR_W * 1.5 // 너비 캐릭터 3마리 분량 → 반폭 = 1.5마리
+const ARCHER_CHANNEL = 1 // 빛의 화살 시전 전 정신집중(초) — 그동안 제자리에 멈춘다
 // 전사 회전베기(궁극기): 2초간 팽이처럼 돌며 반경 안을 계속 후린다(이동 가능).
 const WHIRL_TIME = 2 // 회전 지속(초)
 const WHIRL_TICK = 0.34 // 피해 판정 간격(초)
 // 마법사 운석(궁극기): 3발이 차례로 떨어진다.
 const METEOR_COUNT = 3 // 낙하 발수
-const METEOR_GAP = 0.45 // 발 사이 간격(초)
+const METEOR_GAP = 0.55 // 발 사이 간격(초) — 또렷이 끊어 떨어지게 아주 살짝 넓힘(0.45→0.55)
 const METEOR_SPREAD = 4.5 // 2·3번째 운석 낙하 지점 흩뿌림 반경
 
 // ── 보조 스킬(Lv3) 공용 수치 ──
@@ -162,7 +165,7 @@ const HASTE_RADIUS = 18
 const HASTE_SPD = 0.45 // 이동속도 +45%
 // 탱커 도발: 주변 적이 잠시 탱커만 노려 평타치게 만든다.
 const TAUNT_RADIUS = 9
-const TAUNT_TIME = 2 // 도발 지속(초)
+const TAUNT_TIME = 3 // 도발 지속(초)
 // 궁수 사냥매: 맵 끝까지 날아가며 지나간 자리의 안개를 잠시 걷는다(시야 흔적).
 const HAWK_SPEED = 46
 const HAWK_LEN = 200 // 사실상 맵 끝까지
@@ -335,6 +338,8 @@ export function createGame(players, opts = {}) {
       hasteT: 0, // 힐러 가속 남은 시간 — 이동 속도 ↑
       tauntT: 0, // 탱커 도발에 걸린 시간 — tauntBy만 평타치게 된다
       tauntBy: null, // 나를 도발한 탱커 id
+      castT: 0, // 정신집중(궁수 빛의 화살) 남은 시간 — 그동안 제자리에 멈춘다
+      castDir: 0, // 정신집중 후 발사 방향(시전 시점에 고정)
       resetSkillCd: false, // 이번 스킬로 처치 → 스킬 쿨 초기화 플래그 (암살자 점멸습격)
       freezeT: 0, // 빙결(마법사 화염구) 남은 시간 — 이동/공격이 느려진다
       whirlT: 0, // 회전베기(전사 궁극기) 남은 시간 — 팽이처럼 돌며 주변 피해
@@ -473,8 +478,21 @@ const berserkStrength = (h) =>
 // 버프 포함 피해 배율 / 공격력
 const dmgMult = (h) => (h.baronT > 0 ? 1.4 : h.dragonT > 0 ? 1.25 : 1)
 const atkOf = (h) => heroAtk(h) * dmgMult(h)
-// 주문(스킬/궁극기) 피해: 기본값 + 아이템 주문 위력, 버프 배율 포함
-const abilityDmg = (h, base) => (base + itemBonus(h).power) * dmgMult(h)
+// 직업 계열: 마법(AP, 주문력 계수) vs 물리(AD, 공격력 계수).
+//  · 마법 계열(마법사·힐러)은 레벨로 성장하는 기본 주문력 + 아이템 주문력을 쓴다.
+//  · 그 외(전사·궁수·암살자·탱커)는 공격력(heroAtk)을 그대로 주력 스탯으로 쓴다.
+const AP_CLASSES = new Set(['mage', 'healer'])
+const SPELL_BASE = { mage: 45, healer: 32 }
+const SPELL_LVL = { mage: 11, healer: 7 }
+const spellPower = (h) =>
+  (SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power
+// 캐릭터 주력 스탯 — 스킬 계수가 곱해지는 값
+const powerStat = (h) => (AP_CLASSES.has(h.cls) ? spellPower(h) : heroAtk(h))
+// 스킬 피해 = 기본값 + 계수 × 주력 스탯(공격력/주문력), 버프 배율 포함.
+//  계수가 클수록 그 직업의 주력 스탯(공격 아이템/주문 아이템)에 더 크게 비례한다.
+const skillDmg = (h, base, coef) => (base + coef * powerStat(h)) * dmgMult(h)
+// 회복량 = 기본값 + 계수 × 주문력 (피해 배율은 적용 안 함)
+const healAmt = (h, base, coef) => base + coef * spellPower(h)
 
 // ── 시야 (전장의 안개 + 수풀 은신) ──
 // state와 makeView() 스냅샷 양쪽에서 같은 필드를 쓰므로 둘 다 받을 수 있다.
@@ -733,7 +751,7 @@ export function resetShop(state, id) {
 export function castAttack(state, id) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
-  if (!h || !canAct(h) || h.atkCd > 0) return state
+  if (!h || !canAct(h) || h.atkCd > 0 || h.castT > 0) return state
   let ref = findAttackTarget(state, h, heroRange(h))
   // 도발: 사거리 안이면 무조건 나를 도발한 탱커만 평타친다
   if (h.tauntT > 0) {
@@ -761,7 +779,7 @@ export function castAttack(state, id) {
 export function castSkill(state, id) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
-  if (!h || !canAct(h) || h.skillCd > 0) return state
+  if (!h || !canAct(h) || h.skillCd > 0 || h.castT > 0) return state
   const ok = SKILLS[h.cls](state, h)
   if (ok === false) return state // 대상이 없으면 쿨다운을 안 쓴다
   cancelRecall(h) // 스킬을 쓰면 집중이 풀린다
@@ -784,7 +802,7 @@ const SKILLS = {
     h.x += Math.cos(dir) * d
     h.z += Math.sin(dir) * d
     state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
-    const dmg = abilityDmg(h, 60 + 12 * (h.lvl - 1))
+    const dmg = skillDmg(h, 30, 0.8) // 공격력 계수 (전사)
     lineDamage(state, h, sx, sz, dir, d + DASH_CONE, DASH_HALF, dmg * 0.6, 0) // 지나간 길의 적
     coneDamage(state, h, h.x, h.z, dir, DASH_CONE, 1.0, dmg, 1) // 착지 전방 강타 + 1초 기절
     pushFxDir(state, 'dash', sx, sz, d + DASH_CONE, dir, h.team)
@@ -802,7 +820,7 @@ const SKILLS = {
       dir = Math.atan2(foe.z - h.z, foe.x - h.x)
     }
     h.dir = dir
-    lineDamage(state, h, h.x, h.z, dir, VOLLEY_RANGE, VOLLEY_HALF, atkOf(h) * 1.2, 0)
+    lineDamage(state, h, h.x, h.z, dir, VOLLEY_RANGE, VOLLEY_HALF, skillDmg(h, 0, 1.2), 0) // 공격력 계수 (궁수)
     // 시각: 앞으로 빠르게 날아가 사라지는 화살 3발(살짝 어긋나게)
     for (const off of [-0.55, 0, 0.55]) {
       state.projectiles.push({
@@ -822,7 +840,7 @@ const SKILLS = {
     state.projectiles.push({
       id: state.nextId++, kind: 'fireball', team: h.team, owner: h.id,
       x: h.x, z: h.z, vx: Math.cos(dir) * FIREBALL_SPEED, vz: Math.sin(dir) * FIREBALL_SPEED,
-      dmg: abilityDmg(h, 85 + 18 * (h.lvl - 1)),
+      dmg: skillDmg(h, 70, 1.0), // 주문력 계수 (마법사)
       travel: 0,
     })
   },
@@ -836,7 +854,7 @@ const SKILLS = {
       if (missing > -worst && (!best || missing > best.maxHp - best.hp)) best = a
     }
     if (!best) return false
-    best.hp = Math.min(best.maxHp, best.hp + 90 + 20 * (h.lvl - 1) + itemBonus(h).power)
+    best.hp = Math.min(best.maxHp, best.hp + healAmt(h, 100, 1.2)) // 주문력 계수 (힐러)
     pushFx(state, 'heal', best.x, best.z, 3.5, h.team)
   },
   // 암살자 점멸습격: 보이는 적 영웅 등 뒤로 순간이동 + 일격
@@ -848,7 +866,7 @@ const SKILLS = {
     h.z = foe.z + ((foe.z - h.z) / d) * 1.8
     state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
     h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
-    damageHero(state, foe, abilityDmg(h, 72 + 13 * (h.lvl - 1)), h)
+    damageHero(state, foe, skillDmg(h, 30, 0.95), h) // 공격력 계수 (암살자)
     if (foe.respawnT > 0) h.resetSkillCd = true // 이 일격으로 처치 → 점멸 쿨 초기화 (castSkill에서 적용)
     pushFx(state, 'blink', h.x, h.z, 3, h.team)
   },
@@ -863,7 +881,7 @@ const SKILLS = {
 export function castUlt(state, id) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
-  if (!h || !canAct(h) || h.ultCd > 0 || h.lvl < ULT_LEVEL) return state
+  if (!h || !canAct(h) || h.ultCd > 0 || h.lvl < ULT_LEVEL || h.castT > 0) return state
   const ok = ULTS[h.cls](state, h)
   if (ok === false) return state
   cancelRecall(h) // 궁극기를 쓰면 집중이 풀린다
@@ -879,7 +897,8 @@ const ULTS = {
     h.whirlT = WHIRL_TIME
     h.whirlTickT = 0 // 시전 즉시 첫 타가 나가게
   },
-  // 빛의 화살: 바라보는 방향으로 화면 끝까지 관통하는 넓은 빛줄기 — 닿는 적 모두 피해
+  // 빛의 화살: 1초 정신집중(제자리) 후, 겨눈 방향으로 화면 끝까지 관통하는 넓은 빛줄기.
+  //  여기선 조준만 하고 집중에 들어간다 — 실제 발사는 stepHero에서 집중이 끝날 때 fireLightArrow로.
   archer(state, h) {
     let dir = h.dir
     const foe = nearestFoeHero(state, h, LIGHTARROW_LEN)
@@ -890,16 +909,9 @@ const ULTS = {
       if (t) dir = Math.atan2(t.z - h.z, t.x - h.x)
     }
     h.dir = dir
-    lineDamage(state, h, h.x, h.z, dir, LIGHTARROW_LEN, LIGHTARROW_HALF, abilityDmg(h, 130 + 22 * (h.lvl - 1)), 0)
-    pushFxDir(state, 'lightarrow', h.x, h.z, LIGHTARROW_LEN, dir, h.team)
-    // 빛줄기 폭만큼 줄지어 빠르게 날아가 사라지는 화살 — 화면 끝까지 통과
-    for (const off of [-LIGHTARROW_HALF * 0.7, 0, LIGHTARROW_HALF * 0.7]) {
-      state.projectiles.push({
-        id: state.nextId++, kind: 'lightarrow', team: h.team, owner: h.id,
-        x: h.x - Math.sin(dir) * off, z: h.z + Math.cos(dir) * off,
-        vx: Math.cos(dir) * 90, vz: Math.sin(dir) * 90, travel: 0, max: LIGHTARROW_LEN,
-      })
-    }
+    h.castDir = dir // 발사 방향을 시전 시점에 고정
+    h.castT = ARCHER_CHANNEL
+    pushFx(state, 'focus', h.x, h.z, 2.5, h.team) // 발밑에 집중 고리
   },
   // 운석: 가까운 적 영웅(없으면 바라보는 앞) 자리에 조준점 → 0.5초 뒤부터 운석 3발이 차례로 낙하.
   //  첫 발은 조준 지점, 2·3번째는 살짝 흩뿌려 넓게 덮는다 (도망쳐도 따라붙게).
@@ -908,7 +920,7 @@ const ULTS = {
     const tx = foe ? foe.x : h.x + Math.cos(h.dir) * METEOR_AIM
     const tz = foe ? foe.z : h.z + Math.sin(h.dir) * METEOR_AIM
     const W = state.map.WORLD
-    const dmg = abilityDmg(h, 85 + 14 * (h.lvl - 1)) // 발당 피해(3발이라 단발 대비 낮춤)
+    const dmg = skillDmg(h, 60, 0.9) // 주문력 계수 (마법사) — 발당 피해(3발 합산 기준)
     for (let i = 0; i < METEOR_COUNT; i++) {
       const ox = i === 0 ? 0 : (state.rng() - 0.5) * 2 * METEOR_SPREAD
       const oz = i === 0 ? 0 : (state.rng() - 0.5) * 2 * METEOR_SPREAD
@@ -922,7 +934,7 @@ const ULTS = {
   },
   // 성역: 하늘에서 성스러운 빛이 내려와 아군 전원(거리 무관)을 크게 회복 + 기절/빙결 해제
   healer(state, h) {
-    const heal = 180 + 30 * (h.lvl - 1) + itemBonus(h).power
+    const heal = healAmt(h, 220, 1.3) // 주문력 계수 (힐러)
     for (const a of state.heroes) {
       if (a.team !== h.team || a.respawnT > 0) continue
       a.hp = Math.min(a.maxHp, a.hp + heal)
@@ -935,27 +947,52 @@ const ULTS = {
   assassin(state, h) {
     const foe = nearestFoeHero(state, h, EXECUTE_RANGE)
     if (!foe) return false
-    let dmg = abilityDmg(h, 145 + 22 * (h.lvl - 1))
+    let dmg = skillDmg(h, 60, 1.7) // 공격력 계수 (암살자)
     if (foe.hp < foe.maxHp * 0.35) dmg *= 2
     pushFx(state, 'execute', foe.x, foe.z, 3, h.team)
     damageHero(state, foe, dmg, h)
     if (foe.respawnT > 0) h.skillCd = 0 // 처형 성공 → 점멸로 빠져나가라!
   },
-  // 대지균열: 앞으로 땅을 길게 갈라, 길목의 적을 길게 기절
+  // 대지균열: 앞으로 땅을 3파(파파팍)로 끊어 갈라 나가며, 닿는 적을 길게 기절.
+  //  각 파는 앞쪽 구간을 차례로 덮어 균열이 적진을 향해 달려간다(한 적은 한 파에 맞는다).
   tank(state, h) {
     const foe = nearestFoeHero(state, h, FISSURE_LEN)
     const dir = foe ? Math.atan2(foe.z - h.z, foe.x - h.x) : h.dir
     h.dir = dir
-    lineDamage(state, h, h.x, h.z, dir, FISSURE_LEN, FISSURE_HALF, abilityDmg(h, 90 + 14 * (h.lvl - 1)), 1.6)
-    pushFxDir(state, 'fissure', h.x, h.z, FISSURE_LEN, dir, h.team)
+    const seg = FISSURE_LEN / FISSURE_WAVES
+    const dmg = skillDmg(h, 50, 1.4) // 공격력 계수 (탱커)
+    for (let i = 0; i < FISSURE_WAVES; i++) {
+      state.zones.push({
+        id: state.nextId++, kind: 'fissure', team: h.team, owner: h.id,
+        x: h.x + Math.cos(dir) * seg * i, z: h.z + Math.sin(dir) * seg * i,
+        dir, len: seg, half: FISSURE_HALF, dmg, stun: 1.6,
+        r: seg, t: 0, delay: i * FISSURE_WAVE_GAP,
+      })
+    }
   },
+}
+
+// 빛의 화살 발사: 정신집중이 끝났을 때 호출 — 고정해 둔 방향(castDir)으로 관통 빛줄기.
+function fireLightArrow(state, h) {
+  const dir = h.castDir
+  h.dir = dir
+  lineDamage(state, h, h.x, h.z, dir, LIGHTARROW_LEN, LIGHTARROW_HALF, skillDmg(h, 90, 1.5), 0) // 공격력 계수 (궁수)
+  pushFxDir(state, 'lightarrow', h.x, h.z, LIGHTARROW_LEN, dir, h.team)
+  for (const off of [-LIGHTARROW_HALF * 0.7, 0, LIGHTARROW_HALF * 0.7]) {
+    state.projectiles.push({
+      id: state.nextId++, kind: 'lightarrow', team: h.team, owner: h.id,
+      x: h.x - Math.sin(dir) * off, z: h.z + Math.cos(dir) * off,
+      vx: Math.cos(dir) * 90, vz: Math.sin(dir) * 90, travel: 0, max: LIGHTARROW_LEN,
+    })
+  }
+  h.revealT = Math.max(h.revealT, REVEAL_TIME)
 }
 
 // ── 보조 스킬 (레벨 3부터) — 마법사를 뺀 5직업이 직업색에 맞는 한 가지씩 ──
 export function castSkill2(state, id) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
-  if (!h || h.respawnT > 0 || h.skill2Cd > 0 || h.lvl < SKILL2_LEVEL) return state
+  if (!h || h.respawnT > 0 || h.skill2Cd > 0 || h.lvl < SKILL2_LEVEL || h.castT > 0) return state
   // 광폭화는 상태이상을 떨쳐내는 용도라 기절/빙결 중에도 쓸 수 있다(자가 해제).
   // 그 밖의 보조 스킬은 행동 가능할 때만.
   if (h.stunT > 0 && h.cls !== 'warrior') return state
@@ -1045,7 +1082,7 @@ const SKILLS2 = {
       return best
     }
     let from = { x: h.x, z: h.z }
-    let dmg = abilityDmg(h, 60 + 12 * (h.lvl - 1))
+    let dmg = skillDmg(h, 45, 0.7) // 주문력 계수 (마법사)
     let chained = false
     for (let i = 0; i < CHAIN_HITS; i++) {
       const found = nearestFoeUnit(from, i === 0 ? CHAIN_RANGE : CHAIN_JUMP)
@@ -1145,6 +1182,7 @@ function damageHero(state, victim, amount, attacker) {
   victim.hasteT = 0
   victim.tauntT = 0
   victim.tauntBy = null
+  victim.castT = 0
   victim.dragonT = 0
   victim.baronT = 0
   // 영웅은 공중 분해 버스트 대신, 렌더러가 시체를 바닥에 쌓이는 파티클로 표현한다(부활까지 유지).
@@ -1417,11 +1455,20 @@ function stepHero(state, h, dt) {
     h.stunT = 0
     h.freezeT = 0
   }
-  // 귀환 채널링: 가만히, 방해(이동/기절/피격) 없이 RECALL_TIME초 버티면 우물로 복귀
+  // 정신집중(궁수 빛의 화살): 1초 집중 후 발사. 그동안 제자리(아래 이동에서 막힘), 기절당하면 끊긴다.
+  if (h.castT > 0) {
+    if (h.stunT > 0) {
+      h.castT = 0 // 기절에 끊김 — 불발
+    } else {
+      h.castT = Math.max(0, h.castT - dt)
+      if (h.castT === 0) fireLightArrow(state, h)
+    }
+  }
+  // 귀환 채널링: 누르면 그 자리에 멈춰(이동 입력 무시) RECALL_TIME초 버티면 우물로 복귀.
+  //  이동으로는 안 끊기고(자동으로 멈춘다), 기절/피격에만 끊긴다.
   if (h.recallT > 0) {
-    const moving = Math.hypot(h.mx, h.mz) > 0.12
-    if (h.stunT > 0 || moving) {
-      h.recallT = 0 // 방해받음 → 취소
+    if (h.stunT > 0) {
+      h.recallT = 0 // 기절에 끊김 (피격은 damageHero에서 끊는다)
     } else {
       h.recallT = Math.max(0, h.recallT - dt)
       if (h.recallT === 0) {
@@ -1435,8 +1482,8 @@ function stepHero(state, h, dt) {
       }
     }
   }
-  // 이동
-  if (h.stunT <= 0) {
+  // 이동 — 기절·정신집중·귀환 채널 중엔 제자리에 멈춘다(이동 입력 무시)
+  if (h.stunT <= 0 && h.castT <= 0 && h.recallT <= 0) {
     const len = Math.hypot(h.mx, h.mz)
     if (len > 0.12) {
       // 공격 직후엔 발이 무겁고, 탱커는 방패막기 중 돌진 가속, 빙결 중엔 굼뜨다,
@@ -1475,7 +1522,7 @@ function stepHero(state, h, dt) {
     h.whirlTickT -= dt
     if (h.whirlTickT <= 0) {
       h.whirlTickT += WHIRL_TICK
-      aoeDamage(state, h, h.x, h.z, WHIRL_RADIUS, abilityDmg(h, 30 + 5 * (h.lvl - 1)), 0)
+      aoeDamage(state, h, h.x, h.z, WHIRL_RADIUS, skillDmg(h, 20, 0.3), 0) // 공격력 계수 (전사)
       pushFx(state, 'whirl', h.x, h.z, WHIRL_RADIUS, h.team)
       h.revealT = Math.max(h.revealT, 0.4)
     }
@@ -1917,6 +1964,10 @@ function stepZones(state, dt) {
     if (z.kind === 'meteor') {
       aoeDamage(state, owner, z.x, z.z, z.r, z.dmg, 0)
       pushFx(state, 'meteorhit', z.x, z.z, z.r, z.team)
+    } else if (z.kind === 'fissure') {
+      // 한 파(구간)가 터진다 — 그 구간의 적을 길게 기절
+      lineDamage(state, owner, z.x, z.z, z.dir, z.len, z.half, z.dmg, z.stun)
+      pushFxDir(state, 'fissure', z.x, z.z, z.len, z.dir, z.team)
     }
     remove.add(z.id)
   }
@@ -1953,7 +2004,7 @@ function botAttack(state, h, dt) {
 function stepAutoAttack(state) {
   for (const h of state.heroes) {
     if (h.isBot || h.autoAttack === false) continue
-    if (h.respawnT > 0 || h.atkCd > 0 || h.recallT > 0 || !canAct(h)) continue
+    if (h.respawnT > 0 || h.atkCd > 0 || h.recallT > 0 || h.castT > 0 || !canAct(h)) continue
     if (h.bushI >= 0 || h.stealthT > 0) continue // 수풀 매복·은신 중엔 자동평타로 모습을 들키지 않게 (직접 공격은 가능)
     // 도발당하면 사거리 안일 때 탱커를 자동으로 평타친다 (castAttack이 표적을 탱커로 강제)
     if (h.tauntT > 0) {
@@ -1991,7 +2042,7 @@ function botShop(state, h) {
 function stepBots(state, dt) {
   for (const h of state.heroes) {
     if (!h.isBot || h.respawnT > 0) continue
-    if (h.stunT > 0) {
+    if (h.stunT > 0 || h.castT > 0) {
       h.mx = 0
       h.mz = 0
       continue
@@ -2450,6 +2501,7 @@ export function makeView(state) {
       stealthT: r2d(h.stealthT),
       hasteT: r2d(h.hasteT),
       tauntT: r2d(h.tauntT),
+      castT: r2d(h.castT), // 정신집중 남은 시간 (렌더러 표시 + 클라 이동 예측 정지)
       recallT: r2d(h.recallT),
       respawnT: r2d(h.respawnT),
       bushI: h.bushI,
@@ -2517,7 +2569,8 @@ export function makeView(state) {
     ],
     // 사냥매가 걷어 둔 시야 흔적 — 렌더러 시야/안개 + isHeroVisible(inSight)가 함께 본다
     reveals: state.reveals.map((rv) => ({ team: rv.team, x: r1(rv.x), z: r1(rv.z), r: rv.r })),
-    zones: state.zones.map((z) => ({
+    // 예고 범위는 운석(조준점)만 클라에 보낸다 — 대지균열 파는 거의 즉발이라 fx로만 보인다
+    zones: state.zones.filter((z) => z.kind === 'meteor').map((z) => ({
       id: z.id, kind: z.kind, team: z.team, x: r1(z.x), z: r1(z.z),
       r: z.r, t: r2d(z.t), delay: z.delay,
     })),

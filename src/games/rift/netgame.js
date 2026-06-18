@@ -61,7 +61,8 @@ export const riftNet = {
   readInput: (c) => ({ mx: c.mx || 0, mz: c.mz || 0 }),
   inputSig: (c) => `${(c.mx || 0).toFixed(2)}|${(c.mz || 0).toFixed(2)}`,
   predictLocal(pred, ctrl, me, dt) {
-    if (me.respawnT > 0 || me.stunT > 0) return // 사망/기절 중엔 못 움직임 → 권위값에 맡김
+    // 사망/기절/정신집중/귀환 중엔 제자리 → 권위값에 맡김(클라 예측 정지)
+    if (me.respawnT > 0 || me.stunT > 0 || me.castT > 0 || me.recallT > 0) return
     const len = Math.hypot(ctrl.mx || 0, ctrl.mz || 0)
     if (len <= 0.12) return
     const sp = me.mvSpeed || 8
