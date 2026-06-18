@@ -794,6 +794,7 @@ const FX_LOOK = {
   haste: { color: 0x7ad8ff, ring: true, mode: 'rise', pcolor: 0xc0f0ff }, // 힐러 가속 — 시원한 바람
   stealth: { color: 0x8a8fb0, ring: true, mode: 'rise', pcolor: 0xcfd4f0 }, // 암살자 은신 — 연기처럼 사라짐
   hawk: { color: 0xffe066, ring: true, mode: 'rise', pcolor: 0xfff0a0 }, // 궁수 사냥매 — 날아오르는 깃털
+  focus: { color: 0xfff4b0, ring: true, mode: 'rise', pcolor: 0xfffbe0 }, // 궁수 정신집중 — 모여드는 빛
   // 앞으로 뻗는 방향성 스킬
   dash: { color: 0xffffff, line: true, mode: 'forward', pcolor: 0xffffff, w: 2.2 },
   fissure: { color: 0xc9863c, line: true, mode: 'forward', pcolor: 0xffb060, w: 3.4, ground: true },
@@ -1535,6 +1536,10 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
           const st = h.berserkT > 3 ? 1 : h.berserkT / 3
           const pulse = 0.85 + Math.sin(view.time * 12) * 0.15
           u.body.material.emissive?.setRGB(0.7 * st * pulse, 0.05 * st, 0)
+        } else if (h.castT > 0) {
+          // 정신집중(빛의 화살): 금빛으로 점점 차오른다
+          const g = 0.3 + Math.abs(Math.sin(view.time * 9)) * 0.4
+          u.body.material.emissive?.setRGB(g, g * 0.85, 0.2)
         } else u.body.material.emissive?.setRGB(0, 0, 0)
         u.recall.visible = h.recallT > 0
         u.recallBeam.visible = h.recallT > 0
