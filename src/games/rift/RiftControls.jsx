@@ -87,7 +87,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
   const atkTimer = useRef(null)
   const cls = CLASSES[me?.cls] || CLASSES.warrior
 
-  // 키보드: WASD/화살표 이동(대각 포함), Space/J 공격, K 스킬, I 보조 스킬, L 궁극기, B 귀환
+  // 키보드: WASD/화살표 이동(대각 포함), L(또는 Space) 평타, H 직업스킬, J 보조스킬, K 궁극기, B 귀환
   useEffect(() => {
     const held = new Set()
     const apply = () => {
@@ -100,14 +100,14 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
     }
     const down = (e) => {
       if (e.repeat) return
-      if (e.key === ' ' || e.key === 'j' || e.key === 'J') {
+      if (e.key === ' ' || e.key === 'l' || e.key === 'L') {
         e.preventDefault()
         onAttackRef.current?.()
         return
       }
-      if (e.key === 'k' || e.key === 'K') return onSkillRef.current?.()
-      if (e.key === 'i' || e.key === 'I') return onSkill2Ref.current?.()
-      if (e.key === 'l' || e.key === 'L') return onUltRef.current?.()
+      if (e.key === 'h' || e.key === 'H') return onSkillRef.current?.()
+      if (e.key === 'j' || e.key === 'J') return onSkill2Ref.current?.()
+      if (e.key === 'k' || e.key === 'K') return onUltRef.current?.()
       if (e.key === 'b' || e.key === 'B') return onRecallRef.current?.()
       for (const set of Object.values(KEYS)) {
         if (set.has(e.key)) {
@@ -127,6 +127,54 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
       window.removeEventListener('keydown', down)
       window.removeEventListener('keyup', up)
     }
+  }, [])
+
+  // 게임패드(Xbox): 좌 아날로그 스틱 이동(가변 속도), A 평타, X 직업스킬, Y 보조스킬, B 궁극기, ≡(메뉴) 귀환.
+  // 표준 매핑 기준 버튼 인덱스 — A:0, B:1, X:2, Y:3, ≡(Start/Menu):9. 평타는 누르고 있으면 연타, 나머지는 누르는 순간(엣지)만.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.getGamepads) return
+    const DEADZONE = 0.18 // 스틱 표류 무시
+    const BTN = { atk: 0, skill: 2, skill2: 3, ult: 1, recall: 9 } // A, X, Y, B, ≡
+    const prev = {} // 버튼 직전 눌림 상태(라이징 엣지 판정)
+    let padMoving = false // 스틱으로 이동 중인가 — idle일 땐 키보드/터치 입력을 덮어쓰지 않는다
+    let lastAtk = 0
+    let raf = 0
+    const edge = (gp, idx, fn) => {
+      const now = !!gp.buttons[idx]?.pressed
+      if (now && !prev[idx]) fn?.()
+      prev[idx] = now
+    }
+    const poll = () => {
+      raf = requestAnimationFrame(poll)
+      const gp = [...(navigator.getGamepads() || [])].find(Boolean)
+      if (!gp) return
+      // 좌 스틱 이동: 데드존을 제외하고 0~1로 다시 스케일 → 미세 조작이 부드럽다
+      const x = gp.axes[0] || 0
+      const y = gp.axes[1] || 0
+      const mag = Math.hypot(x, y)
+      if (mag > DEADZONE) {
+        const s = Math.min(1, (mag - DEADZONE) / (1 - DEADZONE)) / mag
+        onMoveRef.current(x * s, y * s)
+        padMoving = true
+      } else if (padMoving) {
+        onMoveRef.current(0, 0) // 중앙 복귀 시 한 번만 멈춤 신호
+        padMoving = false
+      }
+      // 평타: 누르고 있으면 연타(엔진 쿨다운이 실제 발동을 제어)
+      if (gp.buttons[BTN.atk]?.pressed) {
+        const t = performance.now()
+        if (t - lastAtk >= ATK_REPEAT_MS) {
+          onAttackRef.current?.()
+          lastAtk = t
+        }
+      }
+      edge(gp, BTN.skill, () => onSkillRef.current?.())
+      edge(gp, BTN.skill2, () => onSkill2Ref.current?.())
+      edge(gp, BTN.ult, () => onUltRef.current?.())
+      edge(gp, BTN.recall, () => onRecallRef.current?.())
+    }
+    raf = requestAnimationFrame(poll)
+    return () => cancelAnimationFrame(raf)
   }, [])
 
   useEffect(() => () => clearInterval(atkTimer.current), [])
