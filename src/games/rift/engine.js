@@ -2039,6 +2039,123 @@ function botShop(state, h) {
   }
 }
 
+// ── 봇 교전 판단용 점수 헬퍼: "잡을 수 있나 + 살아 돌아올 수 있나"를 수치로 가늠한다 ──
+// 받는 피해 배율(직업 기본 방어 + 방어 아이템). 방패막기는 가변이라 제외한다.
+const dmgTakenMult = (h) => (CLASSES[h.cls].def ?? 1) * (1 - itemBonus(h).def)
+// 평타 기준 대략적 초당 피해. 스킬 딜을 평타의 1.35배로 어림한 점수용 근사치.
+const heroDps = (h) =>
+  (atkOf(h) / Math.max(0.2, CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed))) * 1.35
+// a가 b를 잡는 데 걸리는 대략적 시간(초) — b의 방어까지 반영
+const timeToKill = (a, b) => b.hp / Math.max(1, heroDps(a) * dmgTakenMult(b))
+
+// 나와 가장 가까운 살아있는 적 타워
+function nearestEnemyTower(state, h) {
+  const en = enemyOf(h.team)
+  let best = null
+  let bd = Infinity
+  for (const t of state.towers) {
+    if (t.team !== en || !t.alive) continue
+    const d = dist2(t, h)
+    if (d < bd) {
+      bd = d
+      best = t
+    }
+  }
+  return best
+}
+
+// 적 영웅 추격 점수: 내가 잡는 시간(killT) vs 내가 죽는 시간(lifeT), 주변 적/아군 수.
+// 준비된 버스트 스킬은 killT를 줄여 더 과감하게, 가까운 적 타워는 들어오는 피해에 더한다.
+function botChaseScore(state, h, foe) {
+  let killT = timeToKill(h, foe)
+  if (h.skillCd <= 0) killT *= 0.7
+  if (h.ultCd <= 0 && h.lvl >= ULT_LEVEL) killT *= 0.65
+  let incoming = heroDps(foe) * dmgTakenMult(h)
+  let foes = 1
+  let allies = 1
+  for (const e of state.heroes) {
+    if (e === foe || e.team === h.team || e.respawnT > 0) continue
+    if (!isHeroVisible(state, e, h.team)) continue
+    if (dist2(e, foe) < 20 * 20) {
+      incoming += heroDps(e) * dmgTakenMult(h)
+      foes++
+    }
+  }
+  for (const a of state.heroes) {
+    if (a === h || a.team !== h.team || a.respawnT > 0) continue
+    if (dist2(a, h) < 20 * 20) allies++
+  }
+  const tower = nearestEnemyTower(state, h)
+  if (tower && dist2(tower, h) < (TOWER_RANGE + 2) ** 2) {
+    incoming += TOWER_DMG_HERO * dmgTakenMult(h) * 0.7
+  }
+  const lifeT = h.hp / Math.max(1, incoming)
+  return { killT, lifeT, foes, allies }
+}
+
+// 용/바론을 "확실히 잡는다"는 확신이 설 때만 true.
+// 곁의 아군 합산 DPS로 처치 시간을 추정하고, 그동안 몬스터(분노 가속)가 쏟아낼
+// 총 피해를 우리 팀의 총 유효 체력으로 버틸 수 있어야 친다. (저레벨·소수 자폭 방지)
+function canTakeMonster(state, h, big) {
+  const allies = state.heroes.filter(
+    (o) => o.team === h.team && o.respawnT <= 0 && dist(o, big) < 26
+  )
+  if (!allies.length) return false
+  let dps = 0
+  for (const a of allies) dps += heroDps(a)
+  const killT = big.hp / Math.max(1, dps)
+  if (killT > (big.kind === 'baron' ? 18 : 13)) return false // 너무 오래 걸리면 분노가 폭발한다
+  const spec = big.kind === 'baron' ? BARON : DRAGON
+  // 분노는 교전 내내 0→killT로 쌓이므로 평균은 그 절반으로 본다
+  const avgRage = 1 + spec.enrage * Math.min(ENRAGE_MAX, killT) * 0.5
+  const monsterTotal = ((spec.dmg * avgRage) / spec.cd) * killT
+  let teamEffHp = 0
+  for (const a of allies) teamEffHp += a.hp / dmgTakenMult(a)
+  return monsterTotal < teamEffHp * 0.6 // 팀 유효 체력의 60% 안쪽 피해면 감당 가능으로 본다
+}
+
+// 정글이 비었을 때 라인 지원: 적 압박이 큰(우리 타워가 위협받는) 레인을 우선 방어하고,
+// 위협이 없으면 가장 가까운 아군 곁으로 가 함께 압박한다 — 캠프 부활을 멍하니 기다리지 않는다.
+function botSupportLane(state, h) {
+  const en = enemyOf(h.team)
+  // ① 방어: 우리 타워 근처에 보이는 적 영웅이 가장 많은 레인으로
+  let need = 0
+  let point = null
+  for (const lane of LANE_IDS) {
+    const tower = state.towers.find((t) => t.team === h.team && t.lane === lane && t.alive)
+    const ref = tower || state.map.NEXUS_POS[h.team]
+    let threat = 0
+    for (const e of state.heroes) {
+      if (e.team !== en || e.respawnT > 0 || !isHeroVisible(state, e, h.team)) continue
+      if (dist(e, ref) < 28) threat++
+    }
+    if (threat > need) {
+      need = threat
+      point = ref
+    }
+  }
+  if (point) {
+    steerToward(state, h, point)
+    return true
+  }
+  // ② 합류: 위협이 없으면 가장 가까운(조금 떨어진) 아군 영웅에게 가 함께 라인을 민다
+  let mate = null
+  let mbd = Infinity
+  for (const o of state.heroes) {
+    if (o === h || o.team !== h.team || o.respawnT > 0) continue
+    const d = dist2(h, o)
+    if (d < mbd) {
+      mbd = d
+      mate = o
+    }
+  }
+  if (mate && mbd > 8 * 8) {
+    steerToward(state, h, mate)
+    return true
+  }
+  return false // 이미 아군 곁이면 호출부의 일반 라인 푸시로 넘긴다
+}
+
 function stepBots(state, dt) {
   for (const h of state.heroes) {
     if (!h.isBot || h.respawnT > 0) continue
@@ -2138,7 +2255,35 @@ function stepBots(state, dt) {
       h.botStrafe += dt * 0.7
       const away = Math.atan2(h.z - foe.z, h.x - foe.x)
       const to = Math.atan2(foe.z - h.z, foe.x - h.x)
-      const chasing = d > kite + 1.2
+      const wantChase = d > kite + 1.2
+      // 추격 가부 판단: 잡을 확신 + 생환 가능성 점수로 결정한다(무작정 본진까지 따라가다 자폭 방지).
+      let chasing = wantChase
+      if (wantChase) {
+        const tower = nearestEnemyTower(state, h)
+        const towerD = tower ? dist(h, tower) : Infinity
+        const sc = botChaseScore(state, h, foe)
+        // 기본: 심하게 불리하지 않고(아군≥적) 체력 여유, 내가 먼저 죽지 않을 때만 쫓는다
+        let ok = h.hp > h.maxHp * 0.4 && sc.allies >= sc.foes && sc.killT <= sc.lifeT
+        // 적 타워 사거리 안으로의 다이브: 빈사 적 + 즉살각 + 충분한 생환 여유가 있을 때만
+        if (towerD < TOWER_RANGE + 3) {
+          ok = ok && foe.hp < foe.maxHp * 0.4 && sc.killT < 1.3 && sc.lifeT > sc.killT * 1.6
+        }
+        chasing = ok
+      }
+      if (wantChase && !chasing) {
+        // 무리한 추격은 접는다 — 내 진영 쪽으로 빠지며 방어/도주기만 쓰고 사거리 안이면 반격한다
+        if (h.cls === 'tank' && h.skillCd <= 0 && d < 10) castSkill(state, h.id) // 방패 켜고 후퇴
+        if (
+          h.skill2Cd <= 0 &&
+          h.lvl >= SKILL2_LEVEL &&
+          (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer')
+        ) {
+          castSkill2(state, h.id)
+        }
+        steerToward(state, h, state.map.NEXUS_POS[h.team])
+        botAttack(state, h, dt)
+        continue
+      }
       const ang = d < kite - 1.2 ? away : chasing ? to : away + Math.PI / 2
       // 추격 중엔 옆걸음 없이 전속 직진 — 근접이 원거리를 따라잡을 수 있게
       const wob = chasing ? 0 : 0.25
@@ -2189,7 +2334,9 @@ function botJungleRole(state, h, dt) {
   }
   // ② 정글링 (지나는 길의 늑대 + 여건 되면 용/바론)
   if (botJungleMove(state, h)) return true
-  // ③ 캠프가 다 비었으면 다음 캠프 부활을 기다리며 강(중앙)으로 — 거기서 다시 판단
+  // ③ 정글이 비었으면 라인 지원 — 위협받는 레인 방어/아군 합류 (캠프 부활을 멍하니 안 기다린다)
+  if (botSupportLane(state, h)) return true
+  // ④ 그래도 할 일이 없으면 다음 캠프 부활을 기다리며 그 자리로
   const respawning = state.monsters.find((m) => m.kind === 'wolf' && !m.alive)
   if (respawning) {
     steerToward(state, h, respawning.camp)
@@ -2240,17 +2387,12 @@ function steerToward(state, h, to) {
 
 // 정글 사냥: 지나는 길의 늑대, 아군이 모여 있으면 용/바론 도전
 function botJungleMove(state, h) {
-  // 용/바론 도전 — 분노 때문에 혼자서는 위험하다(용이 강해졌다).
-  //  · 바론: 어떤 레벨도 솔로 불가 → 팀(3명)이 모였을 때만
-  //  · 용: 12레벨부터 혼자 가능, 그 전엔 곁에 동료가 있을 때(2명+)만 도전
+  // 용/바론 도전 — 분노 때문에 어설프게 덤비면 잡기 전에 쓰러진다.
+  //  곁의 아군 합산 화력으로 "분노가 폭발하기 전에 처치 + 우리 팀이 피해를 버틴다"는
+  //  확신(canTakeMonster)이 설 때만 친다 → 저레벨·소수가 무리하게 치는 자폭을 막는다.
   for (const big of state.monsters) {
     if (!big.alive || big.kind === 'wolf') continue
-    const near = state.heroes.filter(
-      (o) => o.team === h.team && o.respawnT <= 0 && dist(o, big) < 28
-    ).length // 나 포함 — 곁에 있는 아군 수
-    const needAllies = big.kind === 'baron' ? 3 : 2
-    const canSolo = big.kind === 'dragon' && h.lvl >= 12 && h.hp > h.maxHp * 0.7
-    if ((near >= needAllies || canSolo) && h.hp > h.maxHp * 0.6) {
+    if (h.hp > h.maxHp * 0.55 && canTakeMonster(state, h, big)) {
       if (dist(h, big) > CLASSES[h.cls].range - 1) steerToward(state, h, big)
       else {
         h.mx = 0
