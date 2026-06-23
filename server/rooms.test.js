@@ -28,10 +28,14 @@ test('참가자: 기기별 추가, 말 중복 금지, 전체 정원 제한', () 
   assert.throws(() => s.addPlayer(room, 'dev-B', { zodiacId: 'rat', name: 'X' }), /이미 누가/)
   assert.throws(() => s.addPlayer(room, 'dev-B', { zodiacId: 'lion', name: 'X' }), /알 수 없는/)
 
-  const more = ['tiger', 'rabbit', 'dragon']
-  more.forEach((z) => s.addPlayer(room, 'dev-A', { zodiacId: z, name: z }))
+  // 정원(MAX_PLAYERS)까지 채운다. rat/ox 2명은 이미 추가됨.
+  const rest = ['tiger', 'rabbit', 'dragon', 'snake', 'horse', 'goat', 'monkey', 'rooster', 'dog', 'pig']
+  for (const z of rest) {
+    if (s.allPlayers(room).length >= MAX_PLAYERS) break
+    s.addPlayer(room, 'dev-A', { zodiacId: z, name: z })
+  }
   assert.equal(s.allPlayers(room).length, MAX_PLAYERS)
-  assert.throws(() => s.addPlayer(room, 'dev-B', { zodiacId: 'snake' }), /최대/)
+  assert.throws(() => s.addPlayer(room, 'dev-B', { zodiacId: 'pig' }), /최대|이미 누가/)
 })
 
 test('참가자 제거: 내 것만 가능, 호스트는 모두 가능', () => {

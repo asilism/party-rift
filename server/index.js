@@ -1,4 +1,4 @@
-// 보드게임 파티 온라인 서버.
+// 파티 리프트 온라인 서버.
 //  - /ws : 방(로비) 관리 + 게임 메시지 릴레이 WebSocket
 //  - 그 외 : dist/ 정적 파일 서빙(빌드돼 있을 때) → 한 포트로 배포 가능
 //
@@ -36,7 +36,7 @@ const httpServer = http.createServer((req, res) => {
   if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(DIST, 'index.html')
   if (!fs.existsSync(file)) {
     res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
-    res.end('BoardGameParty 서버 동작 중. 앱은 `npm run build` 후 이 포트로, 개발 중엔 vite(5173)로 접속하세요.')
+    res.end('파티 리프트 서버 동작 중. 앱은 `npm run build` 후 이 포트로, 개발 중엔 vite(5173)로 접속하세요.')
     return
   }
   res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' })
@@ -280,5 +280,5 @@ const heartbeat = setInterval(() => {
 wss.on('close', () => clearInterval(heartbeat))
 
 httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`[boardgameparty] 서버 시작: http://0.0.0.0:${PORT} (ws: /ws)`)
+  console.log(`[party-rift] 서버 시작: http://0.0.0.0:${PORT} (ws: /ws)`)
 })

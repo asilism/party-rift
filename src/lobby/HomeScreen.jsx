@@ -1,16 +1,12 @@
 import { useState } from 'react'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
 import { sound } from '../shared/sound.js'
-import logoUrl from '../resources/logo.png'
 
-// 첫 화면: 플레이 방식 선택.
-//  - 한 기기로: 기존 핫시트(오프라인) 모드
-//  - 방 만들기: 온라인 방 생성(이 기기가 호스트)
-//  - 코드로 참여: 다른 기기가 만든 방에 합류
-export default function HomeScreen({ onLocal, onCreate, onJoin, initialCode = '' }) {
+// 첫 화면: 방을 만들거나(이 기기가 호스트) 코드로 다른 방에 합류한다.
+//  리프트는 기기마다 조이스틱이 필요해 온라인 방 전용이다.
+export default function HomeScreen({ onCreate, onJoin, initialCode = '' }) {
   const [joining, setJoining] = useState(!!initialCode)
   const [code, setCode] = useState(initialCode)
-  const [logoOk, setLogoOk] = useState(true)
 
   function submitJoin() {
     const c = code.trim().toUpperCase()
@@ -23,14 +19,8 @@ export default function HomeScreen({ onLocal, onCreate, onJoin, initialCode = ''
     <div className="lobby home">
       <header className="lobby__header">
         <div className="lobby__titles">
-          {logoOk ? (
-            <img className="lobby__logo" src={logoUrl} alt="보드게임 파티" onError={() => setLogoOk(false)} />
-          ) : (
-            <>
-              <h1>🎉 보드게임 파티</h1>
-              <p>같이 즐기는 보드/파티게임 모음</p>
-            </>
-          )}
+          <h1>⚔️ 파티 리프트</h1>
+          <p>3:3 / 5:5 3D 전장 — 타워를 부수고 넥서스를 터뜨려요</p>
         </div>
         <FullscreenButton />
       </header>
@@ -40,23 +30,11 @@ export default function HomeScreen({ onLocal, onCreate, onJoin, initialCode = ''
           className="mode-card"
           onClick={() => {
             sound.unlock()
-            onLocal()
-          }}
-        >
-          <span className="mode-card__emoji">📱</span>
-          <span className="mode-card__title">한 기기로 놀기</span>
-          <span className="mode-card__desc">모두 모여서 번갈아 플레이</span>
-        </button>
-
-        <button
-          className="mode-card"
-          onClick={() => {
-            sound.unlock()
             onCreate()
           }}
         >
           <span className="mode-card__emoji">🌐</span>
-          <span className="mode-card__title">온라인 방 만들기</span>
+          <span className="mode-card__title">방 만들기</span>
           <span className="mode-card__desc">코드를 알려주면 친구 기기로 함께!</span>
         </button>
 
@@ -95,7 +73,7 @@ export default function HomeScreen({ onLocal, onCreate, onJoin, initialCode = ''
         </div>
       </div>
 
-      <p className="home__hint">🌐 온라인 방은 같은 서버에 접속한 모든 기기에서 참여할 수 있어요</p>
+      <p className="home__hint">🌐 같은 서버에 접속한 모든 기기에서 한 방에 모일 수 있어요</p>
     </div>
   )
 }

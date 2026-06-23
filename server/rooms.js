@@ -8,7 +8,7 @@
 //  - 로비(참가자 명단/화면 전환)는 서버가 관리하고, 게임 진행 상태는
 //    호스트 기기가 권위를 갖고 state 브로드캐스트 / 게스트 action 릴레이로 동작.
 
-export const MAX_PLAYERS = 5
+export const MAX_PLAYERS = 10 // 리프트 5:5 모드까지 사람으로 채울 수 있게
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789' // 헷갈리는 글자(I,L,O,0,1) 제외
 const ZODIAC_IDS = [
   'rat', 'ox', 'tiger', 'rabbit', 'dragon', 'snake',
@@ -33,7 +33,7 @@ export function createRoomStore(rng = Math.random) {
     const room = {
       code,
       hostId: deviceId,
-      screen: 'lobby', // 'lobby' | 게임 id ('ladder' 등)
+      screen: 'lobby', // 'lobby' | 'rift'
       devices: new Map([[deviceId, { players: [] }]]),
     }
     rooms.set(code, room)

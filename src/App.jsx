@@ -1,56 +1,14 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import HomeScreen from './lobby/HomeScreen.jsx'
-import GameLobby from './lobby/GameLobby.jsx'
 import OnlineLobby from './lobby/OnlineLobby.jsx'
-import LadderGame from './games/ladder/LadderGame.jsx'
-import MemoryGame from './games/memory/MemoryGame.jsx'
-import DobbleGame from './games/dobble/DobbleGame.jsx'
-import ThrillGame from './games/thrillpang/ThrillGame.jsx'
-import RaceGame from './games/race/RaceGame.jsx'
-import WhackGame from './games/whack/WhackGame.jsx'
-import TrafficGame from './games/traffic/TrafficGame.jsx'
-
-// 파티 카트/리프트는 three.js(3D)를 쓰므로 선택할 때만 내려받는다 (번들 분리)
-const KartGame = lazy(() => import('./games/kart/KartGame.jsx'))
-const RiftGame = lazy(() => import('./games/rift/RiftGame.jsx'))
 import ErrorBoundary from './shared/ErrorBoundary.jsx'
 import { RoomProvider, useRoom } from './net/RoomContext.jsx'
-import { loadRoster, saveRoster } from './shared/storage.js'
 
-// 게임 id → 컴포넌트. 모든 게임은 { roster, onExit, net }을 받는다.
-//  net=null 이면 오프라인(핫시트), net이 있으면 온라인 동기화 모드.
-const GAME_COMPONENTS = {
-  ladder: LadderGame,
-  memory: MemoryGame,
-  dobble: DobbleGame,
-  thrillpang: ThrillGame,
-  race: RaceGame,
-  whack: WhackGame,
-  traffic: TrafficGame,
-  kart: KartGame,
-  rift: RiftGame,
-}
+// 파티 리프트 — 단독 게임. three.js(3D)를 쓰므로 게임에 들어갈 때만 내려받는다(번들 분리).
+const RiftGame = lazy(() => import('./games/rift/RiftGame.jsx'))
 
-function renderGame(id, props) {
-  const Game = GAME_COMPONENTS[id]
-  if (!Game) return null
-  return (
-    <Suspense
-      fallback={
-        <div className="net-screen">
-          <div className="net-screen__icon">⏳</div>
-          <p>게임을 불러오는 중...</p>
-        </div>
-      }
-    >
-      <Game {...props} />
-    </Suspense>
-  )
-}
-
-// 화면 흐름:
-//  홈(모드 선택) → ① 한 기기 모드: 로비 → 게임 (기존 핫시트, localStorage 저장)
-//               → ② 온라인 모드: 방 생성/참여 → 온라인 로비 → 게임 (서버 동기화)
+// 리프트는 기기마다 조이스틱이 필요해 온라인 방 전용이다.
+//  화면 흐름:  홈(방 만들기/코드 참여) → 온라인 로비(참가자 모으기) → 전투
 export default function App() {
   // URL에 ?room=CODE 가 있으면 바로 참여 시도 (초대 링크)
   const [mode, setMode] = useState(() => {
@@ -75,13 +33,10 @@ export default function App() {
 
       {mode.kind === 'home' && (
         <HomeScreen
-          onLocal={() => setMode({ kind: 'local' })}
           onCreate={() => setMode({ kind: 'online', intent: { kind: 'create' } })}
           onJoin={(code) => setMode({ kind: 'online', intent: { kind: 'join', code } })}
         />
       )}
-
-      {mode.kind === 'local' && <LocalFlow onBack={goHome} />}
 
       {mode.kind === 'online' && (
         <RoomProvider intent={mode.intent} onLeft={goHome}>
@@ -92,26 +47,7 @@ export default function App() {
   )
 }
 
-// ① 한 기기(핫시트) 모드 — 기존 동작 그대로. 참가자는 localStorage에 유지.
-function LocalFlow({ onBack }) {
-  const [screen, setScreen] = useState('lobby')
-  const [roster, setRoster] = useState(loadRoster)
-
-  useEffect(() => {
-    saveRoster(roster)
-  }, [roster])
-
-  if (screen === 'lobby') {
-    return <GameLobby roster={roster} setRoster={setRoster} onPlay={setScreen} onBack={onBack} />
-  }
-  return (
-    <ErrorBoundary key={screen} onExit={() => setScreen('lobby')}>
-      {renderGame(screen, { roster, onExit: () => setScreen('lobby'), net: null })}
-    </ErrorBoundary>
-  )
-}
-
-// ② 온라인 모드 — 화면(screen)은 방 상태로 서버가 관리하고 호스트가 전환한다.
+// 온라인 모드 — 화면(screen)은 방 상태로 서버가 관리하고 호스트가 전환한다.
 function OnlineFlow({ onHome }) {
   const { status, room, notice, deviceId, isHost, addPlayer, removePlayer, setScreen, leaveRoom, net } = useRoom()
 
@@ -150,12 +86,21 @@ function OnlineFlow({ onHome }) {
     )
   }
 
-  // 게임 중: 호스트의 나가기 → 방 전체가 로비로, 게스트의 나가기 → 방을 떠남
+  // 전투 중: 호스트의 나가기 → 방 전체가 로비로, 게스트의 나가기 → 방을 떠남
   const onExit = isHost ? () => setScreen('lobby') : leaveRoom
   return (
     <ErrorBoundary key={room.screen} onExit={onExit}>
       {notice && <div className="net-toast net-toast--ingame">{notice}</div>}
-      {renderGame(room.screen, { roster: room.players, onExit, net })}
+      <Suspense
+        fallback={
+          <div className="net-screen">
+            <div className="net-screen__icon">⏳</div>
+            <p>전장을 불러오는 중...</p>
+          </div>
+        }
+      >
+        <RiftGame roster={room.players} onExit={onExit} net={net} />
+      </Suspense>
     </ErrorBoundary>
   )
 }

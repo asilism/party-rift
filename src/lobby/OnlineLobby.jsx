@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
 import { sound } from '../shared/sound.js'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
-import { GAMES, blockedReason } from './games.js'
 
-const MAX_PLAYERS = 5
+const MAX_PLAYERS = 10 // 5:5 모드까지 사람으로 채울 수 있게
 
 // 온라인 방 로비. 모든 기기에서 같은 명단이 보이고,
 // 각 기기는 자기 참가자를 추가/제거한다. 게임 시작은 호스트만.
@@ -40,8 +39,8 @@ export default function OnlineLobby({ room, isHost, deviceId, addPlayer, removeP
     <div className="lobby online-lobby">
       <header className="lobby__header">
         <div className="lobby__titles">
-          <h1>🌐 온라인 방</h1>
-          <p>{isHost ? '친구들에게 코드를 알려주세요!' : '호스트가 게임을 고르면 시작돼요'}</p>
+          <h1>⚔️ 파티 리프트</h1>
+          <p>{isHost ? '친구들에게 코드를 알려주세요!' : '호스트가 시작하면 전투가 열려요'}</p>
         </div>
         <div className="topbar__right">
           <button className="btn btn--ghost" onClick={onLeave}>
@@ -150,35 +149,23 @@ export default function OnlineLobby({ room, isHost, deviceId, addPlayer, removeP
         )}
       </section>
 
-      {/* 게임 목록 — 시작은 호스트만 */}
-      {!isHost && <p className="online-lobby__wait">⏳ 호스트가 게임을 고르는 중이에요...</p>}
-      <div className={`lobby__grid ${!isHost ? 'lobby__grid--readonly' : ''}`}>
-        {GAMES.map((g) => {
-          const blocked = blockedReason(g, players.length, true)
-          return (
-            <button
-              key={g.id}
-              className={`game-card ${blocked ? 'game-card--disabled' : ''}`}
-              disabled={!!blocked || !isHost}
-              onClick={() => {
-                if (blocked || !isHost) return
-                sound.unlock()
-                setScreen(g.id)
-              }}
-            >
-              <span className="game-card__emoji">{g.emoji}</span>
-              <span className="game-card__title">{g.title}</span>
-              <span className="game-card__desc">{g.desc}</span>
-              {g.ready && g.minPlayers != null && (
-                <span className="game-card__players">
-                  👥 {g.minPlayers}~{g.maxPlayers}명
-                </span>
-              )}
-              {blocked && <span className="game-card__lock">{blocked}</span>}
-            </button>
-          )
-        })}
-      </div>
+      {/* 전투 시작 — 호스트만. 빈자리는 봇이 채우므로 1명부터 시작 가능 */}
+      <section className="online-lobby__start">
+        {isHost ? (
+          <button
+            className="btn btn--primary online-lobby__start-btn"
+            disabled={players.length < 1}
+            onClick={() => {
+              sound.unlock()
+              setScreen('rift')
+            }}
+          >
+            ⚔️ 전투 시작! (빈자리는 봇이 채워요)
+          </button>
+        ) : (
+          <p className="online-lobby__wait">⏳ 호스트가 시작하기를 기다리는 중이에요...</p>
+        )}
+      </section>
     </div>
   )
 }

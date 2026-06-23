@@ -28,29 +28,5 @@ test('큰 dt는 잘라서 폭주를 막는다', () => {
   assert.ok(ticks <= 21)
 })
 
-// ④ 핵심 전제: 실제 카트 엔진이 브라우저 없이 Node에서 그대로 돈다.
-test('실제 카트 엔진을 헤드리스로 구동(서버 권위 검증)', async () => {
-  const kart = await import('../../games/kart/engine.js')
-  const players = [
-    { id: 'rat', name: '쥐', zodiacId: 'rat', color: '#f00' },
-    { id: 'ox', name: '소', zodiacId: 'ox', color: '#0f0', isBot: true },
-  ]
-  const adapter = {
-    STEP: kart.STEP,
-    createGame: (ps) => kart.createGame(ps, () => 0.5),
-    setInput: kart.setInput,
-    step: kart.step,
-    makeView: kart.makeView,
-  }
-  const sim = new RealtimeSim(adapter, adapter.createGame(players))
-  sim.setInput('rat', { steer: 0.3, brake: false, drift: false })
-  // 5초 진행 — 카운트다운(3초) 지나 주행 시작
-  for (let i = 0; i < 100; i++) sim.advance(50)
-  const view = sim.view()
-  assert.equal(view.phase, 'play')
-  assert.equal(view.karts.length, 2)
-  const me = view.karts.find((k) => k.id === 'rat')
-  assert.ok(Number.isFinite(me.x) && Number.isFinite(me.z))
-  // 주행 중이라면 출발선에서 어느 정도는 움직였다
-  assert.equal(view.status, 'racing')
-})
+// ④ 핵심 전제(실제 리프트 엔진을 브라우저 없이 Node에서 그대로 구동)는
+//    server/realtime.test.js 가 전체 세션으로 검증한다.
