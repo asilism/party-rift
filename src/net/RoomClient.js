@@ -36,13 +36,17 @@ export function createRoomClient({ url = wsUrl(), deviceId = getDeviceId() } = {
 
   function connect() {
     closedByUser = false
-    ws = new WebSocket(url)
-    ws.binaryType = 'arraybuffer' // 실시간 스냅샷은 바이너리 프레임으로 온다
-    ws.onopen = () => {
+    // 소켓을 지역 변수로 캡처 → 재연결로 교체된 "옛 소켓"의 이벤트는 무시(가짜 disconnect 방지).
+    const sock = new WebSocket(url)
+    ws = sock
+    sock.binaryType = 'arraybuffer' // 실시간 스냅샷은 바이너리 프레임으로 온다
+    sock.onopen = () => {
+      if (sock !== ws) return
       send({ t: 'hello', deviceId })
       emit('open')
     }
-    ws.onmessage = (ev) => {
+    sock.onmessage = (ev) => {
+      if (sock !== ws) return
       // 바이너리 프레임 = 실시간 게임 스냅샷(델타/full). JSON 파싱하지 않고 그대로 넘긴다.
       if (typeof ev.data !== 'string') {
         emit('rt', new Uint8Array(ev.data))
@@ -56,10 +60,11 @@ export function createRoomClient({ url = wsUrl(), deviceId = getDeviceId() } = {
       }
       emit(msg.t, msg)
     }
-    ws.onclose = () => {
+    sock.onclose = () => {
+      if (sock !== ws) return // 재연결로 교체된 옛 소켓 → 무시
       if (!closedByUser) emit('disconnect')
     }
-    ws.onerror = () => {}
+    sock.onerror = () => {}
   }
 
   function send(msg) {
@@ -86,19 +91,15 @@ export function createRoomClient({ url = wsUrl(), deviceId = getDeviceId() } = {
     connect,
     close,
     on,
-    createRoom: () => send({ t: 'create' }),
-    joinRoom: (code) => send({ t: 'join', code }),
-    leaveRoom: () => send({ t: 'leave' }),
-    addPlayer: (player) => send({ t: 'addPlayer', player }),
-    removePlayer: (playerId) => send({ t: 'removePlayer', playerId }),
-    setScreen: (screen) => send({ t: 'setScreen', screen }),
-    sendState: (data) => send({ t: 'state', data }),
-    sendAction: (data) => send({ t: 'action', data }),
-    // 실시간 게임(④ 서버 권위)
-    rtStart: (config) => send({ t: 'rtStart', config }),
-    rtStop: () => send({ t: 'rtStop' }),
-    rtPause: (paused) => send({ t: 'rtPause', paused: !!paused }),
+    // 매치메이킹 큐 / 드래프트
+    joinQueue: (mode) => send({ t: 'queue', mode }),
+    leaveQueue: () => send({ t: 'leaveQueue' }),
+    startNow: () => send({ t: 'startNow' }),
+    pick: (classId) => send({ t: 'pick', classId }),
+    leaveMatch: () => send({ t: 'leaveMatch' }),
+    // 실시간 게임(④ 서버 권위) — 서버가 시뮬을 주도하므로 입력/액션만 보낸다
     rtInput: (input) => send({ t: 'rtInput', input }),
     rtAction: (action) => send({ t: 'rtAction', action }),
+    rtResync: () => send({ t: 'rtResync' }),
   }
 }

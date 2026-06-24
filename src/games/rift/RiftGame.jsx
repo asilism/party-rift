@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import RiftSetup from './RiftSetup.jsx'
 import Rift3D from './Rift3D.jsx'
 import RiftMiniMap from './RiftMiniMap.jsx'
 import RiftControls from './RiftControls.jsx'
@@ -9,32 +8,29 @@ import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import { canShop, CLASSES } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { getItem } from './items.js'
-import { racers } from '../../net/realtime/roster.js'
 import { sound } from '../../shared/sound.js'
 import { loadRiftControl, saveRiftControl } from '../../shared/storage.js'
 import { useRealtimeGame } from '../../net/useRealtimeGame.js'
 import { riftNet } from './netgame.js'
-import { NetWaiting, GuestRestartNote } from '../../net/NetParts.jsx'
+import { NetWaiting } from '../../net/NetParts.jsx'
 
 // 파티 리프트 — 3:3 AOS. 온라인 방 전용(기기마다 조이스틱이 필요해서).
 //  - 서버 권위(④): 서버가 60Hz로 시뮬레이션을 돌리고 20Hz로 바이너리 델타 스냅샷을 방송.
 //  - 클라(①③): 내 영웅은 입력 즉시 반영(예측)·권위 보정, 남의 유닛은 보간으로 부드럽게.
 //      모든 동기화 배관은 useRealtimeGame이 담당.
-//  - 영웅은 기기당 1명: 각 기기의 첫 번째 참가자가 싸우고 나머지는 관전.
-export default function RiftGame({ roster, onExit, net }) {
+//  - 영웅은 기기당 1명: 그 기기가 드래프트에서 고른 영웅을 조종한다.
+//  - 매치(팀/직업)는 서버가 드래프트로 확정·시작하므로, 이 컴포넌트는 전장을 그리기만 한다.
+export default function RiftGame({ onExit, net }) {
   const online = !!net?.online
   const ctrlRef = useRef({ mx: 0, mz: 0 })
-  const { view, sample, myId, isHost, start, stop, pause, sendAction } = useRealtimeGame(net, riftNet, ctrlRef)
+  const { view, sample, myId, sendAction } = useRealtimeGame(net, riftNet, ctrlRef)
   const [soundOn, setSoundOn] = useState(true)
-  const lastTeamsRef = useRef(null) // "한판 더!" 즉시 리매치용
 
-  function startGame(teams, classes, mode = '3v3') {
-    lastTeamsRef.current = [teams, classes, mode]
+  // 전장 진입 시 사운드 준비(첫 입력에서 unlock)
+  useEffect(() => {
     sound.setEnabled(soundOn)
-    sound.unlock()
-    ctrlRef.current = { mx: 0, mz: 0 }
-    start({ teams, classes, mode }) // 서버가 전장을 생성·시작
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // 버튼/상점 — 소유권은 서버가 판정(내 영웅에만 적용)
   function cast(slot) {
@@ -69,22 +65,12 @@ export default function RiftGame({ roster, onExit, net }) {
     )
   }
 
-  // 아직 서버 스냅샷을 못 받았을 때
-  if (!view) {
-    return <NetWaiting text="전장에 접속하고 있어요... ⚔️" onExit={onExit} />
+  // 아직 서버 스냅샷을 못 받았을 때(전장 생성 직후) — 곧 엔진 카운트다운이 이어진다
+  if (!view || view.phase !== 'play') {
+    return <NetWaiting text="이제 곧 경기가 시작합니다… ⚔️" onExit={onExit} />
   }
 
-  // ── 셋업 단계 ──
-  if (view.phase !== 'play') {
-    if (isHost) {
-      const racing = racers(roster)
-      const benched = roster.filter((p) => !racing.includes(p))
-      return <RiftSetup racers={racing} benched={benched} onStart={startGame} onExit={onExit} />
-    }
-    return <NetWaiting text="호스트가 전장을 준비하고 있어요... ⚔️" onExit={onExit} />
-  }
-
-  // ── 전투 단계 (호스트/게스트 공용) ──
+  // ── 전투 단계 ──
   return (
     <RiftPlay
       hud={view}
@@ -95,9 +81,7 @@ export default function RiftGame({ roster, onExit, net }) {
       onBuy={buy}
       onSell={sell}
       onResetShop={resetShopBuys}
-      onRematch={isHost ? () => startGame(...lastTeamsRef.current) : null} // 같은 팀/직업으로 한판 더!
-      onRestart={isHost ? () => stop() : null} // 팀 다시 나누기 = 셋업으로 복귀
-      onTogglePause={isHost ? () => pause(!view.paused) : null} // 방장만 일시정지/재개
+      onTogglePause={null}
       onExit={onExit}
       soundOn={soundOn}
       onToggleSound={toggleSound}
@@ -109,7 +93,7 @@ export default function RiftGame({ roster, onExit, net }) {
 const FX_SOUND = {
   dash: 'melee', blink: 'melee', execute: 'melee', whirl: 'melee', // 근접 타격
   volley: 'ranged', lightarrow: 'ranged', // 원거리 타격
-  boom: 'magic', meteorhit: 'magic', fissure: 'magic', chain: 'magic', // 마법 타격
+  boom: 'magic', meteorhit: 'magic', fissure: 'magic', chain: 'magic', frost: 'magic', // 마법 타격
   heal: 'heal', holylight: 'heal', shield: 'shield', // 보조
   berserk: 'melee', taunt: 'shield', haste: 'heal', stealth: 'shield', hawk: 'ranged', // 보조 스킬
   towerfall: 'tower', nexusfall: 'nexus', // 건물 파괴
@@ -274,7 +258,7 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
 
 // 전투 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function RiftPlay({
-  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onRematch, onRestart, onTogglePause, onExit, soundOn, onToggleSound,
+  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onTogglePause, onExit, soundOn, onToggleSound,
 }) {
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
@@ -492,18 +476,7 @@ function RiftPlay({
               ))}
             </div>
             <div className="win-modal__btns">
-              {onRestart ? (
-                <>
-                  <button className="btn btn--primary" onClick={onRematch}>🔁 한판 더!</button>
-                  <button className="btn btn--ghost" onClick={onRestart}>👥 팀 바꾸기</button>
-                  <button className="btn btn--ghost" onClick={onExit}>로비로</button>
-                </>
-              ) : (
-                <>
-                  <GuestRestartNote />
-                  <button className="btn btn--ghost" onClick={onExit}>방 나가기</button>
-                </>
-              )}
+              <button className="btn btn--primary" onClick={onExit}>🔁 새 매치 찾기</button>
             </div>
           </div>
         </div>

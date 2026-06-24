@@ -759,6 +759,60 @@ function buildMonster(m) {
   return g
 }
 
+// 소환물(야수조련사 펫 / 엔지니어 포탑) 외형
+const SUMMON_LOOK = {
+  wolfpet: { emoji: '🐺', size: 1.9, body: 0x9aa3b2, r: 0.9, turret: false },
+  bear: { emoji: '🐻', size: 3.2, body: 0x9b6b4a, r: 1.6, turret: false },
+  turret: { emoji: '🔧', size: 1.7, body: 0x8d99b5, r: 1.0, turret: true },
+  cannon: { emoji: '💥', size: 2.6, body: 0x6f7a93, r: 1.5, turret: true },
+}
+
+function buildSummon(s, barColor) {
+  const look = SUMMON_LOOK[s.kind] || SUMMON_LOOK.wolfpet
+  const col = TEAM_COLOR[s.team]
+  const g = new THREE.Group()
+  let body
+  if (look.turret) {
+    body = new THREE.Group()
+    const base = new THREE.Mesh(
+      new THREE.CylinderGeometry(look.r * 0.9, look.r * 1.15, 0.7, 10),
+      new THREE.MeshLambertMaterial({ color: 0x5b667e })
+    )
+    base.position.y = 0.35
+    const head = new THREE.Mesh(
+      new THREE.BoxGeometry(look.r * 1.3, look.r * 1.0, look.r * 1.5),
+      new THREE.MeshLambertMaterial({ color: look.body })
+    )
+    head.position.y = 0.35 + look.r * 0.7
+    const barrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18, 0.18, look.r * 1.7, 8),
+      new THREE.MeshLambertMaterial({ color: col, emissive: col, emissiveIntensity: 0.3 })
+    )
+    barrel.rotation.z = Math.PI / 2
+    barrel.position.set(look.r * 0.95, 0.35 + look.r * 0.7, 0)
+    body.add(base, head, barrel)
+    body.userData = { head } // 회전은 head/barrel만
+  } else {
+    body = new THREE.Mesh(
+      new THREE.SphereGeometry(look.r, 9, 7),
+      new THREE.MeshLambertMaterial({ color: look.body })
+    )
+    body.position.y = look.r
+  }
+  const face = emojiSprite(look.emoji, look.size)
+  face.position.y = look.r * 2 + 0.3
+  const bar = makeHpBar(look.r * 2.0, barColor)
+  bar.position.y = look.r * 2 + 0.9
+  const shadow = blobShadow(look.r * 1.25)
+  // 휴면(zzz) 표시 — 포탑이 주인 사거리 밖이면 보여 준다
+  const zzz = emojiSprite('💤', 1.4)
+  zzz.position.set(look.r * 0.7, look.r * 2 + 1.0, 0)
+  zzz.visible = false
+  g.add(shadow, body, face, bar, zzz)
+  g.userData = { bar, body, turret: look.turret, zzz, face }
+  return g
+}
+
 const PROJ_LOOK = {
   bolt: { r: 0.4, y: 2.4, color: null }, // null → 팀 색
   mbolt: { r: 0.26, y: 1.5, color: null }, // 원거리 미니언의 작은 화살 (낮고 작게)
@@ -767,6 +821,7 @@ const PROJ_LOOK = {
   pierce: { r: 0.34, y: 2.2, color: 0xfff0a0 }, // 궁수 꿰뚫는 화살 (밝은 노랑)
   lightarrow: { r: 0.6, y: 2.2, color: 0xfff4b0 }, // 빛의 화살 궁극기 (크고 환한 빛)
   hawk: { r: 0.7, y: 5.5, color: 0xffe066 }, // 궁수 사냥매 (높이 떠 날아가는 빛점)
+  hook: { r: 0.55, y: 1.6, color: 0xcfd4e0 }, // 사슬잡이 갈고리 (낮게 직진하는 금속 집게)
 }
 
 // 스킬 이펙트 색 + 파티클 모드 (kind → 색/파티클 움직임).
@@ -800,6 +855,7 @@ const FX_LOOK = {
   fissure: { color: 0xc9863c, line: true, mode: 'forward', pcolor: 0xffb060, w: 3.4, ground: true },
   volley: { color: 0xfff0a0, line: true, mode: 'forward', pcolor: 0xfff4c0, w: 1.4 },
   chain: { color: 0x9fd6ff, line: true, mode: 'forward', pcolor: 0xe0f2ff, w: 1.0 }, // 마법사 체인 라이트닝 — 푸른 번개 줄기
+  frost: { color: 0x9fe0ff, line: true, mode: 'forward', pcolor: 0xe0f6ff, w: 3.2 }, // 한빙술사 서리파동 — 차가운 서리 분사
   lightarrow: { color: 0xfff4b0, line: true, mode: 'forward', pcolor: 0xfffbe0, w: 7 }, // 화면 끝까지 관통하는 넓은 빛줄기
 }
 
@@ -1384,6 +1440,7 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
   const heroPool = new Map()
   const minionPool = new Map()
   const monsterPool = new Map()
+  const summonPool = new Map()
   const projPool = new Map()
   const zonePool = new Map()
   const fxPool = new Map()
@@ -1605,6 +1662,31 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
           body.material.emissiveIntensity = rage
           const shake = rage > 0 ? 1 + Math.sin(view.time * 18) * 0.06 * rage : 1
           body.scale.setScalar(shake)
+        }
+      }
+    )
+    // 소환물(펫/포탑) — 적 소환물은 시야 밖이면 안 보인다
+    syncPool(
+      scene, summonPool, view.summons || [],
+      (s) => buildSummon(s, barColorOf(s.team)),
+      (obj, s) => {
+        obj.visible = isUnitVisible(view, s, myTeam)
+        const u = obj.userData
+        obj.position.set(s.x, u.turret ? 0 : Math.sin(view.time * 3 + s.x) * 0.12, s.z)
+        setHpBar(u.bar, s.hp / s.maxHp)
+        // 포탑은 포신만, 펫은 몸 전체가 바라보는 방향으로 돈다
+        const turn = u.turret ? u.body.userData?.head : u.body
+        if (turn) turn.rotation.y = -(s.dir || 0)
+        // 휴면(zzz): 잠든 포탑은 표시를 띄우고 얼굴을 흐리게
+        if (u.zzz) {
+          u.zzz.visible = obj.visible && !!s.dormant
+          if (u.face) u.face.material.opacity = s.dormant ? 0.4 : 1
+        }
+        // 과부하(엔지니어)/광폭화(야수조련사)면 살짝 달아오른다
+        if (u.body.material) {
+          const c = s.charge ? 1 : 0
+          u.body.material.emissive?.setRGB(c * 0.6, c * 0.2, 0)
+          if (u.body.material.emissiveIntensity != null) u.body.material.emissiveIntensity = c * 0.6
         }
       }
     )

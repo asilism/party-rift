@@ -1,5 +1,29 @@
 import { useEffect, useRef, useState } from 'react'
-import { CLASSES, RECALL_TIME } from './engine.js'
+import { CLASSES, RECALL_TIME, ABILITY_SCALING, powerLabel } from './engine.js'
+
+// 스킬 한 줄 데미지/회복/보호막 공식 + 현재 수치를 만든다(툴팁용).
+//  me.power(주력 스탯)·me.dmgMult(버프 배율)·me.lvl로 실제 값을 계산한다.
+function abilityLines(clsId, slot, me) {
+  const info = ABILITY_SCALING[clsId]?.[slot]
+  if (!info || !me) return []
+  const label = powerLabel(clsId)
+  const power = me.power ?? 0
+  const mult = me.dmgMult ?? 1
+  const lvl = me.lvl ?? 1
+  const lines = []
+  const scale = (base, coef, m) => Math.round((base + coef * power) * m)
+  const formula = (base, coef) => (base ? `${base} + ${coef}×${label}` : `${coef}×${label}`)
+  if (info.dmg) lines.push(`💥 피해 ${formula(info.dmg[0], info.dmg[1])} = ${scale(info.dmg[0], info.dmg[1], mult)}`)
+  if (info.dot) {
+    const dps = scale(info.dot[0], info.dot[1], mult)
+    lines.push(`☠️ 지속피해 ${formula(info.dot[0], info.dot[1])} = ${dps}/초 · ${info.dotDur}초(총 ${Math.round(dps * info.dotDur)})`)
+  }
+  if (info.heal) lines.push(`💚 회복 ${formula(info.heal[0], info.heal[1])} = ${scale(info.heal[0], info.heal[1], 1)}`)
+  if (info.shield) lines.push(`🛡️ 보호막 ${info.shield[0]} + ${info.shield[1]}×(Lv-1) = ${Math.round(info.shield[0] + info.shield[1] * (lvl - 1))}`)
+  if (info.summon) lines.push(`🐾 소환수 공격력 ${info.summon}${info.count ? ` (×${info.count}마리)` : ''}`)
+  if (info.note) lines.push(`· ${info.note}`)
+  return lines
+}
 
 const JOY_RADIUS = 60 // px. 이만큼 끌면 풀 스피드
 const ATK_REPEAT_MS = 220 // 공격 버튼을 누르고 있으면 연타해 준다
@@ -28,21 +52,23 @@ function usePressPulse(pulse, setPressed) {
 
 // 쿨다운 버튼: 남은 시간 비율만큼 어두운 부채꼴 오버레이 + 스킬 이름
 // interactive=false면 터치 입력은 막고 쿨다운/상태 표시만 한다(키보드·패드 모드).
-function CdButton({ className, icon, label, cd, cdMax, locked, lockText, onPress, onRelease, interactive = true, pulse = 0 }) {
+function CdButton({ className, icon, label, name, desc, lines, cd, cdMax, locked, lockText, onPress, onRelease, interactive = true, pulse = 0 }) {
   const frac = cdMax > 0 ? Math.max(0, Math.min(1, cd / cdMax)) : 0
   const ready = !locked && frac <= 0
   const [pressed, setPressed] = useState(false)
   usePressPulse(pulse, setPressed)
   const release = () => {
+    if (!interactive) return
     if (pressed) setPressed(false)
     onRelease?.()
   }
   return (
     <button
+      // 키보드/게임패드 모드에서도 마우스 오버 툴팁은 보이게 한다(클릭 발동만 막음).
       className={`rift-btn ${className} ${ready ? 'rift-btn--ready' : ''} ${pressed ? 'rift-btn--press' : ''}`}
-      style={interactive ? undefined : { pointerEvents: 'none', opacity: 0.82 }}
+      style={interactive ? undefined : { opacity: 0.82 }}
       onPointerDown={() => {
-        if (locked) return
+        if (!interactive || locked) return
         setPressed(true)
         onPress?.()
       }}
@@ -59,6 +85,19 @@ function CdButton({ className, icon, label, cd, cdMax, locked, lockText, onPress
           style={{ background: `conic-gradient(rgba(8, 12, 26, 0.78) ${frac * 360}deg, transparent 0deg)` }}
         >
           {Math.ceil(cd)}
+        </span>
+      )}
+      {desc && (
+        <span className="rift-btn__tip" role="tooltip">
+          <b>{icon} {name}{cdMax > 0 ? ` · 쿨 ${cdMax}초` : ''}{locked ? ` (${lockText})` : ''}</b>
+          {desc}
+          {lines && lines.length > 0 && (
+            <span className="rift-btn__tip-stats">
+              {lines.map((l, i) => (
+                <span key={i}>{l}</span>
+              ))}
+            </span>
+          )}
         </span>
       )}
     </button>
@@ -300,6 +339,9 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
         className="rift-btn--ult"
         icon={cls.ult.icon}
         label={cls.ult.name}
+        name={cls.ult.name}
+        desc={cls.ult.desc}
+        lines={abilityLines(me?.cls, 'ult', me)}
         cd={me?.ultCd ?? 0}
         cdMax={cls.ult.cd}
         locked={me?.ultLocked}
@@ -313,6 +355,9 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
           className="rift-btn--skill2"
           icon={cls.skill2.icon}
           label={cls.skill2.name}
+          name={cls.skill2.name}
+          desc={cls.skill2.desc}
+          lines={abilityLines(me?.cls, 'skill2', me)}
           cd={me?.skill2Cd ?? 0}
           cdMax={cls.skill2.cd}
           locked={me?.skill2Locked}
@@ -326,6 +371,9 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
         className="rift-btn--skill"
         icon={cls.skill.icon}
         label={cls.skill.name}
+        name={cls.skill.name}
+        desc={cls.skill.desc}
+        lines={abilityLines(me?.cls, 'skill', me)}
         cd={me?.skillCd ?? 0}
         cdMax={cls.skill.cd}
         onPress={onSkill}
@@ -336,6 +384,8 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
         className="rift-btn--atk"
         icon="⚔️"
         label="공격"
+        name="기본 공격"
+        desc="사거리 안 가장 가까운 적을 자동으로 친다(누르고 있으면 연타)"
         cd={0}
         cdMax={0}
         onPress={atkPress}

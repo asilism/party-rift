@@ -25,16 +25,20 @@ export function createRealtimeSession(gameId, room, sendTo) {
   let lastNow = Date.now()
   let timer = null
   let paused = false // 방장이 일시정지하면 시뮬을 멈춘다(방송은 계속)
+  let warmup = 0 // 시작 직후 이 틱 수만큼은 전원 full 전송 — 전장(three.js) 청크가 늦게 로드돼
+  //               클라가 구독을 늦게 시작해도 full 한 장은 받게 한다(델타-온리로 멈추는 것 방지)
   const needsFull = new Set() // 중간 합류 등으로 full이 필요한 기기
 
   function broadcast() {
     // 일시정지 상태는 view에 실어 보낸다(클라가 오버레이/예측정지 판단)
     const view = sim ? { ...sim.view(), paused } : { phase: 'setup' }
+    const forceFull = warmup > 0
+    if (warmup > 0) warmup--
     const delta = encodeSnapshot(lastView, view)
     let full = null // 필요할 때만 만든다
     const getFull = () => (full || (full = encodeSnapshot(null, view)))
     for (const devId of room.devices.keys()) {
-      if (lastView == null || needsFull.has(devId)) sendTo(devId, getFull())
+      if (lastView == null || forceFull || needsFull.has(devId)) sendTo(devId, getFull())
       else sendTo(devId, delta)
     }
     needsFull.clear()
@@ -71,6 +75,7 @@ export function createRealtimeSession(gameId, room, sendTo) {
       sim = new RealtimeSim(adapter, adapter.createGame(players, opts))
       lastNow = Date.now()
       lastView = null // 다음 방송은 전원 full
+      warmup = 40 // 약 2초간 full 유지 — 늦게 합류/구독하는 클라도 안전하게 동기화
       paused = false
     },
     // 호스트가 셋업으로 복귀(맵/팀 다시 고르기)

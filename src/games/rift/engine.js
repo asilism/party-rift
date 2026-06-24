@@ -41,6 +41,14 @@ const ROLE_PREF = {
   healer: ['support', 'bot', 'top', 'mid'],
   assassin: ['jungle', 'mid', 'bot', 'top'],
   warrior: ['jungle', 'top', 'mid', 'bot'],
+  cryomancer: ['mid', 'top', 'bot'], // 컨트롤 메이지 — 미드
+  gladiator: ['jungle', 'top', 'mid', 'bot'], // 브루저 — 정글/탑
+  warlock: ['mid', 'bot', 'top'], // DoT 메이지 — 미드
+  guardian: ['support', 'bot', 'top', 'mid'], // 보호막 서폿 — 봇 지원
+  swordmaster: ['top', 'jungle', 'mid', 'bot'], // 듀얼리스트 — 탑/정글
+  catcher: ['support', 'top', 'bot', 'mid'], // 이니시에이터 — 로밍/지원
+  beastmaster: ['jungle', 'top', 'mid', 'bot'], // 소환사 — 정글
+  engineer: ['mid', 'top', 'bot'], // 포탑 설치 — 미드/사이드
 }
 // 한 봇에게 그 모드의 역할 풀에서 직업 선호에 맞는 빈 역할을 고른다(겹치면 다음 후보 → 남은 자리).
 function pickRole(cls, mode, taken) {
@@ -99,8 +107,90 @@ export const CLASSES = {
     skill2: { name: '도발', icon: '📣', cd: 13, desc: '주변 적을 도발 — 2초간 나만 노려보며 평타치게 만든다' },
     ult: { name: '대지균열', icon: '💥', cd: 60, desc: '앞으로 땅을 길게 갈라 길목의 적을 길게 기절' },
   },
+  cryomancer: {
+    name: '한빙술사', icon: '❄️', desc: '얼리고 묶는 군중제어 마법사 — 폭발보다 통제',
+    hp: 450, hpLvl: 48, atk: 40, atkLvl: 6, range: 10, atkCd: 0.95, speed: 12.3,
+    skill: { name: '서리파동', icon: '🌨️', cd: 7, desc: '앞으로 냉기를 부채꼴로 뿜어 맞은 적을 빙결(이동·공격 둔화)' },
+    skill2: { name: '서리고리', icon: '🧊', cd: 11, desc: '내 주변에 얼음가시가 솟아 가까운 적을 빙결시킨다(피일)' },
+    ult: { name: '절대영도', icon: '🥶', cd: 60, desc: '넓은 범위를 얼려 적 전원을 길게 빙결 + 피해' },
+  },
+  gladiator: {
+    name: '검투사', icon: '🪓', desc: '흡혈로 버티며 싸우는 근접 딜탱(브루저)',
+    hp: 700, hpLvl: 80, atk: 56, atkLvl: 8, range: 3.9, atkCd: 0.72, speed: 13.4, def: 0.85,
+    skill: { name: '휘둘러베기', icon: '🩸', cd: 7, desc: '주변을 넓게 베어 피해를 주고 입힌 피해의 일부를 흡혈' },
+    skill2: { name: '도약강타', icon: '⤵️', cd: 13, desc: '적에게 도약해 착지 지점을 강타(교전 합류)' },
+    ult: { name: '검투의 분노', icon: '😤', cd: 60, desc: '수 초간 흡혈·이동속도 ↑, 받는 군중제어 감소' },
+  },
+  warlock: {
+    name: '주술사', icon: '☠️', desc: '갉아먹는 지속피해·저주의 원거리 zoner',
+    hp: 420, hpLvl: 44, atk: 42, atkLvl: 6, range: 11, atkCd: 0.9, speed: 12.4,
+    skill: { name: '저주살', icon: '🟣', cd: 6, desc: '가까운 적에게 강한 즉시 피해 + 4초 지속피해(중독·회복 감소)' },
+    skill2: { name: '역병안개', icon: '🌫️', cd: 12, desc: '넓은 독안개를 잠깐 깔아 머무는 적을 계속 중독시킨다' },
+    ult: { name: '파멸의 낙인', icon: '💀', cd: 60, desc: '넓은 범위 적 전원에 강한 중독 + 받는 피해 증가 낙인' },
+  },
+  guardian: {
+    name: '수호기사', icon: '🔰', desc: '아군에 보호막을 둘러 지키는 인챈터 서포터',
+    hp: 560, hpLvl: 60, atk: 44, atkLvl: 6, range: 8.5, atkCd: 0.9, speed: 12.6,
+    skill: { name: '수호의 빛', icon: '🛡️', cd: 8, desc: '가장 다친 아군(나 포함)에게 피해를 흡수하는 보호막' },
+    skill2: { name: '결속', icon: '🔗', cd: 11, desc: '주변 아군(나 포함)이 잠시 받는 피해 감소' },
+    ult: { name: '불굴의 진형', icon: '✨', cd: 60, desc: '아군 전원에게 보호막 + 잠깐의 피해 감소' },
+  },
+  swordmaster: {
+    name: '검성', icon: '🗡️', desc: '받아넘기고 베는 평타 듀얼리스트 — 빠른 검과 반격',
+    hp: 480, hpLvl: 50, atk: 58, atkLvl: 9, range: 5.5, atkCd: 0.5, speed: 14, def: 0.92,
+    skill: { name: '발도 카운터', icon: '🪞', cd: 8, desc: '잠깐 자세를 잡아 다음 피해 1회를 막고 즉시 강하게 반격' },
+    skill2: { name: '잔영 스텝', icon: '💨', cd: 6, desc: '바라보는 방향으로 짧게 순간이동해 위치를 바꾼다(리포지션)' },
+    ult: { name: '무형검', icon: '🌀', cd: 60, desc: '수 초간 사거리·공격속도가 크게 올라 평타로 몰아친다' },
+  },
+  catcher: {
+    name: '사슬잡이', icon: '🪝', desc: '갈고리로 적을 끌어와 묶는 이니시에이터',
+    hp: 560, hpLvl: 62, atk: 50, atkLvl: 7, range: 5, atkCd: 0.8, speed: 12.8, def: 0.9,
+    skill: { name: '사슬갈고리', icon: '⛓️', cd: 9, desc: '직선으로 사슬을 던져 첫 적을 끌어오고 잠시 속박 + 피해' },
+    skill2: { name: '옭아매기', icon: '🕸️', cd: 11, desc: '주변 적을 사슬로 묶어 잠시 이동 불가(피해)' },
+    ult: { name: '단두대', icon: '🪓', cd: 60, desc: '주변 적을 강하게 내리쳐 큰 피해 + 속박 연장' },
+  },
+  beastmaster: {
+    name: '야수조련사', icon: '🐺', desc: '늑대와 곰을 부려 함께 싸우는 소환사',
+    hp: 540, hpLvl: 58, atk: 48, atkLvl: 7, range: 6, atkCd: 0.85, speed: 13, def: 0.92,
+    skill: { name: '늑대 소환', icon: '🐺', cd: 12, desc: '늑대 두 마리를 불러내 주인을 따라다니며 적을 문다' },
+    skill2: { name: '사냥 명령', icon: '📯', cd: 9, desc: '주변 늑대/곰이 잠시 광폭화 — 더 빠르고 거세게 적을 덮친다' },
+    ult: { name: '곰 소환', icon: '🐻', cd: 60, desc: '거대한 곰을 불러내 앞장세운다 — 단단하고 강한 일격' },
+  },
+  engineer: {
+    name: '엔지니어', icon: '🔧', desc: '미니포탑을 설치해 진영을 장악하는 기술자',
+    hp: 500, hpLvl: 54, atk: 46, atkLvl: 7, range: 9, atkCd: 0.9, speed: 12.4,
+    skill: { name: '미니포탑 설치', icon: '🔧', cd: 10, desc: '발밑에 자동 사격 포탑을 세운다(최대 2기, 초과 시 오래된 것 회수)' },
+    skill2: { name: '과부하', icon: '⚙️', cd: 14, desc: '내 포탑들의 공격속도를 잠시 크게 올린다' },
+    ult: { name: '거포 설치', icon: '💥', cd: 60, desc: '강력한 장거리 거포를 세운다 — 넓은 사거리·큰 피해' },
+  },
 }
 export const CLASS_IDS = Object.keys(CLASSES)
+
+// 스킬 데미지/회복/보호막 스케일링 메타데이터 — 툴팁이 "공식 + 현재 수치"를 보여 줄 때 쓴다.
+//  (엔진 SKILLS/ULTS의 skillDmg/healAmt 호출 계수와 일치시켜 둔다)
+//  dmg/dot/heal: [기본, 계수] · 계수는 직업 주력 스탯(AD/AP)에 곱한다.
+//  shield: [기본, 레벨당] · summon: 소환수 공격력(고정).
+export const ABILITY_SCALING = {
+  warrior: { skill: { dmg: [30, 0.8] }, ult: { dmg: [20, 0.3], note: '0.34초마다 타격 · 2초' } },
+  archer: { skill: { dmg: [0, 1.2] }, ult: { dmg: [90, 1.5] } },
+  mage: { skill: { dmg: [96, 1.2] }, skill2: { dmg: [45, 0.7], note: '점프마다 약화 · 최대 3타' }, ult: { dmg: [60, 0.9], note: '운석 3발' } },
+  healer: { skill: { heal: [100, 1.2] }, ult: { heal: [220, 1.3] } },
+  assassin: { skill: { dmg: [30, 0.95] }, ult: { dmg: [60, 1.7], note: '빈사(35%↓) 2배' } },
+  tank: { ult: { dmg: [50, 1.4] } },
+  cryomancer: { skill: { dmg: [38, 0.5], note: '빙결' }, skill2: { dmg: [26, 0.35], note: '빙결' }, ult: { dmg: [80, 0.8], note: '긴 빙결' } },
+  gladiator: { skill: { dmg: [42, 0.85], note: '흡혈 35%' }, skill2: { dmg: [25, 0.5] } },
+  warlock: { skill: { dmg: [48, 0.55], dot: [24, 0.4], dotDur: 4 }, skill2: { dot: [12, 0.2], dotDur: 2.5, note: '장판 안에서 지속' }, ult: { dmg: [50, 0.5], dot: [16, 0.3], dotDur: 5, note: '받는 피해 +18%' } },
+  guardian: { skill: { shield: [120, 26] }, ult: { shield: [90, 18] } },
+  swordmaster: { skill: { dmg: [40, 0.9], note: '피해 1회 무효 후 반격' } },
+  catcher: { skill: { dmg: [40, 0.7], note: '명중 시 1초 끌림+스턴' }, skill2: { dmg: [25, 0.4], note: '속박' }, ult: { dmg: [90, 1.0], note: '속박' } },
+  beastmaster: { skill: { summon: 26, count: 2 }, ult: { summon: 64 } },
+  engineer: { skill: { summon: 34 }, ult: { summon: 72 } },
+}
+
+// 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 그 외는 공격력.
+export function powerLabel(cls) {
+  return AP_CLASSES.has(cls) ? '주문력' : '공격력'
+}
 
 // ── 공용 수치 ──
 const HERO_RADIUS = 1.3
@@ -177,6 +267,86 @@ const CHAIN_RANGE = 11 // 첫 표적 탐색 거리
 const CHAIN_JUMP = 7 // 표적 사이 점프 거리
 const CHAIN_HITS = 3 // 최대 적중 수(첫 표적 포함)
 const CHAIN_FALLOFF = 0.75 // 점프할 때마다 피해 배율
+
+// ── 한빙술사(P1): 빙결 전문 컨트롤 메이지 ──
+const FROST_RANGE = 11 // 서리파동 부채꼴 사거리
+const FROST_HALF_ANGLE = 0.62 // 부채꼴 반각(rad)
+const FROST_FREEZE = 1.6 // 서리파동 빙결 지속(초)
+const FROSTNOVA_RADIUS = 7 // 서리고리(자기 중심) 반경
+const FROSTNOVA_FREEZE = 1.3
+const ABSZERO_RADIUS = 13 // 절대영도 반경
+const ABSZERO_FREEZE = 2.4 // 거의 정지 수준의 긴 빙결
+const ABSZERO_AIM = 14 // 노릴 적이 없을 때 앞쪽 거리
+// ── 검투사(P1): 흡혈 브루저 ──
+const GLAD_SLASH_RADIUS = 6 // 휘둘러베기 반경
+const GLAD_LIFESTEAL = 0.35 // 영웅 피해의 흡혈 비율
+const GLAD_LIFESTEAL_MINION = 0.1 // 미니언/정글몹 피해의 흡혈 비율(과회복 방지)
+const GLAD_LIFESTEAL_CAP = 0.3 // 한 번에 최대 (최대체력×이 비율)까지만 흡혈
+const GLAD_LEAP_DIST = 12 // 도약 거리
+const GLAD_LEAP_AIM = 15 // 도약으로 노릴 적 탐색 거리
+const GLAD_LEAP_CONE = 4.5 // 착지 강타 반경
+const RAGE_TIME = 6 // 검투의 분노 지속(초)
+const RAGE_SPD = 0.35 // 분노 중 이동속도 +35%
+const RAGE_REGEN = 0.03 // 분노 중 초당 최대체력 3% 회복
+const RAGE_CC_CUT = 0.5 // 분노 중 받는 기절/빙결 시간 배율
+
+// ── 주술사(P2): 지속피해(DoT)·저주 zoner ──
+const CURSE_RANGE = 12 // 저주살 사거리
+const HEAL_CUT = 0.4 // 중독 중 받는 회복 배율(안티힐)
+const PLAGUE_RANGE = 14 // 역병안개 시전 거리(앞쪽/가까운 적)
+const PLAGUE_RADIUS = 8.5 // 장판 반경(넓게)
+const PLAGUE_LIFE = 2.5 // 장판 지속(초) — 넓은 대신 짧게
+const PLAGUE_TICK = 0.5 // 장판 재적용 간격
+const PLAGUE_POISON_T = 1.6 // 장판 안에서 갱신되는 중독 지속
+const DOOM_RANGE = 22 // 파멸의 낙인 조준 거리
+const DOOM_RADIUS = 12 // 낙인 반경
+const DOOM_POISON_T = 5 // 낙인 중독 지속
+const DOOM_VULN_T = 5 // 낙인 받는피해 증가 지속
+const DOOM_VULN_AMP = 0.18 // 낙인 대상이 받는 피해 +18%
+// ── 수호기사(P2): 아군 보호막 인챈터 ──
+const GUARD_RANGE = 16 // 보호막을 줄 아군 탐색 거리
+const GUARD_SHIELD_BASE = 120 // 수호의 빛 흡수량 기본
+const GUARD_SHIELD_LVL = 26 // 레벨당 흡수량
+const GUARD_SHIELD_T = 4 // 보호막 지속(초)
+const WARD_RADIUS = 14 // 결속 범위
+const WARD_TIME = 3 // 결속 지속(초)
+const WARD_CUT = 0.7 // 결속 중 받는 피해 배율(30% 감소)
+const BASTION_BARRIER_BASE = 90 // 불굴의 진형 흡수량 기본
+const BASTION_BARRIER_LVL = 18 // 레벨당 흡수량
+const BASTION_WARD_T = 2.5 // 진형 결속 지속
+
+// ── 검성(P3): 패링 듀얼리스트 ──
+const PARRY_WINDOW = 1.2 // 발도 카운터 유효 시간(이 안에 받는 첫 피해 1회 무효 + 반격)
+const PARRY_RIPOSTE_BASE = 40
+const PARRY_RIPOSTE_COEF = 0.9 // 공격력 계수 (반격)
+const STEP_DIST = 7 // 잔영 스텝 거리(리포지션)
+const BLADE_TIME = 5 // 무형검 지속
+const BLADE_RANGE = 4 // 무형검 중 사거리 +4
+const BLADE_ASPD = 0.45 // 무형검 중 공격속도 +45%
+// ── 사슬잡이(P3): 끌어오기/속박 이니시에이터 ──
+const HOOK_RANGE = 16 // 사슬갈고리 사거리(직선)
+const HOOK_WINDUP = 0.25 // 발사 준비 모션(그동안 제자리, 기절당하면 불발)
+const HOOK_SPEED = 34 // 갈고리 투사체 속도
+const HOOK_HIT_R = HERO_RADIUS + 0.7 // 투사체 적중 반경
+const HOOK_PULL_TIME = 1.0 // 끌려오는 시간 — 그동안 천천히 당겨지며 아무것도 못 함(스턴)
+const ENSNARE_RADIUS = 7 // 옭아매기 반경
+const ENSNARE_ROOT = 1.2 // 옭아매기 속박 시간
+const GUILLOTINE_RADIUS = 7 // 단두대 반경
+const GUILLOTINE_ROOT = 1.2 // 단두대 속박 연장
+
+// ── 소환물(P4 야수조련사 펫 / P5 엔지니어 포탑) 공용 시스템 ──
+// kind: 'wolfpet'(늑대) | 'bear'(곰) | 'turret'(미니포탑) | 'cannon'(거포)
+const SUMMON_SPEC = {
+  wolfpet: { hp: 220, dmg: 26, range: 2.6, aggro: 16, speed: 9.5, mobile: true, cd: 0.9, life: 18 },
+  bear: { hp: 760, dmg: 64, range: 3.2, aggro: 18, speed: 8.6, mobile: true, cd: 1.1, life: 16 },
+  // 미니포탑: 평타 2대 정도면 터지게 저체력. 주인(엔지니어)이 사거리 안에 없으면 휴면(zzz).
+  turret: { hp: 110, dmg: 34, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: 22 },
+  cannon: { hp: 560, dmg: 72, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 },
+}
+const BEAST_WOLVES = 2 // 야수조련사 늑대 소환 마릿수
+const ENGI_MAX_TURRETS = 3 // 엔지니어가 동시에 둘 수 있는 미니포탑 수(초과 시 가장 오래된 것 회수)
+const OVERCHARGE_T = 4 // 과부하 지속(초)
+const OVERCHARGE_ASPD = 0.5 // 과부하 중 포탑 공격속도 배율(쿨 -50%)
 
 export const SIGHT_RANGE = 24 // 아군 유닛 주변 이만큼이 우리 시야
 export const BUSH_REVEAL = 4 // 수풀 속 적도 이만큼 붙으면 보인다
@@ -258,7 +428,7 @@ const ZERO_BONUS = sumStats([])
 
 const heroMaxHp = (h) => CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1) + itemBonus(h).hp
 const heroAtk = (h) => CLASSES[h.cls].atk + CLASSES[h.cls].atkLvl * (h.lvl - 1) + itemBonus(h).atk
-const heroRange = (h) => CLASSES[h.cls].range + itemBonus(h).range
+const heroRange = (h) => CLASSES[h.cls].range + itemBonus(h).range + (h.bladeT > 0 ? BLADE_RANGE : 0)
 const heroSpeed = (h) => CLASSES[h.cls].speed + itemBonus(h).speed
 // 레벨업 필요 경험치 — 전반적으로 상향(레벨링을 느리게).
 //  Lv1→Lv2 = 250 ≈ 적 미니언 1.5웨이브(미니언 28xp × 9마리). 정글러는 늑대 3마리(84×3)면 2렙.
@@ -334,6 +504,21 @@ export function createGame(players, opts = {}) {
       ultCd: 0,
       stunT: 0,
       berserkT: 0, // 전사 광폭화 남은 시간 — 이동/공격 가속 + 상태이상 면역
+      rageT: 0, // 검투사 검투의 분노 — 이속↑·지속회복·받는 CC 감소
+      poisonT: 0, // 주술사 중독(DoT) 남은 시간 — 매 틱 피해 + 회복 감소(안티힐)
+      poisonDps: 0, // 중독 초당 피해
+      poisonBy: null, // 중독을 건 적 영웅 id(킬 크레딧)
+      barrierHp: 0, // 수호기사 보호막 흡수 풀
+      barrierT: 0, // 보호막 남은 시간
+      wardT: 0, // 수호기사 결속 — 받는 피해 감소 남은 시간
+      vulnT: 0, // 주술사 낙인 — 받는 피해 증가 남은 시간
+      parryT: 0, // 검성 발도 카운터 유효 시간(받는 첫 피해 무효 + 반격)
+      rootT: 0, // 사슬잡이 속박(옭아매기/단두대) — 이동 불가(공격/시전은 가능)
+      bladeT: 0, // 검성 무형검 — 사거리·공격속도 ↑
+      hookWindT: 0, // 사슬잡이 발사 준비 남은 시간
+      hookDir: 0, // 발사 방향(준비 시작 시 고정)
+      pullT: 0, // 갈고리에 끌려오는 남은 시간(그동안 스턴)
+      pullBy: null, // 나를 끌어당기는 사슬잡이 id
       stealthT: 0, // 암살자 은신 남은 시간 — 적에게 안 보인다
       hasteT: 0, // 힐러 가속 남은 시간 — 이동 속도 ↑
       tauntT: 0, // 탱커 도발에 걸린 시간 — tauntBy만 평타치게 된다
@@ -420,6 +605,7 @@ export function createGame(players, opts = {}) {
     hawks: [], // 궁수 사냥매 {id, team, owner, x, z, vx, vz, travel, max, dropAt}
     reveals: [], // 사냥매가 걷어 둔 시야 흔적 {team, x, z, r, t, life}
     zones: [], // 예고 후 발동하는 지면 범위 {id, kind:'meteor', x, z, r, t, delay, dmg, ...}
+    summons: [], // 소환물(야수조련사 펫/엔지니어 포탑) {id, kind, team, owner, x, z, hp, ...}
     fx: [], // 시각 효과 {id, kind, x, z, r, t, team}
     kills: { blue: 0, red: 0 },
     towersDown: { blue: 0, red: 0 }, // 그 팀이 "부순" 적 타워 수
@@ -481,9 +667,9 @@ const atkOf = (h) => heroAtk(h) * dmgMult(h)
 // 직업 계열: 마법(AP, 주문력 계수) vs 물리(AD, 공격력 계수).
 //  · 마법 계열(마법사·힐러)은 레벨로 성장하는 기본 주문력 + 아이템 주문력을 쓴다.
 //  · 그 외(전사·궁수·암살자·탱커)는 공격력(heroAtk)을 그대로 주력 스탯으로 쓴다.
-const AP_CLASSES = new Set(['mage', 'healer'])
-const SPELL_BASE = { mage: 45, healer: 32 }
-const SPELL_LVL = { mage: 11, healer: 7 }
+const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock'])
+const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40 }
+const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9 }
 const spellPower = (h) =>
   (SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power
 // 캐릭터 주력 스탯 — 스킬 계수가 곱해지는 값
@@ -600,6 +786,14 @@ function findAttackTarget(state, h, range) {
       best = { tk: 'monster', id: m.id }
     }
   }
+  for (const s of state.summons) {
+    if (s.team === h.team) continue
+    const d = dist(h, s)
+    if (d < bd) {
+      bd = d
+      best = { tk: 'summon', id: s.id }
+    }
+  }
   for (const t of state.towers) {
     if (!t.alive || t.team === h.team || !towerVulnerable(state, t)) continue
     const d = dist(h, t) - TOWER_RADIUS
@@ -631,6 +825,7 @@ function targetEntity(state, ref) {
     const t = state.towers.find((o) => o.id === ref.id)
     return t?.alive ? t : null
   }
+  if (ref.tk === 'summon') return state.summons.find((s) => s.id === ref.id) || null
   if (ref.tk === 'nexus') {
     return state.nexus[ref.id].hp > 0 ? { ...state.map.NEXUS_POS[ref.id], team: ref.id } : null
   }
@@ -764,6 +959,7 @@ export function castAttack(state, id) {
   h.atkCd = CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed)
   if (h.berserkT > 0) h.atkCd *= 1 - BERSERK_ASPD * berserkStrength(h) // 광폭화: 공격속도 ↑
   if (h.freezeT > 0) h.atkCd *= FREEZE_ATK // 빙결 중엔 평타도 굼뜨다
+  if (h.bladeT > 0) h.atkCd *= 1 - BLADE_ASPD // 검성 무형검: 공격속도 ↑
   h.atkSeq++
   h.dir = Math.atan2(tgt.z - h.z, tgt.x - h.x)
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
@@ -831,7 +1027,8 @@ const SKILLS = {
     }
     pushFxDir(state, 'volley', h.x, h.z, VOLLEY_RANGE, dir, h.team)
   },
-  // 마법사 화염구: 직선으로 날아가 크게 폭발 (적 영웅 자동 조준)
+  // 마법사 화염구: 직선으로 날아가 크게 폭발 (적 영웅 자동 조준).
+  //  순수 폭발 누커 — CC(빙결)는 없는 대신 폭발 피해가 크다. (빙결 정체성은 한빙술사 전용)
   mage(state, h) {
     let dir = h.dir
     const foe = nearestFoeHero(state, h, FIREBALL_RANGE)
@@ -840,7 +1037,7 @@ const SKILLS = {
     state.projectiles.push({
       id: state.nextId++, kind: 'fireball', team: h.team, owner: h.id,
       x: h.x, z: h.z, vx: Math.cos(dir) * FIREBALL_SPEED, vz: Math.sin(dir) * FIREBALL_SPEED,
-      dmg: skillDmg(h, 70, 1.0), // 주문력 계수 (마법사)
+      dmg: skillDmg(h, 96, 1.2), // 주문력 계수 (마법사) — CC를 뺀 만큼 폭발 피해 상향
       travel: 0,
     })
   },
@@ -854,7 +1051,7 @@ const SKILLS = {
       if (missing > -worst && (!best || missing > best.maxHp - best.hp)) best = a
     }
     if (!best) return false
-    best.hp = Math.min(best.maxHp, best.hp + healAmt(h, 100, 1.2)) // 주문력 계수 (힐러)
+    healHero(best, healAmt(h, 100, 1.2)) // 주문력 계수 (힐러) — 안티힐 적용
     pushFx(state, 'heal', best.x, best.z, 3.5, h.team)
   },
   // 암살자 점멸습격: 보이는 적 영웅 등 뒤로 순간이동 + 일격
@@ -874,6 +1071,110 @@ const SKILLS = {
   tank(state, h) {
     h.shieldT = SHIELD_TIME
     pushFx(state, 'shield', h.x, h.z, 3, h.team)
+  },
+  // 한빙술사 서리파동: 앞으로 냉기를 부채꼴로 뿜어 맞은 적을 빙결(피해는 약하게)
+  cryomancer(state, h) {
+    let dir = h.dir
+    const foe = nearestFoeHero(state, h, FROST_RANGE)
+    if (foe) dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    h.dir = dir
+    const r2 = FROST_RANGE * FROST_RANGE
+    let hitAny = false
+    damageInShape(state, h, (e) => {
+      const rx = e.x - h.x, rz = e.z - h.z
+      const d2 = rx * rx + rz * rz
+      if (d2 > r2) return false
+      let inside = d2 < 1
+      if (!inside) {
+        let dd = Math.atan2(rz, rx) - dir
+        while (dd > Math.PI) dd -= 2 * Math.PI
+        while (dd < -Math.PI) dd += 2 * Math.PI
+        inside = Math.abs(dd) <= FROST_HALF_ANGLE
+      }
+      if (inside) hitAny = true
+      return inside
+    }, skillDmg(h, 38, 0.5), 0, FROST_FREEZE) // 주문력 계수 (한빙술사)
+    pushFxDir(state, 'frost', h.x, h.z, FROST_RANGE, dir, h.team)
+    if (!hitAny) return false // 맞춘 적이 없으면 쿨다운을 안 쓴다
+  },
+  // 검투사 휘둘러베기: 주변을 넓게 베고 입힌 피해의 일부를 흡혈(영웅에게 크게, 잡몹엔 작게)
+  gladiator(state, h) {
+    const r2 = GLAD_SLASH_RADIUS * GLAD_SLASH_RADIUS
+    const base = skillDmg(h, 42, 0.85) // 공격력 계수 (검투사)
+    let heal = 0
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0) continue
+      if ((e.x - h.x) ** 2 + (e.z - h.z) ** 2 > r2) continue
+      damageHero(state, e, base, h)
+      heal += base * GLAD_LIFESTEAL
+    }
+    for (const m of [...state.minions]) {
+      if (m.team === h.team || (m.x - h.x) ** 2 + (m.z - h.z) ** 2 > r2) continue
+      damageMinion(state, m, base, h)
+      heal += base * GLAD_LIFESTEAL_MINION
+    }
+    for (const m of state.monsters) {
+      if (!m.alive || (m.x - h.x) ** 2 + (m.z - h.z) ** 2 > r2) continue
+      damageMonster(state, m, base, h)
+      heal += base * GLAD_LIFESTEAL_MINION
+    }
+    if (heal > 0) healHero(h, Math.min(heal, h.maxHp * GLAD_LIFESTEAL_CAP)) // 흡혈(안티힐 적용)
+    pushFx(state, 'whirl', h.x, h.z, GLAD_SLASH_RADIUS, h.team)
+  },
+  // 주술사 저주살: 가까운 적에게 즉시 약한 피해 + 지속피해(중독) 부여 (회복 감소 동반)
+  warlock(state, h) {
+    const foe = nearestFoeHero(state, h, CURSE_RANGE)
+    if (!foe) return false
+    h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    damageHero(state, foe, skillDmg(h, 48, 0.55), h) // 주문력 계수 (주술사) — 즉시 피해(체감되게 상향)
+    applyPoison(foe, h, skillDmg(h, 24, 0.4), 4) // 4초 강한 중독
+    pushFxDir(state, 'chain', h.x, h.z, dist(h, foe), h.dir, h.team)
+  },
+  // 수호기사 수호의 빛: 가장 다친 아군(나 포함)에게 피해를 흡수하는 보호막
+  guardian(state, h) {
+    let best = null
+    let worst = -1
+    for (const a of state.heroes) {
+      if (a.team !== h.team || a.respawnT > 0 || dist(h, a) > GUARD_RANGE) continue
+      const missing = a.maxHp - a.hp
+      if (missing > worst) { worst = missing; best = a }
+    }
+    if (!best) best = h
+    best.barrierHp = Math.max(best.barrierHp, GUARD_SHIELD_BASE + GUARD_SHIELD_LVL * (h.lvl - 1))
+    best.barrierT = GUARD_SHIELD_T
+    pushFx(state, 'shield', best.x, best.z, 3, h.team)
+  },
+  // 검성 발도 카운터: 잠깐 자세를 잡아 다음 피해 1회를 막고 강하게 반격(damageHero에서 발동)
+  swordmaster(state, h) {
+    h.parryT = PARRY_WINDOW
+    pushFx(state, 'shield', h.x, h.z, 2.5, h.team)
+  },
+  // 사슬잡이 사슬갈고리: 짧은 발사 준비 후 직진하는 갈고리 투사체를 던진다.
+  //  투사체가 적에 닿으면(stepProjectiles에서) 1초간 천천히 끌려오며 스턴.
+  catcher(state, h) {
+    const aim = nearestFoeHero(state, h, HOOK_RANGE)
+    if (aim) h.dir = Math.atan2(aim.z - h.z, aim.x - h.x)
+    h.hookWindT = HOOK_WINDUP // 발사 준비 모션 시작 → stepHero에서 끝나면 발사
+    h.hookDir = h.dir
+    pushFx(state, 'focus', h.x, h.z, 2.2, h.team) // 발 밑에 모이는 준비 이펙트
+  },
+  // 야수조련사 늑대 소환: 주인 주위에 늑대 두 마리(따라다니며 적을 문다)
+  beastmaster(state, h) {
+    for (let i = 0; i < BEAST_WOLVES; i++) {
+      const a = h.dir + (i === 0 ? 0.6 : -0.6)
+      spawnSummon(state, h, 'wolfpet', h.x + Math.cos(a) * 2.5, h.z + Math.sin(a) * 2.5)
+    }
+    pushFx(state, 'berserk', h.x, h.z, 3, h.team)
+  },
+  // 엔지니어 미니포탑 설치: 발밑에 자동 사격 포탑(최대치 초과 시 가장 오래된 것 회수)
+  engineer(state, h) {
+    const turrets = state.summons.filter((s) => s.owner === h.id && s.kind === 'turret')
+    if (turrets.length >= ENGI_MAX_TURRETS) {
+      const oldest = turrets[0]
+      state.summons = state.summons.filter((s) => s !== oldest)
+    }
+    spawnSummon(state, h, 'turret', h.x + Math.cos(h.dir) * 2, h.z + Math.sin(h.dir) * 2)
+    pushFx(state, 'shield', h.x, h.z, 2.5, h.team)
   },
 }
 
@@ -937,7 +1238,7 @@ const ULTS = {
     const heal = healAmt(h, 220, 1.3) // 주문력 계수 (힐러)
     for (const a of state.heroes) {
       if (a.team !== h.team || a.respawnT > 0) continue
-      a.hp = Math.min(a.maxHp, a.hp + heal)
+      healHero(a, heal) // 안티힐 적용
       a.stunT = 0
       a.freezeT = 0
       pushFx(state, 'holylight', a.x, a.z, 4, h.team) // 각자 머리 위로 내리쬐는 성광
@@ -970,6 +1271,89 @@ const ULTS = {
       })
     }
   },
+  // 한빙술사 절대영도: 가까운 적(없으면 앞)을 중심으로 넓게 얼려 적 전원을 길게 빙결 + 피해
+  cryomancer(state, h) {
+    const foe = nearestFoeHero(state, h, METEOR_RANGE)
+    const tx = foe ? foe.x : h.x + Math.cos(h.dir) * ABSZERO_AIM
+    const tz = foe ? foe.z : h.z + Math.sin(h.dir) * ABSZERO_AIM
+    aoeDamage(state, h, tx, tz, ABSZERO_RADIUS, skillDmg(h, 80, 0.8), 0, ABSZERO_FREEZE) // 주문력 계수
+    pushFx(state, 'boom', tx, tz, ABSZERO_RADIUS, h.team)
+  },
+  // 검투사 검투의 분노: 수 초간 흡혈(휘둘러베기 강화 유지) + 이속 ↑ + 받는 CC 감소 + 지속 회복
+  gladiator(state, h) {
+    h.rageT = RAGE_TIME
+    pushFx(state, 'berserk', h.x, h.z, 3.5, h.team)
+  },
+  // 주술사 파멸의 낙인: 넓은 범위 적 전원에 강한 중독 + 받는 피해 증가(낙인)
+  warlock(state, h) {
+    const foe = nearestFoeHero(state, h, DOOM_RANGE)
+    const tx = foe ? foe.x : h.x + Math.cos(h.dir) * 14
+    const tz = foe ? foe.z : h.z + Math.sin(h.dir) * 14
+    const r2 = DOOM_RADIUS * DOOM_RADIUS
+    let hitAny = false
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0) continue
+      if ((e.x - tx) ** 2 + (e.z - tz) ** 2 > r2) continue
+      damageHero(state, e, skillDmg(h, 50, 0.5), h)
+      applyPoison(e, h, skillDmg(h, 16, 0.3), DOOM_POISON_T)
+      e.vulnT = Math.max(e.vulnT, DOOM_VULN_T)
+      hitAny = true
+    }
+    pushFx(state, 'meteorhit', tx, tz, DOOM_RADIUS, h.team)
+    if (!hitAny) return false
+  },
+  // 수호기사 불굴의 진형: 아군 전원에게 보호막 + 잠깐의 받는 피해 감소
+  guardian(state, h) {
+    const amt = BASTION_BARRIER_BASE + BASTION_BARRIER_LVL * (h.lvl - 1)
+    for (const a of state.heroes) {
+      if (a.team !== h.team || a.respawnT > 0) continue
+      a.barrierHp = Math.max(a.barrierHp, amt)
+      a.barrierT = GUARD_SHIELD_T
+      a.wardT = Math.max(a.wardT, BASTION_WARD_T)
+      pushFx(state, 'holylight', a.x, a.z, 3.5, h.team)
+    }
+  },
+  // 검성 무형검: 수 초간 사거리·공격속도가 크게 올라 평타로 몰아친다(heroRange/castAttack에 반영)
+  swordmaster(state, h) {
+    h.bladeT = BLADE_TIME
+    pushFx(state, 'berserk', h.x, h.z, 3, h.team)
+  },
+  // 사슬잡이 단두대: 주변 적을 강하게 내리쳐 큰 피해 + 속박 연장
+  catcher(state, h) {
+    const r2 = GUILLOTINE_RADIUS * GUILLOTINE_RADIUS
+    let hitAny = false
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || dist2(h, e) > r2) continue
+      damageHero(state, e, skillDmg(h, 90, 1.0), h)
+      e.rootT = Math.max(e.rootT, GUILLOTINE_ROOT)
+      hitAny = true
+    }
+    pushFx(state, 'meteorhit', h.x, h.z, GUILLOTINE_RADIUS, h.team)
+    if (!hitAny) return false
+  },
+  // 야수조련사 곰 소환: 거대한 곰 한 마리(단단하고 강한 일격)
+  beastmaster(state, h) {
+    spawnSummon(state, h, 'bear', h.x + Math.cos(h.dir) * 3, h.z + Math.sin(h.dir) * 3)
+    pushFx(state, 'berserk', h.x, h.z, 4, h.team)
+  },
+  // 엔지니어 거포 설치: 강력한 장거리 거포
+  engineer(state, h) {
+    spawnSummon(state, h, 'cannon', h.x + Math.cos(h.dir) * 2.5, h.z + Math.sin(h.dir) * 2.5)
+    pushFx(state, 'meteorhit', h.x, h.z, 4, h.team)
+  },
+}
+
+// 사슬갈고리 발사: 발사 준비(hookWindT)가 끝났을 때 호출 — 고정 방향(hookDir)으로 직진 투사체.
+function fireHook(state, h) {
+  const dir = h.hookDir
+  h.dir = dir
+  state.projectiles.push({
+    id: state.nextId++, kind: 'hook', team: h.team, owner: h.id,
+    x: h.x, z: h.z, vx: Math.cos(dir) * HOOK_SPEED, vz: Math.sin(dir) * HOOK_SPEED,
+    travel: 0, max: HOOK_RANGE,
+  })
+  pushFxDir(state, 'dash', h.x, h.z, 4, dir, h.team)
+  h.revealT = Math.max(h.revealT, REVEAL_TIME)
 }
 
 // 빛의 화살 발사: 정신집중이 끝났을 때 호출 — 고정해 둔 방향(castDir)으로 관통 빛줄기.
@@ -1100,14 +1484,99 @@ const SKILLS2 = {
     }
     if (!chained) return false // 맞출 적이 없으면 쿨다운을 안 쓴다
   },
+  // 한빙술사 서리고리: 내 주변에 얼음가시 — 가까운 적을 빙결시켜 떼어낸다(피일/탈출)
+  cryomancer(state, h) {
+    aoeDamage(state, h, h.x, h.z, FROSTNOVA_RADIUS, skillDmg(h, 26, 0.35), 0, FROSTNOVA_FREEZE)
+    pushFx(state, 'boom', h.x, h.z, FROSTNOVA_RADIUS, h.team)
+  },
+  // 검투사 도약강타: 가까운 적에게 도약해 착지 전방을 강타(교전 합류/갭클로즈, CC 없음)
+  gladiator(state, h) {
+    const foe = nearestFoeHero(state, h, GLAD_LEAP_AIM)
+    const dir = foe ? Math.atan2(foe.z - h.z, foe.x - h.x) : h.dir
+    const d = foe ? Math.min(GLAD_LEAP_DIST, Math.max(0, dist(h, foe) - 1.5)) : GLAD_LEAP_DIST
+    const sx = h.x, sz = h.z
+    h.dir = dir
+    h.x += Math.cos(dir) * d
+    h.z += Math.sin(dir) * d
+    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    coneDamage(state, h, h.x, h.z, dir, GLAD_LEAP_CONE, 1.0, skillDmg(h, 25, 0.5), 0)
+    pushFxDir(state, 'dash', sx, sz, d + GLAD_LEAP_CONE, dir, h.team)
+  },
+  // 주술사 역병안개: 지정 지역에 독안개 장판 — 머무는 적을 PLAGUE_LIFE초 동안 계속 중독시킨다
+  warlock(state, h) {
+    const foe = nearestFoeHero(state, h, PLAGUE_RANGE)
+    const tx = foe ? foe.x : h.x + Math.cos(h.dir) * 8
+    const tz = foe ? foe.z : h.z + Math.sin(h.dir) * 8
+    state.zones.push({
+      id: state.nextId++, kind: 'plague', team: h.team, owner: h.id,
+      x: tx, z: tz, r: PLAGUE_RADIUS, t: 0, delay: 0, life: PLAGUE_LIFE, tickT: 0,
+      poisonDps: skillDmg(h, 12, 0.2),
+    })
+    pushFx(state, 'boom', tx, tz, PLAGUE_RADIUS, h.team)
+  },
+  // 수호기사 결속: 주변 아군(나 포함)이 잠시 받는 피해 감소
+  guardian(state, h) {
+    const r2 = WARD_RADIUS * WARD_RADIUS
+    for (const a of state.heroes) {
+      if (a.team !== h.team || a.respawnT > 0 || dist2(h, a) > r2) continue
+      a.wardT = Math.max(a.wardT, WARD_TIME)
+      pushFx(state, 'shield', a.x, a.z, 2, h.team)
+    }
+  },
+  // 검성 잔영 스텝: 바라보는 방향으로 짧게 순간이동(리포지션, 피해 없음)
+  swordmaster(state, h) {
+    const dir = h.dir
+    const sx = h.x, sz = h.z
+    h.x += Math.cos(dir) * STEP_DIST
+    h.z += Math.sin(dir) * STEP_DIST
+    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    pushFxDir(state, 'dash', sx, sz, STEP_DIST, dir, h.team)
+  },
+  // 사슬잡이 옭아매기: 주변 적을 사슬로 묶어 잠시 이동 불가 + 피해
+  catcher(state, h) {
+    const r2 = ENSNARE_RADIUS * ENSNARE_RADIUS
+    let hitAny = false
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || dist2(h, e) > r2) continue
+      e.rootT = Math.max(e.rootT, ENSNARE_ROOT)
+      damageHero(state, e, skillDmg(h, 25, 0.4), h)
+      hitAny = true
+    }
+    pushFx(state, 'taunt', h.x, h.z, ENSNARE_RADIUS, h.team)
+    if (!hitAny) return false
+  },
+  // 야수조련사 사냥 명령: 내 펫을 광폭화(공속↑) + 수명 약간 연장
+  beastmaster(state, h) {
+    let n = 0
+    for (const s of state.summons) {
+      if (s.owner !== h.id) continue
+      s.chargeT = OVERCHARGE_T
+      s.life += 2
+      n++
+    }
+    pushFx(state, 'haste', h.x, h.z, 3, h.team)
+    if (n === 0) return false // 부릴 펫이 없으면 쿨다운을 안 쓴다
+  },
+  // 엔지니어 과부하: 내 포탑들의 공격속도를 잠시 크게 올린다
+  engineer(state, h) {
+    let n = 0
+    for (const s of state.summons) {
+      if (s.owner !== h.id) continue
+      s.chargeT = OVERCHARGE_T
+      n++
+    }
+    pushFx(state, 'haste', h.x, h.z, 3, h.team)
+    if (n === 0) return false
+  },
 }
 
 // 술식 공통: 판정 함수 pred(e)에 걸리는 모든 적(영웅/미니언/정글몹)에게 피해(+기절/빙결)
 function damageInShape(state, attacker, pred, dmg, stun, freeze = 0) {
   for (const e of state.heroes) {
     if (e.team === attacker.team || e.respawnT > 0 || !pred(e)) continue
-    if (stun > 0) e.stunT = Math.max(e.stunT, stun)
-    if (freeze > 0) e.freezeT = Math.max(e.freezeT, freeze)
+    const cc = e.rageT > 0 ? RAGE_CC_CUT : 1 // 검투의 분노: 받는 CC 시간 감소
+    if (stun > 0) e.stunT = Math.max(e.stunT, stun * cc)
+    if (freeze > 0) e.freezeT = Math.max(e.freezeT, freeze * cc)
     damageHero(state, e, dmg, attacker)
   }
   for (const m of [...state.minions]) {
@@ -1153,12 +1622,42 @@ function coneDamage(state, attacker, x, z, dir, range, halfAngle, dmg, stun) {
   }, dmg, stun)
 }
 
+// 중독(DoT) 부여 — 더 약한 도트가 강한 걸 덮어쓰지 않게, 피해량은 큰 값을 유지하고 시간만 갱신.
+function applyPoison(victim, attacker, dps, dur) {
+  if (victim.poisonT <= 0 || dps >= victim.poisonDps) victim.poisonDps = dps
+  victim.poisonT = Math.max(victim.poisonT, dur)
+  if (attacker?.id) victim.poisonBy = attacker.id
+}
+
+// 회복 적용 — 중독(안티힐) 중이면 회복량이 줄어든다.
+function healHero(h, amount) {
+  if (amount <= 0 || h.respawnT > 0) return
+  if (h.poisonT > 0) amount *= HEAL_CUT
+  h.hp = Math.min(h.maxHp, h.hp + amount)
+}
+
 // ── 피해 처리 ──
 function damageHero(state, victim, amount, attacker) {
   if (victim.respawnT > 0 || state.status !== 'playing') return
+  // 검성 발도 카운터: 자세를 잡은 동안 받는 첫 피해를 무효화하고 즉시 반격
+  if (victim.parryT > 0 && amount > 0) {
+    victim.parryT = 0
+    pushFx(state, 'shield', victim.x, victim.z, 2.5, victim.team)
+    if (attacker?.id && attacker.team !== victim.team && attacker.respawnT <= 0) {
+      damageHero(state, attacker, skillDmg(victim, PARRY_RIPOSTE_BASE, PARRY_RIPOSTE_COEF), victim)
+    }
+    return
+  }
   amount *= CLASSES[victim.cls].def ?? 1 // 근접 직업은 기본 방어력이 높다
   amount *= 1 - itemBonus(victim).def // 방어 아이템: 받는 피해 감소
   if (victim.shieldT > 0) amount *= SHIELD_CUT // 방패막기!
+  if (victim.wardT > 0) amount *= WARD_CUT // 수호기사 결속(아군 피해 감소)
+  if (victim.vulnT > 0) amount *= 1 + DOOM_VULN_AMP // 주술사 낙인(받는 피해 증가)
+  if (victim.barrierHp > 0) { // 수호기사 보호막: 흡수 풀에서 먼저 깎인다
+    const absorb = Math.min(victim.barrierHp, amount)
+    victim.barrierHp -= absorb
+    amount -= absorb
+  }
   victim.hp -= amount
   victim.lastHurt = state.time
   if (victim.recallT > 0) victim.recallT = 0 // 피해를 받으면 귀환이 끊긴다
@@ -1178,6 +1677,7 @@ function damageHero(state, victim, amount, attacker) {
   victim.whirlT = 0
   victim.shieldT = 0
   victim.berserkT = 0
+  victim.rageT = 0
   victim.stealthT = 0
   victim.hasteT = 0
   victim.tauntT = 0
@@ -1185,6 +1685,16 @@ function damageHero(state, victim, amount, attacker) {
   victim.castT = 0
   victim.dragonT = 0
   victim.baronT = 0
+  victim.poisonT = 0
+  victim.barrierHp = 0
+  victim.barrierT = 0
+  victim.wardT = 0
+  victim.vulnT = 0
+  victim.parryT = 0
+  victim.rootT = 0
+  victim.bladeT = 0
+  victim.hookWindT = 0
+  victim.pullT = 0
   // 영웅은 공중 분해 버스트 대신, 렌더러가 시체를 바닥에 쌓이는 파티클로 표현한다(부활까지 유지).
   // 킬 크레딧: 마지막으로 때린 적 영웅이 최근(KILL_CREDIT_T 초)일 때만. 오래됐으면
   //  미니언/타워에 의한 처형으로 보고 개인 크레딧/킬 보상 없이 처리한다.
@@ -1301,6 +1811,7 @@ function applyDamage(state, ref, amount, attacker) {
   else if (ref.tk === 'monster') damageMonster(state, e, amount, attacker)
   else if (ref.tk === 'tower') damageTower(state, e, amount, attacker)
   else if (ref.tk === 'nexus') damageNexus(state, ref.id, amount, attacker)
+  else if (ref.tk === 'summon') damageSummon(state, e, amount)
 }
 
 // 처치 지점 근처의 같은 팀 영웅 모두에게 경험치 (킬러는 어디 있든 받는다)
@@ -1352,6 +1863,7 @@ export function step(state, dt) {
   stepProjectiles(state, dt)
   stepHawks(state, dt)
   stepZones(state, dt)
+  stepSummons(state, dt)
   state.fx = state.fx.filter((n) => (n.t += dt) < 0.8)
   // 시간 초과: 부순 타워 → 킬 → 넥서스 체력으로 판정
   if (state.status === 'playing' && state.time >= COUNTDOWN_TIME + TIME_LIMIT) {
@@ -1428,6 +1940,13 @@ function stepHero(state, h, dt) {
   h.slowT = Math.max(0, h.slowT - dt)
   h.freezeT = Math.max(0, h.freezeT - dt)
   h.berserkT = Math.max(0, h.berserkT - dt)
+  h.rageT = Math.max(0, h.rageT - dt)
+  h.wardT = Math.max(0, h.wardT - dt)
+  h.vulnT = Math.max(0, h.vulnT - dt)
+  h.parryT = Math.max(0, h.parryT - dt)
+  h.rootT = Math.max(0, h.rootT - dt)
+  h.bladeT = Math.max(0, h.bladeT - dt)
+  if (h.barrierT > 0 && (h.barrierT = Math.max(0, h.barrierT - dt)) === 0) h.barrierHp = 0
   h.stealthT = Math.max(0, h.stealthT - dt)
   h.hasteT = Math.max(0, h.hasteT - dt)
   if (h.tauntT > 0 && (h.tauntT = Math.max(0, h.tauntT - dt)) === 0) h.tauntBy = null
@@ -1454,6 +1973,12 @@ function stepHero(state, h, dt) {
   if (h.berserkT > 0) {
     h.stunT = 0
     h.freezeT = 0
+  }
+  // 중독(주술사 DoT): 매 틱 피해. 가해자를 넘겨 킬 크레딧을 정상 처리한다.
+  if (h.poisonT > 0) {
+    h.poisonT = Math.max(0, h.poisonT - dt)
+    const by = state.heroes.find((o) => o.id === h.poisonBy && o.team !== h.team)
+    damageHero(state, h, h.poisonDps * dt, by || null)
   }
   // 정신집중(궁수 빛의 화살): 1초 집중 후 발사. 그동안 제자리(아래 이동에서 막힘), 기절당하면 끊긴다.
   if (h.castT > 0) {
@@ -1482,8 +2007,34 @@ function stepHero(state, h, dt) {
       }
     }
   }
-  // 이동 — 기절·정신집중·귀환 채널 중엔 제자리에 멈춘다(이동 입력 무시)
-  if (h.stunT <= 0 && h.castT <= 0 && h.recallT <= 0) {
+  // 사슬갈고리 발사 준비: 짧게 모은 뒤 투사체 발사 (기절당하면 불발)
+  if (h.hookWindT > 0) {
+    if (h.stunT > 0) h.hookWindT = 0
+    else {
+      h.hookWindT = Math.max(0, h.hookWindT - dt)
+      if (h.hookWindT === 0) fireHook(state, h)
+    }
+  }
+  // 끌려오는 중: 시전자 쪽으로 남은 시간 동안 천천히 당겨지며 스턴(아무것도 못 함)
+  if (h.pullT > 0) {
+    const by = state.heroes.find((o) => o.id === h.pullBy)
+    if (by) {
+      const dx = by.x - h.x, dz = by.z - h.z
+      const d = Math.hypot(dx, dz)
+      const stopGap = HERO_RADIUS * 2 + 0.4
+      if (d > stopGap) {
+        const frac = Math.min(1, dt / h.pullT) // 남은 시간 대비 이번 틱 이동 비율 → 끝날 때 도착
+        h.x += dx * frac
+        h.z += dz * frac
+        state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+        h.bushI = state.map.bushIndexAt(h.x, h.z)
+      }
+    }
+    h.stunT = Math.max(h.stunT, h.pullT)
+    h.pullT = Math.max(0, h.pullT - dt)
+  }
+  // 이동 — 기절·정신집중·귀환 채널·속박·발사준비 중엔 제자리에 멈춘다(이동 입력 무시)
+  if (h.stunT <= 0 && h.castT <= 0 && h.recallT <= 0 && h.rootT <= 0 && h.hookWindT <= 0) {
     const len = Math.hypot(h.mx, h.mz)
     if (len > 0.12) {
       // 공격 직후엔 발이 무겁고, 탱커는 방패막기 중 돌진 가속, 빙결 중엔 굼뜨다,
@@ -1493,7 +2044,8 @@ function stepHero(state, h, dt) {
       const frz = h.freezeT > 0 ? FREEZE_MOVE : 1
       const berserk = h.berserkT > 0 ? 1 + BERSERK_SPD * berserkStrength(h) : 1
       const haste = h.hasteT > 0 ? 1 + HASTE_SPD : 1
-      const sp = heroSpeed(h) * slow * charge * frz * berserk * haste * Math.min(1, len)
+      const rage = h.rageT > 0 ? 1 + RAGE_SPD : 1 // 검투의 분노: 이동속도 ↑
+      const sp = heroSpeed(h) * slow * charge * frz * berserk * haste * rage * Math.min(1, len)
       h.dir = Math.atan2(h.mz, h.mx)
       h.x += (h.mx / len) * sp * dt
       h.z += (h.mz / len) * sp * dt
@@ -1512,6 +2064,7 @@ function stepHero(state, h, dt) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * REGEN_RATE * dt)
   }
   if (h.baronT > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.02 * dt)
+  if (h.rageT > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * RAGE_REGEN * dt) // 검투의 분노: 지속 회복
   // 아이템 체력 재생 (전투 중에도 항상)
   if (itemBonus(h).regen > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * itemBonus(h).regen * dt)
   // 골드 자동 수입
@@ -1890,7 +2443,30 @@ function stepProjectiles(state, dt) {
       if (hit) {
         remove.add(p.id)
         pushFx(state, 'boom', p.x, p.z, FIREBALL_AOE, p.team)
-        if (owner) aoeDamage(state, owner, p.x, p.z, FIREBALL_AOE, p.dmg, 0, FREEZE_TIME) // 맞으면 1초 빙결
+        if (owner) aoeDamage(state, owner, p.x, p.z, FIREBALL_AOE, p.dmg, 0, 0) // 순수 폭발(빙결 없음)
+      }
+      continue
+    }
+    if (p.kind === 'hook') {
+      // 직진하다 첫 적 영웅에 닿으면 1초간 천천히 끌어오며 스턴(stepHero에서 이동/스턴 처리)
+      p.x += p.vx * dt
+      p.z += p.vz * dt
+      p.travel += HOOK_SPEED * dt
+      let grabbed = null
+      for (const e of state.heroes) {
+        if (e.team === p.team || e.respawnT > 0) continue
+        if (dist2(p, e) < HOOK_HIT_R * HOOK_HIT_R) { grabbed = e; break }
+      }
+      if (grabbed) {
+        remove.add(p.id)
+        const owner = state.heroes.find((hh) => hh.id === p.owner)
+        grabbed.pullT = HOOK_PULL_TIME
+        grabbed.pullBy = p.owner
+        grabbed.stunT = Math.max(grabbed.stunT, HOOK_PULL_TIME)
+        if (owner) damageHero(state, grabbed, skillDmg(owner, 40, 0.7), owner) // 공격력 계수
+        pushFx(state, 'blink', grabbed.x, grabbed.z, 2.5, p.team)
+      } else if (p.travel >= p.max) {
+        remove.add(p.id)
       }
       continue
     }
@@ -1959,6 +2535,26 @@ function stepZones(state, dt) {
   const remove = new Set()
   for (const z of state.zones) {
     z.t += dt
+    // 역병안개: 일회성이 아니라 life 동안 머무는 지속 장판 — tick마다 범위 내 적을 중독시킨다
+    if (z.kind === 'plague') {
+      z.tickT -= dt
+      if (z.tickT <= 0) {
+        z.tickT += PLAGUE_TICK
+        const owner = state.heroes.find((h) => h.id === z.owner) || { team: z.team }
+        const r2 = z.r * z.r
+        for (const e of state.heroes) {
+          if (e.team === z.team || e.respawnT > 0) continue
+          if ((e.x - z.x) ** 2 + (e.z - z.z) ** 2 > r2) continue
+          applyPoison(e, owner, z.poisonDps, PLAGUE_POISON_T)
+        }
+        for (const m of [...state.minions]) {
+          if (m.team !== z.team && (m.x - z.x) ** 2 + (m.z - z.z) ** 2 <= r2) damageMinion(state, m, z.poisonDps * PLAGUE_TICK, owner)
+        }
+        pushFx(state, 'boom', z.x, z.z, z.r * 0.6, z.team)
+      }
+      if (z.t >= z.life) remove.add(z.id)
+      continue
+    }
     if (z.t < z.delay) continue
     const owner = state.heroes.find((h) => h.id === z.owner) || { team: z.team }
     if (z.kind === 'meteor') {
@@ -1972,6 +2568,91 @@ function stepZones(state, dt) {
     remove.add(z.id)
   }
   if (remove.size) state.zones = state.zones.filter((z) => !remove.has(z.id))
+}
+
+// 소환물 생성(펫/포탑). 주인(owner)의 팀/위치 기준.
+function spawnSummon(state, owner, kind, x, z) {
+  const spec = SUMMON_SPEC[kind]
+  state.summons.push({
+    id: state.nextId++, kind, team: owner.team, owner: owner.id,
+    x, z, dir: owner.dir, hp: spec.hp, maxHp: spec.hp,
+    atkCd: 0, dmg: spec.dmg, range: spec.range, aggro: spec.aggro,
+    speed: spec.speed, mobile: spec.mobile, cd: spec.cd, life: spec.life,
+    chargeT: 0, // 과부하(엔지니어) 남은 시간
+  })
+}
+
+function damageSummon(state, s, amount) {
+  s.hp -= amount // 제거는 stepSummons에서 hp<=0이면 처리
+}
+
+// 소환물 갱신: 수명 감소, 가까운 적을 향해 이동/공격, 적이 없으면 (이동형은) 주인을 따라간다.
+function stepSummons(state, dt) {
+  if (!state.summons.length) return
+  const remove = new Set()
+  for (const s of state.summons) {
+    s.life -= dt
+    s.chargeT = Math.max(0, s.chargeT - dt)
+    s.atkCd = Math.max(0, s.atkCd - dt)
+    if (s.life <= 0 || s.hp <= 0) {
+      if (s.hp <= 0) pushFx(state, 'death', s.x, s.z, 1.5, s.team)
+      remove.add(s.id)
+      continue
+    }
+    const owner = state.heroes.find((h) => h.id === s.owner)
+    // 미니포탑 휴면: 사정거리 안에 주인(엔지니어)이 없으면 잠든다(zzz) — 표적 탐색/공격 중단
+    if (s.kind === 'turret') {
+      s.dormant = !(owner && owner.respawnT <= 0 && dist(s, owner) <= s.range)
+      if (s.dormant) continue
+    }
+    // 표적: aggro 범위 내 가장 가까운 적 영웅 > 미니언 > 정글몹
+    let target = null
+    let bd = s.aggro * s.aggro
+    let tk = null
+    for (const e of state.heroes) {
+      if (e.team === s.team || e.respawnT > 0) continue
+      const d = dist2(s, e)
+      if (d < bd) { bd = d; target = e; tk = 'hero' }
+    }
+    for (const m of state.minions) {
+      if (m.team === s.team) continue
+      const d = dist2(s, m)
+      if (d < bd) { bd = d; target = m; tk = 'minion' }
+    }
+    if (!target) {
+      for (const m of state.monsters) {
+        if (!m.alive) continue
+        const d = dist2(s, m)
+        if (d < bd) { bd = d; target = m; tk = 'monster' }
+      }
+    }
+    if (target) {
+      const d = Math.sqrt(bd)
+      s.dir = Math.atan2(target.z - s.z, target.x - s.x)
+      const reach = s.range + (tk === 'hero' ? 0 : 1.2)
+      if (d > reach && s.mobile) {
+        s.x += Math.cos(s.dir) * s.speed * dt
+        s.z += Math.sin(s.dir) * s.speed * dt
+        state.map.resolveTerrain(s, 1.0, state.towers)
+      } else if (d <= reach + 0.6 && s.atkCd <= 0) {
+        s.atkCd = s.cd * (s.chargeT > 0 ? OVERCHARGE_ASPD : 1)
+        const att = owner && owner.respawnT <= 0 ? owner : { id: s.owner, team: s.team }
+        if (tk === 'hero') damageHero(state, target, s.dmg, att)
+        else if (tk === 'minion') damageMinion(state, target, s.dmg, att)
+        else damageMonster(state, target, s.dmg, att)
+        if (!s.mobile) pushFxDir(state, 'chain', s.x, s.z, d, s.dir, s.team) // 포탑 사격 시각
+      }
+    } else if (s.mobile && owner && owner.respawnT <= 0) {
+      const d = dist(s, owner)
+      if (d > 5) {
+        s.dir = Math.atan2(owner.z - s.z, owner.x - s.x)
+        s.x += Math.cos(s.dir) * s.speed * dt
+        s.z += Math.sin(s.dir) * s.speed * dt
+        state.map.resolveTerrain(s, 1.0, state.towers)
+      }
+    }
+  }
+  if (remove.size) state.summons = state.summons.filter((s) => !remove.has(s.id))
 }
 
 // ── 봇 AI ──
@@ -2219,7 +2900,7 @@ function stepBots(state, dt) {
       if (h.cls === 'tank' && h.skillCd <= 0) castSkill(state, h.id) // 방패 켜고 도망!
       // 보조 스킬로 탈출: 은신(암살자)·광폭화(전사, CC 면역+가속)·가속(힐러)
       if (h.skill2Cd <= 0 && h.lvl >= SKILL2_LEVEL &&
-        (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer')) castSkill2(state, h.id)
+        (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer' || h.cls === 'cryomancer' || h.cls === 'swordmaster')) castSkill2(state, h.id)
       steerToward(state, h, state.map.NEXUS_POS[h.team])
       botAttack(state, h, dt) // 도망치면서도 사거리 안이면 반격
       continue
@@ -2233,6 +2914,31 @@ function stepBots(state, dt) {
         ).length
         if (hurt >= 2 || h.hp < h.maxHp * 0.4) castUlt(state, h.id)
       }
+    }
+    // 수호기사: 다치거나 막 맞은 아군(또는 나)에게 보호막을 둘러 준다
+    if (h.cls === 'guardian') {
+      if (h.skillCd <= 0) {
+        const need = state.heroes.some(
+          (a) => a.team === h.team && a.respawnT <= 0 && dist(h, a) <= GUARD_RANGE &&
+            (a.hp < a.maxHp * 0.8 || state.time - a.lastHurt < 1.5)
+        )
+        if (need || h.hp < h.maxHp * 0.75) castSkill(state, h.id)
+      }
+      if (h.ultCd <= 0 && h.lvl >= ULT_LEVEL) {
+        const hurt = state.heroes.filter(
+          (a) => a.team === h.team && a.respawnT <= 0 && a.hp < a.maxHp * 0.5
+        ).length
+        if (hurt >= 2) castUlt(state, h.id)
+      }
+    }
+    // 야수조련사: 펫이 없으면 늑대를 소환해 데리고 다닌다
+    if (h.cls === 'beastmaster' && h.skillCd <= 0) {
+      if (!state.summons.some((s) => s.owner === h.id && s.mobile)) castSkill(state, h.id)
+    }
+    // 엔지니어: 포탑이 부족하면 설치한다(전투/푸시용)
+    if (h.cls === 'engineer' && h.skillCd <= 0) {
+      const turrets = state.summons.filter((s) => s.owner === h.id && s.kind === 'turret').length
+      if (turrets < ENGI_MAX_TURRETS) castSkill(state, h.id)
     }
     // 가장 가까운 "보이는" 적 영웅
     let foe = null
@@ -2276,7 +2982,7 @@ function stepBots(state, dt) {
         if (
           h.skill2Cd <= 0 &&
           h.lvl >= SKILL2_LEVEL &&
-          (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer')
+          (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer' || h.cls === 'cryomancer' || h.cls === 'swordmaster')
         ) {
           castSkill2(state, h.id)
         }
@@ -2354,6 +3060,15 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'healer') castSkill2(state, h.id) // 가속으로 교전 보조
     else if (h.cls === 'mage' && d < CHAIN_RANGE) castSkill2(state, h.id) // 사거리 안이면 체인 라이트닝
     else if (h.cls === 'assassin' && h.hp < h.maxHp * 0.4) castSkill2(state, h.id) // 위기엔 은신으로 빠진다
+    else if (h.cls === 'cryomancer' && d < FROSTNOVA_RADIUS) castSkill2(state, h.id) // 붙으면 서리고리로 얼린다
+    else if (h.cls === 'gladiator' && d > 3 && d < GLAD_LEAP_AIM) castSkill2(state, h.id) // 도약으로 붙는다
+    else if (h.cls === 'warlock' && d < PLAGUE_RANGE) castSkill2(state, h.id) // 역병안개를 깐다
+    else if (h.cls === 'guardian' && (nearCount >= 1 || d < WARD_RADIUS)) castSkill2(state, h.id) // 결속(받피감소)
+    else if (h.cls === 'catcher' && d < ENSNARE_RADIUS) castSkill2(state, h.id) // 붙으면 옭아매기로 묶는다
+    else if (h.cls === 'swordmaster' && h.hp < h.maxHp * 0.45) castSkill2(state, h.id) // 위기엔 잔영 스텝으로 빠진다
+    else if ((h.cls === 'beastmaster' || h.cls === 'engineer') && state.summons.some((s) => s.owner === h.id)) {
+      castSkill2(state, h.id) // 사냥 명령 / 과부하
+    }
   }
   const ready = h.skillCd <= 0
   if (ready) {
@@ -2362,7 +3077,12 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'mage' && d < FIREBALL_RANGE - 6) castSkill(state, h.id)
     else if (h.cls === 'assassin' && d < BLINK_RANGE - 2 && h.hp > h.maxHp * 0.45) castSkill(state, h.id)
     else if (h.cls === 'tank' && d < 14) castSkill(state, h.id) // 방패 들고 돌격!
-    // 힐러 치유는 stepBots 위쪽에서 항상 챙긴다
+    else if (h.cls === 'cryomancer' && d < FROST_RANGE - 1) castSkill(state, h.id) // 서리파동으로 얼린다
+    else if (h.cls === 'gladiator' && d < GLAD_SLASH_RADIUS + 1) castSkill(state, h.id) // 붙으면 휘둘러베기(흡혈)
+    else if (h.cls === 'warlock' && d < CURSE_RANGE - 1) castSkill(state, h.id) // 저주살(중독)
+    else if (h.cls === 'catcher' && d > 4 && d < HOOK_RANGE - 1) castSkill(state, h.id) // 사슬갈고리로 끌어온다
+    else if (h.cls === 'swordmaster' && d < 6) castSkill(state, h.id) // 붙으면 발도 카운터(반격)
+    // 힐러 치유·수호기사 보호막은 stepBots 위쪽에서 항상 챙긴다
   }
   if (h.ultCd > 0 || h.lvl < ULT_LEVEL) return
   if (h.cls === 'warrior' && (nearCount >= 2 || (d < WHIRL_RADIUS - 2 && foe.hp < foe.maxHp * 0.5))) {
@@ -2375,7 +3095,22 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     castUlt(state, h.id)
   } else if (h.cls === 'tank' && nearCount >= 2) {
     castUlt(state, h.id)
+  } else if (h.cls === 'cryomancer' && (nearCount >= 2 || (d < ABSZERO_RADIUS && foe.hp < foe.maxHp * 0.6))) {
+    castUlt(state, h.id) // 절대영도로 한타를 얼린다
+  } else if (h.cls === 'gladiator' && (nearCount >= 1 || h.hp < h.maxHp * 0.6)) {
+    castUlt(state, h.id) // 분노로 버티며 싸운다
+  } else if (h.cls === 'warlock' && (nearCount >= 2 || (d < DOOM_RADIUS && foe.hp < foe.maxHp * 0.7))) {
+    castUlt(state, h.id) // 파멸의 낙인
+  } else if (h.cls === 'swordmaster' && (nearCount >= 1 || d < 8)) {
+    castUlt(state, h.id) // 무형검으로 평타 몰아치기
+  } else if (h.cls === 'catcher' && (nearCount >= 2 || (d < GUILLOTINE_RADIUS && foe.hp < foe.maxHp * 0.6))) {
+    castUlt(state, h.id) // 단두대
+  } else if (h.cls === 'beastmaster' && (nearCount >= 1 || d < 10)) {
+    castUlt(state, h.id) // 곰 소환
+  } else if (h.cls === 'engineer' && (nearCount >= 1 || d < 13)) {
+    castUlt(state, h.id) // 거포 설치
   }
+  // 수호기사 궁극(불굴의 진형)은 stepBots 위쪽 능동 블록에서 챙긴다
 }
 
 // 봇 조향: 직선이 막히면 접선으로 비켜 가는 방향을 입력으로 넣는다
@@ -2627,6 +3362,8 @@ export function makeView(state) {
       gold: Math.floor(h.gold),
       items: h.items.slice(),
       shopUndo: !!h.shopChanged, // 이번 상점 세션에 무료 취소할 변경이 있나
+      power: Math.round(powerStat(h)), // 스킬 계수가 곱해지는 주력 스탯(공격력/주문력) — 툴팁 계산용
+      dmgMult: r2d(dmgMult(h)), // 버프 피해 배율(용/바론) — 툴팁 계산용
 
       atkCd: r2d(h.atkCd),
       atkSeq: h.atkSeq,
@@ -2640,6 +3377,16 @@ export function makeView(state) {
       whirlT: r2d(h.whirlT),
       shieldT: r2d(h.shieldT),
       berserkT: r2d(h.berserkT),
+      rageT: r2d(h.rageT),
+      poisonT: r2d(h.poisonT),
+      barrierHp: Math.ceil(h.barrierHp),
+      wardT: r2d(h.wardT),
+      vulnT: r2d(h.vulnT),
+      parryT: r2d(h.parryT),
+      rootT: r2d(h.rootT),
+      bladeT: r2d(h.bladeT),
+      hookWindT: r2d(h.hookWindT),
+      pullT: r2d(h.pullT),
       stealthT: r2d(h.stealthT),
       hasteT: r2d(h.hasteT),
       tauntT: r2d(h.tauntT),
@@ -2675,6 +3422,10 @@ export function makeView(state) {
       maxHp: m.maxHp,
       respawnT: m.alive ? 0 : Math.ceil(m.respawnT),
       enrage: r1(m.combatT || 0), // 분노 누적 시간(초) — 렌더러가 붉게 달아오르게
+    })),
+    summons: state.summons.map((s) => ({
+      id: s.id, kind: s.kind, team: s.team, x: r1(s.x), z: r1(s.z), dir: r2d(s.dir),
+      hp: Math.ceil(s.hp), maxHp: s.maxHp, charge: s.chargeT > 0 ? 1 : 0, dormant: s.dormant ? 1 : 0,
     })),
     towers: state.towers.map((t) => ({
       id: t.id,
