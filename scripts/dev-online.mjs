@@ -2,9 +2,10 @@
 // vite가 /ws 를 룸 서버로 프록시하므로 브라우저는 5173 하나로 접속하면 된다.
 import { spawn } from 'node:child_process'
 
+// Windows에서 npx는 npx.cmd 라 shell:true 로 띄워야 spawn ENOENT가 안 난다.
 const procs = [
-  spawn('node', ['server/index.js'], { stdio: 'inherit' }),
-  spawn('npx', ['vite'], { stdio: 'inherit' }),
+  spawn('node', ['server/index.js'], { stdio: 'inherit', shell: true }),
+  spawn('npx', ['vite'], { stdio: 'inherit', shell: true }),
 ]
 
 function shutdown() {

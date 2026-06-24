@@ -38,6 +38,9 @@ export function useRealtimeGame(net, adapter, ctrlRef) {
   // ── 스냅샷 수신: 바이너리 델타 → 누적 디코드 ──
   useEffect(() => {
     if (!net?.subscribeSnapshot) return undefined
+    // 막 구독함 → 서버에 full 스냅샷 1장 요청. 전장(three.js) 청크가 늦게 로드돼
+    // 세션의 첫 full을 놓쳐 델타만 받게 되는 경우에도 안전하게 동기화된다.
+    net.rtResync?.()
     return net.subscribeSnapshot((bytes) => {
       let v
       try {

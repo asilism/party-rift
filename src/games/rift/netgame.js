@@ -12,6 +12,23 @@ export const riftNet = {
 
   buildParticipants(players, config) {
     const mode = config?.mode || '3v3'
+
+    // 서버 드래프트로 팀·직업이 확정된 풀 로스터를 받으면 그대로 신뢰한다.
+    //  (사람+봇이 모두 들어 있고, 같은 팀 직업 중복은 드래프트에서 이미 막혔다)
+    if (Array.isArray(config?.roster) && config.roster.length) {
+      const list = config.roster.map((p) => ({
+        id: p.id || p.zodiacId,
+        name: p.name,
+        zodiacId: p.zodiacId,
+        color: p.color || getZodiac(p.zodiacId)?.color,
+        team: p.team || 'blue',
+        cls: p.cls,
+        isBot: !!p.isBot,
+        deviceId: p.deviceId,
+      }))
+      return { players: list, opts: { mode } }
+    }
+
     const teams = config?.teams || {}
     const classes = config?.classes || {}
     const teamSize = TEAM_SIZES[mode] || TEAM_SIZE
@@ -61,8 +78,8 @@ export const riftNet = {
   readInput: (c) => ({ mx: c.mx || 0, mz: c.mz || 0 }),
   inputSig: (c) => `${(c.mx || 0).toFixed(2)}|${(c.mz || 0).toFixed(2)}`,
   predictLocal(pred, ctrl, me, dt) {
-    // 사망/기절/정신집중/귀환 중엔 제자리 → 권위값에 맡김(클라 예측 정지)
-    if (me.respawnT > 0 || me.stunT > 0 || me.castT > 0 || me.recallT > 0) return
+    // 사망/기절/정신집중/귀환/발사준비 중엔 제자리 → 권위값에 맡김(클라 예측 정지)
+    if (me.respawnT > 0 || me.stunT > 0 || me.castT > 0 || me.recallT > 0 || me.hookWindT > 0) return
     const len = Math.hypot(ctrl.mx || 0, ctrl.mz || 0)
     if (len <= 0.12) return
     const sp = me.mvSpeed || 8

@@ -1,23 +1,28 @@
-// 파티 리프트 온라인 서버.
-//  - /ws : 방(로비) 관리 + 게임 메시지 릴레이 WebSocket
-//  - 그 외 : dist/ 정적 파일 서빙(빌드돼 있을 때) → 한 포트로 배포 가능
+// 파티 리프트 온라인 서버 (서버 권위, 매치메이킹 큐 기반).
+//  - /ws : 큐 입장 → 드래프트 → 카운트다운 → 실시간 전투의 전 생애주기를 서버가 주도.
+//  - 그 외 : dist/ 정적 파일 서빙(빌드돼 있을 때) → 한 포트로 배포 가능.
 //
-// 동기화 모델(호스트 권위):
-//  - 로비(참가자/화면)는 서버가 관리해 모든 기기에 room 스냅샷을 보낸다.
-//  - 게임 진행은 호스트 기기가 계산하고 'state'로 모두에게 전파,
-//    게스트 기기의 입력은 'action'으로 호스트에게 릴레이된다.
+// 흐름:
+//  1) 클라가 hello(deviceId)로 접속. 진행 중이던 큐/매치가 있으면 그대로 이어준다(재접속 복구).
+//  2) queue(mode)로 대기열 입장. 목표 인원이 차거나 1분이 지나면 매치 생성(빈자리는 봇).
+//  3) 매치: 랜덤 팀 배정 → 스네이크 드래프트(사람 10초/봇 자동) → 3초 카운트다운 → 플레이.
+//  4) 플레이: realtime 세션이 60Hz 시뮬 / 20Hz 바이너리 델타 스냅샷을 방송.
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer } from 'ws'
-import { createRoomStore } from './rooms.js'
+import { createMatchmaker, MODES } from './matchmaking.js'
+import { createMatch, PICK_MS } from './match.js'
 import { createRealtimeSession } from './realtime.js'
-import { isRealtimeGame } from './games.js'
 
 const PORT = Number(process.env.PORT || 8787)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(__dirname, '..', 'dist')
+
+const LOOP_MS = 250 // 생애주기 스케줄러 주기
+const BOT_PICK_MS = 700 // 봇이 "고민"하는 시간(연출)
+const PLAY_GRACE_MS = 20_000 // 플레이 중 끊긴 사람을 봇으로 넘기기까지 유예(재접속 허용)
 
 const MIME = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
@@ -26,7 +31,6 @@ const MIME = {
 }
 
 const httpServer = http.createServer((req, res) => {
-  // 정적 서빙(프로덕션). dist가 없으면 안내만.
   const urlPath = decodeURIComponent((req.url || '/').split('?')[0])
   let file = path.join(DIST, urlPath === '/' ? 'index.html' : urlPath)
   if (!file.startsWith(DIST)) {
@@ -44,79 +48,161 @@ const httpServer = http.createServer((req, res) => {
 })
 
 const wss = new WebSocketServer({ server: httpServer, path: '/ws' })
-const store = createRoomStore()
+const mm = createMatchmaker()
 
-// deviceId -> { ws, room } (한 기기당 연결 1개)
+// deviceId -> { ws }
 const conns = new Map()
-
-// room.code -> 실시간 게임 세션(④ 서버 권위). 실시간 게임 화면일 때만 존재.
-const rtSessions = new Map()
+// matchId -> entry { match, session, turnSeat, turnAt, countdownAt, disc:Map<deviceId,discAt> }
+const matches = new Map()
+// deviceId -> matchId (현재 속한 매치)
+const deviceMatch = new Map()
 
 const send = (ws, msg) => {
-  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg))
+  if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg))
 }
-
-// 실시간 스냅샷(바이너리 프레임)을 한 기기로 전송
+const sendTo = (devId, msg) => {
+  const c = conns.get(devId)
+  if (c) send(c.ws, msg)
+}
+// 실시간 바이너리 프레임을 한 기기로
 function sendBytes(devId, bytes) {
   const c = conns.get(devId)
   if (c && c.ws.readyState === c.ws.OPEN) c.ws.send(bytes)
 }
 
-function ensureSession(room, gameId) {
-  const cur = rtSessions.get(room.code)
-  if (cur && cur.gameId === gameId) return cur
-  if (cur) cur.end()
-  const s = createRealtimeSession(gameId, room, sendBytes)
-  if (!s) {
-    rtSessions.delete(room.code)
-    return null
-  }
-  rtSessions.set(room.code, s)
-  s.begin()
-  return s
+// ── 큐 ──
+function queueSnapshotFor(deviceId, now = Date.now()) {
+  const mode = mm.modeOf(deviceId)
+  return mode ? mm.snapshot(mode, now) : null
+}
+function broadcastQueue(mode, now = Date.now()) {
+  const snap = mm.snapshot(mode, now)
+  for (const e of mm.queues.get(mode).entries) sendTo(e.deviceId, { t: 'queue', queue: snap })
 }
 
-function dropSession(room) {
-  const s = rtSessions.get(room.code)
-  if (s) {
-    s.end()
-    rtSessions.delete(room.code)
+// ── 매치 ──
+function entryOf(deviceId) {
+  const id = deviceMatch.get(deviceId)
+  return id ? matches.get(id) : null
+}
+
+function matchSnapshot(entry, now = Date.now()) {
+  const snap = entry.match.snapshot()
+  if (snap.phase === 'draft') {
+    const cur = entry.match.currentPicker()
+    snap.pickRemainingMs = cur && !cur.isBot && entry.turnAt ? Math.max(0, entry.turnAt + PICK_MS - now) : null
+  }
+  return snap
+}
+
+function broadcastMatch(entry, now = Date.now()) {
+  const snap = matchSnapshot(entry, now)
+  for (const p of entry.match.participants) {
+    if (p.isBot || !p.deviceId) continue
+    sendTo(p.deviceId, { t: 'match', match: snap, you: p.seat })
   }
 }
 
-function broadcastRoom(room) {
-  const snap = store.snapshot(room)
-  for (const devId of room.devices.keys()) {
-    const c = conns.get(devId)
-    if (c) send(c.ws, { t: 'room', room: snap })
-  }
+function formMatch(mode) {
+  const now = Date.now()
+  const humanIds = mm.takeMatch(mode, now)
+  if (!humanIds.length) return
+  const match = createMatch(humanIds, mode)
+  const entry = { match, session: null, turnSeat: null, turnAt: 0, disc: new Map() }
+  matches.set(match.code, entry)
+  for (const d of humanIds) deviceMatch.set(d, match.code)
+  broadcastMatch(entry, now)
 }
 
-function closeRoom(room, reason) {
-  dropSession(room)
-  for (const devId of [...room.devices.keys()]) {
-    const c = conns.get(devId)
-    if (c) {
-      c.room = null
-      send(c.ws, { t: 'closed', reason })
+// 드래프트가 끝나면 실시간 세션을 띄우고 드래프트 로스터로 시작한다.
+function startPlay(entry) {
+  const { match } = entry
+  match.toPlay() // 전장 안에서 엔진의 "곧 시작" 3초 카운트다운이 이어진다.
+  const session = createRealtimeSession('rift', match.room, sendBytes)
+  entry.session = session
+  session.begin()
+  session.start({ mode: match.mode, roster: match.roster() })
+  // 끊긴 채로 플레이에 들어간 사람은 유예 타이머 시작
+  const now = Date.now()
+  for (const [devId] of match.room.devices) {
+    if (!conns.get(devId)) entry.disc.set(devId, now)
+  }
+  // 모두에게 phase=play 매치 스냅샷 한 번(클라가 전장으로 전환)
+  broadcastMatch(entry, now)
+}
+
+function endMatch(entry, reason) {
+  entry.session?.end()
+  for (const p of entry.match.participants) {
+    if (p.deviceId) {
+      deviceMatch.delete(p.deviceId)
+      sendTo(p.deviceId, { t: 'gate', reason })
     }
   }
-  store.rooms.delete(room.code)
+  matches.delete(entry.match.code)
 }
 
-// 한 기기가 방에서 빠질 때(나가기/연결 끊김) 공통 처리:
-// 방이 닫히면 세션 정리, 아니면 그 기기의 엔티티를 봇이 인계한다.
-function handleDeparture(room, deviceId) {
-  const leftIds = (room.devices.get(deviceId)?.players || []).map((p) => p.id)
-  if (store.leave(room, deviceId) === 'closed') {
-    closeRoom(room, deviceId === room.hostId ? '호스트가 방을 나갔어요.' : '방이 닫혔어요.')
-    return 'closed'
+// 사람이 매치를 떠남(나가기/유예 만료) → 그 자리를 봇으로. 사람 0명이면 매치 종료.
+function leaveMatch(entry, deviceId, { silent } = {}) {
+  const match = entry.match
+  const seat = match.seatOf(deviceId)
+  const entityId = seat?.zodiacId
+  match.makeBotSeat(deviceId)
+  deviceMatch.delete(deviceId)
+  entry.disc.delete(deviceId)
+  if (entry.session && entityId) entry.session.takeOver([entityId]) // 플레이 중이면 엔티티를 봇이 인계
+  if (!silent) sendTo(deviceId, { t: 'gate' })
+  if (!match.hasHuman()) {
+    endMatch(entry)
+    return
   }
-  broadcastRoom(room)
-  rtSessions.get(room.code)?.takeOver(leftIds)
-  return 'left'
+  if (match.phase !== 'play') broadcastMatch(entry)
 }
 
+// ── 생애주기 스케줄러(단일 루프) ──
+function loop() {
+  const now = Date.now()
+
+  // 1) 큐: 남은시간 갱신 방송 + 매치 형성
+  for (const mode of MODES) {
+    const q = mm.queues.get(mode)
+    if (q.entries.length) broadcastQueue(mode, now)
+    while (mm.ready(mode, now)) formMatch(mode)
+  }
+
+  // 2) 매치 진행
+  for (const entry of [...matches.values()]) {
+    const match = entry.match
+
+    if (match.phase === 'draft') {
+      if (match.allPicked()) {
+        startPlay(entry) // 전원 픽 완료 → 곧바로 전장 시작
+      } else {
+        const cur = match.currentPicker()
+        if (cur && cur.seat !== entry.turnSeat) {
+          // 새 차례 시작 — 타이머 리셋
+          entry.turnSeat = cur.seat
+          entry.turnAt = now
+          broadcastMatch(entry, now)
+        }
+        const limit = cur.isBot ? BOT_PICK_MS : PICK_MS
+        if (cur && now - entry.turnAt >= limit) {
+          match.autoPickCurrent()
+          entry.turnSeat = null // 다음 루프에서 새 차례(또는 전원완료) 처리
+          broadcastMatch(entry, now)
+        }
+      }
+    } else if (match.phase === 'play') {
+      // 끊긴 사람 유예 만료 → 봇 인계
+      for (const [devId, at] of entry.disc) {
+        if (now - at >= PLAY_GRACE_MS) leaveMatch(entry, devId, { silent: true })
+      }
+    }
+  }
+}
+const loopTimer = setInterval(loop, LOOP_MS)
+
+// ── 연결 ──
 wss.on('connection', (ws) => {
   ws.isAlive = true
   ws.on('pong', () => (ws.isAlive = true))
@@ -140,114 +226,59 @@ wss.on('connection', (ws) => {
     if (msg.t === 'hello') {
       deviceId = String(msg.deviceId || '').slice(0, 64)
       if (!deviceId) throw new Error('deviceId가 필요해요.')
-      // 같은 기기의 이전 연결이 남아 있으면 교체(새로고침 등)
       const prev = conns.get(deviceId)
       if (prev && prev.ws !== ws) prev.ws.terminate()
-      conns.set(deviceId, { ws, room: prev?.room || null })
-      if (prev?.room) {
-        send(ws, { t: 'room', room: store.snapshot(prev.room) })
-        // 재연결: 실시간 게임 중이면 다음 틱에 full 스냅샷을 받아 델타 누적을 재동기화
-        rtSessions.get(prev.room.code)?.deviceJoined(deviceId)
-      }
+      conns.set(deviceId, { ws })
+      resumeOrGate(deviceId)
       return
     }
     if (!deviceId) throw new Error('먼저 hello를 보내야 해요.')
-    const conn = conns.get(deviceId)
 
     switch (msg.t) {
-      case 'create': {
-        if (conn.room) {
-          const old = conn.room
-          if (store.leave(old, deviceId) === 'closed') dropSession(old)
-        }
-        conn.room = store.create(deviceId)
-        broadcastRoom(conn.room)
+      case 'queue': {
+        // 이미 매치 중이면 큐 입장 무시
+        if (deviceMatch.has(deviceId)) break
+        const snap = mm.join(deviceId, String(msg.mode || ''), Date.now())
+        sendTo(deviceId, { t: 'queue', queue: snap })
         break
       }
-      case 'join': {
-        const room = store.join(msg.code, deviceId)
-        conn.room = room
-        broadcastRoom(room)
-        // 게임 중간에 들어온 기기도 화면을 그릴 수 있게 마지막 상태를 보내준다
-        if (room.lastState != null) send(ws, { t: 'state', data: room.lastState })
-        // 실시간 게임 진행 중이면 다음 틱에 full 스냅샷 한 장을 받도록 표시
-        rtSessions.get(room.code)?.deviceJoined(deviceId)
+      case 'leaveQueue': {
+        mm.leave(deviceId)
+        sendTo(deviceId, { t: 'gate' })
         break
       }
-      case 'leave': {
-        if (!conn.room) break
-        const room = conn.room
-        conn.room = null
-        handleDeparture(room, deviceId)
+      case 'startNow': {
+        // 대기 시간을 건너뛰고 지금 큐에 있는 사람으로 즉시 매치(빈자리는 봇).
+        const mode = mm.modeOf(deviceId)
+        if (mode) formMatch(mode)
         break
       }
-      case 'addPlayer': {
-        if (!conn.room) throw new Error('방에 먼저 참여해 주세요.')
-        store.addPlayer(conn.room, deviceId, msg.player || {})
-        broadcastRoom(conn.room)
+      case 'pick': {
+        const entry = entryOf(deviceId)
+        if (!entry) break
+        entry.match.pick(deviceId, String(msg.classId || ''))
+        entry.turnSeat = null // 다음 차례 타이머는 루프가 새로 잡는다(전원 완료면 다음 틱에 startPlay)
+        broadcastMatch(entry)
         break
       }
-      case 'removePlayer': {
-        if (!conn.room) break
-        store.removePlayer(conn.room, deviceId, msg.playerId)
-        broadcastRoom(conn.room)
+      case 'leaveMatch': {
+        const entry = entryOf(deviceId)
+        if (entry) leaveMatch(entry, deviceId)
+        else sendTo(deviceId, { t: 'gate' })
         break
       }
-      case 'setScreen': {
-        if (!conn.room) break
-        store.setScreen(conn.room, deviceId, msg.screen)
-        conn.room.lastState = null // 새 화면 → 이전 게임 상태 폐기
-        broadcastRoom(conn.room)
-        // 실시간 게임 화면이면 서버 권위 세션을 띄우고, 아니면 정리한다.
-        if (isRealtimeGame(msg.screen)) ensureSession(conn.room, msg.screen)
-        else dropSession(conn.room)
-        break
-      }
-      // ── 실시간 게임(④ 서버 권위) ──
-      case 'rtStart': {
-        const s = conn.room && rtSessions.get(conn.room.code)
-        if (s && conn.room.hostId === deviceId) s.start(msg.config)
-        break
-      }
-      case 'rtStop': {
-        const s = conn.room && rtSessions.get(conn.room.code)
-        if (s && conn.room.hostId === deviceId) s.reset()
-        break
-      }
-      case 'rtPause': {
-        // 방장만 일시정지/재개할 수 있다
-        const s = conn.room && rtSessions.get(conn.room.code)
-        if (s && conn.room.hostId === deviceId) s.setPaused(msg.paused)
-        break
-      }
+      // ── 실시간 입력(플레이 중) ──
       case 'rtInput': {
-        const s = conn.room && rtSessions.get(conn.room.code)
-        if (s) s.input(deviceId, msg.input)
+        entryOf(deviceId)?.session?.input(deviceId, msg.input)
         break
       }
       case 'rtAction': {
-        const s = conn.room && rtSessions.get(conn.room.code)
-        if (s) s.action(deviceId, msg.action)
+        entryOf(deviceId)?.session?.action(deviceId, msg.action)
         break
       }
-      case 'state': {
-        // 호스트 → 게스트 전원에게 게임 상태 전파
-        const room = conn.room
-        if (!room || room.hostId !== deviceId) break
-        room.lastState = msg.data
-        for (const devId of room.devices.keys()) {
-          if (devId === deviceId) continue
-          const c = conns.get(devId)
-          if (c) send(c.ws, { t: 'state', data: msg.data })
-        }
-        break
-      }
-      case 'action': {
-        // 게스트 → 호스트에게 입력 릴레이
-        const room = conn.room
-        if (!room) break
-        const host = conns.get(room.hostId)
-        if (host) send(host.ws, { t: 'action', data: msg.data, deviceId })
+      case 'rtResync': {
+        // 클라가 막 구독함 → 다음 틱에 full 스냅샷 한 장을 보내 동기화 보장
+        entryOf(deviceId)?.session?.deviceJoined(deviceId)
         break
       }
       default:
@@ -260,11 +291,37 @@ wss.on('connection', (ws) => {
     const conn = conns.get(deviceId)
     if (!conn || conn.ws !== ws) return // 새 연결로 교체된 경우
     conns.delete(deviceId)
-    const room = conn.room
-    if (!room) return
-    handleDeparture(room, deviceId)
+    // 큐에 있었으면 큐에서 제거
+    const mode = mm.modeOf(deviceId)
+    if (mode) {
+      mm.leave(deviceId)
+      return
+    }
+    // 매치 중이면: 플레이 단계는 유예 타이머, 그 외(드래프트/카운트다운)는 자리 유지(재접속 대기)
+    const entry = entryOf(deviceId)
+    if (entry && entry.match.phase === 'play') entry.disc.set(deviceId, Date.now())
   })
 })
+
+// 재접속 복구 또는 대문으로 안내
+function resumeOrGate(deviceId) {
+  const entry = entryOf(deviceId)
+  if (entry) {
+    entry.disc.delete(deviceId) // 유예 취소
+    const snap = matchSnapshot(entry)
+    const seat = entry.match.seatOf(deviceId)
+    sendTo(deviceId, { t: 'match', match: snap, you: seat?.seat ?? null })
+    // 플레이 중이면 다음 틱에 full 스냅샷 한 장
+    if (entry.match.phase === 'play') entry.session?.deviceJoined(deviceId)
+    return
+  }
+  const qsnap = queueSnapshotFor(deviceId)
+  if (qsnap) {
+    sendTo(deviceId, { t: 'queue', queue: qsnap })
+    return
+  }
+  sendTo(deviceId, { t: 'gate' })
+}
 
 // 죽은 연결 정리(킵얼라이브)
 const heartbeat = setInterval(() => {
@@ -277,7 +334,10 @@ const heartbeat = setInterval(() => {
     ws.ping()
   }
 }, 25000)
-wss.on('close', () => clearInterval(heartbeat))
+wss.on('close', () => {
+  clearInterval(heartbeat)
+  clearInterval(loopTimer)
+})
 
 httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`[party-rift] 서버 시작: http://0.0.0.0:${PORT} (ws: /ws)`)
