@@ -262,6 +262,8 @@ function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onTog
       >
         ⚙️
       </button>
+      {/* 메뉴를 열면 화면 전체를 어둡게 덮어 조작 버튼과 겹쳐 보이지 않게 한다(누르면 닫힘) */}
+      {open && <div className="rift-settings__backdrop" onClick={() => setOpen(false)} />}
       {open && (
         <div className="rift-settings__menu" role="menu">
           {/* 현재 팀 상황 — 사망 화면과 같은 양 팀 현황판을 여기서도 본다 */}
@@ -494,7 +496,7 @@ function RiftPlay({
       {/* 우물 안 또는 사망 중에 뜨는 상점 버튼 */}
       {me && !finished && meCanShop && !shopOpen && (
         <button className="rift-shop-fab" onClick={() => setShopOpen(true)}>
-          🛒 <small>{me.respawnT > 0 ? '상점 (대기중)' : '넥서스 상점'}</small>
+          🛒 <small>{me.respawnT > 0 ? '상점 (대기중)' : '상점'}</small>
         </button>
       )}
       {shopOpen && me && meCanShop && (

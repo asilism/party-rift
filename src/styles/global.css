@@ -16,6 +16,30 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* 세련된 스크롤바 — 게임 내 메뉴/패널 공용(상점·설정·드래프트 등). 얇고 둥근 캡슐형. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.4);
+  background-clip: padding-box;
+}
+
 /* 버튼은 포인터 이벤트로 동시 멀티터치 처리 + 더블탭 확대/지연 방지 */
 button {
   touch-action: manipulation;
@@ -1884,7 +1908,7 @@ body {
 .rift__canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .rift__hud {
   position: absolute; inset: 0; display: flex; flex-direction: column;
-  pointer-events: none; z-index: 4;
+  pointer-events: none; z-index: 8; /* 조작 버튼(z-index 6)보다 위 — 설정 메뉴가 버튼에 가리지 않게 */
 }
 /* 전적·설정은 우상단으로 몰고, 좌상단은 미니맵(rift__side)만 둔다.
    중앙 스코어를 없애 자식이 우측 클러스터 하나뿐이라 flex-end로 오른쪽에 고정. */
@@ -2106,6 +2130,12 @@ body {
 /* 우상단 설정 메뉴 — 톱니 버튼 하나에서 분기 메뉴를 띄운다 */
 .rift-settings { position: relative; pointer-events: auto; }
 .rift-settings__toggle--on { filter: brightness(1.2); box-shadow: 0 0 0 2px var(--accent) inset; }
+/* 메뉴 뒤를 덮는 어두운 막 — 조작 버튼을 흐리게 가리고, 메뉴(z-index 40)는 그 위에 뜬다 */
+.rift-settings__backdrop {
+  position: fixed; inset: 0; z-index: 30; pointer-events: auto;
+  background: rgba(4, 8, 18, 0.62);
+  -webkit-backdrop-filter: blur(1.5px); backdrop-filter: blur(1.5px);
+}
 .rift-settings__menu {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
   width: min(400px, 92vw); padding: 8px;
@@ -2241,7 +2271,9 @@ body {
 
 /* 넥서스 상점 버튼 (우물 안에서만 뜬다) */
 .rift-shop-fab {
-  position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%);
+  /* 미니맵(rift__side: top/left 12px, 너비 clamp(150,30vh,240)) 바로 오른쪽에 붙인다 */
+  position: absolute; top: 12px; left: calc(12px + clamp(150px, 30vh, 240px) + 12px);
+  transform: scale(0.8); transform-origin: top left;
   z-index: 7; pointer-events: auto; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 1px;
   padding: 10px 20px; border-radius: 16px; font-size: 26px;
@@ -2380,8 +2412,6 @@ body {
 }
 .gate__body > * { position: relative; }
 .gate__c-dim { color: var(--muted); }
-.gate__c-acc { color: var(--accent2); }
-.gate__c-ok { color: #27c93f; }
 
 .gate__brand { text-align: center; margin-bottom: 14px; }
 .gate__crest {
@@ -2399,14 +2429,6 @@ body {
 }
 .gate__name span { color: transparent; background: linear-gradient(180deg, #b8f3d8, var(--accent2)); -webkit-background-clip: text; background-clip: text; }
 .gate__tag { margin: 0; color: var(--muted); font-size: clamp(12px, 2vh, 15px); }
-
-.gate__prompt {
-  font-family: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
-  font-size: clamp(11px, 1.7vw, 13.5px); line-height: 1.7;
-  border-left: 2px solid var(--accent2); padding: 6px 0 6px 12px; margin: 0 0 16px;
-  background: rgba(255, 255, 255, 0.02);
-}
-.gate__prompt p { margin: 0; }
 
 .gate__modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0 0 14px; }
 .gate__mode {
@@ -2455,14 +2477,26 @@ body {
 .queue__now { margin-top: 8px; padding: 12px 22px; font-size: 16px; }
 
 /* ── 드래프트 ── */
-.draft { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 10px 14px 14px; gap: 10px; }
-.draft__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.draft__title { margin: 0; font-size: clamp(18px, 3.2vh, 26px); }
+.draft { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 10px 14px 14px; gap: 10px; overflow: hidden; }
+/* 헤더는 중앙 패널 맨 위에 — 좌/우 팀 칸은 슬롯만 두어 풀 높이를 쓴다 */
+.draft__header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 6px 10px; flex-wrap: wrap; flex-shrink: 0; margin-bottom: 8px;
+}
+.draft__title { margin: 0; font-size: clamp(16px, 2.8vh, 24px); }
 .draft__sub { margin: 2px 0 0; color: var(--muted); font-size: clamp(12px, 2vh, 15px); }
 .draft__top-right { display: flex; align-items: center; gap: 8px; }
-.draft__teams { display: flex; align-items: stretch; gap: 10px; }
-.draft__vs { align-self: center; font-weight: 900; color: var(--muted); font-size: clamp(14px, 2.6vh, 20px); }
-.draft-team { flex: 1; min-width: 0; border-radius: 14px; padding: 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line); }
+/* 3분할 본문: [블루팀][중앙 선택][레드팀] — 남는 높이를 채우고, 각 칸이 알아서 스크롤 */
+.draft__body {
+  flex: 1; min-height: 0; display: grid; gap: 10px; align-items: stretch;
+  grid-template-columns: clamp(92px, 20%, 180px) minmax(0, 1fr) clamp(92px, 20%, 180px);
+  grid-template-areas: "blue center red";
+}
+.draft-team {
+  grid-area: blue; min-width: 0; min-height: 0; overflow-y: auto;
+  border-radius: 14px; padding: 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line);
+}
+.draft-team--red { grid-area: red; }
 .draft-team--blue { box-shadow: inset 0 0 0 2px rgba(90, 150, 255, 0.35); }
 .draft-team--red { box-shadow: inset 0 0 0 2px rgba(255, 110, 110, 0.35); }
 .draft-team__label { font-weight: 900; font-size: 14px; margin-bottom: 8px; }
@@ -2487,11 +2521,51 @@ body {
 .draft-slot__class { font-size: 12px; color: var(--muted); }
 .draft-slot.is-done .draft-slot__class { color: var(--accent2); font-weight: 700; }
 
-.draft__pick { margin-top: auto; }
-.draft__timer { position: relative; height: 16px; border-radius: 8px; background: rgba(255, 255, 255, 0.08); overflow: hidden; margin-bottom: 8px; }
+.draft__center { grid-area: center; position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+/* "더 있음" 힌트: 스크롤 남은 가장자리에서 콘텐츠가 흐려지고, 아래로 더 있으면 ⌄가 깜빡인다 */
+.draft__center.is-more-down .draft__classes {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 30px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 30px), transparent);
+}
+.draft__center.is-more-up .draft__classes {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 30px);
+  mask-image: linear-gradient(to bottom, transparent, #000 30px);
+}
+.draft__center.is-more-up.is-more-down .draft__classes {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 30px, #000 calc(100% - 30px), transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 30px, #000 calc(100% - 30px), transparent);
+}
+/* v자 3개가 위→아래로 순차 점멸하는 "더 아래로" 스크롤 힌트 */
+.draft__more {
+  position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  pointer-events: none; z-index: 2;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
+}
+.draft__more span {
+  width: 11px; height: 11px; margin-top: -6px;
+  border-right: 2.5px solid var(--accent); border-bottom: 2.5px solid var(--accent);
+  transform: rotate(45deg); opacity: 0.2;
+  animation: draft-more-wave 1.2s ease-in-out infinite;
+}
+.draft__more span:nth-child(1) { margin-top: 0; animation-delay: 0s; }
+.draft__more span:nth-child(2) { animation-delay: 0.18s; }
+.draft__more span:nth-child(3) { animation-delay: 0.36s; }
+@keyframes draft-more-wave {
+  0%, 100% { opacity: 0.18; }
+  50% { opacity: 1; }
+}
+.draft__center-status {
+  margin: auto; text-align: center; white-space: pre-line; color: var(--muted);
+  font-weight: 800; font-size: clamp(13px, 2.4vh, 18px); line-height: 1.5;
+}
+.draft__timer { position: relative; height: 16px; border-radius: 8px; background: rgba(255, 255, 255, 0.08); overflow: hidden; margin-top: 8px; flex-shrink: 0; }
 .draft__timer-fill { height: 100%; background: linear-gradient(90deg, #ff6e6e, var(--accent)); transition: width .12s linear; }
 .draft__timer-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 900; color: #fff; text-shadow: 0 1px 2px #000; }
-.draft__classes { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; max-height: 42vh; overflow-y: auto; }
+.draft__classes {
+  flex: 1; min-height: 0; display: grid; align-content: start;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; overflow-y: auto;
+}
 .draft-class {
   display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; color: var(--text);
   padding: 10px 6px; border-radius: 12px; border: 2px solid var(--line); background: rgba(255, 255, 255, 0.04);
@@ -2507,8 +2581,11 @@ body {
 .draft__wait { text-align: center; color: var(--muted); margin: auto 0 4px; }
 
 @media (max-width: 720px) {
-  .draft__classes { grid-template-columns: repeat(5, 1fr); }
   .draft-class__desc { display: none; }
   .draft-class__name { font-size: 12px; }
+  .draft-class { padding: 8px 4px; }
+  .draft-class__icon { font-size: 22px; }
+  .draft-slot { padding: 6px; gap: 6px; }
+  .draft-slot__avatar { font-size: 22px; }
   .gate__modes { grid-template-columns: 1fr; }
 }

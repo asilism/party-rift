@@ -12,7 +12,7 @@
 import { ZODIAC } from '../src/shared/zodiac.js'
 import { CLASS_IDS, TEAM_SIZES } from '../src/games/rift/engine.js'
 
-export const PICK_MS = 10_000 // 사람 픽 제한
+export const PICK_MS = 20_000 // 사람 픽 제한
 // 본게임 시작 전 카운트다운(3초)은 엔진(status:'countdown', COUNTDOWN_TIME)이 담당한다.
 // 드래프트가 끝나면 곧바로 실시간 세션을 시작하고, 전장 안에서 "곧 시작" 카운트다운을 보여준다.
 
