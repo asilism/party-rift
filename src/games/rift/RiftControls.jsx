@@ -287,6 +287,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
 
   function down(e) {
     if (disabled || joyPointer.current != null) return
+    if (e.button != null && e.button > 0) return // 우/중클릭은 무시(컨텍스트 메뉴·오작동 방지)
     joyPointer.current = e.pointerId
     e.currentTarget.setPointerCapture(e.pointerId)
     setJoy({ ox: e.clientX, oy: e.clientY, dx: 0, dy: 0 })
