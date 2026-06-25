@@ -94,10 +94,15 @@ const FX_SOUND = {
   dash: 'melee', blink: 'melee', execute: 'melee', whirl: 'melee', // 근접 타격
   volley: 'ranged', lightarrow: 'ranged', // 원거리 타격
   boom: 'magic', meteorhit: 'magic', fissure: 'magic', chain: 'magic', frost: 'magic', // 마법 타격
+  curse: 'magic', frostnova: 'magic', abszero: 'magic', plague: 'magic', doom: 'magic', // 직업 전용 마법
   heal: 'heal', holylight: 'heal', shield: 'shield', // 보조
   berserk: 'melee', taunt: 'shield', haste: 'heal', stealth: 'shield', hawk: 'ranged', // 보조 스킬
+  summon: 'magic', deploy: 'shield', // 소환/설치
   towerfall: 'tower', nexusfall: 'nexus', // 건물 파괴
 }
+// 위치 기반 가청 범위(월드 유닛): 전투/스킬 소리는 내 화면 근처(약 1화면)만, 건물 붕괴는 더 멀리까지.
+const AUDIO_RANGE = 52
+const AUDIO_RANGE_BIG = 105
 const FX_PLAY = {
   melee: () => sound.meleeHit(),
   ranged: () => sound.rangedHit(),
@@ -136,6 +141,13 @@ function useRiftSounds(hud, myId) {
       if (f.id <= fxSeen.current) continue
       const cat = FX_SOUND[f.kind]
       if (!cat) continue
+      // 위치 기반 가청: 내 영웅에서 먼 곳의 소리는 들리지 않는다(관전 중이면 전부 들림).
+      if (me && f.x != null) {
+        const range = cat === 'tower' || cat === 'nexus' ? AUDIO_RANGE_BIG : AUDIO_RANGE
+        const dx = f.x - me.x
+        const dz = f.z - me.z
+        if (dx * dx + dz * dz > range * range) continue
+      }
       if (now - (fxLast.current[cat] || 0) < FX_THROTTLE_MS) continue
       fxLast.current[cat] = now
       FX_PLAY[cat]()

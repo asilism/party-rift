@@ -9,7 +9,6 @@ function abilityLines(clsId, slot, me) {
   const label = powerLabel(clsId)
   const power = me.power ?? 0
   const mult = me.dmgMult ?? 1
-  const lvl = me.lvl ?? 1
   const lines = []
   const scale = (base, coef, m) => Math.round((base + coef * power) * m)
   const formula = (base, coef) => (base ? `${base} + ${coef}×${label}` : `${coef}×${label}`)
@@ -19,8 +18,8 @@ function abilityLines(clsId, slot, me) {
     lines.push(`☠️ 지속피해 ${formula(info.dot[0], info.dot[1])} = ${dps}/초 · ${info.dotDur}초(총 ${Math.round(dps * info.dotDur)})`)
   }
   if (info.heal) lines.push(`💚 회복 ${formula(info.heal[0], info.heal[1])} = ${scale(info.heal[0], info.heal[1], 1)}`)
-  if (info.shield) lines.push(`🛡️ 보호막 ${info.shield[0]} + ${info.shield[1]}×(Lv-1) = ${Math.round(info.shield[0] + info.shield[1] * (lvl - 1))}`)
-  if (info.summon) lines.push(`🐾 소환수 공격력 ${info.summon}${info.count ? ` (×${info.count}마리)` : ''}`)
+  if (info.shield) lines.push(`🛡️ 보호막 ${formula(info.shield[0], info.shield[1])} = ${scale(info.shield[0], info.shield[1], 1)}`)
+  if (info.summon) lines.push(`🐾 소환수 공격력 ${formula(info.summon[0], info.summon[1])} = ${scale(info.summon[0], info.summon[1], 1)}${info.count ? ` (×${info.count}마리)` : ''}`)
   if (info.note) lines.push(`· ${info.note}`)
   return lines
 }

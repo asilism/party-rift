@@ -168,8 +168,7 @@ export const CLASS_IDS = Object.keys(CLASSES)
 
 // 스킬 데미지/회복/보호막 스케일링 메타데이터 — 툴팁이 "공식 + 현재 수치"를 보여 줄 때 쓴다.
 //  (엔진 SKILLS/ULTS의 skillDmg/healAmt 호출 계수와 일치시켜 둔다)
-//  dmg/dot/heal: [기본, 계수] · 계수는 직업 주력 스탯(AD/AP)에 곱한다.
-//  shield: [기본, 레벨당] · summon: 소환수 공격력(고정).
+//  dmg/dot/heal/shield/summon: [기본, 계수] · 계수는 직업 주력 스탯(AD/AP/공·주 평균)에 곱한다.
 export const ABILITY_SCALING = {
   warrior: { skill: { dmg: [30, 0.8] }, ult: { dmg: [20, 0.3], note: '0.34초마다 타격 · 2초' } },
   archer: { skill: { dmg: [0, 1.2] }, ult: { dmg: [90, 1.5] } },
@@ -180,15 +179,16 @@ export const ABILITY_SCALING = {
   cryomancer: { skill: { dmg: [38, 0.5], note: '빙결' }, skill2: { dmg: [26, 0.35], note: '빙결' }, ult: { dmg: [80, 0.8], note: '긴 빙결' } },
   gladiator: { skill: { dmg: [42, 0.85], note: '흡혈 35%' }, skill2: { dmg: [25, 0.5] } },
   warlock: { skill: { dmg: [48, 0.55], dot: [24, 0.4], dotDur: 4 }, skill2: { dot: [12, 0.2], dotDur: 2.5, note: '장판 안에서 지속' }, ult: { dmg: [50, 0.5], dot: [16, 0.3], dotDur: 5, note: '받는 피해 +18%' } },
-  guardian: { skill: { shield: [120, 26] }, ult: { shield: [90, 18] } },
+  guardian: { skill: { shield: [60, 1.0] }, ult: { shield: [48, 0.7] } },
   swordmaster: { skill: { dmg: [40, 0.9], note: '피해 1회 무효 후 반격' } },
   catcher: { skill: { dmg: [40, 0.7], note: '명중 시 1초 끌림+스턴' }, skill2: { dmg: [25, 0.4], note: '속박' }, ult: { dmg: [90, 1.0], note: '속박' } },
-  beastmaster: { skill: { summon: 26, count: 2 }, ult: { summon: 64 } },
-  engineer: { skill: { summon: 34 }, ult: { summon: 72 } },
+  beastmaster: { skill: { summon: [26, 0.12], count: 2 }, ult: { summon: [64, 0.3] } },
+  engineer: { skill: { summon: [34, 0.15] }, ult: { summon: [72, 0.34] } },
 }
 
-// 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 그 외는 공격력.
+// 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 하이브리드는 공·주 평균, 그 외는 공격력.
 export function powerLabel(cls) {
+  if (HYBRID_CLASSES.has(cls)) return '공·주 평균'
   return AP_CLASSES.has(cls) ? '주문력' : '공격력'
 }
 
@@ -305,14 +305,14 @@ const DOOM_VULN_T = 5 // 낙인 받는피해 증가 지속
 const DOOM_VULN_AMP = 0.18 // 낙인 대상이 받는 피해 +18%
 // ── 수호기사(P2): 아군 보호막 인챈터 ──
 const GUARD_RANGE = 16 // 보호막을 줄 아군 탐색 거리
-const GUARD_SHIELD_BASE = 120 // 수호의 빛 흡수량 기본
-const GUARD_SHIELD_LVL = 26 // 레벨당 흡수량
+const GUARD_SHIELD_BASE = 60 // 수호의 빛 흡수량 기본
+const GUARD_SHIELD_COEF = 1.0 // 주문력 계수 (AP 스케일) — 무아이템 기준 기존 곡선(120 + 26×Lv)과 동일
 const GUARD_SHIELD_T = 4 // 보호막 지속(초)
 const WARD_RADIUS = 14 // 결속 범위
 const WARD_TIME = 3 // 결속 지속(초)
 const WARD_CUT = 0.7 // 결속 중 받는 피해 배율(30% 감소)
-const BASTION_BARRIER_BASE = 90 // 불굴의 진형 흡수량 기본
-const BASTION_BARRIER_LVL = 18 // 레벨당 흡수량
+const BASTION_BARRIER_BASE = 48 // 불굴의 진형 흡수량 기본
+const BASTION_BARRIER_COEF = 0.7 // 주문력 계수 (AP 스케일) — 무아이템 기준 기존 곡선(90 + 18×Lv)과 동일
 const BASTION_WARD_T = 2.5 // 진형 결속 지속
 
 // ── 검성(P3): 패링 듀얼리스트 ──
@@ -336,12 +336,13 @@ const GUILLOTINE_ROOT = 1.2 // 단두대 속박 연장
 
 // ── 소환물(P4 야수조련사 펫 / P5 엔지니어 포탑) 공용 시스템 ──
 // kind: 'wolfpet'(늑대) | 'bear'(곰) | 'turret'(미니포탑) | 'cannon'(거포)
+// dmg는 소환 시점에 주인의 주력 스탯(공·주 평균)×coef 만큼 더해진다(spawnSummon). 여러 번 때리므로 coef는 작게.
 const SUMMON_SPEC = {
-  wolfpet: { hp: 220, dmg: 26, range: 2.6, aggro: 16, speed: 9.5, mobile: true, cd: 0.9, life: 18 },
-  bear: { hp: 760, dmg: 64, range: 3.2, aggro: 18, speed: 8.6, mobile: true, cd: 1.1, life: 16 },
+  wolfpet: { hp: 220, dmg: 26, coef: 0.12, range: 2.6, aggro: 16, speed: 9.5, mobile: true, cd: 0.9, life: 18 },
+  bear: { hp: 760, dmg: 64, coef: 0.3, range: 3.2, aggro: 18, speed: 8.6, mobile: true, cd: 1.1, life: 16 },
   // 미니포탑: 평타 2대 정도면 터지게 저체력. 주인(엔지니어)이 사거리 안에 없으면 휴면(zzz).
-  turret: { hp: 110, dmg: 34, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: 22 },
-  cannon: { hp: 560, dmg: 72, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 },
+  turret: { hp: 110, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: 22 },
+  cannon: { hp: 560, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 },
 }
 const BEAST_WOLVES = 2 // 야수조련사 늑대 소환 마릿수
 const ENGI_MAX_TURRETS = 3 // 엔지니어가 동시에 둘 수 있는 미니포탑 수(초과 시 가장 오래된 것 회수)
@@ -647,8 +648,8 @@ function pushFeed(state, t, msg) {
   if (state.feed.length > 8) state.feed.shift()
 }
 
-function pushFx(state, kind, x, z, r, team = null) {
-  state.fx.push({ id: state.nextId++, kind, x, z, r, t: 0, team })
+function pushFx(state, kind, x, z, r, team = null, life = null) {
+  state.fx.push({ id: state.nextId++, kind, x, z, r, t: 0, team, ...(life ? { life } : null) })
 }
 
 // 방향성(앞으로 뻗는) 이펙트 — dir 방향, 길이 r. 렌더러가 콘/직선 + 파티클로 그린다.
@@ -667,13 +668,20 @@ const atkOf = (h) => heroAtk(h) * dmgMult(h)
 // 직업 계열: 마법(AP, 주문력 계수) vs 물리(AD, 공격력 계수).
 //  · 마법 계열(마법사·힐러)은 레벨로 성장하는 기본 주문력 + 아이템 주문력을 쓴다.
 //  · 그 외(전사·궁수·암살자·탱커)는 공격력(heroAtk)을 그대로 주력 스탯으로 쓴다.
-const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock'])
-const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40 }
-const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9 }
+//  수호기사도 AP 인챈터로 편입 — 보호막이 주문력에 비례한다.
+const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock', 'guardian'])
+//  하이브리드: 소환수 피해를 공격력·주문력 절반씩으로 키운다(AD/AP 아이템 어느 쪽이든 도움).
+const HYBRID_CLASSES = new Set(['beastmaster', 'engineer'])
+const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46 }
+const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7 }
 const spellPower = (h) =>
   (SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power
 // 캐릭터 주력 스탯 — 스킬 계수가 곱해지는 값
-const powerStat = (h) => (AP_CLASSES.has(h.cls) ? spellPower(h) : heroAtk(h))
+//  · 하이브리드(야수조련사·엔지니어)는 공격력·주문력의 평균 → 소환수가 두 스탯 모두에 비례한다.
+const powerStat = (h) =>
+  HYBRID_CLASSES.has(h.cls) ? 0.5 * (heroAtk(h) + spellPower(h))
+    : AP_CLASSES.has(h.cls) ? spellPower(h)
+      : heroAtk(h)
 // 스킬 피해 = 기본값 + 계수 × 주력 스탯(공격력/주문력), 버프 배율 포함.
 //  계수가 클수록 그 직업의 주력 스탯(공격 아이템/주문 아이템)에 더 크게 비례한다.
 const skillDmg = (h, base, coef) => (base + coef * powerStat(h)) * dmgMult(h)
@@ -1128,7 +1136,7 @@ const SKILLS = {
     h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
     damageHero(state, foe, skillDmg(h, 48, 0.55), h) // 주문력 계수 (주술사) — 즉시 피해(체감되게 상향)
     applyPoison(foe, h, skillDmg(h, 24, 0.4), 4) // 4초 강한 중독
-    pushFxDir(state, 'chain', h.x, h.z, dist(h, foe), h.dir, h.team)
+    pushFxDir(state, 'curse', h.x, h.z, dist(h, foe), h.dir, h.team)
   },
   // 수호기사 수호의 빛: 가장 다친 아군(나 포함)에게 피해를 흡수하는 보호막
   guardian(state, h) {
@@ -1140,7 +1148,7 @@ const SKILLS = {
       if (missing > worst) { worst = missing; best = a }
     }
     if (!best) best = h
-    best.barrierHp = Math.max(best.barrierHp, GUARD_SHIELD_BASE + GUARD_SHIELD_LVL * (h.lvl - 1))
+    best.barrierHp = Math.max(best.barrierHp, GUARD_SHIELD_BASE + GUARD_SHIELD_COEF * spellPower(h))
     best.barrierT = GUARD_SHIELD_T
     pushFx(state, 'shield', best.x, best.z, 3, h.team)
   },
@@ -1164,7 +1172,7 @@ const SKILLS = {
       const a = h.dir + (i === 0 ? 0.6 : -0.6)
       spawnSummon(state, h, 'wolfpet', h.x + Math.cos(a) * 2.5, h.z + Math.sin(a) * 2.5)
     }
-    pushFx(state, 'berserk', h.x, h.z, 3, h.team)
+    pushFx(state, 'summon', h.x, h.z, 3, h.team)
   },
   // 엔지니어 미니포탑 설치: 발밑에 자동 사격 포탑(최대치 초과 시 가장 오래된 것 회수)
   engineer(state, h) {
@@ -1174,7 +1182,7 @@ const SKILLS = {
       state.summons = state.summons.filter((s) => s !== oldest)
     }
     spawnSummon(state, h, 'turret', h.x + Math.cos(h.dir) * 2, h.z + Math.sin(h.dir) * 2)
-    pushFx(state, 'shield', h.x, h.z, 2.5, h.team)
+    pushFx(state, 'deploy', h.x, h.z, 2.5, h.team)
   },
 }
 
@@ -1277,7 +1285,7 @@ const ULTS = {
     const tx = foe ? foe.x : h.x + Math.cos(h.dir) * ABSZERO_AIM
     const tz = foe ? foe.z : h.z + Math.sin(h.dir) * ABSZERO_AIM
     aoeDamage(state, h, tx, tz, ABSZERO_RADIUS, skillDmg(h, 80, 0.8), 0, ABSZERO_FREEZE) // 주문력 계수
-    pushFx(state, 'boom', tx, tz, ABSZERO_RADIUS, h.team)
+    pushFx(state, 'abszero', tx, tz, ABSZERO_RADIUS, h.team)
   },
   // 검투사 검투의 분노: 수 초간 흡혈(휘둘러베기 강화 유지) + 이속 ↑ + 받는 CC 감소 + 지속 회복
   gladiator(state, h) {
@@ -1299,12 +1307,12 @@ const ULTS = {
       e.vulnT = Math.max(e.vulnT, DOOM_VULN_T)
       hitAny = true
     }
-    pushFx(state, 'meteorhit', tx, tz, DOOM_RADIUS, h.team)
+    pushFx(state, 'doom', tx, tz, DOOM_RADIUS, h.team)
     if (!hitAny) return false
   },
   // 수호기사 불굴의 진형: 아군 전원에게 보호막 + 잠깐의 받는 피해 감소
   guardian(state, h) {
-    const amt = BASTION_BARRIER_BASE + BASTION_BARRIER_LVL * (h.lvl - 1)
+    const amt = BASTION_BARRIER_BASE + BASTION_BARRIER_COEF * spellPower(h)
     for (const a of state.heroes) {
       if (a.team !== h.team || a.respawnT > 0) continue
       a.barrierHp = Math.max(a.barrierHp, amt)
@@ -1334,7 +1342,7 @@ const ULTS = {
   // 야수조련사 곰 소환: 거대한 곰 한 마리(단단하고 강한 일격)
   beastmaster(state, h) {
     spawnSummon(state, h, 'bear', h.x + Math.cos(h.dir) * 3, h.z + Math.sin(h.dir) * 3)
-    pushFx(state, 'berserk', h.x, h.z, 4, h.team)
+    pushFx(state, 'summon', h.x, h.z, 4, h.team)
   },
   // 엔지니어 거포 설치: 강력한 장거리 거포
   engineer(state, h) {
@@ -1487,7 +1495,7 @@ const SKILLS2 = {
   // 한빙술사 서리고리: 내 주변에 얼음가시 — 가까운 적을 빙결시켜 떼어낸다(피일/탈출)
   cryomancer(state, h) {
     aoeDamage(state, h, h.x, h.z, FROSTNOVA_RADIUS, skillDmg(h, 26, 0.35), 0, FROSTNOVA_FREEZE)
-    pushFx(state, 'boom', h.x, h.z, FROSTNOVA_RADIUS, h.team)
+    pushFx(state, 'frostnova', h.x, h.z, FROSTNOVA_RADIUS, h.team)
   },
   // 검투사 도약강타: 가까운 적에게 도약해 착지 전방을 강타(교전 합류/갭클로즈, CC 없음)
   gladiator(state, h) {
@@ -1512,7 +1520,7 @@ const SKILLS2 = {
       x: tx, z: tz, r: PLAGUE_RADIUS, t: 0, delay: 0, life: PLAGUE_LIFE, tickT: 0,
       poisonDps: skillDmg(h, 12, 0.2),
     })
-    pushFx(state, 'boom', tx, tz, PLAGUE_RADIUS, h.team)
+    pushFx(state, 'plague', tx, tz, PLAGUE_RADIUS, h.team)
   },
   // 수호기사 결속: 주변 아군(나 포함)이 잠시 받는 피해 감소
   guardian(state, h) {
@@ -1766,7 +1774,7 @@ function damageTower(state, t, amount, attacker) {
   if (t.hp > 0) return
   t.hp = 0
   t.alive = false
-  pushFx(state, 'towerfall', t.x, t.z, TOWER_RADIUS + 3, t.team) // 무너지는 포탑
+  pushFx(state, 'towerfall', t.x, t.z, TOWER_RADIUS + 3, t.team, 1.7) // 무너지는 포탑 — 돌무더기가 와르르
   const team = attacker?.team || enemyOf(t.team)
   state.towersDown[team]++
   for (const h of state.heroes) if (h.team === team) giveXp(state, h, TOWER_XP)
@@ -1789,7 +1797,7 @@ function damageNexus(state, team, amount, attacker) {
   if (nx.hp > 0) return
   nx.hp = 0
   const np = state.map.NEXUS_POS[team]
-  pushFx(state, 'nexusfall', np.x, np.z, NEXUS_RADIUS + 4, team) // 폭발하는 넥서스
+  pushFx(state, 'nexusfall', np.x, np.z, NEXUS_RADIUS + 4, team, 2.0) // 폭발하는 넥서스 — 펑! 파편이 터져나간다
   finish(state, attacker?.team || enemyOf(team))
 }
 
@@ -1864,7 +1872,7 @@ export function step(state, dt) {
   stepHawks(state, dt)
   stepZones(state, dt)
   stepSummons(state, dt)
-  state.fx = state.fx.filter((n) => (n.t += dt) < 0.8)
+  state.fx = state.fx.filter((n) => (n.t += dt) < (n.life || 0.8))
   // 시간 초과: 부순 타워 → 킬 → 넥서스 체력으로 판정
   if (state.status === 'playing' && state.time >= COUNTDOWN_TIME + TIME_LIMIT) {
     const d = state.towersDown
@@ -2576,7 +2584,8 @@ function spawnSummon(state, owner, kind, x, z) {
   state.summons.push({
     id: state.nextId++, kind, team: owner.team, owner: owner.id,
     x, z, dir: owner.dir, hp: spec.hp, maxHp: spec.hp,
-    atkCd: 0, dmg: spec.dmg, range: spec.range, aggro: spec.aggro,
+    // 소환 시점 주인의 주력 스탯(공·주 평균)을 계수만큼 얹는다 — 하이브리드 스케일.
+    atkCd: 0, dmg: spec.dmg + Math.round((spec.coef || 0) * powerStat(owner)), range: spec.range, aggro: spec.aggro,
     speed: spec.speed, mobile: spec.mobile, cd: spec.cd, life: spec.life,
     chargeT: 0, // 과부하(엔지니어) 남은 시간
   })
@@ -2705,6 +2714,22 @@ const BOT_BUILD = {
   mage: ['orb', 'flame_core', 'void_staff', 'boots'],
   healer: ['orb', 'wisdom_hat', 'frost_staff', 'plate'],
   tank: ['leather', 'plate', 'giant_heart', 'thornmail'],
+  // 한빙술사: 컨트롤 메이지 — 주문력 + 약간의 생존(무른 몸)
+  cryomancer: ['orb', 'frost_staff', 'flame_core', 'void_staff'],
+  // 검투사: 흡혈 브루저 — 공격력 + 흡혈 + 체력
+  gladiator: ['longsword', 'vampire_scythe', 'giant_heart', 'executioner'],
+  // 주술사: DoT zoner — 주문력 위주
+  warlock: ['orb', 'flame_core', 'void_staff', 'frost_staff'],
+  // 수호기사: AP 인챈터 서폿 — 주문력(보호막) + 쿨감(자주 시전) + 생존
+  guardian: ['orb', 'wisdom_hat', 'frost_staff', 'archmage_staff'],
+  // 검성: 평타 듀얼리스트 — 공격속도 + 공격력 + 흡혈
+  swordmaster: ['rage_gloves', 'vampire_scythe', 'executioner', 'dragon_blade'],
+  // 사슬잡이: 이니시에이터 — 단단함 + 약간의 공격력
+  catcher: ['plate', 'longsword', 'giant_heart', 'executioner'],
+  // 야수조련사: 하이브리드 소환사 — 공/주 혼합(현자의 돌) + 주문·공격 섞어 소환수 강화 + 생존
+  beastmaster: ['sage_stone', 'flame_core', 'longsword', 'giant_heart'],
+  // 엔지니어: 하이브리드 포탑 — 주문력 위주 혼합 + 약간의 생존(후방)
+  engineer: ['sage_stone', 'flame_core', 'void_staff', 'plate'],
 }
 
 // 봇 자동 구매: 우물 안 + 빈 칸 있으면 빌드 우선순위에서 안 가진 첫 구매 가능 아이템을 산다.
@@ -2961,23 +2986,18 @@ function stepBots(state, dt) {
       h.botStrafe += dt * 0.7
       const away = Math.atan2(h.z - foe.z, h.x - foe.x)
       const to = Math.atan2(foe.z - h.z, foe.x - h.x)
-      const wantChase = d > kite + 1.2
-      // 추격 가부 판단: 잡을 확신 + 생환 가능성 점수로 결정한다(무작정 본진까지 따라가다 자폭 방지).
-      let chasing = wantChase
-      if (wantChase) {
-        const tower = nearestEnemyTower(state, h)
-        const towerD = tower ? dist(h, tower) : Infinity
-        const sc = botChaseScore(state, h, foe)
-        // 기본: 심하게 불리하지 않고(아군≥적) 체력 여유, 내가 먼저 죽지 않을 때만 쫓는다
-        let ok = h.hp > h.maxHp * 0.4 && sc.allies >= sc.foes && sc.killT <= sc.lifeT
-        // 적 타워 사거리 안으로의 다이브: 빈사 적 + 즉살각 + 충분한 생환 여유가 있을 때만
-        if (towerD < TOWER_RANGE + 3) {
-          ok = ok && foe.hp < foe.maxHp * 0.4 && sc.killT < 1.3 && sc.lifeT > sc.killT * 1.6
-        }
-        chasing = ok
-      }
-      if (wantChase && !chasing) {
-        // 무리한 추격은 접는다 — 내 진영 쪽으로 빠지며 방어/도주기만 쓰고 사거리 안이면 반격한다
+      // ── 교전 stance 판단: 이 싸움이 유리/호각/불리 중 무엇인가 ──
+      // killT(내가 적을 잡는 시간) vs lifeT(내가 버티는 시간) + 주변 아군·적 수로 가늠한다.
+      const sc = botChaseScore(state, h, foe)
+      const tower = nearestEnemyTower(state, h)
+      const towerD = tower ? dist(h, tower) : Infinity
+      const healthy = h.hp > h.maxHp * 0.4
+      // 유리: 체력 여유 + 안 밀리고(아군≥적) + 트레이드 우세(살짝 손해까진 허용 → 적극적으로 붙는다)
+      const winning = healthy && sc.allies >= sc.foes && sc.killT <= sc.lifeT * 1.15
+      // 불리: 빈사거나 수적 열세거나 트레이드가 확실히 진다
+      const losing = !healthy || sc.allies < sc.foes || sc.lifeT < sc.killT * 0.7
+      // ① 불리한데 적이 붙어 있으면 본진으로 뺀다(생존 우선). 방어·도주기를 쓰며 사거리 안이면 반격.
+      if (losing && d < kite + 4) {
         if (h.cls === 'tank' && h.skillCd <= 0 && d < 10) castSkill(state, h.id) // 방패 켜고 후퇴
         if (
           h.skill2Cd <= 0 &&
@@ -2990,14 +3010,39 @@ function stepBots(state, dt) {
         botAttack(state, h, dt)
         continue
       }
-      const ang = d < kite - 1.2 ? away : chasing ? to : away + Math.PI / 2
-      // 추격 중엔 옆걸음 없이 전속 직진 — 근접이 원거리를 따라잡을 수 있게
-      const wob = chasing ? 0 : 0.25
-      h.mx = Math.cos(ang) * (1 - wob) + Math.cos(h.botStrafe) * wob
-      h.mz = Math.sin(ang) * (1 - wob) + Math.sin(h.botStrafe) * wob
-      botAttack(state, h, dt)
-      botCombatSkills(state, h, foe, d, nearCount)
-      continue
+      // ② 적이 사거리 밖 → 추격은 "유리"할 때만. 확신 없으면 쫓지 않고 임무로 빠진다(자폭 방지).
+      //    여기서 도망은 가지 않는다 — 불리 상황은 ①에서 이미 처리했다.
+      if (d > kite + 1.5) {
+        let dive = true // 적 타워 사거리 안 다이브는 빈사 적 + 즉살각 + 생환 여유가 있을 때만
+        if (towerD < TOWER_RANGE + 3) {
+          dive = foe.hp < foe.maxHp * 0.4 && sc.killT < 1.3 && sc.lifeT > sc.killT * 1.6
+        }
+        if (winning && dive) {
+          steerToward(state, h, foe) // 옆걸음 없이 전속 직진으로 따라붙는다
+          botAttack(state, h, dt)
+          botCombatSkills(state, h, foe, d, nearCount)
+          continue
+        }
+        // 확신 없으면 추격을 접고 아래 임무 로직으로 떨어진다(라인/정글) — 도망은 안 친다.
+      } else {
+        // ③ 적이 사거리 안 → 도망치지 않고 선다.
+        //    유리하면 공격 사거리까지 파고들어 들러붙어 딜하고, 호각이면 사거리 가장자리를
+        //    유지하며 평타를 트레이드한다(붙으면만 살짝 빠지는 진짜 카이팅).
+        let ang
+        if (winning) {
+          const engage = Math.max(2.6, cls.range - 1.5)
+          ang = d > engage ? to : d < engage - 2 ? away : away + Math.PI / 2
+        } else {
+          ang = d < kite - 1.2 ? away : d > kite + 0.8 ? to : away + Math.PI / 2
+        }
+        // 붙어 싸우는 중엔 옆걸음을 줄여(딜 집중), 거리 좁힐 땐 직진한다.
+        const wob = winning && d > cls.range - 1 ? 0 : 0.22
+        h.mx = Math.cos(ang) * (1 - wob) + Math.cos(h.botStrafe) * wob
+        h.mz = Math.sin(ang) * (1 - wob) + Math.sin(h.botStrafe) * wob
+        botAttack(state, h, dt)
+        botCombatSkills(state, h, foe, d, nearCount)
+        continue
+      }
     }
     // 교전 상대가 없으면 임무 수행
     botAttack(state, h, dt) // 미니언/정글/타워 등 사거리 안 아무거나
