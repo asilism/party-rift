@@ -858,6 +858,29 @@ test('봇 반응 지연: 쿨이 끝나도 그 즉시 평타를 박지 않는다(
   assert.ok(g.projectiles.some((p) => p.owner === bot.id) || bot.atkCd > 0)
 })
 
+test('봇 교전: 확신이 안 서도 본진까지 전면 도주하지 않고 그 자리에서 버틴다', () => {
+  // 회귀: 예전 봇은 "확실히 잡는다"는 확신이 안 서면(호각·약간 불리) 곧장 본진으로 빼버려
+  //   적과 거리만 벌리고 싸우질 않았다. 이제는 빈사·수적 열세가 아니면 본진까지 도망치지 않고
+  //   제자리에서 재정비한다 — 멀어지는 거리가 크게 줄어든다.
+  // (힐러 vs 전사: 힐러 입장에선 트레이드가 불리해 예전엔 무조건 본진 도주했다.)
+  const g = createGame(humans())
+  startPlaying(g)
+  const bot = makeBot(g, g.heroes[3].id) // red 힐러를 봇으로 — 전사 상대로 트레이드 불리
+  const foe = g.heroes[2] // blue 전사
+  foe.autoAttack = false
+  const nx = g.map.NEXUS_POS[bot.team]
+  bot.x = 0; bot.z = 0
+  // 적을 "본진 반대 방향"에 둔다 → 본진으로 빼면 적과의 거리가 크게 벌어진다(도주 신호).
+  const ang = Math.atan2(0 - nx.z, 0 - nx.x)
+  const place = CLASSES.healer.range + 0.5 // 사거리 살짝 밖
+  foe.x = Math.cos(ang) * place; foe.z = Math.sin(ang) * place
+  const before = Math.hypot(bot.x - foe.x, bot.z - foe.z) // = place
+  run(g, 1.0)
+  const after = Math.hypot(bot.x - foe.x, bot.z - foe.z)
+  // 예전 봇은 본진으로 빠져 ~4 이상 벌렸다. 이제는 재정비 수준(<3.5)에 그쳐야 한다.
+  assert.ok(after - before < 3.5, `본진까지 전면 도주하지 않았다 (before=${before.toFixed(1)} after=${after.toFixed(1)})`)
+})
+
 test('전장의 안개: 아군 유닛 시야 밖의 적은 안 보인다', () => {
   const g = createGame(humans())
   startPlaying(g) // 아직 미니언 없음

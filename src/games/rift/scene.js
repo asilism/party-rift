@@ -495,6 +495,133 @@ function buildWeapon(cls) {
       string.position.x = -swing(t) * 0.5 // 시위 당김
       g.position.x = 1.0 - swing(t) * 0.25 // 반동
     }
+  } else if (cls === 'swordmaster') {
+    // 카타나: 가늘고 긴 검 — 번개같은 횡베기
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.08, 0.16), new THREE.MeshLambertMaterial({ color: 0xeef2f8 }))
+    blade.position.x = 1.3
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.42, 4), metal)
+    tip.rotation.z = -Math.PI / 2
+    tip.position.x = 2.45
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.5), wood)
+    guard.position.x = 0.28
+    g.add(blade, tip, guard)
+    g.position.set(0.32, 0.32, 0.85)
+    g.userData.pose = (t) => {
+      g.rotation.y = 0.9 - swing(t) * 2.6 // 빠른 횡베기
+    }
+  } else if (cls === 'gladiator') {
+    // 전투도끼: 묵직하게 휘두른다
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.8), wood)
+    handle.position.y = 0.4
+    const bit = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.72, 0.14), metal) // 도끼날
+    bit.position.set(0.3, 1.2, 0)
+    const edge = new THREE.Mesh(new THREE.ConeGeometry(0.36, 0.5, 3), metal)
+    edge.rotation.z = -Math.PI / 2
+    edge.position.set(0.62, 1.2, 0)
+    g.add(handle, bit, edge)
+    g.position.set(0.4, 0.2, 0.92)
+    g.userData.pose = (t) => {
+      g.rotation.z = 0.5 - swing(t) * 1.5
+      g.rotation.y = swing(t) * 0.6
+    }
+  } else if (cls === 'catcher') {
+    // 사슬 갈고리: 앞으로 휙 던진다
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.7), wood)
+    shaft.rotation.z = Math.PI / 2
+    shaft.position.x = 0.4
+    const hook = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.07, 6, 10, Math.PI * 1.4), metal)
+    hook.position.x = 1.0
+    hook.rotation.y = Math.PI / 2
+    g.add(shaft, hook)
+    g.position.set(0.5, 0.45, 0.5)
+    g.userData.pose = (t) => {
+      g.position.x = 0.5 + swing(t) * 1.7 // 던졌다 회수
+    }
+  } else if (cls === 'beastmaster') {
+    // 사냥 창: 찌른다
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.3), wood)
+    shaft.rotation.z = Math.PI / 2
+    shaft.position.x = 0.9
+    const tipM = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.52, 6), metal)
+    tipM.rotation.z = -Math.PI / 2
+    tipM.position.x = 2.1
+    g.add(shaft, tipM)
+    g.position.set(0.2, 0.5, 0.4)
+    g.userData.pose = (t) => {
+      g.position.x = 0.2 + swing(t) * 1.0 // 찌르기
+    }
+  } else if (cls === 'engineer') {
+    // 렌치(스패너): 비틀어 조인다
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.16, 0.16), metal)
+    handle.position.x = 0.8
+    const jaw1 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.52, 0.18), metal)
+    jaw1.position.set(1.5, 0.2, 0)
+    const jaw2 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.3, 0.18), metal)
+    jaw2.position.set(1.5, -0.2, 0)
+    g.add(handle, jaw1, jaw2)
+    g.position.set(0.3, 0.5, 0.6)
+    g.userData.pose = (t) => {
+      g.rotation.z = swing(t) * 0.9 // 비틀기
+    }
+  } else if (cls === 'guardian') {
+    // 방패 + 짧은 철퇴 (보호막 인챈터)
+    const shieldMat = new THREE.MeshLambertMaterial({ color: 0xbfcadb, emissive: 0x2a3550, emissiveIntensity: 0.3 })
+    const shield = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 0.14, 16), shieldMat)
+    shield.rotation.z = Math.PI / 2
+    shield.position.set(0.55, 0.6, 0.35)
+    const boss = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffe8a8 }))
+    boss.position.set(0.64, 0.6, 0.35)
+    const mace = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.0), wood)
+    mace.position.set(0.3, 0.5, -0.35)
+    const macehead = new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), metal)
+    macehead.position.set(0.3, 1.0, -0.35)
+    g.add(shield, boss, mace, macehead)
+    g.position.set(0.2, 0.4, 0)
+    g.userData.pose = (t) => {
+      g.position.z = swing(t) * 0.3 // 방패를 들어 막기
+      shieldMat.emissiveIntensity = 0.3 + swing(t) * 0.8
+    }
+  } else if (cls === 'cryomancer') {
+    // 얼음 지팡이: 결정 끝의 한기
+    const ice = 0x8fdcff
+    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.1), new THREE.MeshLambertMaterial({ color: 0x6a7a90 }))
+    staff.position.y = 0.3
+    const crystal = new THREE.Mesh(
+      new THREE.OctahedronGeometry(0.34),
+      new THREE.MeshLambertMaterial({ color: ice, emissive: ice, emissiveIntensity: 0.5 })
+    )
+    crystal.position.y = 1.55
+    g.add(staff, crystal)
+    g.position.set(0.4, 0.2, 0.9)
+    g.userData.pose = (t) => {
+      const s = swing(t)
+      g.rotation.z = -s * 0.8
+      crystal.rotation.y += 0.1
+      crystal.material.emissiveIntensity = 0.5 + s * 1.8
+      crystal.scale.setScalar(1 + s * 0.6)
+    }
+  } else if (cls === 'warlock') {
+    // 저주의 낫 지팡이: 병독빛 구슬 + 굽은 날
+    const poison = 0x9ad06a
+    const dark = new THREE.MeshLambertMaterial({ color: 0x3a3550 })
+    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 2.2), dark)
+    staff.position.y = 0.3
+    const orb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.26, 10, 8),
+      new THREE.MeshLambertMaterial({ color: poison, emissive: poison, emissiveIntensity: 0.6 })
+    )
+    orb.position.y = 1.5
+    const blade = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.06, 6, 10, Math.PI), new THREE.MeshLambertMaterial({ color: 0xbfc6d4 }))
+    blade.position.y = 1.45
+    blade.rotation.z = Math.PI / 2
+    g.add(staff, orb, blade)
+    g.position.set(0.4, 0.2, 0.9)
+    g.userData.pose = (t) => {
+      const s = swing(t)
+      g.rotation.z = -s * 0.7
+      orb.material.emissiveIntensity = 0.6 + s * 1.6
+      orb.scale.setScalar(1 + s * 0.5)
+    }
   } else {
     // 마법사/힐러: 지팡이 + 빛나는 구슬
     const color = cls === 'healer' ? 0x6ee7a0 : 0xb07ef0
@@ -838,8 +965,8 @@ const FX_LOOK = {
   blink: { color: 0x9a7bff, ring: true, mode: 'out', pcolor: 0xc9b8ff },
   execute: { color: 0xff3b3b, ring: true, mode: 'out', pcolor: 0xff9a9a },
   level: { color: 0xffe066, ring: true, mode: 'rise', pcolor: 0xfff0a0 },
-  towerfall: { color: 0xff8c2e, ring: true, mode: 'out', pcolor: 0xffcaa0 }, // 포탑 붕괴
-  nexusfall: { color: 0xffe066, ring: true, mode: 'out', pcolor: 0xfff3b0 }, // 넥서스 폭발
+  towerfall: { color: 0xff8c2e, ring: true, mode: 'out', pcolor: 0xffcaa0, debris: { count: 16, rock: 0x8c8c98, dur: 1.7 } }, // 포탑 붕괴 — 돌무더기 와르르
+  nexusfall: { color: 0xffe066, ring: true, mode: 'out', pcolor: 0xfff3b0, debris: { count: 24, rock: 0xb0b6c4, burst: true, dur: 2.0 } }, // 넥서스 폭발 — 펑! 파편이 터져나간다
   death: { color: 0x39405c, ring: true, mode: 'out' },
   shield: { color: 0x9fd0ff, ring: true, mode: 'rise', pcolor: 0xd0eaff },
   recall: { color: 0x4ad6e0, ring: true, mode: 'rise', pcolor: 0xa0f0f7 },
@@ -856,7 +983,15 @@ const FX_LOOK = {
   volley: { color: 0xfff0a0, line: true, mode: 'forward', pcolor: 0xfff4c0, w: 1.4 },
   chain: { color: 0x9fd6ff, line: true, mode: 'forward', pcolor: 0xe0f2ff, w: 1.0 }, // 마법사 체인 라이트닝 — 푸른 번개 줄기
   frost: { color: 0x9fe0ff, line: true, mode: 'forward', pcolor: 0xe0f6ff, w: 3.2 }, // 한빙술사 서리파동 — 차가운 서리 분사
+  curse: { color: 0xb46bff, line: true, mode: 'forward', pcolor: 0xd9b3ff, w: 1.2 }, // 주술사 저주살 — 보랏빛 저주 줄기
   lightarrow: { color: 0xfff4b0, line: true, mode: 'forward', pcolor: 0xfffbe0, w: 7 }, // 화면 끝까지 관통하는 넓은 빛줄기
+  // 직업 전용 광역/소환 이펙트 (색을 직업 테마에 맞춤)
+  frostnova: { color: 0x8fdcff, ring: true, mode: 'out', pcolor: 0xd6f3ff }, // 한빙술사 서리고리 — 솟는 얼음가시
+  abszero: { color: 0x6fc8ff, ring: true, mode: 'rise', pcolor: 0xcdeeff }, // 한빙술사 절대영도 — 거대한 한기
+  plague: { color: 0x7fc24a, ring: true, mode: 'rise', pcolor: 0xbfe88a }, // 주술사 역병안개 — 피어오르는 독 구름
+  doom: { color: 0x8a3bd0, ring: true, mode: 'out', pcolor: 0xc89af0 }, // 주술사 파멸의 낙인 — 어두운 보랏빛 낙인
+  summon: { color: 0xffd06a, ring: true, mode: 'rise', pcolor: 0xffe6a8 }, // 야수조련사 소환 — 솟아오르는 마력
+  deploy: { color: 0x9fb0c4, ring: true, mode: 'out', pcolor: 0xd6e0ec }, // 엔지니어 설치 — 기계 조립 불꽃
 }
 
 // 시드 고정 파티클 구름 — 호스트/게스트 모두 같은 fx(id)에서 같은 모양이 나오게 lcg 시드.
@@ -921,6 +1056,50 @@ function makeBurst(n, look) {
   return pts
 }
 
+// 붕괴 파편 — 입체 덩어리들이 솟구쳤다 중력으로 떨어져 바닥에 구른다.
+//  burst=true(넥서스): 사방으로 강하게 터져나간다. burst 없음(포탑): 와르르 무너져 내린다.
+//  dur(초)에 맞춰 마지막 0.4초간 사라진다. 시드(n.id)로 호스트/게스트가 같은 모양.
+function makeDebris(n, dcfg, team) {
+  const g = new THREE.Group()
+  const rnd = lcg(((n.id | 0) + 7) * 2246822519 >>> 0)
+  const grav = dcfg.burst ? 26 : 22
+  const chunks = []
+  for (let i = 0; i < dcfg.count; i++) {
+    const a = rnd() * Math.PI * 2
+    const sz = (dcfg.burst ? 0.5 : 0.55) + rnd() * (dcfg.burst ? 1.2 : 1.0)
+    // 대부분 돌 파편, 넥서스는 일부를 팀색 결정 조각으로
+    let col = dcfg.rock
+    if (dcfg.burst && team != null && rnd() < 0.4) col = TEAM_COLOR[team]
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(sz, sz, sz),
+      new THREE.MeshLambertMaterial({ color: col, transparent: true })
+    )
+    const vh = dcfg.burst ? 8 + rnd() * 9 : 2.5 + rnd() * 6
+    chunks.push({
+      m, sz,
+      vx: Math.cos(a) * vh, vz: Math.sin(a) * vh,
+      vy: dcfg.burst ? 9 + rnd() * 9 : rnd() * 3 - 0.5,
+      startY: dcfg.burst ? 1 + rnd() * 3 : 2 + rnd() * 7,
+      sx: (rnd() - 0.5) * 9, sy: (rnd() - 0.5) * 9, sz2: (rnd() - 0.5) * 9, // 텀블 회전 속도
+      landed: false, lt: 0,
+    })
+    g.add(m)
+  }
+  g.userData.update = (t) => {
+    const fade = Math.max(0, Math.min(1, (dcfg.dur - t) / 0.4))
+    for (const c of chunks) {
+      const rest = c.sz * 0.5
+      let y = c.startY + c.vy * t - 0.5 * grav * t * t
+      if (y < rest) { y = rest; if (!c.landed) { c.landed = true; c.lt = t } }
+      const ht = c.landed ? c.lt : t // 착지 후엔 수평 이동 정지(마찰)
+      c.m.position.set(c.vx * ht, y, c.vz * ht)
+      if (!c.landed) c.m.rotation.set(c.sx * t, c.sy * t, c.sz2 * t) // 착지하면 회전도 멈춤
+      c.m.material.opacity = fade
+    }
+  }
+  return g
+}
+
 // fx 한 개를 3D 오브젝트(Group)로 — 동심원 링/방향성 직선 + 파티클.
 function buildFxObject(n) {
   let look = FX_LOOK[n.kind] || { color: 0xffd34d, ring: true, mode: 'out' }
@@ -983,6 +1162,11 @@ function buildFxObject(n) {
     const burst = makeBurst(n, look)
     g.add(burst)
     ups.push((t) => burst.userData.update(t))
+  }
+  if (look.debris) {
+    const debris = makeDebris(n, look.debris, n.team)
+    g.add(debris)
+    ups.push((t) => debris.userData.update(t))
   }
   g.userData.update = (t) => { for (const u of ups) u(t) }
   return g
