@@ -39,11 +39,6 @@ export default function SshGate({ onQueue, notice }) {
             <p className="gate__tag">3D AOS · 레인을 밀고 넥서스를 터뜨려라</p>
           </div>
 
-          <div className="gate__prompt">
-            <p><span className="gate__c-acc">rift@party</span><span className="gate__c-dim">:~$</span> ssh --play</p>
-            <p><span className="gate__c-ok">✔</span> connection established <span className="gate__c-dim">· 전장을 선택하세요</span></p>
-          </div>
-
           <div className="gate__modes">
             {MODES.map((m) => (
               <button
