@@ -1886,19 +1886,19 @@ body {
   position: absolute; inset: 0; display: flex; flex-direction: column;
   pointer-events: none; z-index: 4;
 }
-.rift__topbar { pointer-events: none; background: transparent; border-bottom: none; gap: 10px; position: relative; }
+/* 전적·설정은 우상단으로 몰고, 좌상단은 미니맵(rift__side)만 둔다.
+   중앙 스코어를 없애 자식이 우측 클러스터 하나뿐이라 flex-end로 오른쪽에 고정. */
+.rift__topbar { pointer-events: none; background: transparent; border-bottom: none; gap: 10px; position: relative; justify-content: flex-end; }
 .rift__topbar .btn { pointer-events: auto; }
-/* 팀 스코어는 화면 가로 정중앙에 고정 (좌측 내 정보·우측 설정과 무관하게 항상 중앙) */
-.rift__score {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  display: flex; align-items: center; gap: 12px;
-  background: rgba(20, 28, 51, 0.75); border-radius: 999px; padding: 6px 18px;
-  font-weight: 900; font-size: clamp(14px, 2.6vh, 20px);
-  white-space: nowrap; pointer-events: none;
+/* 우상단(설정 옆) 개인 전적 칩: 킬/데스/어시 · 골드 · 남은 시간 */
+.rift__stats {
+  display: flex; align-items: center; gap: 10px; pointer-events: none;
+  background: rgba(20, 28, 51, 0.72); border-radius: 999px; padding: 5px 14px;
+  font-weight: 900; font-size: clamp(12px, 2vh, 16px); white-space: nowrap;
 }
-.rift__score-side--blue { color: #8fb8ff; }
-.rift__score-side--red { color: #ffa3a3; }
-.rift__score-time { color: var(--muted); font-size: 0.85em; font-weight: 800; }
+.rift__stats-kda { display: flex; gap: 8px; }
+.rift__stats-gold { color: #ffd34d; }
+.rift__stats-time { color: var(--muted); }
 .rift__count {
   position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%);
   font-size: clamp(60px, 20vh, 170px); font-weight: 900; color: var(--accent);
@@ -1963,12 +1963,12 @@ body {
 .rift__dead-board .rift-result__team--blue { box-shadow: inset 0 0 0 2px rgba(79, 140, 255, 0.5); }
 .rift__dead-board .rift-result__team--red { box-shadow: inset 0 0 0 2px rgba(255, 107, 107, 0.5); }
 .rift__hint {
-  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: 76px; transform: translateX(-50%);
   color: #fff; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
   font-size: clamp(11px, 1.9vh, 15px); pointer-events: none; white-space: nowrap;
 }
 .rift__side {
-  position: absolute; top: 58px; left: 12px;
+  position: absolute; top: 12px; left: 12px;
   display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
   pointer-events: none;
 }
@@ -1995,6 +1995,11 @@ body {
 }
 .rift__me-lvl { color: var(--accent); flex-shrink: 0; }
 .rift__me-kd { font-size: 0.85em; opacity: 0.9; flex-shrink: 0; white-space: nowrap; }
+/* 하단 중앙 내 영웅 명패 — .rift__me(플렉스 칩)를 그대로 쓰되 위치만 잡는다 */
+.rift__nameplate {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  max-width: 94vw;
+}
 .rift__bar {
   position: relative; height: 16px; border-radius: 8px; overflow: hidden;
   background: rgba(8, 12, 26, 0.8);
@@ -2057,8 +2062,9 @@ body {
   right: 54px; bottom: 172px; width: 92px; height: 92px; font-size: 32px;
   background: rgba(155, 107, 214, 0.92);
 }
+/* 귀환: 직업 스킬(skill1) 왼쪽 옆에 둔다 — 크기는 그대로(80) */
 .rift-btn--recall {
-  left: calc(50% - 40px); bottom: 20px; width: 80px; height: 80px; font-size: 28px;
+  right: 268px; bottom: 52px; width: 80px; height: 80px; font-size: 28px;
   background: rgba(40, 180, 196, 0.9);
 }
 .rift-btn--recall small { font-size: 11px; }
@@ -2102,7 +2108,8 @@ body {
 .rift-settings__toggle--on { filter: brightness(1.2); box-shadow: 0 0 0 2px var(--accent) inset; }
 .rift-settings__menu {
   position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
-  width: min(280px, 84vw); padding: 8px;
+  width: min(400px, 92vw); padding: 8px;
+  max-height: 82vh; overflow-y: auto;
   background: rgba(14, 20, 40, 0.97); border: 1px solid var(--line);
   border-radius: 14px; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
   display: flex; flex-direction: column; gap: 2px;
@@ -2200,15 +2207,28 @@ body {
 .rift-result__team--blue { background: rgba(79, 140, 255, 0.16); }
 .rift-result__team--red { background: rgba(255, 107, 107, 0.14); }
 .rift-result__team h4 { margin: 0 0 6px; font-size: 15px; }
+/* 영웅 한 줄을 grid로 칸 맞춤: [별자리][직업][이름·현상금][레벨][KDA][아이템] */
 .rift-result__row {
-  display: flex; align-items: center; gap: 7px;
-  font-size: 13.5px; font-weight: 800; line-height: 1.7;
+  display: grid;
+  grid-template-columns: 1.5em 1.5em minmax(0, 1fr) auto auto auto;
+  align-items: center; column-gap: 8px;
+  font-size: 13.5px; font-weight: 800; line-height: 1.95;
 }
-.rift-result__name {
-  max-width: 7.5em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  margin-right: auto;
+.rift-result__zodiac, .rift-result__cls { text-align: center; }
+.rift-result__name { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.rift-result__nick { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rift-result__bounty {
+  flex-shrink: 0; color: #ffcaa0; background: rgba(255, 120, 40, 0.2);
+  border-radius: 999px; padding: 0 7px; font-size: 0.8em; font-weight: 900; white-space: nowrap;
 }
-.rift-result__items { font-size: 13px; letter-spacing: 1px; }
+.rift-result__lvl { color: var(--accent); text-align: right; white-space: nowrap; }
+.rift-result__kda { font-size: 0.86em; opacity: 0.92; white-space: nowrap; text-align: right; }
+.rift-result__items { font-size: 13px; letter-spacing: 1px; text-align: right; white-space: nowrap; }
+.rift-result__teamkills { float: right; color: var(--accent); }
+/* 설정 팝업 안의 팀 현황판 — 두 팀을 세로로 쌓는다(팝업을 넓혀 한 줄에 깔끔히) */
+.rift-settings__board { display: flex; flex-direction: column; gap: 8px; padding: 2px 2px 4px; }
+.rift-settings__board .rift-result__team { background: rgba(12, 18, 36, 0.55); padding: 7px 11px; }
+.rift-settings__board .rift-result__row { font-size: 12px; column-gap: 7px; line-height: 1.8; }
 
 /* 내 영웅 패널: 골드 + 인벤토리 */
 .rift__me-gold { color: #ffd34d; flex-shrink: 0; white-space: nowrap; }

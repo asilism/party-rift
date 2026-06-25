@@ -383,14 +383,25 @@ const MINION_XP = 28
 // ── 골드 / 상점 ──
 // 미니언/정글몹/타워/적 영웅을 "처치(막타)"하면 골드를 얻어 우물 상점에서 아이템을 산다.
 const START_GOLD = 300 // 시작 골드 (싼 아이템 하나는 바로 살 수 있게)
-const GOLD_PASSIVE = 0.8 // 초당 자동 수입 (파밍이 안 풀려도 천천히 모이게)
+const GOLD_PASSIVE = 1.0 // 초당 자동 수입 (파밍이 안 풀려도 모이게 — 가벼운 성장 가속)
 const GOLD_MINION_MELEE = 13 // 근접 미니언 막타
 const GOLD_MINION_RANGED = 11 // 원거리 미니언 막타
 const GOLD_WOLF = 36 // 정글몹 보상 +50% (정글이 더 매력적이게)
 const GOLD_DRAGON = 68 // 용 — 팀 전원 (+50%)
 const GOLD_BARON = 98 // 바론 — 팀 전원 (+50%)
 const GOLD_TOWER = 48 // 타워 파괴 — 팀 전원
-const GOLD_KILL = 75 // 적 영웅 처치 — 킬러
+const GOLD_KILL = 200 // 적 영웅 처치 — 킬러(막타) 기본값
+const GOLD_ASSIST = 50 // 어시스트 — 사망 직전 7초 내 피해를 준 적(킬러 제외)
+// 연속 데스(킬/어시 없이 죽기만 한) 캐릭터를 잡으면 킬골드가 줄어든다 — 안티 스노우볼.
+// 그 캐릭이 킬/어시를 따면 deathStreak가 0으로 리셋된다.
+const DEATHSTREAK_PENALTY = 60 // 연속 데스 1회마다 깎이는 킬골드
+const KILL_BOUNTY_MIN = 100 // 아무리 많이 죽어도 보장되는 최소 킬골드
+// 현상금(shutdown): 안 죽고 연속 킬(killStreak)을 쌓은 적을 잡으면 보너스 골드.
+// killStreak 2부터 BOUNTY_STEP씩 붙고, 죽으면 killStreak가 0으로 리셋된다.
+const BOUNTY_STEP = 75 // 연속 킬 1회 초과분마다 붙는 현상금
+const BOUNTY_MAX = 300 // 현상금 상한 (기본 200 + 최대 300 = 최대 500골드)
+// 연속 킬(killStreak)에 붙는 현상금 골드 — 사망 보상 계산과 HUD 표식이 공유한다.
+export const bountyGold = (killStreak) => Math.min(BOUNTY_MAX, BOUNTY_STEP * Math.max(0, (killStreak || 0) - 1))
 const MINION_DEFEND_RANGE = 14 // 이 거리 안 아군 영웅이 적 영웅에게 맞으면 가해자를 노린다
 const MINION_DEFEND_LEASH = 16 // 가해자를 쫓다 시작점에서 이만큼 벗어나면 포기하고 레인 복귀
 const MINION_DEFEND_HURT_T = 1.5 // 아군이 최근 이 시간 안에 맞았어야 "공격받는 중"으로 본다
@@ -433,7 +444,7 @@ const heroRange = (h) => CLASSES[h.cls].range + itemBonus(h).range + (h.bladeT >
 const heroSpeed = (h) => CLASSES[h.cls].speed + itemBonus(h).speed
 // 레벨업 필요 경험치 — 전반적으로 상향(레벨링을 느리게).
 //  Lv1→Lv2 = 250 ≈ 적 미니언 1.5웨이브(미니언 28xp × 9마리). 정글러는 늑대 3마리(84×3)면 2렙.
-export const xpNeed = (lvl) => 250 + 110 * (lvl - 1)
+export const xpNeed = (lvl) => 250 + 98 * (lvl - 1) // 레벨업 ~10% 빠르게(증가폭 110→98) — 가벼운 가속
 const respawnTime = (lvl) => 4 + 1.5 * lvl // 레벨이 높을수록 부활 대기 ↑ (Lv1 5.5초 → Lv18 31초)
 
 const dist2 = (a, b) => (a.x - b.x) ** 2 + (a.z - b.z) ** 2
@@ -544,6 +555,10 @@ export function createGame(players, opts = {}) {
       baronT: 0, // 바론 버프 남은 시간
       kills: 0,
       deaths: 0,
+      assists: 0,
+      deathStreak: 0, // 킬/어시 없이 연속으로 죽은 횟수 — 잡힐 때 킬골드를 깎는다(킬/어시 시 0)
+      killStreak: 0, // 안 죽고 쌓은 연속 킬 — 잡히면 현상금이 붙는다(죽으면 0)
+      damagedBy: {}, // 적영웅 id → 마지막으로 맞은 시각 (어시스트 판정, 사망 시 비움)
       // 사람 플레이어 자동평타: 버튼을 안 눌러도 사거리 안 적 영웅에게 평타를 이어 준다
       // (봇은 매 틱 평타를 박는데 사람은 손가락 연타에 의존 → 평타 cadence가 불리하던 문제 보정)
       autoAttack: true,
@@ -1672,6 +1687,7 @@ function damageHero(state, victim, amount, attacker) {
   if (attacker?.id) {
     victim.lastHitBy = attacker.id
     victim.lastHitT = state.time // 킬 크레딧 시한 판정용 (미니언/타워/우물은 attacker가 없어 안 바뀐다)
+    if (attacker.team && attacker.team !== victim.team) victim.damagedBy[attacker.id] = state.time // 어시스트 판정용
     attacker.aggroT = TOWER_AGGRO_TIME // 타워 앞에서 깐족이면 타워가 노린다
     victim.revealT = Math.max(victim.revealT, 0.8) // 맞으면 잠깐 드러난다
   }
@@ -1679,6 +1695,10 @@ function damageHero(state, victim, amount, attacker) {
   // 사망!
   victim.hp = 0
   victim.deaths++
+  victim.deathStreak++ // 킬/어시를 따면 0으로 리셋(아래 killer/assist 처리에서)
+  // 죽기 직전까지 쌓은 연속 킬에 비례한 현상금(killStreak 2부터). 죽었으니 killStreak는 0으로.
+  const bountyBonus = bountyGold(victim.killStreak)
+  victim.killStreak = 0
   victim.respawnT = respawnTime(victim.lvl)
   victim.stunT = 0
   victim.freezeT = 0
@@ -1710,16 +1730,35 @@ function damageHero(state, victim, amount, attacker) {
   const killer = recent
     ? state.heroes.find((h) => h.id === victim.lastHitBy && h.team !== victim.team)
     : null
+  // 어시스트: 사망 직전 KILL_CREDIT_T 초 안에 피해를 준 적 영웅(막타=killer 제외).
+  const assisters = state.heroes.filter((h) => (
+    h !== killer && h.team !== victim.team &&
+    state.time - (victim.damagedBy[h.id] ?? -99) <= KILL_CREDIT_T
+  ))
   if (killer) {
     killer.kills++
+    killer.deathStreak = 0 // 킬을 따면 연속 데스 디버프 해제
+    killer.killStreak++ // 안 죽고 이어가면 다음에 잡힐 때 현상금이 붙는다
     state.kills[killer.team]++
     awardXp(state, killer.team, victim, 90 + 15 * victim.lvl, killer)
-    awardGold(state, killer, GOLD_KILL, victim.x, victim.z)
-    pushFeed(state, 'kill', `${emojiOf(killer.zodiacId)} ${killer.name} ⚔️ ${emojiOf(victim.zodiacId)} ${victim.name} 처치!`)
+    // 기본값 + 현상금(연속 킬) − 감소(연속 데스). 최저 KILL_BOUNTY_MIN 보장.
+    const penalty = DEATHSTREAK_PENALTY * Math.max(0, victim.deathStreak - 1)
+    const reward = Math.max(KILL_BOUNTY_MIN, GOLD_KILL + bountyBonus - penalty)
+    awardGold(state, killer, reward, victim.x, victim.z)
+    const bountyTag = bountyBonus > 0 ? ` 💰현상금 +${bountyBonus}!` : ''
+    const assistTag = assisters.length ? ` (도움: ${assisters.map((a) => emojiOf(a.zodiacId)).join('')})` : ''
+    pushFeed(state, 'kill', `${emojiOf(killer.zodiacId)} ${killer.name} ⚔️ ${emojiOf(victim.zodiacId)} ${victim.name} 처치!${bountyTag}${assistTag}`)
   } else {
     state.kills[enemyOf(victim.team)]++
     pushFeed(state, 'kill', `${emojiOf(victim.zodiacId)} ${victim.name} 쓰러짐!`)
   }
+  // 어시스트 보상: 골드 + 연속 데스 디버프 해제
+  for (const a of assisters) {
+    a.assists++
+    a.deathStreak = 0
+    awardGold(state, a, GOLD_ASSIST, victim.x, victim.z)
+  }
+  victim.damagedBy = {} // 사망 처리 끝 — 피해 이력 비움(부활 후 새로 쌓는다)
 }
 
 function damageMinion(state, m, amount, attacker) {
@@ -3444,6 +3483,8 @@ export function makeView(state) {
       baronT: r1(h.baronT),
       kills: h.kills,
       deaths: h.deaths,
+      assists: h.assists,
+      killStreak: h.killStreak, // 현상금 표식용 (안 죽고 쌓은 연속 킬)
       mvSpeed: r2d(heroSpeed(h)), // 클라 이동 예측용(현재 이동속도)
     })),
     minions: state.minions.map((m) => ({

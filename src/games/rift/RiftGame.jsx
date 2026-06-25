@@ -5,9 +5,9 @@ import RiftControls from './RiftControls.jsx'
 import RiftShop from './RiftShop.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
-import { canShop, CLASSES } from './engine.js'
+import { canShop, CLASSES, bountyGold } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
-import { getItem } from './items.js'
+import { getItem, ITEM_SLOTS } from './items.js'
 import { sound } from '../../shared/sound.js'
 import { loadRiftControl, saveRiftControl } from '../../shared/storage.js'
 import { useRealtimeGame } from '../../net/useRealtimeGame.js'
@@ -203,8 +203,44 @@ const CONTROL_SCHEMES = [
   { id: 'xbox', icon: '🎮', label: 'Xbox 컨트롤러', desc: '스틱 이동, A 평타, X/Y/B 스킬' },
 ]
 
-// 우상단 설정 버튼 하나로 통합한 메뉴: 일시정지·소리·전체화면·조작 방식·나가기를 분기 메뉴로 띄운다.
-function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSound, scheme, onSchemeChange, onExit }) {
+// 양 팀 현황판(팀 킬 스코어 + 영웅별 K/D/A·레벨·아이템). 두 팀 카드를 나란히 반환한다 —
+// 감싸는 래퍼(.rift__dead-board / .rift-result / .rift-settings__board)는 호출부가 정한다.
+// 사망 화면·설정 팝업·결과창에서 공용으로 쓴다.
+function RiftRoster({ hud, crown = null }) {
+  return ['blue', 'red'].map((team) => (
+    <div key={team} className={`rift-result__team rift-result__team--${team}`}>
+      <h4>
+        {team === 'blue' ? '🔵 파랑팀' : '🔴 빨강팀'} {crown === team ? '👑' : ''}
+        <span className="rift-result__teamkills"> ⚔️ {hud.kills[team]}</span>
+      </h4>
+      {hud.heroes.filter((h) => h.team === team).map((h) => {
+        const bounty = bountyGold(h.killStreak)
+        return (
+          <div key={h.id} className="rift-result__row">
+            <span className="rift-result__zodiac">{getZodiac(h.zodiacId)?.emoji}</span>
+            <span className="rift-result__cls" title={CLASSES[h.cls]?.name}>{CLASSES[h.cls]?.icon}</span>
+            <span className="rift-result__name">
+              <span className="rift-result__nick">{h.name}{h.isBot ? ' 🤖' : ''}</span>
+              {bounty > 0 && (
+                <span className="rift-result__bounty" title={`연속 ${h.killStreak}킬 — 잡으면 현상금 +${bounty}`}>
+                  🔥{bounty}
+                </span>
+              )}
+            </span>
+            <span className="rift-result__lvl">Lv.{h.lvl}</span>
+            <span className="rift-result__kda">⚔️{h.kills} 💀{h.deaths} 🤝{h.assists}</span>
+            <span className="rift-result__items">
+              {(h.items || []).map((it) => getItem(it)?.icon).join('') || '—'}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  ))
+}
+
+// 우상단 설정 버튼 하나로 통합한 메뉴: 팀 현황·일시정지·소리·전체화면·조작 방식·나가기를 분기 메뉴로 띄운다.
+function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onToggleSound, scheme, onSchemeChange, onExit }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   useEffect(() => {
@@ -228,6 +264,16 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
       </button>
       {open && (
         <div className="rift-settings__menu" role="menu">
+          {/* 현재 팀 상황 — 사망 화면과 같은 양 팀 현황판을 여기서도 본다 */}
+          {hud && (
+            <>
+              <div className="rift-settings__label">📊 팀 현황</div>
+              <div className="rift-settings__board">
+                <RiftRoster hud={hud} />
+              </div>
+              <div className="rift-settings__sep" />
+            </>
+          )}
           {onTogglePause && !finished && (
             <button className="rift-settings__item" onClick={() => { onTogglePause(); setOpen(false) }}>
               <span>{paused ? '▶️' : '⏸️'}</span> {paused ? '재개' : '일시정지'}
@@ -314,7 +360,7 @@ function RiftPlay({
   ))
 
   return (
-    <div className="rift">
+    <div className="rift" onContextMenu={(e) => e.preventDefault()}>
       <Rift3D sample={sample} myId={myId} mode={hud.mode || '3v3'} />
 
       {me && !finished && (
@@ -336,44 +382,23 @@ function RiftPlay({
 
       <div className="rift__hud">
         <div className="ladder__topbar rift__topbar">
-          {/* 내 영웅 상태를 상단 메뉴바 좌측에 녹여 넣는다 (모바일에서 하단 공간 확보) */}
-          {me && (
-            <div className="rift__me">
-              <span className="rift__me-emoji">{getZodiac(me.zodiacId)?.emoji}</span>
-              <span className="rift__me-cls">{CLASSES[me.cls]?.icon}{CLASSES[me.cls]?.name}</span>
-              <span className="rift__me-lvl">Lv.{me.lvl}</span>
-              <div className="rift__me-bars">
-                <div className="rift__bar rift__bar--hp">
-                  <div style={{ width: `${(me.hp / me.maxHp) * 100}%` }} />
-                  <span>{me.hp} / {me.maxHp}</span>
-                </div>
-                <div className="rift__bar rift__bar--xp">
-                  <div style={{ width: me.xpNeed ? `${(me.xp / me.xpNeed) * 100}%` : '100%' }} />
-                </div>
-              </div>
-              <span className="rift__me-gold">💰 {me.gold}</span>
-              <span className="rift__me-kd">⚔️{me.kills} 💀{me.deaths}</span>
-              <span className="rift__me-items">
-                {Array.from({ length: 3 }).map((_, i) => {
-                  const it = (me.items || [])[i]
-                  return (
-                    <span key={i} className="rift__me-item">
-                      {it ? getItem(it)?.icon : '·'}
-                    </span>
-                  )
-                })}
-              </span>
-              {me.dragonT > 0 && <span title="용 버프">🐉</span>}
-              {me.baronT > 0 && <span title="바론 버프">👹</span>}
-            </div>
-          )}
-          <div className="rift__score">
-            <span className="rift__score-side rift__score-side--blue">🔵 {hud.kills.blue}</span>
-            <span className="rift__score-time">⏱ {fmtTime(hud.timeLeft)}</span>
-            <span className="rift__score-side rift__score-side--red">{hud.kills.red} 🔴</span>
-          </div>
+          {/* 우상단(설정 옆): 개인 전적 — 킬/데스/어시 · 골드 · 남은 시간 */}
           <div className="topbar__right">
+            <div className="rift__stats">
+              {me && (
+                <>
+                  <span className="rift__stats-kda">
+                    <span title="킬">⚔️{me.kills}</span>
+                    <span title="데스">💀{me.deaths}</span>
+                    <span title="어시스트">🤝{me.assists}</span>
+                  </span>
+                  <span className="rift__stats-gold">💰{me.gold}</span>
+                </>
+              )}
+              <span className="rift__stats-time">⏱{fmtTime(hud.timeLeft)}</span>
+            </div>
             <RiftSettingsMenu
+              hud={hud}
               paused={paused}
               finished={finished}
               onTogglePause={onTogglePause}
@@ -390,6 +415,36 @@ function RiftPlay({
         <div className="rift__side">
           <RiftMiniMap view={hud} myId={myId} />
         </div>
+
+        {/* 하단 중앙: 내 영웅 명패 — 캐릭터/직업/레벨/HP/경험치 */}
+        {me && !finished && (
+          <div className="rift__me rift__nameplate">
+            <span className="rift__me-emoji">{getZodiac(me.zodiacId)?.emoji}</span>
+            <span className="rift__me-cls">{CLASSES[me.cls]?.icon}{CLASSES[me.cls]?.name}</span>
+            <span className="rift__me-lvl">Lv.{me.lvl}</span>
+            <div className="rift__me-bars">
+              <div className="rift__bar rift__bar--hp">
+                <div style={{ width: `${(me.hp / me.maxHp) * 100}%` }} />
+                <span>{me.hp} / {me.maxHp}</span>
+              </div>
+              <div className="rift__bar rift__bar--xp">
+                <div style={{ width: me.xpNeed ? `${(me.xp / me.xpNeed) * 100}%` : '100%' }} />
+              </div>
+            </div>
+            <span className="rift__me-items">
+              {Array.from({ length: ITEM_SLOTS }).map((_, i) => {
+                const it = (me.items || [])[i]
+                return (
+                  <span key={i} className="rift__me-item">
+                    {it ? getItem(it)?.icon : '·'}
+                  </span>
+                )
+              })}
+            </span>
+            {me.dragonT > 0 && <span title="용 버프">🐉</span>}
+            {me.baronT > 0 && <span title="바론 버프">👹</span>}
+          </div>
+        )}
 
         {hud.status === 'countdown' && hud.countdown > 0 && (
           <div className="rift__count" key={hud.countdown}>{hud.countdown}</div>
@@ -409,24 +464,9 @@ function RiftPlay({
             <div className="rift__respawn">
               💀 부활까지 <b>{Math.ceil(me.respawnT)}</b>초...
             </div>
-            {/* 사망 중엔 양 팀 아이템/레벨 현황을 한눈에 (상대 빌드 파악용) */}
+            {/* 사망 중엔 양 팀 킬스코어·아이템·레벨 현황을 한눈에 (상대 빌드 파악용) */}
             <div className="rift__dead-board">
-              {['blue', 'red'].map((team) => (
-                <div key={team} className={`rift-result__team rift-result__team--${team}`}>
-                  <h4>{team === 'blue' ? '🔵 파랑팀' : '🔴 빨강팀'}</h4>
-                  {hud.heroes.filter((h) => h.team === team).map((h) => (
-                    <div key={h.id} className="rift-result__row">
-                      <span>{getZodiac(h.zodiacId)?.emoji}</span>
-                      <span title={CLASSES[h.cls]?.name}>{CLASSES[h.cls]?.icon}</span>
-                      <span className="rift-result__name">{h.name}{h.isBot ? ' 🤖' : ''}</span>
-                      <span>Lv.{h.lvl}</span>
-                      <span className="rift-result__items">
-                        {(h.items || []).map((it) => getItem(it)?.icon).join('') || '—'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ))}
+              <RiftRoster hud={hud} />
             </div>
           </>
         )}
@@ -468,24 +508,7 @@ function RiftPlay({
             <div className="win-modal__emoji">{hud.winner ? '🏆' : '🤝'}</div>
             <h2>{winnerLabel ? `${winnerLabel} 승리! 🎉` : '무승부!'}</h2>
             <div className="rift-result">
-              {['blue', 'red'].map((team) => (
-                <div key={team} className={`rift-result__team rift-result__team--${team}`}>
-                  <h4>{team === 'blue' ? '🔵 파랑팀' : '🔴 빨강팀'} {hud.winner === team ? '👑' : ''}</h4>
-                  {hud.heroes.filter((h) => h.team === team).map((h) => (
-                    <div key={h.id} className="rift-result__row">
-                      <span>{getZodiac(h.zodiacId)?.emoji}</span>
-                      <span title={CLASSES[h.cls]?.name}>{CLASSES[h.cls]?.icon}</span>
-                      <span className="rift-result__name">{h.name}{h.isBot ? ' 🤖' : ''}</span>
-                      <span>Lv.{h.lvl}</span>
-                      <span>⚔️{h.kills}</span>
-                      <span>💀{h.deaths}</span>
-                      <span className="rift-result__items">
-                        {(h.items || []).map((it) => getItem(it)?.icon).join('')}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ))}
+              <RiftRoster hud={hud} crown={hud.winner} />
             </div>
             <div className="win-modal__btns">
               <button className="btn btn--primary" onClick={onExit}>🔁 새 매치 찾기</button>

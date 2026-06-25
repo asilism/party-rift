@@ -534,6 +534,65 @@ test('킬 크레딧: 7초 안에 죽으면 마지막으로 때린 영웅의 킬'
   assert.ok(g.feed.some((f) => f.msg.includes('처치')))
 })
 
+test('어시스트: 사망 직전 7초 내 피해를 준 동료가 어시·골드를 받는다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const killer = g.heroes[0] // blue mage — 막타
+  const helper = g.heroes[1] // blue — 어시스트
+  const victim = g.heroes[3] // red
+  victim.x = 0; victim.z = 0; victim.hp = 1
+  victim.damagedBy[helper.id] = g.time // helper가 방금 피해를 준 것으로 기록
+  killer.x = 4; killer.z = 0
+  const helperGold0 = helper.gold
+  castAttack(g, killer.id)
+  run(g, 0.5)
+  assert.equal(killer.kills, 1)
+  assert.equal(killer.assists, 0) // 막타는 킬, 어시 아님
+  assert.equal(helper.assists, 1)
+  assert.equal(helper.kills, 0)
+  assert.ok(helper.gold > helperGold0) // 어시 골드
+  assert.ok(g.feed.some((f) => f.msg.includes('도움'))) // 피드에 도움 표기
+})
+
+test('연속 데스 디버프: 많이 죽은 적은 킬골드가 줄어 최저 100까지 (킬 시 리셋)', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const killer = g.heroes[0]
+  const fresh = g.heroes[3] // 첫 데스
+  const fed = g.heroes[4] // 연속으로 많이 죽은 적
+  killer.x = 0; killer.z = 0
+  // 첫 데스(streak 1) → 킬골드 전액(~200)
+  fresh.x = 4; fresh.z = 0; fresh.hp = 1; fresh.deathStreak = 0
+  let g0 = killer.gold
+  castAttack(g, killer.id); run(g, 0.4)
+  const fullBounty = killer.gold - g0
+  assert.ok(fullBounty >= 195 && fullBounty <= 215, `전액 킬골드 기대 ~200, 실제 ${fullBounty}`)
+  // 연속 데스가 쌓인 적 → 최저 100
+  killer.atkCd = 0
+  fed.x = 4; fed.z = 0; fed.hp = 1; fed.deathStreak = 10
+  g0 = killer.gold
+  castAttack(g, killer.id); run(g, 0.4)
+  const minBounty = killer.gold - g0
+  assert.ok(minBounty <= 130 && minBounty >= 95, `최저 킬골드 기대 ~100, 실제 ${minBounty}`)
+  assert.equal(killer.deathStreak, 0) // 킬을 따면 본인 연속데스는 리셋
+})
+
+test('현상금: 안 죽고 연속 킬을 쌓은 적을 잡으면 보너스 골드(+피드)', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const killer = g.heroes[0] // blue
+  const fed = g.heroes[3] // red — 연속 킬 보유
+  killer.x = 0; killer.z = 0
+  fed.x = 4; fed.z = 0; fed.hp = 1; fed.killStreak = 4; fed.deathStreak = 0
+  const g0 = killer.gold
+  castAttack(g, killer.id); run(g, 0.4)
+  const reward = killer.gold - g0
+  // 200 기본 + 현상금 min(300, 75×3=225) = 425
+  assert.ok(reward >= 415 && reward <= 440, `현상금 포함 ~425 기대, 실제 ${reward}`)
+  assert.equal(fed.killStreak, 0) // 죽으면 연속 킬 리셋
+  assert.ok(g.feed.some((f) => f.msg.includes('현상금')))
+})
+
 test('암살자 그림자처형: 빈사 적에게 2배 — 처치하면 점멸 초기화', () => {
   const g = createGame(humans())
   startPlaying(g)
@@ -1648,15 +1707,15 @@ test('상점: 죽어 있는 동안에도 우물 밖에서 살 수 있다', () =>
   assert.deepEqual(h.items, ['dagger'])
 })
 
-test('상점: 인벤토리는 3칸, 가득 차면 더 못 산다', () => {
+test('상점: 인벤토리는 ITEM_SLOTS칸, 가득 차면 더 못 산다', () => {
   const g = createGame(humans())
   startPlaying(g)
   const h = g.heroes[2]
   toFountain(g, h)
   h.gold = 99999
-  for (const id of ['dagger', 'longsword', 'leather', 'boots']) buyItem(g, h.id, id)
+  for (const id of ['dagger', 'longsword', 'leather', 'boots', 'orb']) buyItem(g, h.id, id)
   assert.equal(h.items.length, ITEM_SLOTS)
-  assert.ok(!h.items.includes('boots'), '4번째는 안 들어간다')
+  assert.ok(!h.items.includes('orb'), '칸을 넘기면 더 안 들어간다')
 })
 
 test('상점: 체력 아이템을 사면 최대 체력이 늘고 그만큼 즉시 회복', () => {
