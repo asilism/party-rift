@@ -36,9 +36,11 @@ function beep(freq, duration = 0.08, type = 'square', gain = 0.06) {
 // ── 프로시저럴 BGM: 에셋 없이 오실레이터 스케줄링 ──
 // lookahead 스케줄러로 "트랙"(멜로디/베이스/스텝 스케줄)을 깔아준다.
 const NOTE = {
+  // 저음 신스 베이스 (드래프트 긴장 리프)
+  C2: 65.41, D2: 73.42, E2: 82.41, Fs2: 92.5,
   // 베이스 음역
   A2: 110.0, B2: 123.5, C3: 130.8, D3: 146.8, E3: 164.8,
-  F3: 174.6, G3: 196.0, A3: 220.0,
+  F3: 174.6, Fs3: 185.0, G3: 196.0, A3: 220.0,
   // 멜로디 음역
   A4: 440.0, B4: 493.9, C5: 523.3, D5: 587.3, E5: 659.3,
   F5: 698.5, G5: 784.0, Gs5: 830.6, A5: 880.0, B5: 987.8,
@@ -133,6 +135,50 @@ function kick(ac, t, vol) {
   osc.stop(t + 0.12)
 }
 
+// 낮게 '둥' 울리는 통(가죽 막) — base에서 반옥타브 떨어지며 둔탁하게
+function tom(ac, t, vol, base = 104) {
+  const osc = ac.createOscillator()
+  const g = ac.createGain()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(base, t)
+  osc.frequency.exponentialRampToValueAtTime(base * 0.5, t + 0.18)
+  osc.connect(g)
+  g.connect(ac.destination)
+  g.gain.setValueAtTime(vol, t)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22)
+  osc.start(t)
+  osc.stop(t + 0.24)
+}
+
+// 신스 베이스: 톱니파를 로우패스로 깎아 '붕' 도톰하게 + 같은 음 사인으로 기음 보강
+// 저음(옥타브 2)에서도 톱니의 배음이 살아 잘 들리고, 어택을 칼같이 세워 드럼과 딱 붙는다.
+function synthBass(ac, freq, t, dur, vol) {
+  const osc = ac.createOscillator()
+  const body = ac.createOscillator()
+  const lp = ac.createBiquadFilter()
+  const g = ac.createGain()
+  osc.type = 'sawtooth'
+  osc.frequency.value = freq
+  body.type = 'sine'
+  body.frequency.value = freq // 같은 옥타브 기음으로 저음대 두께(서브-옥타브 아님 → 안 뭉갬)
+  lp.type = 'lowpass'
+  lp.frequency.setValueAtTime(freq * 9, t) // 어택은 밝게 확 열고
+  lp.frequency.exponentialRampToValueAtTime(freq * 2.2, t + dur * 0.45) // 빠르게 닫혀 플럭
+  lp.Q.value = 5
+  osc.connect(lp)
+  body.connect(lp)
+  lp.connect(g)
+  g.connect(ac.destination)
+  // 칼 어택(2ms) → 드럼 타격과 동시에 떨어지게
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.002)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
+  osc.start(t)
+  body.start(t)
+  osc.stop(t + dur)
+  body.stop(t + dur)
+}
+
 // 노이즈 버퍼(라이드/브러시용)
 let noiseBuf = null
 function getNoise(ac) {
@@ -158,6 +204,35 @@ function cymbal(ac, t, vol, hpFreq, dur) {
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur)
   s.start(t)
   s.stop(t + dur + 0.02)
+}
+
+// 날카롭게 '탁!' 내리치는 림샷 — 밴드패스 노이즈 크랙 + 짧은 톤 클릭
+function snap(ac, t, vol) {
+  const s = ac.createBufferSource()
+  s.buffer = getNoise(ac)
+  const bp = ac.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.value = 1900
+  bp.Q.value = 0.7
+  const g = ac.createGain()
+  s.connect(bp)
+  bp.connect(g)
+  g.connect(ac.destination)
+  g.gain.setValueAtTime(vol, t)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.07)
+  s.start(t)
+  s.stop(t + 0.09)
+  // 어택을 또렷하게 살리는 고음 클릭
+  const osc = ac.createOscillator()
+  const og = ac.createGain()
+  osc.type = 'triangle'
+  osc.frequency.setValueAtTime(440, t)
+  osc.connect(og)
+  og.connect(ac.destination)
+  og.gain.setValueAtTime(vol * 0.55, t)
+  og.gain.exponentialRampToValueAtTime(0.0001, t + 0.04)
+  osc.start(t)
+  osc.stop(t + 0.05)
 }
 
 // 카트: 메이저 칩튠 스텝
@@ -190,6 +265,38 @@ function scheduleStepLift(ac, i, t, dur) {
   if (i % 8 === 0) kick(ac, t, 0.04)
   // 브러시 스네어: 마디 3박(스텝 4)에 살짝
   if (i % 8 === 4) cymbal(ac, t, 0.02, 2500, 0.09)
+}
+
+// ── 드래프트: 긴장감 타악 루프 (16스텝) "둥둥 탁! 두둥 둥 탁!" ──
+// D=둥(깊은 통) · d=두(여린 그레이스 노트) · T=탁(림샷)
+const DRAFT_PERC = [
+  'D', 'D', null, 'T', null, null, null, null,
+  'd', 'D', null, 'D', null, 'T', null, null,
+]
+// 루프 시작 '둥둥'에 깔리는 신스 베이스 2음 — 루프마다 순환: 미미 → 파#파# → 레레 → 도도
+// 옥타브 2 — 묵직하게 깔리되 톱니 배음으로 또렷이 들린다(너무 높으면 촐싹거려서 한 칸 내림)
+const BASS_DRAFT = ['E2', 'Fs2', 'D2', 'C2']
+let draftLoop = -1
+
+function scheduleStepDraft(ac, i, t, dur) {
+  if (i === 0) draftLoop++ // 루프 한 바퀴마다 베이스 진행 한 칸
+  const hit = DRAFT_PERC[i]
+  if (hit === 'D') tom(ac, t, 0.12, 104)
+  else if (hit === 'd') tom(ac, t, 0.075, 138) // 두 — 살짝 높고 여리게
+  else if (hit === 'T') snap(ac, t, 0.1)
+  // 둥둥(스텝 0·1) 위에 신스 베이스 2음을 같은 음으로 깔아 묵직하게 — 톰과 같은 t라 딱 붙는다
+  if (i === 0 || i === 1) {
+    synthBass(ac, NOTE[BASS_DRAFT[draftLoop % BASS_DRAFT.length]], t, dur * 1.05, 0.2)
+  }
+  // 마디 머리에 낮은 드론 펄스로 깔리는 긴장감
+  if (i === 0) tom(ac, t, 0.05, 62)
+}
+
+const TRACK_DRAFT = {
+  melody: DRAFT_PERC,
+  scheduleStep: scheduleStepDraft,
+  durNormal: 0.15, // 16분음표 ≈ 100BPM, 조여오는 템포
+  durFast: 0.13,
 }
 
 const TRACK_CART = {
@@ -236,6 +343,11 @@ export const sound = {
   // 리프트 전용 BGM: 마이너 재즈 (카트의 4배 길이 리프)
   musicStartLift() {
     startTrack(TRACK_LIFT)
+  },
+  // 드래프트 화면 긴장감 타악 루프 (둥둥 탁! 두둥 둥 탁!)
+  musicStartDraft() {
+    draftLoop = -1 // 베이스 진행을 미미부터 다시 시작
+    startTrack(TRACK_DRAFT)
   },
   musicStop() {
     if (mTimer) clearInterval(mTimer)

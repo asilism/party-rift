@@ -3,8 +3,10 @@
 import { spawn } from 'node:child_process'
 
 // Windows에서 npx는 npx.cmd 라 shell:true 로 띄워야 spawn ENOENT가 안 난다.
+// --watch: server/*.js 를 고치면 룸 서버를 자동 재시작(vite는 이미 핫리로드).
+// 안 그러면 서버 코드 수정이 dev 세션에 반영 안 돼 옛 동작이 계속 돈다.
 const procs = [
-  spawn('node', ['server/index.js'], { stdio: 'inherit', shell: true }),
+  spawn('node', ['--watch', 'server/index.js'], { stdio: 'inherit', shell: true }),
   spawn('npx', ['vite'], { stdio: 'inherit', shell: true }),
 ]
 

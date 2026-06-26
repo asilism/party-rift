@@ -10,9 +10,21 @@
 //   사람은 10초 제한(초과 시 자동 픽), 봇은 자동 픽. 같은 팀 같은 직업 선택 불가.
 
 import { ZODIAC } from '../src/shared/zodiac.js'
-import { CLASS_IDS, TEAM_SIZES } from '../src/games/rift/engine.js'
+import { CLASS_IDS, TEAM_SIZES, CLASS_ROLE, DRAFT_ROLE_PRIORITY } from '../src/games/rift/engine.js'
 
 export const PICK_MS = 20_000 // 사람 픽 제한
+
+// 드래프트 픽 잔여시간(ms) — 클라 타이머 바가 쓴다.
+//  · 봇 차례 / 픽 종료 → null (바 숨김)
+//  · "갓 시작한 차례"(turnSeat이 아직 현재 픽커로 리셋되기 전: 픽 직후 브로드캐스트 순간)
+//    → 항상 풀타임. 안 그러면 turnAt이 이전 차례 기준이라 이전 선수의 잔여가 새어 나가고,
+//    클라가 그 첫 스냅샷으로 데드라인을 굳혀 "나중 픽일수록 몇 초밖에 안 남는" 버그가 난다.
+export function draftPickRemainingMs(match, turnSeat, turnAt, now) {
+  const cur = match.currentPicker()
+  if (!cur || cur.isBot) return null
+  if (cur.seat !== turnSeat) return PICK_MS
+  return turnAt ? Math.max(0, turnAt + PICK_MS - now) : null
+}
 // 본게임 시작 전 카운트다운(3초)은 엔진(status:'countdown', COUNTDOWN_TIME)이 담당한다.
 // 드래프트가 끝나면 곧바로 실시간 세션을 시작하고, 전장 안에서 "곧 시작" 카운트다운을 보여준다.
 
@@ -113,11 +125,12 @@ export function createMatch(humanDeviceIds, mode, rng = Math.random) {
     allPicked() {
       return this.pickPtr >= pickOrder.length
     },
-    takenClasses(team) {
-      return participants.filter((p) => p.team === team && p.cls).map((p) => p.cls)
+    // 이미 고른 직업 — 아군·적군 통틀어 매치 전체에서 같은 캐릭터는 한 명뿐
+    takenClasses() {
+      return participants.filter((p) => p.cls).map((p) => p.cls)
     },
-    availableClasses(team) {
-      const taken = new Set(this.takenClasses(team))
+    availableClasses() {
+      const taken = new Set(this.takenClasses())
       return CLASS_IDS.filter((c) => !taken.has(c))
     },
 
@@ -127,20 +140,36 @@ export function createMatch(humanDeviceIds, mode, rng = Math.random) {
       if (!cur) throw new Error('지금은 픽할 차례가 아니에요.')
       if (cur.deviceId !== deviceId) throw new Error('당신 차례가 아니에요.')
       if (!CLASS_IDS.includes(classId)) throw new Error('알 수 없는 직업이에요.')
-      if (this.takenClasses(cur.team).includes(classId)) throw new Error('같은 팀이 이미 고른 직업이에요.')
+      if (this.takenClasses().includes(classId)) throw new Error('이미 다른 선수가 고른 직업이에요.')
       cur.cls = classId
       this._advance()
       return cur
     },
 
-    // 현재 차례를 자동 픽(봇 / 사람 시간초과). 남은 직업 중 랜덤.
+    // 현재 차례를 자동 픽(봇 / 사람 시간초과). 팀 조합 밸런스를 맞춰 고른다.
     autoPickCurrent() {
       const cur = this.currentPicker()
       if (!cur) return null
-      const avail = this.availableClasses(cur.team)
-      cur.cls = avail.length ? avail[Math.floor(rng() * avail.length)] : CLASS_IDS[0]
+      cur.cls = this.balancedClassFor(cur.team)
       this._advance()
       return cur
+    },
+
+    // 팀 조합 밸런스 픽: 우리 팀에 아직 없는 역할을 우선순위대로 채운다.
+    //  · 같은 팀이 이미 가진 역할은 건너뛰고(다 차면 우선순위 다시 한 바퀴 → 2번째 카피 허용),
+    //  · 그 역할의 전역 미사용 직업 중에서 무작위로 한 명. 후보가 없으면 다음 역할로.
+    balancedClassFor(team) {
+      const avail = this.availableClasses()
+      if (!avail.length) return CLASS_IDS[0]
+      const have = new Set(
+        participants.filter((p) => p.team === team && p.cls).map((p) => CLASS_ROLE[p.cls]),
+      )
+      const order = [...DRAFT_ROLE_PRIORITY.filter((r) => !have.has(r)), ...DRAFT_ROLE_PRIORITY]
+      for (const role of order) {
+        const pool = avail.filter((c) => CLASS_ROLE[c] === role)
+        if (pool.length) return pool[Math.floor(rng() * pool.length)]
+      }
+      return avail[Math.floor(rng() * avail.length)] // 안전망(역할 미분류 등)
     },
 
     _advance() {

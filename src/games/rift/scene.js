@@ -992,6 +992,8 @@ const FX_LOOK = {
   doom: { color: 0x8a3bd0, ring: true, mode: 'out', pcolor: 0xc89af0 }, // 주술사 파멸의 낙인 — 어두운 보랏빛 낙인
   summon: { color: 0xffd06a, ring: true, mode: 'rise', pcolor: 0xffe6a8 }, // 야수조련사 소환 — 솟아오르는 마력
   deploy: { color: 0x9fb0c4, ring: true, mode: 'out', pcolor: 0xd6e0ec }, // 엔지니어 설치 — 기계 조립 불꽃
+  snare: { color: 0x6fbf3a, ring: true, mode: 'out', pcolor: 0xbfe88a }, // 넝쿨사냥꾼 포획망 — 옭아매는 넝쿨 그물
+  vine: { color: 0x5fae33, line: true, mode: 'forward', pcolor: 0xbfe88a, w: 2.4, ground: true }, // 올가미 — 땅에서 솟아 앞으로 뻗는 넝쿨
 }
 
 // 시드 고정 파티클 구름 — 호스트/게스트 모두 같은 fx(id)에서 같은 모양이 나오게 lcg 시드.

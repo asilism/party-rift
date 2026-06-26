@@ -333,6 +333,58 @@ test('사슬잡이 사슬갈고리: 발사준비 후 투사체 발사 → 명중
   assert.ok(d2 < d1 - 1, `천천히 끌려와 거리가 줄어든다 (${d1.toFixed(1)}→${d2.toFixed(1)})`)
 })
 
+// ── P6: 넝쿨사냥꾼 (원거리 속박 정글러) ──
+test('넝쿨사냥꾼 올가미: 땅에서 5단으로 솟아 앞 적을 속박(이동 불가) + 피해', () => {
+  const g = duo('snarer', 'mage')
+  startPlaying(g)
+  g.minions.length = 0 // 미니언이 표적을 밀지 않게
+  const s = g.heroes[0]; const m = g.heroes[1]
+  s.x = 0; s.z = 0; s.dir = 0
+  m.x = 8; m.z = 0 // 직선 경로상(사거리 15 안), 폭 안
+  castSkill(g, s.id)
+  assert.equal(g.projectiles.filter((p) => p.kind === 'net').length, 0, '투사체가 아니다')
+  assert.equal(g.zones.filter((z) => z.kind === 'vine').length, 5, '땅에서 솟는 5단 넝쿨 존')
+  run(g, 0.6) // 단들이 앞으로 전진하며 적 위치까지 솟는다
+  assert.ok(m.rootT > 0, '솟아오른 올가미에 속박')
+  assert.ok(m.hp < m.maxHp, '피해도 들어간다')
+  const x0 = m.x
+  m.mx = 1; m.mz = 0 // 이동 시도
+  run(g, 0.3)
+  assert.ok(Math.abs(m.x - x0) < 0.6, '속박 동안 못 움직인다')
+})
+
+test('넝쿨사냥꾼 포획망: 범위 안 적 전원을 속박 + 피해', () => {
+  const g = duo('snarer', 'tank')
+  startPlaying(g)
+  const s = g.heroes[0]; const t = g.heroes[1]
+  s.lvl = ULT_LEVEL
+  s.x = 0; s.z = 0; s.dir = 0
+  t.x = 6; t.z = 0
+  castUlt(g, s.id)
+  assert.ok(t.rootT > 0, '포획망에 속박')
+  assert.ok(t.hp < t.maxHp, '피해도 들어간다')
+})
+
+test('넝쿨사냥꾼 덩굴 합류: 아군 곁으로 순간이동한다', () => {
+  const g = createGame([
+    { id: 'rat', name: 'B1', zodiacId: 'rat', color: '#abc', cls: 'snarer', team: 'blue' },
+    { id: 'ox', name: 'B2', zodiacId: 'ox', color: '#abc', cls: 'archer', team: 'blue' },
+    { id: 'tiger', name: 'R', zodiacId: 'tiger', color: '#abc', cls: 'mage', team: 'red' },
+  ], { mode: '3v3', rng: () => 0.5 })
+  startPlaying(g)
+  const s = g.heroes.find((h) => h.cls === 'snarer')
+  const ally = g.heroes.find((h) => h.cls === 'archer')
+  s.lvl = SKILL2_LEVEL
+  s.x = 0; s.z = 0
+  ally.x = 25; ally.z = 0 // 사거리(30) 안의 합류 대상
+  castSkill2(g, s.id)
+  assert.ok(Math.hypot(s.x, s.z) > 1, '제자리가 아니라 이동했다')
+  const onAlly = g.heroes.some(
+    (a) => a.team === 'blue' && a !== s && a.respawnT <= 0 && Math.hypot(s.x - a.x, s.z - a.z) < 2,
+  )
+  assert.ok(onAlly, '아군 곁에 착지')
+})
+
 // ── P4: 야수조련사 / P5: 엔지니어 (소환물 시스템) ──
 test('야수조련사 늑대 소환: 펫이 생겨 근처 적을 문다', () => {
   const g = duo('beastmaster', 'mage')

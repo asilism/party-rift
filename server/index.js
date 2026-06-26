@@ -13,7 +13,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { WebSocketServer } from 'ws'
 import { createMatchmaker, MODES } from './matchmaking.js'
-import { createMatch, PICK_MS } from './match.js'
+import { createMatch, PICK_MS, draftPickRemainingMs } from './match.js'
 import { createRealtimeSession } from './realtime.js'
 
 const PORT = Number(process.env.PORT || 8787)
@@ -89,8 +89,7 @@ function entryOf(deviceId) {
 function matchSnapshot(entry, now = Date.now()) {
   const snap = entry.match.snapshot()
   if (snap.phase === 'draft') {
-    const cur = entry.match.currentPicker()
-    snap.pickRemainingMs = cur && !cur.isBot && entry.turnAt ? Math.max(0, entry.turnAt + PICK_MS - now) : null
+    snap.pickRemainingMs = draftPickRemainingMs(entry.match, entry.turnSeat, entry.turnAt, now)
   }
   return snap
 }
