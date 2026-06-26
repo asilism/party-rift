@@ -18,7 +18,8 @@ export default function DraftScreen({ match, you, onPick, onLeave, notice }) {
   const isMyTurn = current != null && current === you
   const allPicked = current == null
 
-  const takenByMyTeam = new Set(players.filter((p) => p.team === me?.team && p.cls).map((p) => p.cls))
+  // 아군·적군 통틀어 이미 고른 직업은 비활성 — 매치 전체에서 같은 캐릭터는 한 명뿐
+  const takenAll = new Set(players.filter((p) => p.cls).map((p) => p.cls))
 
   // 내 차례 10초 타이머는 로컬에서 부드럽게 줄인다(서버는 차례마다만 스냅샷을 보냄).
   const [remain, setRemain] = useState(PICK_MS)
@@ -36,6 +37,12 @@ export default function DraftScreen({ match, you, onPick, onLeave, notice }) {
   }, [isMyTurn, current])
   const timerPct = Math.max(0, Math.min(100, (remain / PICK_MS) * 100))
 
+  // 드래프트 내내 긴장감 타악 루프 (둥둥 탁! 두둥 둥 탁!) — 화면을 벗어나면 정지
+  useEffect(() => {
+    sound.musicStartDraft()
+    return () => sound.musicStop()
+  }, [])
+
   // 내 차례가 열리는 순간 알림음
   const wasMyTurn = useRef(false)
   useEffect(() => {
@@ -44,7 +51,7 @@ export default function DraftScreen({ match, you, onPick, onLeave, notice }) {
   }, [isMyTurn])
 
   function pick(classId) {
-    if (!isMyTurn || takenByMyTeam.has(classId)) return
+    if (!isMyTurn || takenAll.has(classId)) return
     sound.step()
     onPick(classId)
   }
@@ -100,7 +107,7 @@ export default function DraftScreen({ match, you, onPick, onLeave, notice }) {
               <div className="draft__classes" ref={classesRef}>
                 {CLASS_IDS.map((id) => {
                   const c = CLASSES[id]
-                  const taken = takenByMyTeam.has(id)
+                  const taken = takenAll.has(id)
                   return (
                     <button
                       key={id}
@@ -111,7 +118,7 @@ export default function DraftScreen({ match, you, onPick, onLeave, notice }) {
                       <span className="draft-class__icon">{c.icon}</span>
                       <span className="draft-class__name">{c.name}</span>
                       <span className="draft-class__desc">{c.desc}</span>
-                      {taken && <span className="draft-class__tag">팀 내 선택됨</span>}
+                      {taken && <span className="draft-class__tag">이미 선택됨</span>}
                     </button>
                   )
                 })}

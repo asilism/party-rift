@@ -49,6 +49,7 @@ const ROLE_PREF = {
   catcher: ['support', 'top', 'bot', 'mid'], // 이니시에이터 — 로밍/지원
   beastmaster: ['jungle', 'top', 'mid', 'bot'], // 소환사 — 정글
   engineer: ['mid', 'top', 'bot'], // 포탑 설치 — 미드/사이드
+  snarer: ['jungle', 'bot', 'mid', 'top'], // 속박 정글러 — 정글/갱킹
 }
 // 한 봇에게 그 모드의 역할 풀에서 직업 선호에 맞는 빈 역할을 고른다(겹치면 다음 후보 → 남은 자리).
 function pickRole(cls, mode, taken) {
@@ -163,8 +164,29 @@ export const CLASSES = {
     skill2: { name: '과부하', icon: '⚙️', cd: 14, desc: '내 포탑들의 공격속도를 잠시 크게 올린다' },
     ult: { name: '거포 설치', icon: '💥', cd: 60, desc: '강력한 장거리 거포를 세운다 — 넓은 사거리·큰 피해' },
   },
+  snarer: {
+    name: '넝쿨사냥꾼', icon: '🌿', desc: '멀리서 옭아매고 아군에게 합류하는 속박 정글러',
+    hp: 500, hpLvl: 56, atk: 48, atkLvl: 7, range: 9, atkCd: 0.85, speed: 13.2, def: 0.9,
+    skill: { name: '올가미', icon: '🪢', cd: 8, desc: '직선으로 넝쿨 올가미를 던져 첫 적을 1.3초 속박 + 피해' },
+    skill2: { name: '덩굴 합류', icon: '🍃', cd: 14, desc: '교전 중인(없으면 가장 가까운) 아군에게 순간이동해 갱에 합류' },
+    ult: { name: '포획망', icon: '🕸️', cd: 60, desc: '겨눈 자리에 넓은 넝쿨 그물 — 범위 안 적 전원을 길게 속박 + 피해' },
+  },
 }
 export const CLASS_IDS = Object.keys(CLASSES)
+
+// 직업의 드래프트 역할 분류 — 봇이 팀 조합 밸런스를 맞춰 픽할 때 쓴다(전투 레인 배정과 별개).
+//  mage(AP 딜) · marksman(AD 원거리) · fighter(AD 근접/브루저/탱) · support(서폿)
+//  jungle(정글러): 갑자기 합류해 적을 속박·제압하며 아군을 지원 — 암살자(버스트 갱)·사슬잡이(끌기·속박)
+export const CLASS_ROLE = {
+  mage: 'mage', cryomancer: 'mage', warlock: 'mage',
+  archer: 'marksman', engineer: 'marksman',
+  warrior: 'fighter', gladiator: 'fighter', swordmaster: 'fighter', tank: 'fighter', beastmaster: 'fighter',
+  healer: 'support', guardian: 'support',
+  assassin: 'jungle', catcher: 'jungle', snarer: 'jungle',
+}
+// 봇 팀이 채우고 싶어하는 역할 우선순위(앞에서부터 한 자리씩) — 균형 잡힌 조합.
+//  3v3는 앞 3개(근접·마법·원거리)로 코어가 서고, 5v5는 서폿·정글까지 다섯 분야가 한 명씩.
+export const DRAFT_ROLE_PRIORITY = ['fighter', 'mage', 'marksman', 'support', 'jungle']
 
 // 스킬 데미지/회복/보호막 스케일링 메타데이터 — 툴팁이 "공식 + 현재 수치"를 보여 줄 때 쓴다.
 //  (엔진 SKILLS/ULTS의 skillDmg/healAmt 호출 계수와 일치시켜 둔다)
@@ -184,6 +206,7 @@ export const ABILITY_SCALING = {
   catcher: { skill: { dmg: [40, 0.7], note: '명중 시 1초 끌림+스턴' }, skill2: { dmg: [25, 0.4], note: '속박' }, ult: { dmg: [90, 1.0], note: '속박' } },
   beastmaster: { skill: { summon: [26, 0.12], count: 2 }, ult: { summon: [64, 0.3] } },
   engineer: { skill: { summon: [34, 0.15] }, ult: { summon: [72, 0.34] } },
+  snarer: { skill: { dmg: [40, 0.6], note: '명중 시 1.3초 속박' }, ult: { dmg: [70, 0.8], note: '범위 속박' } },
 }
 
 // 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 하이브리드는 공·주 평균, 그 외는 공격력.
@@ -333,6 +356,17 @@ const ENSNARE_RADIUS = 7 // 옭아매기 반경
 const ENSNARE_ROOT = 1.2 // 옭아매기 속박 시간
 const GUILLOTINE_RADIUS = 7 // 단두대 반경
 const GUILLOTINE_ROOT = 1.2 // 단두대 속박 연장
+// ── 넝쿨사냥꾼(P6): 원거리 속박 정글러 — 멀리서 묶고, 아군에게 순간이동해 합류 ──
+const NET_RANGE = 15 // 올가미 사거리(앞으로 직선)
+const NET_HALF = HERO_RADIUS // 올가미 폭(반) — 좌우 합쳐 캐릭터 1개분량
+const NET_WAVES = 5 // 땅에서 5단으로 끊어 앞으로 솟는다 (파 파 파 파 팍!)
+const NET_WAVE_GAP = 0.08 // 단 사이 간격(초)
+const NET_ROOT = 1.3 // 올가미 명중 속박 시간
+const VINE_TELE_RANGE = 30 // 덩굴 합류 순간이동 사거리(아군까지)
+const SNARE_AIM = 11 // 포획망 조준 거리(앞)
+const SNARE_RANGE = 13 // 포획망 표적 탐색 사거리
+const SNARE_RADIUS = 7 // 포획망 반경
+const SNARE_ROOT = 1.6 // 포획망 속박 시간
 
 // ── 소환물(P4 야수조련사 펫 / P5 엔지니어 포탑) 공용 시스템 ──
 // kind: 'wolfpet'(늑대) | 'bear'(곰) | 'turret'(미니포탑) | 'cannon'(거포)
@@ -1199,6 +1233,24 @@ const SKILLS = {
     spawnSummon(state, h, 'turret', h.x + Math.cos(h.dir) * 2, h.z + Math.sin(h.dir) * 2)
     pushFx(state, 'deploy', h.x, h.z, 2.5, h.team)
   },
+  // 넝쿨사냥꾼 올가미: 발밑에서부터 앞으로 5단(파 파 파 파 팍)으로 솟아오르는 넝쿨 — 닿은 적을 속박 + 피해.
+  //  투사체가 아니라 지면 존(stepZones에서 단마다 터진다). 폭은 좁게(캐릭터 1개분량).
+  snarer(state, h) {
+    const aim = nearestFoeHero(state, h, NET_RANGE)
+    const dir = aim ? Math.atan2(aim.z - h.z, aim.x - h.x) : h.dir
+    h.dir = dir
+    const seg = NET_RANGE / NET_WAVES
+    const dmg = skillDmg(h, 40, 0.6) // 공격력 계수
+    for (let i = 0; i < NET_WAVES; i++) {
+      state.zones.push({
+        id: state.nextId++, kind: 'vine', team: h.team, owner: h.id,
+        x: h.x + Math.cos(dir) * seg * i, z: h.z + Math.sin(dir) * seg * i,
+        dir, len: seg, half: NET_HALF, dmg, root: NET_ROOT,
+        r: seg, t: 0, delay: i * NET_WAVE_GAP,
+      })
+    }
+    h.revealT = Math.max(h.revealT, REVEAL_TIME)
+  },
 }
 
 // ── 궁극기 (레벨 3부터) ──
@@ -1363,6 +1415,23 @@ const ULTS = {
   engineer(state, h) {
     spawnSummon(state, h, 'cannon', h.x + Math.cos(h.dir) * 2.5, h.z + Math.sin(h.dir) * 2.5)
     pushFx(state, 'meteorhit', h.x, h.z, 4, h.team)
+  },
+  // 넝쿨사냥꾼 포획망: 가까운 적(없으면 앞)을 중심으로 넓은 넝쿨 그물 — 범위 안 적 전원 길게 속박 + 피해
+  snarer(state, h) {
+    const foe = nearestFoeHero(state, h, SNARE_RANGE)
+    const tx = foe ? foe.x : h.x + Math.cos(h.dir) * SNARE_AIM
+    const tz = foe ? foe.z : h.z + Math.sin(h.dir) * SNARE_AIM
+    const r2 = SNARE_RADIUS * SNARE_RADIUS
+    let hitAny = false
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || (e.x - tx) ** 2 + (e.z - tz) ** 2 > r2) continue
+      damageHero(state, e, skillDmg(h, 70, 0.8), h) // 공격력 계수
+      const cc = e.rageT > 0 ? RAGE_CC_CUT : 1 // 검투의 분노: 받는 CC 감소
+      e.rootT = Math.max(e.rootT, SNARE_ROOT * cc)
+      hitAny = true
+    }
+    pushFx(state, 'snare', tx, tz, SNARE_RADIUS, h.team)
+    if (!hitAny) return false
   },
 }
 
@@ -1591,15 +1660,41 @@ const SKILLS2 = {
     pushFx(state, 'haste', h.x, h.z, 3, h.team)
     if (n === 0) return false
   },
+  // 넝쿨사냥꾼 덩굴 합류: 교전 중인 아군(곁에 적이 있는 아군)에게, 없으면 가장 가까운 아군에게 순간이동.
+  snarer(state, h) {
+    let best = null
+    let score = Infinity
+    for (const a of state.heroes) {
+      if (a.team !== h.team || a === h || a.respawnT > 0) continue
+      if (dist2(h, a) > VINE_TELE_RANGE * VINE_TELE_RANGE) continue
+      // 곁에 적이 가까운 아군일수록 우선(교전 합류). 적이 아예 없으면 거리순으로 폴백.
+      let foeD = Infinity
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0) continue
+        foeD = Math.min(foeD, dist2(a, e))
+      }
+      const s = foeD === Infinity ? dist2(h, a) + 1e6 : foeD
+      if (s < score) { score = s; best = a }
+    }
+    if (!best) return false // 합류할 아군이 없으면 쿨다운을 안 쓴다
+    const sx = h.x, sz = h.z
+    h.x = best.x + Math.cos(h.dir) * 0.6 // 살짝 옆으로 떨궈 겹침 방지
+    h.z = best.z + Math.sin(h.dir) * 0.6
+    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    pushFx(state, 'blink', sx, sz, 2.5, h.team)
+    pushFx(state, 'blink', h.x, h.z, 2.5, h.team)
+    h.revealT = Math.max(h.revealT, REVEAL_TIME)
+  },
 }
 
-// 술식 공통: 판정 함수 pred(e)에 걸리는 모든 적(영웅/미니언/정글몹)에게 피해(+기절/빙결)
-function damageInShape(state, attacker, pred, dmg, stun, freeze = 0) {
+// 술식 공통: 판정 함수 pred(e)에 걸리는 모든 적(영웅/미니언/정글몹)에게 피해(+기절/빙결/속박)
+function damageInShape(state, attacker, pred, dmg, stun, freeze = 0, root = 0) {
   for (const e of state.heroes) {
     if (e.team === attacker.team || e.respawnT > 0 || !pred(e)) continue
     const cc = e.rageT > 0 ? RAGE_CC_CUT : 1 // 검투의 분노: 받는 CC 시간 감소
     if (stun > 0) e.stunT = Math.max(e.stunT, stun * cc)
     if (freeze > 0) e.freezeT = Math.max(e.freezeT, freeze * cc)
+    if (root > 0) e.rootT = Math.max(e.rootT, root * cc)
     damageHero(state, e, dmg, attacker)
   }
   for (const m of [...state.minions]) {
@@ -1616,8 +1711,8 @@ function aoeDamage(state, attacker, x, z, radius, dmg, stun, freeze = 0) {
   damageInShape(state, attacker, (e) => (e.x - x) ** 2 + (e.z - z) ** 2 <= r2, dmg, stun, freeze)
 }
 
-// 전방 직선(직사각형) 범위 피해 — (x,z)에서 dir 방향으로 length, 좌우 half폭
-function lineDamage(state, attacker, x, z, dir, length, half, dmg, stun) {
+// 전방 직선(직사각형) 범위 피해 — (x,z)에서 dir 방향으로 length, 좌우 half폭 (root>0이면 속박)
+function lineDamage(state, attacker, x, z, dir, length, half, dmg, stun, root = 0) {
   const ux = Math.cos(dir)
   const uz = Math.sin(dir)
   damageInShape(state, attacker, (e) => {
@@ -1626,7 +1721,7 @@ function lineDamage(state, attacker, x, z, dir, length, half, dmg, stun) {
     const along = rx * ux + rz * uz // 진행 방향 거리
     if (along < -0.5 || along > length) return false
     return Math.abs(-uz * rx + ux * rz) <= half // 경로에서 옆으로 벗어난 거리
-  }, dmg, stun)
+  }, dmg, stun, 0, root)
 }
 
 // 전방 부채꼴(콘) 범위 피해 — (x,z)에서 dir 방향, 반경 range, 반각 halfAngle(rad)
@@ -2611,6 +2706,10 @@ function stepZones(state, dt) {
       // 한 파(구간)가 터진다 — 그 구간의 적을 길게 기절
       lineDamage(state, owner, z.x, z.z, z.dir, z.len, z.half, z.dmg, z.stun)
       pushFxDir(state, 'fissure', z.x, z.z, z.len, z.dir, z.team)
+    } else if (z.kind === 'vine') {
+      // 한 단이 땅에서 솟는다 — 좁은 구간의 적을 속박(기절 아님)
+      lineDamage(state, owner, z.x, z.z, z.dir, z.len, z.half, z.dmg, 0, z.root)
+      pushFxDir(state, 'vine', z.x, z.z, z.len, z.dir, z.team)
     }
     remove.add(z.id)
   }
@@ -2765,6 +2864,8 @@ const BOT_BUILD = {
   swordmaster: ['rage_gloves', 'vampire_scythe', 'executioner', 'dragon_blade'],
   // 사슬잡이: 이니시에이터 — 단단함 + 약간의 공격력
   catcher: ['plate', 'longsword', 'giant_heart', 'executioner'],
+  // 넝쿨사냥꾼: 속박 정글러 — 단단함 + 약간의 공격력(갱킹 합류)
+  snarer: ['plate', 'longsword', 'giant_heart', 'executioner'],
   // 야수조련사: 하이브리드 소환사 — 공/주 혼합(현자의 돌) + 주문·공격 섞어 소환수 강화 + 생존
   beastmaster: ['sage_stone', 'flame_core', 'longsword', 'giant_heart'],
   // 엔지니어: 하이브리드 포탑 — 주문력 위주 혼합 + 약간의 생존(후방)
@@ -2964,7 +3065,7 @@ function stepBots(state, dt) {
       if (h.cls === 'tank' && h.skillCd <= 0) castSkill(state, h.id) // 방패 켜고 도망!
       // 보조 스킬로 탈출: 은신(암살자)·광폭화(전사, CC 면역+가속)·가속(힐러)
       if (h.skill2Cd <= 0 && h.lvl >= SKILL2_LEVEL &&
-        (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer' || h.cls === 'cryomancer' || h.cls === 'swordmaster')) castSkill2(state, h.id)
+        (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer' || h.cls === 'cryomancer' || h.cls === 'swordmaster' || h.cls === 'snarer')) castSkill2(state, h.id)
       steerToward(state, h, state.map.NEXUS_POS[h.team])
       botAttack(state, h, dt) // 도망치면서도 사거리 안이면 반격
       continue
@@ -3041,7 +3142,7 @@ function stepBots(state, dt) {
         if (
           h.skill2Cd <= 0 &&
           h.lvl >= SKILL2_LEVEL &&
-          (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer' || h.cls === 'cryomancer' || h.cls === 'swordmaster')
+          (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer' || h.cls === 'cryomancer' || h.cls === 'swordmaster' || h.cls === 'snarer')
         ) {
           castSkill2(state, h.id)
         }
@@ -3165,6 +3266,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'gladiator' && d < GLAD_SLASH_RADIUS + 1) castSkill(state, h.id) // 붙으면 휘둘러베기(흡혈)
     else if (h.cls === 'warlock' && d < CURSE_RANGE - 1) castSkill(state, h.id) // 저주살(중독)
     else if (h.cls === 'catcher' && d > 4 && d < HOOK_RANGE - 1) castSkill(state, h.id) // 사슬갈고리로 끌어온다
+    else if (h.cls === 'snarer' && d > 3 && d < NET_RANGE - 1) castSkill(state, h.id) // 올가미로 멀리서 묶는다
     else if (h.cls === 'swordmaster' && d < 6) castSkill(state, h.id) // 붙으면 발도 카운터(반격)
     // 힐러 치유·수호기사 보호막은 stepBots 위쪽에서 항상 챙긴다
   }
@@ -3189,6 +3291,8 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     castUlt(state, h.id) // 무형검으로 평타 몰아치기
   } else if (h.cls === 'catcher' && (nearCount >= 2 || (d < GUILLOTINE_RADIUS && foe.hp < foe.maxHp * 0.6))) {
     castUlt(state, h.id) // 단두대
+  } else if (h.cls === 'snarer' && (nearCount >= 2 || d < SNARE_RADIUS)) {
+    castUlt(state, h.id) // 포획망으로 한타를 묶는다
   } else if (h.cls === 'beastmaster' && (nearCount >= 1 || d < 10)) {
     castUlt(state, h.id) // 곰 소환
   } else if (h.cls === 'engineer' && (nearCount >= 1 || d < 13)) {

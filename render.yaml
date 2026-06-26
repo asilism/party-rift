@@ -1,0 +1,12 @@
+# Render Blueprint — 파티 리프트(영속 Node + WebSocket) 무료 배포.
+# Render 대시보드에서 New → Blueprint 로 이 리포를 연결하면 자동으로 읽힌다.
+# Dockerfile을 그대로 빌드하므로 별도 빌드/시작 명령이 필요 없다.
+services:
+  - type: web
+    name: party-rift
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    # 서버가 process.env.PORT(Render가 주입)에 0.0.0.0으로 바인딩한다 — 추가 환경변수 불필요.
+    healthCheckPath: /
+    autoDeploy: true
