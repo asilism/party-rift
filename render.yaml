@@ -6,6 +6,7 @@ services:
     name: party-rift
     runtime: docker
     plan: free
+    region: singapore
     dockerfilePath: ./Dockerfile
     # 서버가 process.env.PORT(Render가 주입)에 0.0.0.0으로 바인딩한다 — 추가 환경변수 불필요.
     healthCheckPath: /
