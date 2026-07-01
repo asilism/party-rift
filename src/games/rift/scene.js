@@ -2111,6 +2111,10 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           // 정신집중(빛의 화살): 금빛으로 점점 차오른다
           const g = 0.3 + Math.abs(Math.sin(view.time * 9)) * 0.4
           u.body.material.emissive?.setRGB(g, g * 0.85, 0.2)
+        } else if (h.parryT > 0) {
+          // 검성 발도 카운터: 자세를 잡는 1초 동안 은빛-청록 오라가 또렷이 맥동한다(반격 대기 신호)
+          const p = 0.45 + Math.abs(Math.sin(view.time * 14)) * 0.4
+          u.body.material.emissive?.setRGB(p * 0.7, p, p)
         } else u.body.material.emissive?.setRGB(0, 0, 0)
         // 피격 테두리: 맞은 순간 몸 실루엣 둘레만 잠깐 빛난다(전신 섬광 대신). 끄면 안 보인다.
         if (u.hitFlash > 0) u.hitFlash = Math.max(0, u.hitFlash - dt)
