@@ -994,10 +994,12 @@ body {
   inset: 0;
   z-index: 50;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: clamp(14px, 3vh, 26px);
   background: rgba(0, 0, 0, 0.55);
-  animation: fade-in 0.3s ease;
+  animation: fade-in 0.55s ease both; /* 폭발 연출이 끝난 뒤 부드럽게 떠오른다 */
 }
 @keyframes fade-in {
   from {
@@ -1007,13 +1009,59 @@ body {
     opacity: 1;
   }
 }
+/* 위쪽: 트로피 + 승리 메시지 (박스 밖, 따로) */
+.win-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.win-banner__trophy {
+  font-size: clamp(56px, 12vw, 88px);
+  line-height: 1;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
+  animation: pawn-bounce 0.8s ease-in-out infinite;
+}
+.win-banner__title {
+  margin: 0;
+  display: inline-flex;
+  justify-content: center;
+  gap: 0.04em;
+  font-weight: 900;
+  font-size: clamp(34px, 8vw, 66px);
+  line-height: 1.1;
+}
+.win-banner__space {
+  display: inline-block;
+  width: 0.3em;
+}
+/* 한 글자씩: 위에서 톡 떨어지듯 나타난다 (style의 animation-delay로 순차 등장) */
+.win-banner__char {
+  display: inline-block;
+  color: var(--z-color, var(--accent));
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.4), 0 0 22px var(--z-color, var(--accent));
+  opacity: 0;
+  transform: translateY(-0.55em) scale(0.4) rotate(-8deg);
+  animation: win-char 0.5s cubic-bezier(0.18, 1.5, 0.4, 1) forwards;
+}
+@keyframes win-char {
+  60% {
+    opacity: 1;
+    transform: translateY(0.08em) scale(1.12) rotate(2deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0);
+  }
+}
+/* 아래쪽: 스코어 표 박스 */
 .win-modal__card {
   text-align: center;
-  padding: 28px 36px;
+  padding: 22px 30px 24px;
   border-radius: 24px;
   background: var(--panel);
   border: 3px solid var(--z-color, var(--accent));
-  animation: pop-card 0.4s cubic-bezier(0.18, 1.4, 0.4, 1);
+  animation: pop-card 0.45s 0.15s cubic-bezier(0.18, 1.4, 0.4, 1) both;
 }
 @keyframes pop-card {
   from {
@@ -1025,21 +1073,11 @@ body {
     opacity: 1;
   }
 }
-.win-modal__emoji {
-  font-size: 80px;
-  animation: pawn-bounce 0.8s ease-in-out infinite;
-}
-.win-modal__card h2 {
-  margin: 8px 0;
-}
-.win-modal__card p {
-  color: var(--muted);
-  margin: 0 0 16px;
-}
 .win-modal__btns {
   display: flex;
   gap: 12px;
   justify-content: center;
+  margin-top: 12px;
 }
 
 /* ── 폭죽 (우승 팝업 좌우) ── */

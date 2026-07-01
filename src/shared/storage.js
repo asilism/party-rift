@@ -27,3 +27,22 @@ export function saveRiftControl(scheme) {
     /* 무시 */
   }
 }
+
+// ── 타격 효과(피격 테두리·화면 흔들림) 켜고/끄기 보존 ──
+const RIFT_HITFX_KEY = 'bgp.rift.hitfx.v1'
+
+export function loadRiftHitFx() {
+  try {
+    return localStorage.getItem(RIFT_HITFX_KEY) !== 'off' // 기본값: 켜짐
+  } catch {
+    return true
+  }
+}
+
+export function saveRiftHitFx(on) {
+  try {
+    localStorage.setItem(RIFT_HITFX_KEY, on ? 'on' : 'off')
+  } catch {
+    /* 무시 */
+  }
+}

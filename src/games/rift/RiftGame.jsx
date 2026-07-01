@@ -9,7 +9,7 @@ import { canShop, CLASSES, bountyGold } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { getItem, ITEM_SLOTS } from './items.js'
 import { sound } from '../../shared/sound.js'
-import { loadRiftControl, saveRiftControl } from '../../shared/storage.js'
+import { loadRiftControl, saveRiftControl, loadRiftHitFx, saveRiftHitFx } from '../../shared/storage.js'
 import { useRealtimeGame } from '../../net/useRealtimeGame.js'
 import { riftNet } from './netgame.js'
 import { NetWaiting } from '../../net/NetParts.jsx'
@@ -240,7 +240,7 @@ function RiftRoster({ hud, crown = null }) {
 }
 
 // 우상단 설정 버튼 하나로 통합한 메뉴: 팀 현황·일시정지·소리·전체화면·조작 방식·나가기를 분기 메뉴로 띄운다.
-function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onToggleSound, scheme, onSchemeChange, onExit }) {
+function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onToggleSound, scheme, onSchemeChange, hitFx, onToggleHitFx, onExit }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   useEffect(() => {
@@ -283,6 +283,9 @@ function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onTog
           )}
           <button className="rift-settings__item" onClick={onToggleSound}>
             <span>{soundOn ? '🔊' : '🔇'}</span> 소리 {soundOn ? '켜짐' : '꺼짐'}
+          </button>
+          <button className="rift-settings__item" onClick={onToggleHitFx}>
+            <span>{hitFx ? '💥' : '🚫'}</span> 타격 효과 {hitFx ? '켜짐' : '꺼짐'}
           </button>
           <div className="rift-settings__item rift-settings__item--full">
             <FullscreenButton />
@@ -328,6 +331,14 @@ function RiftPlay({
     setScheme(s)
     saveRiftControl(s)
   }
+  const [hitFx, setHitFx] = useState(loadRiftHitFx) // 타격 효과(피격 테두리·화면 흔들림) on/off
+  function toggleHitFx() {
+    setHitFx((on) => {
+      const n = !on
+      saveRiftHitFx(n)
+      return n
+    })
+  }
   // 배경음악(칩튠 루프): 경기 중에만 흐르고, 어느 한쪽 넥서스가 위태로우면 템포 업
   const bgmStatus = hud?.status
   const paused = !!hud?.paused
@@ -342,6 +353,14 @@ function RiftPlay({
     sound.musicSetFast(nexusCrisis)
   }, [bgmStatus, nexusCrisis, soundOn, paused])
   useEffect(() => () => sound.musicStop(), [])
+  // 승리 팝업은 넥서스 폭발 연출(카메라 이동 + 펑)이 끝난 뒤 페이드인하도록 잠깐 늦춘다
+  const finishedNow = hud?.status === 'finished'
+  const [showWin, setShowWin] = useState(false)
+  useEffect(() => {
+    if (!finishedNow) { setShowWin(false); return undefined }
+    const t = setTimeout(() => setShowWin(true), 1700)
+    return () => clearTimeout(t)
+  }, [finishedNow])
   // 상점은 우물 안에 있거나 사망(부활 대기) 중에 열 수 있다 — 그 밖이면 자동으로 닫힌다
   const me = hud?.heroes?.find((h) => h.id === myId)
   const meCanShop = !!(me && canShop(me))
@@ -354,7 +373,12 @@ function RiftPlay({
 
   const finished = hud.status === 'finished'
   const myTeam = me?.team
-  const winnerLabel = hud.winner === 'blue' ? '🔵 파랑팀' : hud.winner === 'red' ? '🔴 빨강팀' : null
+  // 승리 메시지를 한 글자씩 나타나게 — "파랑팀 승리"를 글자 단위로 쪼갠다(공백은 자리만 차지)
+  const winText = hud.winner === 'blue' ? '파랑팀 승리' : hud.winner === 'red' ? '빨강팀 승리' : '무승부'
+  let winBeat = 0
+  const winChars = [...winText].map((ch, i) => ({
+    ch, key: i, space: ch === ' ', delay: ch === ' ' ? 0 : winBeat++ * 0.16,
+  }))
   // 우리 넥서스가 공격받고 있으면 경고 (관전자는 양 팀 모두 표시)
   const nexusUnderAttack = !finished && !!(hud.nexus && (
     myTeam ? hud.nexus[myTeam]?.underAttack
@@ -363,7 +387,7 @@ function RiftPlay({
 
   return (
     <div className="rift" onContextMenu={(e) => e.preventDefault()}>
-      <Rift3D sample={sample} myId={myId} mode={hud.mode || '3v3'} />
+      <Rift3D sample={sample} myId={myId} mode={hud.mode || '3v3'} hitFx={hitFx} />
 
       {me && !finished && (
         <RiftControls
@@ -408,6 +432,8 @@ function RiftPlay({
               onToggleSound={onToggleSound}
               scheme={scheme}
               onSchemeChange={changeScheme}
+              hitFx={hitFx}
+              onToggleHitFx={toggleHitFx}
               onExit={onExit}
             />
           </div>
@@ -503,12 +529,26 @@ function RiftPlay({
         <RiftShop me={me} onBuy={onBuy} onSell={onSell} onResetShop={onResetShop} onClose={() => setShopOpen(false)} />
       )}
 
-      {finished && (
-        <div className="win-modal">
+      {finished && showWin && (
+        <div className="win-modal" style={{ '--z-color': hud.winner === 'red' ? '#ff6b6b' : '#4f8cff' }}>
           {(!myTeam || hud.winner === myTeam) && <Fireworks />}
-          <div className="win-modal__card" style={{ '--z-color': hud.winner === 'red' ? '#ff6b6b' : '#4f8cff' }}>
-            <div className="win-modal__emoji">{hud.winner ? '🏆' : '🤝'}</div>
-            <h2>{winnerLabel ? `${winnerLabel} 승리! 🎉` : '무승부!'}</h2>
+          {/* 위쪽: 트로피 + 한 글자씩 나타나는 승리 메시지 */}
+          <div className="win-banner">
+            <div className="win-banner__trophy">{hud.winner ? '🏆' : '🤝'}</div>
+            <h2 className="win-banner__title" aria-label={winText}>
+              {winChars.map((c) =>
+                c.space
+                  ? <span key={c.key} className="win-banner__space" aria-hidden="true">&nbsp;</span>
+                  : (
+                    <span key={c.key} className="win-banner__char" style={{ animationDelay: `${c.delay}s` }}>
+                      {c.ch}
+                    </span>
+                  )
+              )}
+            </h2>
+          </div>
+          {/* 아래쪽: 스코어 표 박스 */}
+          <div className="win-modal__card">
             <div className="rift-result">
               <RiftRoster hud={hud} crown={hud.winner} />
             </div>
