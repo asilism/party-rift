@@ -85,14 +85,14 @@ export const ITEMS = [
     desc: '값싼 체력.', stats: { hp: 150 } },
   { id: 'plate', cat: 'defense', name: '강철 판금', icon: '🛡️', cost: 750,
     desc: '체력 + 피해 감소.', stats: { hp: 250, def: 0.08 } },
-  { id: 'guardian_cloak', cat: 'defense', name: '수호의 망토', icon: '🧣', cost: 750,
-    desc: '받는 피해를 크게 줄인다.', stats: { def: 0.15 } },
+  { id: 'guardian_cloak', cat: 'defense', name: '수호의 망토', icon: '🧣', cost: 850,
+    desc: '받는 피해를 크게 줄이고 주문 위력도 더해 준다 — 무른 마법사용 방어구.', stats: { def: 0.15, power: 25 } },
   { id: 'giant_heart', cat: 'defense', name: '거인의 심장', icon: '🫀', cost: 1050,
     desc: '엄청난 체력.', stats: { hp: 450 } },
   { id: 'thornmail', cat: 'defense', name: '가시 갑옷', icon: '🌵', cost: 1000,
     desc: '체력 + 피해 감소 + 재생.', stats: { hp: 200, def: 0.1, regen: 0.01 } },
-  { id: 'immortal_plate', cat: 'defense', name: '불멸의 갑주', icon: '🏰', cost: 2200,
-    desc: '거대한 체력 + 피해 감소 + 재생. 방어 최종 장비.', stats: { hp: 500, def: 0.18, regen: 0.015 } },
+  { id: 'immortal_plate', cat: 'defense', name: '불멸의 갑주', icon: '🏰', cost: 2400,
+    desc: '거대한 체력 + 피해 감소 + 재생 + 주문 위력. 마법사도 단단해지는 방어 최종 장비.', stats: { hp: 500, def: 0.18, regen: 0.015, power: 50 } },
 
   // ── 유틸 (속도 / 쿨다운 / 재생 / 사거리) ──
   { id: 'boots', cat: 'util', name: '신속의 장화', icon: '👟', cost: 300,

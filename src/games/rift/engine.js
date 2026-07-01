@@ -71,7 +71,7 @@ export const CLASSES = {
     hp: 620, hpLvl: 70, atk: 62, atkLvl: 9, range: 3.8, atkCd: 0.7, speed: 14.2, def: 0.85,
     skill: { name: '베며 돌진', icon: '💨', cd: 7, desc: '앞으로 돌진하며 길을 가르고 착지 지점을 후려쳐 1초 기절' },
     skill2: { name: '광폭화', icon: '💢', cd: 14, desc: '3초간 빨갛게 폭주 — 이동·공격속도 ↑, 상태이상 면역·즉시 해제. 이후 3초간 서서히 원래대로' },
-    ult: { name: '회전베기', icon: '🌪️', cd: 60, desc: '2초간 팽이처럼 돌며(이동 가능) 주변 적을 계속 후린다' },
+    ult: { name: '회전베기', icon: '🌪️', cd: 60, desc: '2초간 팽이처럼 돌며(이동 가능) 주변 적을 계속 후린다 — 도는 동안 받는 피해 45% 감소(앞라인 탱킹)' },
   },
   archer: {
     name: '궁수', icon: '🏹', desc: '제일 긴 사거리·제일 약한 몸의 원거리 딜러',
@@ -154,7 +154,7 @@ export const CLASSES = {
     name: '야수조련사', icon: '🐺', desc: '늑대와 곰을 부려 함께 싸우는 소환사',
     hp: 540, hpLvl: 58, atk: 48, atkLvl: 7, range: 6, atkCd: 0.85, speed: 13, def: 0.92,
     skill: { name: '늑대 소환', icon: '🐺', cd: 12, desc: '늑대 두 마리를 불러내 주인을 따라다니며 적을 문다' },
-    skill2: { name: '사냥 명령', icon: '📯', cd: 9, desc: '주변 늑대/곰이 잠시 광폭화 — 더 빠르고 거세게 적을 덮친다' },
+    skill2: { name: '사냥 명령', icon: '📯', cd: 9, desc: '늑대/곰이 광폭화하며 가장 가까운 적에게 거리 무시하고 도약해 달려든다' },
     ult: { name: '곰 소환', icon: '🐻', cd: 60, desc: '거대한 곰을 불러내 앞장세운다 — 단단하고 강한 일격' },
   },
   engineer: {
@@ -171,6 +171,20 @@ export const CLASSES = {
     skill2: { name: '덩굴 합류', icon: '🍃', cd: 14, desc: '교전 중인(없으면 가장 가까운) 아군에게 순간이동해 갱에 합류' },
     ult: { name: '포획망', icon: '🕸️', cd: 60, desc: '겨눈 자리에 넓은 넝쿨 그물 — 범위 안 적 전원을 길게 속박 + 피해' },
   },
+  windcaller: {
+    name: '돌풍술사', icon: '🌬️', desc: '적을 밀쳐내고 날려버리는 바람 컨트롤러 — 벽에 처박으면 기절',
+    hp: 470, hpLvl: 52, atk: 42, atkLvl: 6, range: 10, atkCd: 0.92, speed: 12.6,
+    skill: { name: '돌풍', icon: '🌀', cd: 9, desc: '앞으로 긴 회오리를 일으켜 닿은 적을 1.5초 공중에 띄운다 + 피해(연계용)' },
+    skill2: { name: '밀쳐내기', icon: '💨', cd: 11, desc: '주변 적을 사방으로 밀어낸다(피일/이탈) — 벽/타워에 처박히면 기절 + 약간의 피해' },
+    ult: { name: '태풍', icon: '🌪️', cd: 60, desc: '겨눈 자리에 1초간 거대한 태풍 — 범위 안 적 전원을 바깥으로 크게 날리고 피해 + 둔화' },
+  },
+  chronomancer: {
+    name: '시간술사', icon: '⏳', desc: '시간을 되감아 살아남는 시간 암살자 — 위치·체력을 4초 전으로 되돌린다',
+    hp: 470, hpLvl: 50, atk: 44, atkLvl: 6, range: 8, atkCd: 0.85, speed: 13.2, def: 0.95,
+    skill: { name: '시간 도약', icon: '⌛', cd: 8, desc: '보이는 적 뒤로 순간이동해 강하게 벤다(교전 진입)' },
+    skill2: { name: '시간 지연', icon: '⏱️', cd: 11, desc: '겨눈 자리에 시간이 느려지는 장판 — 머무는 적의 이동·공격을 늦추고 갉아먹는다(추격·고립)' },
+    ult: { name: '역행', icon: '⏪', cd: 60, desc: '4초 전 위치·체력으로 되돌아가며 주변에 충격파 피해' },
+  },
 }
 export const CLASS_IDS = Object.keys(CLASSES)
 
@@ -178,11 +192,11 @@ export const CLASS_IDS = Object.keys(CLASSES)
 //  mage(AP 딜) · marksman(AD 원거리) · fighter(AD 근접/브루저/탱) · support(서폿)
 //  jungle(정글러): 갑자기 합류해 적을 속박·제압하며 아군을 지원 — 암살자(버스트 갱)·사슬잡이(끌기·속박)
 export const CLASS_ROLE = {
-  mage: 'mage', cryomancer: 'mage', warlock: 'mage',
+  mage: 'mage', cryomancer: 'mage', warlock: 'mage', windcaller: 'mage',
   archer: 'marksman', engineer: 'marksman',
   warrior: 'fighter', gladiator: 'fighter', swordmaster: 'fighter', tank: 'fighter', beastmaster: 'fighter',
   healer: 'support', guardian: 'support',
-  assassin: 'jungle', catcher: 'jungle', snarer: 'jungle',
+  assassin: 'jungle', catcher: 'jungle', snarer: 'jungle', chronomancer: 'jungle',
 }
 // 봇 팀이 채우고 싶어하는 역할 우선순위(앞에서부터 한 자리씩) — 균형 잡힌 조합.
 //  3v3는 앞 3개(근접·마법·원거리)로 코어가 서고, 5v5는 서폿·정글까지 다섯 분야가 한 명씩.
@@ -192,7 +206,7 @@ export const DRAFT_ROLE_PRIORITY = ['fighter', 'mage', 'marksman', 'support', 'j
 //  (엔진 SKILLS/ULTS의 skillDmg/healAmt 호출 계수와 일치시켜 둔다)
 //  dmg/dot/heal/shield/summon: [기본, 계수] · 계수는 직업 주력 스탯(AD/AP/공·주 평균)에 곱한다.
 export const ABILITY_SCALING = {
-  warrior: { skill: { dmg: [30, 0.8] }, ult: { dmg: [20, 0.3], note: '0.34초마다 타격 · 2초' } },
+  warrior: { skill: { dmg: [15, 0.4] }, ult: { dmg: [10, 0.15], note: '0.34초마다 타격 · 2초 · 받는 피해 -45%' } },
   archer: { skill: { dmg: [0, 1.2] }, ult: { dmg: [90, 1.5] } },
   mage: { skill: { dmg: [96, 1.2] }, skill2: { dmg: [45, 0.7], note: '점프마다 약화 · 최대 3타' }, ult: { dmg: [60, 0.9], note: '운석 3발' } },
   healer: { skill: { heal: [100, 1.2] }, ult: { heal: [220, 1.3] } },
@@ -207,6 +221,8 @@ export const ABILITY_SCALING = {
   beastmaster: { skill: { summon: [26, 0.12], count: 2 }, ult: { summon: [64, 0.3] } },
   engineer: { skill: { summon: [34, 0.15] }, ult: { summon: [72, 0.34] } },
   snarer: { skill: { dmg: [40, 0.6], note: '명중 시 1.3초 속박' }, ult: { dmg: [70, 0.8], note: '범위 속박' } },
+  windcaller: { skill: { dmg: [44, 0.7], note: '1.5초 공중에 띄움' }, skill2: { dmg: [26, 0.4], note: '사방으로 밀침 · 벽에 박으면 기절' }, ult: { dmg: [70, 0.8], note: '바깥으로 날림 + 둔화' } },
+  chronomancer: { skill: { dmg: [40, 0.9], note: '적 뒤로 순간이동' }, skill2: { dot: [10, 0.2], dotDur: 3, note: '장판 안 이동·공격 둔화' }, ult: { dmg: [60, 0.9], note: '도착 충격파 · 4초 전 체력 복원' } },
 }
 
 // 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 하이브리드는 공·주 평균, 그 외는 공격력.
@@ -221,8 +237,8 @@ const BOLT_SPEED = 38
 const FIREBALL_RANGE = 24
 const FIREBALL_SPEED = 30
 const FIREBALL_AOE = 5
-const DASH_DIST = 13
-const DASH_AIM = 16
+const DASH_DIST = 11 // 베며 돌진 거리(전천후 견제 억제 — 약간 짧게)
+const DASH_AIM = 13 // 돌진으로 노릴 적 탐색 거리
 const DASH_HALF = 2.6 // 돌진 경로 피해 폭(반)
 const DASH_CONE = 5 // 착지 시 전방 베기 반경
 const BLINK_RANGE = 18
@@ -256,8 +272,11 @@ const LIGHTARROW_LEN = 240 // 사실상 맵 끝까지
 const LIGHTARROW_HALF = CHAR_W * 1.5 // 너비 캐릭터 3마리 분량 → 반폭 = 1.5마리
 const ARCHER_CHANNEL = 1 // 빛의 화살 시전 전 정신집중(초) — 그동안 제자리에 멈춘다
 // 전사 회전베기(궁극기): 2초간 팽이처럼 돌며 반경 안을 계속 후린다(이동 가능).
+//  정체성: 앞장서서 적진에 파고들어 주력 딜러를 무는 이니시에이터 — 폭딜이 아니라 "버티며 무는" 역할.
+//  그래서 궁극기 동안엔 받는 피해를 크게 줄여(탱킹) 앞라인을 서게 한다.
 const WHIRL_TIME = 2 // 회전 지속(초)
 const WHIRL_TICK = 0.34 // 피해 판정 간격(초)
+const WHIRL_DR = 0.45 // 회전베기 중 받는 피해 감소(방어 ↑) — 45% 경감
 // 마법사 운석(궁극기): 3발이 차례로 떨어진다.
 const METEOR_COUNT = 3 // 낙하 발수
 const METEOR_GAP = 0.55 // 발 사이 간격(초) — 또렷이 끊어 떨어지게 아주 살짝 넓힘(0.45→0.55)
@@ -368,18 +387,52 @@ const SNARE_RANGE = 13 // 포획망 표적 탐색 사거리
 const SNARE_RADIUS = 7 // 포획망 반경
 const SNARE_ROOT = 1.6 // 포획망 속박 시간
 
+// ── 돌풍술사(P7): 적을 밀쳐내는 변위(넉백) 컨트롤러 — 기존 CC가 '고정/끌기'뿐인 로스터에 '밀어내기'를 더한다 ──
+const KNOCK_DUR = 0.22 // 넉백 이동에 걸리는 시간(초) — 짧고 또렷하게 밀린다
+const KNOCK_WALL_STUN = 0.9 // 벽/타워/넥서스에 처박혔을 때 추가 기절(초)
+const KNOCK_WALL_FRAC = 0.45 // 의도한 거리의 이만큼도 못 밀렸으면 "벽꽝"으로 판정
+const GUST_RANGE = 19.5 // 돌풍 회오리가 앞으로 이동하는 거리(기존 13의 1.5배)
+const GUST_TRAVEL_T = 1.0 // 회오리가 그 거리를 가로지르는 데 걸리는 시간(초) — 즉발이 아니라 굴러간다
+const GUST_SPEED = GUST_RANGE / GUST_TRAVEL_T // 회오리 이동 속도
+const GUST_TORNADO_R = CHAR_W * 1.2 // 회오리 적중 반경(닿으면 띄운다)
+const GUST_AIRBORNE = 1.5 // 돌풍에 맞은 적이 공중에 뜨는 시간(초) — 띄워 두고 연계
+const REPULSE_RADIUS = 7 // 밀쳐내기 반경(자기 중심)
+const REPULSE_KB = 6 // 밀쳐내기 거리
+const TYPHOON_RANGE = 16 // 태풍 조준 거리(가까운 적 탐색)
+const TYPHOON_AIM = 12 // 노릴 적이 없을 때 앞쪽 거리
+const TYPHOON_RADIUS = 9 // 태풍 반경
+const TYPHOON_KB = 10 // 태풍이 바깥으로 날리는 거리
+const TYPHOON_SLOW = 1.2 // 태풍에 휩쓸린 적의 둔화(빙결로 재활용) 지속(초)
+
+// ── 시간술사(P8): 위치·체력을 과거로 되돌리는 시간 메커닉 ──
+const TRAIL_DT = 0.2 // 위치/체력 표본을 남기는 간격(초)
+const TRAIL_MAX = 28 // 표본 보관 개수(약 5.6초치) — 역행(4초)+여유
+const TIMELEAP_RANGE = 18 // 시간 도약 사거리(보이는 적 탐색)
+const REWIND_BACK = 4.0 // 역행: 이만큼 과거(초)의 위치+체력으로 되돌아간다
+const REWIND_RADIUS = 7 // 역행 도착 충격파 반경
+// 시간 지연(보조 스킬): 겨눈 자리에 시간이 느려지는 장판 — 머무는 적의 이동/공격을 늦춘다(추격·고립).
+const TIMEWARP_RANGE = 15 // 시간 지연 조준 거리(가까운 적 탐색)
+const TIMEWARP_AIM = 9 // 노릴 적이 없을 때 앞쪽 거리
+const TIMEWARP_RADIUS = 6 // 장판 반경
+const TIMEWARP_LIFE = 3 // 장판 지속(초)
+const TIMEWARP_TICK = 0.35 // 둔화 재적용 간격
+const TIMEWARP_SLOW_T = 0.7 // 장판 안에서 갱신되는 둔화 지속(빙결로 재활용 — 이동·공격 느려짐)
+
 // ── 소환물(P4 야수조련사 펫 / P5 엔지니어 포탑) 공용 시스템 ──
 // kind: 'wolfpet'(늑대) | 'bear'(곰) | 'turret'(미니포탑) | 'cannon'(거포)
 // dmg는 소환 시점에 주인의 주력 스탯(공·주 평균)×coef 만큼 더해진다(spawnSummon). 여러 번 때리므로 coef는 작게.
 const SUMMON_SPEC = {
   wolfpet: { hp: 220, dmg: 26, coef: 0.12, range: 2.6, aggro: 16, speed: 9.5, mobile: true, cd: 0.9, life: 18 },
   bear: { hp: 760, dmg: 64, coef: 0.3, range: 3.2, aggro: 18, speed: 8.6, mobile: true, cd: 1.1, life: 16 },
-  // 미니포탑: 평타 2대 정도면 터지게 저체력. 주인(엔지니어)이 사거리 안에 없으면 휴면(zzz).
-  turret: { hp: 110, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: 22 },
-  cannon: { hp: 560, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 },
+  // 미니포탑: 기본 체력은 평타 두어 대 수준이지만 주력 스탯(hpCoef)에 비례해 단단해진다 — 후반에 평타 한 방에 안 터지게.
+  //  주인(엔지니어)이 사거리 안에 없으면 잠시 뒤 휴면(zzz).
+  turret: { hp: 110, hpCoef: 1.0, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: 22 },
+  cannon: { hp: 560, hpCoef: 0.8, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 },
 }
+const BEAST_LEAP_DUR = 0.45 // 사냥 명령 시 야수가 적에게 달려드는(도약) 시간 — 거리 무시
 const BEAST_WOLVES = 2 // 야수조련사 늑대 소환 마릿수
 const ENGI_MAX_TURRETS = 3 // 엔지니어가 동시에 둘 수 있는 미니포탑 수(초과 시 가장 오래된 것 회수)
+const ENGI_IDLE_GRACE = 3 // 주인이 죽거나 사거리 밖으로 나가도 이 시간(초) 뒤에야 포탑이 휴면(그 전엔 타이머 표시)
 const OVERCHARGE_T = 4 // 과부하 지속(초)
 const OVERCHARGE_ASPD = 0.5 // 과부하 중 포탑 공격속도 배율(쿨 -50%)
 
@@ -394,6 +447,7 @@ const REGEN_RATE = 0.015 // 초당 최대 HP 비율
 const FOUNTAIN_HEAL = 0.12
 const FOUNTAIN_DMG = 90 // 적 우물에 들어가면 따끔!
 const XP_RANGE = 22 // 처치 경험치를 나눠 받는 거리
+const XP_SHARE_BONUS = 0.2 // 여럿이 나눠 먹을 때 1명 늘 때마다 팀 합계에 붙는 보너스(1인당은 줄지만 합계는 조금↑)
 const KILL_CREDIT_T = 7 // 마지막으로 때린 적 영웅이 이 시간 안에 죽어야 그의 킬 (지나면 미니언/타워 처형)
 const TOWER_AGGRO_TIME = 3 // 적 영웅을 때리면 타워가 이만큼 노린다
 export const RECALL_TIME = 4 // 귀환 시전(채널링) 시간 — 방해 없이 버티면 우물로 복귀
@@ -472,8 +526,21 @@ export const BARON_BUFF_T = 75 // 바론 버프: 공격력 +40% + 빠른 회복
 const itemBonus = (h) => h.bonus || ZERO_BONUS
 const ZERO_BONUS = sumStats([])
 
-const heroMaxHp = (h) => CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1) + itemBonus(h).hp
-const heroAtk = (h) => CLASSES[h.cls].atk + CLASSES[h.cls].atkLvl * (h.lvl - 1) + itemBonus(h).atk
+// 밸런스: 전투가 한 방에 끝나지 않게 영웅 체력을 전반적으로 10% 상향(기본·레벨·아이템 모두 포함).
+//  (원래 1.0 ↔ 한때 1.2 사이의 중간값)
+export const HP_SCALE = 1.1
+const heroMaxHp = (h) => Math.round((CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1) + itemBonus(h).hp) * HP_SCALE)
+// 밸런스: 공격력 기반 딜러(근접·원거리)는 순간 딜링이 과해 마법사·물몸이 버티기 어려웠다.
+//  직업 고유 공격력 곡선(기본 + 레벨 성장)을 20% 낮춘다 — 평타와 공격력 계수 스킬 모두에 함께 반영된다.
+//  (아이템 공격력은 그대로 둬서 장비 투자 가치는 유지) 탱커·하이브리드(소환사)는 딜러가 아니라 제외.
+const AD_DAMAGE_CLASSES = new Set(['warrior', 'archer', 'assassin', 'gladiator', 'swordmaster', 'catcher', 'snarer'])
+const AD_CURVE = 0.8
+const innateAtk = (h) => {
+  const c = CLASSES[h.cls]
+  const base = c.atk + c.atkLvl * (h.lvl - 1)
+  return AD_DAMAGE_CLASSES.has(h.cls) ? base * AD_CURVE : base
+}
+const heroAtk = (h) => innateAtk(h) + itemBonus(h).atk
 const heroRange = (h) => CLASSES[h.cls].range + itemBonus(h).range + (h.bladeT > 0 ? BLADE_RANGE : 0)
 const heroSpeed = (h) => CLASSES[h.cls].speed + itemBonus(h).speed
 // 레벨업 필요 경험치 — 전반적으로 상향(레벨링을 느리게).
@@ -575,6 +642,13 @@ export function createGame(players, opts = {}) {
       freezeT: 0, // 빙결(마법사 화염구) 남은 시간 — 이동/공격이 느려진다
       whirlT: 0, // 회전베기(전사 궁극기) 남은 시간 — 팽이처럼 돌며 주변 피해
       whirlTickT: 0, // 회전베기 다음 피해 판정까지 남은 시간
+      knockT: 0, // 돌풍술사 넉백에 밀려나는 남은 시간 — 그동안 입력 무시(변위에 끌려간다)
+      knockVx: 0, // 넉백 속도(초당 이동)
+      knockVz: 0,
+      knockStun: 0, // 벽꽝 시 줄 기절(벽에 막히면 적용)
+      airT: 0, // 돌풍에 띄워진(공중) 남은 시간 — stunT와 함께 걸리며 렌더러가 몸을 띄운다
+      trail: [], // 시간술사: 과거 {x,z,hp} 표본 링버퍼(되감기용)
+      trailT: 0, // 다음 표본까지 남은 시간
       shieldT: 0, // 탱커 방패막기 남은 시간
       slowT: 0, // 공격 직후 무거운 발 남은 시간
       recallT: 0, // 귀환 채널링 남은 시간 (>0이면 시전 중)
@@ -706,6 +780,35 @@ function pushFxDir(state, kind, x, z, r, dir, team = null) {
   state.fx.push({ id: state.nextId++, kind, x, z, r, t: 0, team, dir })
 }
 
+// 넉백(변위): (fromX,fromZ)에서 멀어지는 방향으로 victim을 dist만큼 KNOCK_DUR초 동안 민다.
+//  벽/타워/넥서스에 막히면(거의 안 밀리면) wallStun만큼 기절한다(벽꽝). stepHero에서 매 틱 처리.
+//  검투의 분노(받는 CC 감소)는 밀려나는 거리·벽꽝 기절 양쪽에 적용한다.
+function applyKnockback(state, victim, fromX, fromZ, dist, wallStun = 0) {
+  if (victim.respawnT > 0) return
+  let dx = victim.x - fromX
+  let dz = victim.z - fromZ
+  let d = Math.hypot(dx, dz)
+  if (d < 1e-3) { dx = Math.cos(victim.dir); dz = Math.sin(victim.dir); d = 1 } // 겹쳐 있으면 바라보는 쪽으로
+  const cc = victim.rageT > 0 ? RAGE_CC_CUT : 1
+  const reach = dist * cc
+  victim.knockVx = (dx / d) * (reach / KNOCK_DUR)
+  victim.knockVz = (dz / d) * (reach / KNOCK_DUR)
+  victim.knockT = KNOCK_DUR
+  victim.knockStun = wallStun * cc
+  // 밀려나면 정신집중/귀환/발사준비 같은 채널은 끊긴다(이동기 CC로 취급)
+  victim.castT = 0
+  victim.recallT = 0
+  victim.hookWindT = 0
+}
+
+// 시간술사: secs초 과거의 표본 {x,z,hp}를 돌려준다. 기록이 모자라면 가장 오래된 표본.
+function trailSampleBack(h, secs) {
+  if (!h.trail || h.trail.length === 0) return { x: h.x, z: h.z, hp: h.hp }
+  const back = Math.round(secs / TRAIL_DT)
+  const i = Math.max(0, h.trail.length - 1 - back)
+  return h.trail[i]
+}
+
 const canAct = (h) => h.respawnT <= 0 && h.stunT <= 0
 // 광폭화 세기: 첫 BERSERK_FULL초는 전력(1), 그 뒤 BERSERK_FADE초 동안 0으로 잦아든다
 const berserkStrength = (h) =>
@@ -718,11 +821,11 @@ const atkOf = (h) => heroAtk(h) * dmgMult(h)
 //  · 마법 계열(마법사·힐러)은 레벨로 성장하는 기본 주문력 + 아이템 주문력을 쓴다.
 //  · 그 외(전사·궁수·암살자·탱커)는 공격력(heroAtk)을 그대로 주력 스탯으로 쓴다.
 //  수호기사도 AP 인챈터로 편입 — 보호막이 주문력에 비례한다.
-const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock', 'guardian'])
+const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock', 'guardian', 'windcaller', 'chronomancer'])
 //  하이브리드: 소환수 피해를 공격력·주문력 절반씩으로 키운다(AD/AP 아이템 어느 쪽이든 도움).
 const HYBRID_CLASSES = new Set(['beastmaster', 'engineer'])
-const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46 }
-const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7 }
+const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46, windcaller: 42, chronomancer: 44 }
+const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7, windcaller: 10, chronomancer: 10 }
 const spellPower = (h) =>
   (SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power
 // 캐릭터 주력 스탯 — 스킬 계수가 곱해지는 값
@@ -816,6 +919,42 @@ function nearestFoeHero(state, h, range) {
     }
   }
   return best
+}
+
+// 야수가 달려들 표적 — 인지(aggro) 범위 안에서 가장 가까운 적 영웅 > 적 미니언 > 정글몹.
+//  범위 안이면 거리를 무시하고(아무리 멀어도 범위 안이면) 바로 도약한다. {target, tk} 또는 null.
+function nearestLeapTarget(state, s, range) {
+  const r2 = range * range
+  let best = null
+  let bd = r2
+  for (const e of state.heroes) {
+    if (e.team === s.team || e.respawnT > 0) continue
+    const d = dist2(s, e)
+    if (d < bd) { bd = d; best = e }
+  }
+  if (best) return { target: best, tk: 'hero' }
+  bd = r2
+  for (const m of state.minions) {
+    if (m.team === s.team) continue
+    const d = dist2(s, m)
+    if (d < bd) { bd = d; best = m }
+  }
+  if (best) return { target: best, tk: 'minion' }
+  bd = r2
+  for (const m of state.monsters) {
+    if (!m.alive) continue
+    const d = dist2(s, m)
+    if (d < bd) { bd = d; best = m }
+  }
+  return best ? { target: best, tk: 'monster' } : null
+}
+
+// 도약 중 표적을 id/종류로 다시 찾는다(도망가도 추적) — 사라졌으면 null.
+function findLeapEntity(state, s) {
+  if (s.leapTk === 'hero') return state.heroes.find((e) => e.id === s.leapTargetId && e.team !== s.team && e.respawnT <= 0) || null
+  if (s.leapTk === 'minion') return state.minions.find((e) => e.id === s.leapTargetId && e.team !== s.team) || null
+  if (s.leapTk === 'monster') return state.monsters.find((e) => e.id === s.leapTargetId && e.alive) || null
+  return null
 }
 
 function findAttackTarget(state, h, range) {
@@ -927,8 +1066,9 @@ export function canShop(h) {
 }
 
 // 골드 지급 + 획득 표시(fx). 미니언 막타 등 "내가 얻은 골드"만 본인에게 떠오른다.
+//  죽어 있어도 받는다 — 내가 먼저 죽었어도 7초 안의 킬/어시스트, 도트·펫·포탑 막타,
+//  용/바론/타워 같은 팀 보상은 정당하게 지급되어야 한다(킬 스코어와 함께).
 function awardGold(state, h, amount, x, z) {
-  if (h.respawnT > 0) return // 죽어 있는 동안엔 골드를 받지 못한다
   h.gold += amount
   state.fx.push({
     id: state.nextId++, kind: 'gold', x: x ?? h.x, z: z ?? h.z,
@@ -936,9 +1076,10 @@ function awardGold(state, h, amount, x, z) {
   })
 }
 
-// 팀 전원에게 골드 (용/바론/타워 같은 오브젝트)
+// 팀 전원에게 골드 (용/바론/타워 같은 오브젝트) — 경험치(giveXp)와 마찬가지로 살아 있는 팀원만 받는다.
+//  (개인 기여로 얻는 킬/어시/막타 골드는 죽어 있어도 awardGold로 지급되지만, 팀 보상은 생존자에게만)
 function teamGold(state, team, amount) {
-  for (const h of state.heroes) if (h.team === team) awardGold(state, h, amount)
+  for (const h of state.heroes) if (h.team === team && h.respawnT <= 0) awardGold(state, h, amount)
 }
 
 // 아이템 효과를 다시 계산해 영웅 능력치에 반영 (구매/판매 시).
@@ -1055,7 +1196,7 @@ const SKILLS = {
     h.x += Math.cos(dir) * d
     h.z += Math.sin(dir) * d
     state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
-    const dmg = skillDmg(h, 30, 0.8) // 공격력 계수 (전사)
+    const dmg = skillDmg(h, 15, 0.4) // 공격력 계수 (전사) — 폭딜 억제(절반)
     lineDamage(state, h, sx, sz, dir, d + DASH_CONE, DASH_HALF, dmg * 0.6, 0) // 지나간 길의 적
     coneDamage(state, h, h.x, h.z, dir, DASH_CONE, 1.0, dmg, 1) // 착지 전방 강타 + 1초 기절
     pushFxDir(state, 'dash', sx, sz, d + DASH_CONE, dir, h.team)
@@ -1251,6 +1392,38 @@ const SKILLS = {
     }
     h.revealT = Math.max(h.revealT, REVEAL_TIME)
   },
+  // 돌풍술사 돌풍: 시전자에게서 회오리 하나가 앞으로 1초에 걸쳐 굴러간다 — 닿은 적을 1.5초 공중에 띄운다 + 피해.
+  //  (넉백/벽꽝은 밀쳐내기·태풍 담당) — 띄우기는 제자리 고정이라 아군 연계가 쉽다. 발사형 스킬샷(자동 조준).
+  windcaller(state, h) {
+    let dir = h.dir
+    const foe = nearestFoeHero(state, h, GUST_RANGE)
+    if (foe) dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    h.dir = dir
+    state.projectiles.push({
+      id: state.nextId++, kind: 'tornado', team: h.team, owner: h.id,
+      x: h.x, z: h.z, vx: Math.cos(dir) * GUST_SPEED, vz: Math.sin(dir) * GUST_SPEED,
+      travel: 0, max: GUST_RANGE, r: GUST_TORNADO_R, dmg: skillDmg(h, 44, 0.7), // 주문력 계수
+      hit: new Set(), // 같은 적을 두 번 띄우지 않게 (회오리가 통과하며 한 번씩)
+    })
+  },
+  // 시간술사 시간 도약: 보이는 적 영웅 뒤로 순간이동해 강하게 벤다(교전 진입).
+  chronomancer(state, h) {
+    let foe = null
+    let bd = TIMELEAP_RANGE * TIMELEAP_RANGE
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || !isHeroVisible(state, e, h.team)) continue
+      const d = dist2(h, e)
+      if (d < bd) { bd = d; foe = e }
+    }
+    if (!foe) return false
+    const d = dist(h, foe) || 1
+    h.x = foe.x + ((foe.x - h.x) / d) * 1.8 // 등 뒤로
+    h.z = foe.z + ((foe.z - h.z) / d) * 1.8
+    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    damageHero(state, foe, skillDmg(h, 40, 0.9), h) // 주문력 계수
+    pushFx(state, 'timeleap', h.x, h.z, 3, h.team)
+  },
 }
 
 // ── 궁극기 (레벨 3부터) ──
@@ -1432,6 +1605,38 @@ const ULTS = {
     }
     pushFx(state, 'snare', tx, tz, SNARE_RADIUS, h.team)
     if (!hitAny) return false
+  },
+  // 돌풍술사 태풍: 겨눈 자리에 거대한 태풍 — 범위 안 적 전원을 중심에서 바깥으로 크게 날리고 피해 + 둔화.
+  windcaller(state, h) {
+    const foe = nearestFoeHero(state, h, TYPHOON_RANGE)
+    const tx = foe ? foe.x : h.x + Math.cos(h.dir) * TYPHOON_AIM
+    const tz = foe ? foe.z : h.z + Math.sin(h.dir) * TYPHOON_AIM
+    const r2 = TYPHOON_RADIUS * TYPHOON_RADIUS
+    let hitAny = false
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || (e.x - tx) ** 2 + (e.z - tz) ** 2 > r2) continue
+      damageHero(state, e, skillDmg(h, 70, 0.8), h) // 주문력 계수
+      e.freezeT = Math.max(e.freezeT, TYPHOON_SLOW) // 휩쓸린 뒤 잠깐 둔화
+      applyKnockback(state, e, tx, tz, TYPHOON_KB, KNOCK_WALL_STUN) // 태풍 중심에서 바깥으로 날림
+      hitAny = true
+    }
+    pushFx(state, 'typhoon', tx, tz, TYPHOON_RADIUS, h.team)
+    pushFx(state, 'tornado', tx, tz, TYPHOON_RADIUS, h.team, 1.0) // 맵에 1초간 거대한 회오리가 선다
+    if (!hitAny) return false
+  },
+  // 시간술사 역행: 4초 전 위치·체력으로 되돌아가며 도착 지점 주변에 충격파 피해.
+  //  체력은 과거 표본으로 "되살린다"(현재보다 낮아지진 않게 — 회복 방향으로만).
+  chronomancer(state, h) {
+    const past = trailSampleBack(h, REWIND_BACK)
+    const sx = h.x, sz = h.z
+    h.x = past.x
+    h.z = past.z
+    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    h.hp = Math.min(h.maxHp, Math.max(h.hp, past.hp))
+    aoeDamage(state, h, h.x, h.z, REWIND_RADIUS, skillDmg(h, 60, 0.9), 0) // 도착 충격파
+    pushFx(state, 'rewind', sx, sz, 3, h.team)
+    pushFx(state, 'rewind', h.x, h.z, REWIND_RADIUS, h.team)
+    h.revealT = Math.max(h.revealT, REVEAL_TIME)
   },
 }
 
@@ -1637,13 +1842,26 @@ const SKILLS2 = {
     pushFx(state, 'taunt', h.x, h.z, ENSNARE_RADIUS, h.team)
     if (!hitAny) return false
   },
-  // 야수조련사 사냥 명령: 내 펫을 광폭화(공속↑) + 수명 약간 연장
+  // 야수조련사 사냥 명령: 내 펫을 광폭화(공속↑) + 수명 약간 연장 + 가장 가까운 적에게 달려들게(거리 무시·도약)
   beastmaster(state, h) {
     let n = 0
     for (const s of state.summons) {
       if (s.owner !== h.id) continue
       s.chargeT = OVERCHARGE_T
       s.life += 2
+      // 인지(aggro) 범위 안에 적이 있으면 거리를 무시하고 그 적에게 즉시 도약(점프 모션)
+      const found = nearestLeapTarget(state, s, s.aggro)
+      if (found) {
+        const t = found.target
+        s.dir = Math.atan2(t.z - s.z, t.x - s.x)
+        s.leapFrom = { x: s.x, z: s.z }
+        s.leapTo = { x: t.x, z: t.z } // 표적 위치로 착지(매 틱 추적해 갱신)
+        s.leapTargetId = t.id
+        s.leapTk = found.tk
+        s.leapT = BEAST_LEAP_DUR
+        s.leapDur = BEAST_LEAP_DUR
+        pushFx(state, 'haste', s.x, s.z, 2, s.team) // 도약 시작 자리에 잔상
+      }
       n++
     }
     pushFx(state, 'haste', h.x, h.z, 3, h.team)
@@ -1684,6 +1902,32 @@ const SKILLS2 = {
     pushFx(state, 'blink', sx, sz, 2.5, h.team)
     pushFx(state, 'blink', h.x, h.z, 2.5, h.team)
     h.revealT = Math.max(h.revealT, REVEAL_TIME)
+  },
+  // 돌풍술사 밀쳐내기: 주변 적을 자기 중심에서 사방으로 밀어낸다(피일/이탈) + 약간의 피해.
+  windcaller(state, h) {
+    const r2 = REPULSE_RADIUS * REPULSE_RADIUS
+    let hitAny = false
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || dist2(h, e) > r2) continue
+      damageHero(state, e, skillDmg(h, 26, 0.4), h) // 주문력 계수
+      applyKnockback(state, e, h.x, h.z, REPULSE_KB, KNOCK_WALL_STUN)
+      hitAny = true
+    }
+    pushFx(state, 'repulse', h.x, h.z, REPULSE_RADIUS, h.team)
+    if (!hitAny) return false
+  },
+  // 시간술사 시간 지연: 겨눈 자리에 시간이 느려지는 장판 — 머무는 적의 이동·공격을 늦추고(빙결) 갉아먹는다.
+  //  도약(진입)·역행(이탈)과 역할이 또렷이 다른 '고립·추격' 도구.
+  chronomancer(state, h) {
+    const foe = nearestFoeHero(state, h, TIMEWARP_RANGE)
+    const tx = foe ? foe.x : h.x + Math.cos(h.dir) * TIMEWARP_AIM
+    const tz = foe ? foe.z : h.z + Math.sin(h.dir) * TIMEWARP_AIM
+    state.zones.push({
+      id: state.nextId++, kind: 'timewarp', team: h.team, owner: h.id,
+      x: tx, z: tz, r: TIMEWARP_RADIUS, t: 0, delay: 0, life: TIMEWARP_LIFE, tickT: 0,
+      slowDps: skillDmg(h, 10, 0.2),
+    })
+    pushFx(state, 'timewarp', tx, tz, TIMEWARP_RADIUS, h.team)
   },
 }
 
@@ -1769,6 +2013,7 @@ function damageHero(state, victim, amount, attacker) {
   amount *= CLASSES[victim.cls].def ?? 1 // 근접 직업은 기본 방어력이 높다
   amount *= 1 - itemBonus(victim).def // 방어 아이템: 받는 피해 감소
   if (victim.shieldT > 0) amount *= SHIELD_CUT // 방패막기!
+  if (victim.whirlT > 0) amount *= 1 - WHIRL_DR // 전사 회전베기 중 방어 ↑(앞라인 탱킹)
   if (victim.wardT > 0) amount *= WARD_CUT // 수호기사 결속(아군 피해 감소)
   if (victim.vulnT > 0) amount *= 1 + DOOM_VULN_AMP // 주술사 낙인(받는 피해 증가)
   if (victim.barrierHp > 0) { // 수호기사 보호막: 흡수 풀에서 먼저 깎인다
@@ -1956,13 +2201,20 @@ function applyDamage(state, ref, amount, attacker) {
   else if (ref.tk === 'summon') damageSummon(state, e, amount)
 }
 
-// 처치 지점 근처의 같은 팀 영웅 모두에게 경험치 (킬러는 어디 있든 받는다)
+// 처치 경험치는 근처의 같은 팀 영웅이 "나눠" 갖는다(킬러는 어디 있든 포함).
+//  → 둘이 함께 먹으면 1인당 경험치가 줄어 몰려다니기만 해도 레벨이 앞서가던 문제를 막는다.
+//  단 팀 합계는 인원수에 비례해 살짝 늘려(XP_SHARE_BONUS) 협력 자체에는 약간의 이득을 둔다.
 function awardXp(state, team, at, amount, killer) {
   const r2 = XP_RANGE * XP_RANGE
+  const recipients = []
   for (const h of state.heroes) {
-    if (h.team !== team) continue
-    if (h === killer || dist2(h, at) <= r2) giveXp(state, h, amount)
+    if (h.team !== team || h.respawnT > 0) continue // 죽은 아군은 못 받고 분배에도 안 낀다
+    if (h === killer || dist2(h, at) <= r2) recipients.push(h)
   }
+  if (!recipients.length) return
+  const n = recipients.length
+  const share = (amount * (1 + XP_SHARE_BONUS * (n - 1))) / n // n=1: 그대로 / n=2: 0.6배씩 / n=3: 0.47배씩
+  for (const h of recipients) giveXp(state, h, share)
 }
 
 function giveXp(state, h, amount) {
@@ -2087,6 +2339,7 @@ function stepHero(state, h, dt) {
   h.vulnT = Math.max(0, h.vulnT - dt)
   h.parryT = Math.max(0, h.parryT - dt)
   h.rootT = Math.max(0, h.rootT - dt)
+  h.airT = Math.max(0, h.airT - dt)
   h.bladeT = Math.max(0, h.bladeT - dt)
   if (h.barrierT > 0 && (h.barrierT = Math.max(0, h.barrierT - dt)) === 0) h.barrierHp = 0
   h.stealthT = Math.max(0, h.stealthT - dt)
@@ -2094,6 +2347,7 @@ function stepHero(state, h, dt) {
   if (h.tauntT > 0 && (h.tauntT = Math.max(0, h.tauntT - dt)) === 0) h.tauntBy = null
   h.revealT = Math.max(0, h.revealT - dt)
   h.aggroT = Math.max(0, h.aggroT - dt)
+  h.gold += GOLD_PASSIVE * dt // 초당 자동 수입 — 죽어 있어도 계속 모인다(살아 있을 때도 동일 적용)
   // 부활 대기 → 우물에서 부활
   if (h.respawnT > 0) {
     h.respawnT = Math.max(0, h.respawnT - dt)
@@ -2107,14 +2361,18 @@ function stepHero(state, h, dt) {
       h.lastHitT = -99
       h.bushI = -1
       h.dir = h.team === 'blue' ? 0 : Math.PI
+      h.knockT = 0; h.knockVx = 0; h.knockVz = 0; h.knockStun = 0; h.airT = 0
+      h.trail = [] // 되감기로 죽기 직전 위치로 못 돌아가게 — 부활 시 기록 초기화
+      h.trailT = 0
     }
     return
   }
   h.stunT = Math.max(0, h.stunT - dt)
-  // 광폭화: 상태이상 면역 — 매 틱 기절/빙결을 떨쳐낸다 (면역+회복)
+  // 광폭화: 상태이상 면역 — 매 틱 기절/빙결/공중띄움을 떨쳐낸다 (면역+회복)
   if (h.berserkT > 0) {
     h.stunT = 0
     h.freezeT = 0
+    h.airT = 0
   }
   // 중독(주술사 DoT): 매 틱 피해. 가해자를 넘겨 킬 크레딧을 정상 처리한다.
   if (h.poisonT > 0) {
@@ -2175,8 +2433,26 @@ function stepHero(state, h, dt) {
     h.stunT = Math.max(h.stunT, h.pullT)
     h.pullT = Math.max(0, h.pullT - dt)
   }
-  // 이동 — 기절·정신집중·귀환 채널·속박·발사준비 중엔 제자리에 멈춘다(이동 입력 무시)
-  if (h.stunT <= 0 && h.castT <= 0 && h.recallT <= 0 && h.rootT <= 0 && h.hookWindT <= 0) {
+  // 넉백(돌풍술사): 밀려나는 동안 입력 무시. 벽/타워에 막혀 거의 안 밀리면 "벽꽝"으로 기절.
+  if (h.knockT > 0) {
+    const want = Math.hypot(h.knockVx, h.knockVz) * dt
+    const px = h.x, pz = h.z
+    h.x += h.knockVx * dt
+    h.z += h.knockVz * dt
+    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    const moved = Math.hypot(h.x - px, h.z - pz)
+    if (h.knockStun > 0 && want > 0.05 && moved < want * KNOCK_WALL_FRAC) {
+      h.stunT = Math.max(h.stunT, h.knockStun) // 벽꽝!
+      pushFx(state, 'boom', h.x, h.z, 2.4, h.team)
+      h.knockT = 0 // 벽에 박혔으니 더 밀리지 않는다
+    } else {
+      h.knockT = Math.max(0, h.knockT - dt)
+    }
+    if (h.knockT <= 0) { h.knockVx = 0; h.knockVz = 0; h.knockStun = 0 }
+    h.bushI = state.map.bushIndexAt(h.x, h.z)
+  }
+  // 이동 — 기절·정신집중·귀환 채널·속박·발사준비·넉백 중엔 제자리에 멈춘다(이동 입력 무시)
+  if (h.stunT <= 0 && h.castT <= 0 && h.recallT <= 0 && h.rootT <= 0 && h.hookWindT <= 0 && h.knockT <= 0) {
     const len = Math.hypot(h.mx, h.mz)
     if (len > 0.12) {
       // 공격 직후엔 발이 무겁고, 탱커는 방패막기 중 돌진 가속, 빙결 중엔 굼뜨다,
@@ -2209,17 +2485,25 @@ function stepHero(state, h, dt) {
   if (h.rageT > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * RAGE_REGEN * dt) // 검투의 분노: 지속 회복
   // 아이템 체력 재생 (전투 중에도 항상)
   if (itemBonus(h).regen > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * itemBonus(h).regen * dt)
-  // 골드 자동 수입
-  h.gold += GOLD_PASSIVE * dt
+  // (골드 자동 수입은 위쪽에서 — 죽어 있을 때도 모이도록 부활 분기 앞에서 처리한다)
   // 회전베기(전사 궁극기): 도는 동안 WHIRL_TICK 간격으로 반경 안을 후린다 (이동은 위에서 이미 처리)
   if (h.whirlT > 0) {
     h.whirlT = Math.max(0, h.whirlT - dt)
     h.whirlTickT -= dt
     if (h.whirlTickT <= 0) {
       h.whirlTickT += WHIRL_TICK
-      aoeDamage(state, h, h.x, h.z, WHIRL_RADIUS, skillDmg(h, 20, 0.3), 0) // 공격력 계수 (전사)
+      aoeDamage(state, h, h.x, h.z, WHIRL_RADIUS, skillDmg(h, 10, 0.15), 0) // 공격력 계수 (전사) — 폭딜 억제(절반)
       pushFx(state, 'whirl', h.x, h.z, WHIRL_RADIUS, h.team)
       h.revealT = Math.max(h.revealT, 0.4)
+    }
+  }
+  // 시간술사: 일정 간격으로 현재 위치·체력 표본을 남긴다(깜빡임/역행이 과거로 되돌아갈 좌표).
+  if (h.cls === 'chronomancer') {
+    h.trailT -= dt
+    if (h.trailT <= 0) {
+      h.trailT += TRAIL_DT
+      h.trail.push({ x: h.x, z: h.z, hp: h.hp })
+      if (h.trail.length > TRAIL_MAX) h.trail.shift()
     }
   }
 }
@@ -2621,6 +2905,30 @@ function stepProjectiles(state, dt) {
       if (p.travel >= p.max) remove.add(p.id)
       continue
     }
+    if (p.kind === 'tornado') {
+      // 돌풍술사 회오리: 앞으로 굴러가며 통과한 적을 한 번씩 공중에 띄운다(+피해). 미니언/정글몹은 피해만.
+      p.x += p.vx * dt
+      p.z += p.vz * dt
+      p.travel += GUST_SPEED * dt
+      const owner = state.heroes.find((hh) => hh.id === p.owner) || { team: p.team }
+      const r2 = p.r * p.r
+      for (const e of state.heroes) {
+        if (e.team === p.team || e.respawnT > 0 || p.hit.has(e.id) || dist2(p, e) > r2) continue
+        p.hit.add(e.id)
+        damageHero(state, e, p.dmg, owner)
+        const cc = e.rageT > 0 ? RAGE_CC_CUT : 1 // 검투의 분노: 받는 CC 감소
+        e.airT = Math.max(e.airT, GUST_AIRBORNE * cc) // 공중에 띄운다(렌더러가 몸을 띄움)
+        e.stunT = Math.max(e.stunT, GUST_AIRBORNE * cc) // 띄워진 동안은 아무것도 못 함(하드 CC)
+      }
+      for (const m of [...state.minions]) {
+        if (m.team !== p.team && !p.hit.has(m.id) && dist2(p, m) <= r2) { p.hit.add(m.id); damageMinion(state, m, p.dmg, owner) }
+      }
+      for (const m of state.monsters) {
+        if (m.alive && !p.hit.has(m.id) && dist2(p, m) <= r2) { p.hit.add(m.id); damageMonster(state, m, p.dmg, owner) }
+      }
+      if (p.travel >= p.max) remove.add(p.id)
+      continue
+    }
     // 유도탄 (기본공격/타워) — 대상이 사라지면 같이 사라진다
     const e = targetEntity(state, p.target)
     if (!e) {
@@ -2697,6 +3005,28 @@ function stepZones(state, dt) {
       if (z.t >= z.life) remove.add(z.id)
       continue
     }
+    // 시간 지연: life 동안 머무는 장판 — tick마다 범위 내 적을 둔화(빙결로 재활용) + 약한 지속피해
+    if (z.kind === 'timewarp') {
+      z.tickT -= dt
+      if (z.tickT <= 0) {
+        z.tickT += TIMEWARP_TICK
+        const owner = state.heroes.find((h) => h.id === z.owner) || { team: z.team }
+        const r2 = z.r * z.r
+        for (const e of state.heroes) {
+          if (e.team === z.team || e.respawnT > 0) continue
+          if ((e.x - z.x) ** 2 + (e.z - z.z) ** 2 > r2) continue
+          const cc = e.rageT > 0 ? RAGE_CC_CUT : 1
+          e.freezeT = Math.max(e.freezeT, TIMEWARP_SLOW_T * cc) // 이동·공격이 느려진다
+          damageHero(state, e, z.slowDps * TIMEWARP_TICK, owner)
+        }
+        for (const m of [...state.minions]) {
+          if (m.team !== z.team && (m.x - z.x) ** 2 + (m.z - z.z) ** 2 <= r2) damageMinion(state, m, z.slowDps * TIMEWARP_TICK, owner)
+        }
+        pushFx(state, 'timewarp', z.x, z.z, z.r * 0.7, z.team)
+      }
+      if (z.t >= z.life) remove.add(z.id)
+      continue
+    }
     if (z.t < z.delay) continue
     const owner = state.heroes.find((h) => h.id === z.owner) || { team: z.team }
     if (z.kind === 'meteor') {
@@ -2719,13 +3049,17 @@ function stepZones(state, dt) {
 // 소환물 생성(펫/포탑). 주인(owner)의 팀/위치 기준.
 function spawnSummon(state, owner, kind, x, z) {
   const spec = SUMMON_SPEC[kind]
+  // 소환 시점 주인의 주력 스탯(공·주 평균)을 계수만큼 피해·체력에 얹는다 — 하이브리드 스케일.
+  const ps = powerStat(owner)
+  const hp = spec.hp + Math.round((spec.hpCoef || 0) * ps)
   state.summons.push({
     id: state.nextId++, kind, team: owner.team, owner: owner.id,
-    x, z, dir: owner.dir, hp: spec.hp, maxHp: spec.hp,
-    // 소환 시점 주인의 주력 스탯(공·주 평균)을 계수만큼 얹는다 — 하이브리드 스케일.
-    atkCd: 0, dmg: spec.dmg + Math.round((spec.coef || 0) * powerStat(owner)), range: spec.range, aggro: spec.aggro,
+    x, z, dir: owner.dir, hp, maxHp: hp,
+    atkCd: 0, dmg: spec.dmg + Math.round((spec.coef || 0) * ps), range: spec.range, aggro: spec.aggro,
     speed: spec.speed, mobile: spec.mobile, cd: spec.cd, life: spec.life,
     chargeT: 0, // 과부하(엔지니어) 남은 시간
+    idleT: 0, // 주인 이탈 누적 시간(엔지니어 포탑 휴면 유예)
+    leapT: 0, leapDur: 0, leapTargetId: null, leapTk: null, // 사냥 명령 도약(야수조련사) 진행/표적
   })
 }
 
@@ -2747,9 +3081,42 @@ function stepSummons(state, dt) {
       continue
     }
     const owner = state.heroes.find((h) => h.id === s.owner)
-    // 미니포탑 휴면: 사정거리 안에 주인(엔지니어)이 없으면 잠든다(zzz) — 표적 탐색/공격 중단
+    // 사냥 명령 도약: 적에게 달려드는 중 — 보간 이동(점프), 그동안 다른 행동은 멈춘다.
+    //  표적이 도망가도 매 틱 위치를 추적하고, 착지 시점엔 표적과 같은 자리에 내려서 무조건 한 번 문다.
+    if (s.leapT > 0) {
+      s.leapT = Math.max(0, s.leapT - dt)
+      const tgt = findLeapEntity(state, s)
+      if (tgt) {
+        s.leapTo = { x: tgt.x, z: tgt.z } // 표적 현재 위치 추적
+        s.dir = Math.atan2(tgt.z - s.z, tgt.x - s.x)
+      }
+      const k = s.leapDur > 0 ? 1 - s.leapT / s.leapDur : 1
+      s.x = s.leapFrom.x + (s.leapTo.x - s.leapFrom.x) * k
+      s.z = s.leapFrom.z + (s.leapTo.z - s.leapFrom.z) * k
+      if (s.leapT <= 0) {
+        if (tgt) {
+          s.x = tgt.x // 착지 = 대상과 동일 위치
+          s.z = tgt.z
+          const att = owner && owner.respawnT <= 0 ? owner : { id: s.owner, team: s.team }
+          if (s.leapTk === 'hero') damageHero(state, tgt, s.dmg, att)
+          else if (s.leapTk === 'minion') damageMinion(state, tgt, s.dmg, att)
+          else damageMonster(state, tgt, s.dmg, att)
+          s.atkCd = s.cd * (s.chargeT > 0 ? OVERCHARGE_ASPD : 1) // 착지 무는 일격 후 평타 쿨 시작
+        }
+        s.leapFrom = null
+        s.leapTo = null
+        s.leapTargetId = null
+        s.leapTk = null
+        state.map.resolveTerrain(s, 1.0, state.towers) // 착지 위치 보정
+      }
+      continue
+    }
+    // 미니포탑: 주인(엔지니어)이 죽거나 사거리 밖으로 나가도 바로 멈추지 않고 3초 유예 후 휴면.
+    //  유예 동안은 계속 사격하며 타이머가 줄어들고(렌더러가 표시), 주인이 사거리 안으로 돌아오면 해제.
     if (s.kind === 'turret') {
-      s.dormant = !(owner && owner.respawnT <= 0 && dist(s, owner) <= s.range)
+      const tethered = owner && owner.respawnT <= 0 && dist(s, owner) <= s.range
+      s.idleT = tethered ? 0 : (s.idleT || 0) + dt
+      s.dormant = s.idleT >= ENGI_IDLE_GRACE
       if (s.dormant) continue
     }
     // 표적: aggro 범위 내 가장 가까운 적 영웅 > 미니언 > 정글몹
@@ -2849,15 +3216,15 @@ const BOT_BUILD = {
   warrior: ['longsword', 'vampire_scythe', 'plate', 'executioner'],
   assassin: ['dagger', 'vampire_scythe', 'executioner', 'boots'],
   archer: ['rage_gloves', 'longsword', 'executioner', 'boots'],
-  mage: ['orb', 'flame_core', 'void_staff', 'boots'],
+  mage: ['orb', 'flame_core', 'void_staff', 'guardian_cloak'],
   healer: ['orb', 'wisdom_hat', 'frost_staff', 'plate'],
   tank: ['leather', 'plate', 'giant_heart', 'thornmail'],
   // 한빙술사: 컨트롤 메이지 — 주문력 + 약간의 생존(무른 몸)
-  cryomancer: ['orb', 'frost_staff', 'flame_core', 'void_staff'],
+  cryomancer: ['orb', 'frost_staff', 'flame_core', 'guardian_cloak'],
   // 검투사: 흡혈 브루저 — 공격력 + 흡혈 + 체력
   gladiator: ['longsword', 'vampire_scythe', 'giant_heart', 'executioner'],
-  // 주술사: DoT zoner — 주문력 위주
-  warlock: ['orb', 'flame_core', 'void_staff', 'frost_staff'],
+  // 주술사: DoT zoner — 주문력 위주 + 무른 몸 보강(주문력 방어구)
+  warlock: ['orb', 'flame_core', 'void_staff', 'guardian_cloak'],
   // 수호기사: AP 인챈터 서폿 — 주문력(보호막) + 쿨감(자주 시전) + 생존
   guardian: ['orb', 'wisdom_hat', 'frost_staff', 'archmage_staff'],
   // 검성: 평타 듀얼리스트 — 공격속도 + 공격력 + 흡혈
@@ -2870,6 +3237,10 @@ const BOT_BUILD = {
   beastmaster: ['sage_stone', 'flame_core', 'longsword', 'giant_heart'],
   // 엔지니어: 하이브리드 포탑 — 주문력 위주 혼합 + 약간의 생존(후방)
   engineer: ['sage_stone', 'flame_core', 'void_staff', 'plate'],
+  // 돌풍술사: 넉백 컨트롤러 — 주문력 + 쿨감(자주 시전) + 무른 몸 보강
+  windcaller: ['orb', 'wisdom_hat', 'flame_core', 'guardian_cloak'],
+  // 시간술사: 버스트 다이버 — 주문력 + 폭딜 + 약간의 생존(되감기로 버틴다)
+  chronomancer: ['orb', 'flame_core', 'void_staff', 'guardian_cloak'],
 }
 
 // 봇 자동 구매: 우물 안 + 빈 칸 있으면 빌드 우선순위에서 안 가진 첫 구매 가능 아이템을 산다.
@@ -3131,11 +3502,12 @@ function stepBots(state, dt) {
       const sc = botChaseScore(state, h, foe)
       const tower = nearestEnemyTower(state, h)
       const towerD = tower ? dist(h, tower) : Infinity
-      const healthy = h.hp > h.maxHp * 0.4
-      // 유리: 체력 여유 + 안 밀리고(아군≥적) + 트레이드 우세(살짝 손해까진 허용 → 적극적으로 붙는다)
-      const winning = healthy && sc.allies >= sc.foes && sc.killT <= sc.lifeT * 1.15
-      // 불리: 빈사거나 수적 열세거나 트레이드가 확실히 진다
-      const losing = !healthy || sc.allies < sc.foes || sc.lifeT < sc.killT * 0.7
+      const healthy = h.hp > h.maxHp * 0.38
+      // 호전적: 체력 여유 + 안 밀리고(아군≥적) + 트레이드가 살짝 손해까진 허용하면 붙는다.
+      //  (원래 1.15 ↔ 한때 1.5 사이의 중간값) — 비등하면 싸움을 걸되 과하게 풀진 않는다.
+      const winning = healthy && sc.allies >= sc.foes && sc.killT <= sc.lifeT * 1.33
+      // 불리: 빈사거나 수적 열세거나 트레이드가 확실히 진다(여기 해당할 때만 물러난다)
+      const losing = !healthy || sc.allies < sc.foes || sc.lifeT < sc.killT * 0.65
       // ① 불리한데 적이 붙어 있으면 본진으로 뺀다(생존 우선). 방어·도주기를 쓰며 사거리 안이면 반격.
       if (losing && d < kite + 4) {
         if (h.cls === 'tank' && h.skillCd <= 0 && d < 10) castSkill(state, h.id) // 방패 켜고 후퇴
@@ -3254,6 +3626,8 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if ((h.cls === 'beastmaster' || h.cls === 'engineer') && state.summons.some((s) => s.owner === h.id)) {
       castSkill2(state, h.id) // 사냥 명령 / 과부하
     }
+    else if (h.cls === 'windcaller' && d < REPULSE_RADIUS) castSkill2(state, h.id) // 붙으면 밀쳐낸다(피일)
+    else if (h.cls === 'chronomancer' && d < TIMEWARP_RANGE - 1) castSkill2(state, h.id) // 시간 지연으로 둔화·고립
   }
   const ready = h.skillCd <= 0
   if (ready) {
@@ -3267,6 +3641,8 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'warlock' && d < CURSE_RANGE - 1) castSkill(state, h.id) // 저주살(중독)
     else if (h.cls === 'catcher' && d > 4 && d < HOOK_RANGE - 1) castSkill(state, h.id) // 사슬갈고리로 끌어온다
     else if (h.cls === 'snarer' && d > 3 && d < NET_RANGE - 1) castSkill(state, h.id) // 올가미로 멀리서 묶는다
+    else if (h.cls === 'windcaller' && d < GUST_RANGE - 1) castSkill(state, h.id) // 돌풍으로 밀쳐낸다
+    else if (h.cls === 'chronomancer' && d < TIMELEAP_RANGE - 1 && h.hp > h.maxHp * 0.4) castSkill(state, h.id) // 시간 도약으로 파고든다
     else if (h.cls === 'swordmaster' && d < 6) castSkill(state, h.id) // 붙으면 발도 카운터(반격)
     // 힐러 치유·수호기사 보호막은 stepBots 위쪽에서 항상 챙긴다
   }
@@ -3297,6 +3673,10 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     castUlt(state, h.id) // 곰 소환
   } else if (h.cls === 'engineer' && (nearCount >= 1 || d < 13)) {
     castUlt(state, h.id) // 거포 설치
+  } else if (h.cls === 'windcaller' && (nearCount >= 2 || d < TYPHOON_RADIUS)) {
+    castUlt(state, h.id) // 태풍으로 한타를 날려버린다
+  } else if (h.cls === 'chronomancer' && (h.hp < h.maxHp * 0.35 || (nearCount >= 1 && foe.hp < foe.maxHp * 0.4))) {
+    castUlt(state, h.id) // 역행 — 위기 탈출/막타 후 안전 귀환
   }
   // 수호기사 궁극(불굴의 진형)은 stepBots 위쪽 능동 블록에서 챙긴다
 }
@@ -3579,7 +3959,13 @@ export function makeView(state) {
       hasteT: r2d(h.hasteT),
       tauntT: r2d(h.tauntT),
       castT: r2d(h.castT), // 정신집중 남은 시간 (렌더러 표시 + 클라 이동 예측 정지)
+      knockT: r2d(h.knockT), // 넉백에 밀려나는 중 (클라 이동 예측 정지 — 서버 변위에 맡김)
+      airT: r2d(h.airT), // 돌풍에 띄워진(공중) 남은 시간 — 렌더러가 몸을 띄운다
       recallT: r2d(h.recallT),
+      // 시간술사 역행 미리보기: 궁극기가 켜져 있을 때만, 되돌아갈 과거 지점을 그림자로 보여 준다
+      ...(h.cls === 'chronomancer' && h.ultCd <= 0 && h.lvl >= ULT_LEVEL && h.respawnT <= 0
+        ? (() => { const p = trailSampleBack(h, REWIND_BACK); return { rewindGhost: { x: r1(p.x), z: r1(p.z) } } })()
+        : null),
       respawnT: r2d(h.respawnT),
       bushI: h.bushI,
       revealT: r2d(h.revealT),
@@ -3616,6 +4002,9 @@ export function makeView(state) {
     summons: state.summons.map((s) => ({
       id: s.id, kind: s.kind, team: s.team, x: r1(s.x), z: r1(s.z), dir: r2d(s.dir),
       hp: Math.ceil(s.hp), maxHp: s.maxHp, charge: s.chargeT > 0 ? 1 : 0, dormant: s.dormant ? 1 : 0,
+      // leap: 도약 진행도(1→0, 점프 모션용) · idle: 포탑 휴면까지 남은 유예 시간(타이머 표시용)
+      leap: s.leapT > 0 && s.leapDur > 0 ? r2d(s.leapT / s.leapDur) : 0,
+      idle: s.kind === 'turret' && !s.dormant && s.idleT > 0 ? r1(ENGI_IDLE_GRACE - s.idleT) : 0,
     })),
     towers: state.towers.map((t) => ({
       id: t.id,
@@ -3660,6 +4049,7 @@ export function makeView(state) {
     fx: state.fx.map((n) => ({
       id: n.id, kind: n.kind, x: r1(n.x), z: r1(n.z), r: n.r, t: r2d(n.t), team: n.team,
       ...(n.dir != null ? { dir: r2d(n.dir) } : null),
+      ...(n.life != null ? { life: n.life } : null),
       ...(n.kind === 'gold' ? { n: n.n, owner: n.owner } : null),
     })),
     feed: state.feed.slice(-5),
