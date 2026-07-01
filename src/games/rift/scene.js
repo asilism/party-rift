@@ -78,6 +78,186 @@ function emojiSprite(emoji, scale = 2) {
   return sp
 }
 
+// 부드러운 방사형 발광 텍스처 (가운데 흰빛 → 가장자리 투명). 발광체 후광·타격 스파크에 공용.
+let _glowTex = null
+function glowTexture() {
+  if (_glowTex) return _glowTex
+  const size = 128
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d')
+  const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2)
+  g.addColorStop(0, 'rgba(255,255,255,1)')
+  g.addColorStop(0.22, 'rgba(255,255,255,0.85)')
+  g.addColorStop(0.5, 'rgba(255,255,255,0.35)')
+  g.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, size, size)
+  _glowTex = new THREE.CanvasTexture(c)
+  _glowTex.colorSpace = THREE.SRGBColorSpace
+  return _glowTex
+}
+
+// 결속의 끈: 두 영웅 사이를 잇는 투명한 청록 선 (매 프레임 양끝 좌표만 갱신)
+function makeBindLine() {
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3))
+  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({
+    color: 0xbfeeff, transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending,
+  }))
+  line.frustumCulled = false
+  return line
+}
+
+// 발광체 후광: 가산 합성으로 은은하게 빛나는 스프라이트 (구체 투사체를 "빛덩이"로 보이게)
+function glowSprite(color, scale = 2) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture(), color, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, opacity: 0.9,
+  }))
+  sp.scale.set(scale, scale, 1)
+  return sp
+}
+
+// ── 공용 파티클 스파크 시스템 ──
+// 하나의 Points(가산 합성 + 발광 텍스처)로 타격 스파크·발자국 먼지·투사체 꼬리를 모두 그린다.
+//  링버퍼로 파티클을 재사용하고, 개별 수명이 다하면 색을 0으로(가산→투명) 죽인다. 순수 클라 연출.
+//  파티클마다 크기가 달라야 해서(타격은 크게, 먼지·꼬리는 작게) 커스텀 셰이더로 per-particle size를 준다.
+function makeParticles(scene, max = 420) {
+  const geo = new THREE.BufferGeometry()
+  const pos = new Float32Array(max * 3)
+  const col = new Float32Array(max * 3)
+  const psize = new Float32Array(max)
+  const phard = new Float32Array(max) // 0=부드러운 발광(꼬리·먼지), 1=각진 조각(타격)
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+  geo.setAttribute('acolor', new THREE.BufferAttribute(col, 3))
+  geo.setAttribute('psize', new THREE.BufferAttribute(psize, 1))
+  geo.setAttribute('phard', new THREE.BufferAttribute(phard, 1))
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { map: { value: glowTexture() } },
+    vertexShader: `
+      attribute vec3 acolor;
+      attribute float psize;
+      attribute float phard;
+      varying vec3 vColor;
+      varying float vHard;
+      void main() {
+        vColor = acolor;
+        vHard = phard;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = psize * (360.0 / -mv.z); // 원근 크기 감쇠
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform sampler2D map;
+      varying vec3 vColor;
+      varying float vHard;
+      void main() {
+        if (vHard > 0.5) {
+          // 각진 조각: 다이아몬드꼴 하드 엣지 — 뿌옇게 번지지 않고 또렷한 파편으로 튄다
+          vec2 d = abs(gl_PointCoord - 0.5);
+          float m = d.x + d.y;
+          if (m > 0.5) discard;
+          float a = 1.0 - smoothstep(0.4, 0.5, m); // 가장자리만 살짝 정리
+          gl_FragColor = vec4(vColor, a);
+        } else {
+          vec4 t = texture2D(map, gl_PointCoord); // 부드러운 발광
+          gl_FragColor = vec4(vColor, t.a);
+        }
+      }`,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  })
+  const points = new THREE.Points(geo, mat)
+  points.frustumCulled = false
+  scene.add(points)
+  const vel = new Float32Array(max * 3)
+  const base = new Float32Array(max * 3) // 원래 색 (수명따라 감쇠)
+  const life = new Float32Array(max)
+  const maxLife = new Float32Array(max)
+  const grav = new Float32Array(max)
+  let cursor = 0
+  const _c = new THREE.Color()
+  function emit(x, y, z, color, n, o = {}) {
+    const spread = o.spread ?? 4
+    const up = o.up ?? 3.5
+    const lo = o.lifeMin ?? 0.25
+    const hi = o.lifeMax ?? 0.5
+    const g = o.gravity ?? 9
+    const sz = o.size ?? 0.9
+    const hard = o.hard ? 1 : 0
+    _c.set(color)
+    for (let k = 0; k < n; k++) {
+      const i = cursor
+      cursor = (cursor + 1) % max
+      const a = Math.random() * Math.PI * 2
+      const sp = spread * (0.35 + Math.random() * 0.65)
+      pos[i * 3] = x
+      pos[i * 3 + 1] = y
+      pos[i * 3 + 2] = z
+      vel[i * 3] = Math.cos(a) * sp
+      vel[i * 3 + 1] = up * (0.25 + Math.random())
+      vel[i * 3 + 2] = Math.sin(a) * sp
+      base[i * 3] = _c.r
+      base[i * 3 + 1] = _c.g
+      base[i * 3 + 2] = _c.b
+      psize[i] = sz * (0.75 + Math.random() * 0.5) // 알갱이 크기 살짝 들쭉날쭉
+      phard[i] = hard
+      const lf = lo + Math.random() * (hi - lo)
+      life[i] = lf
+      maxLife[i] = lf
+      grav[i] = g
+    }
+    geo.attributes.psize.needsUpdate = true
+    geo.attributes.phard.needsUpdate = true
+  }
+  function update(dt) {
+    for (let i = 0; i < max; i++) {
+      if (life[i] <= 0) continue
+      life[i] -= dt
+      if (life[i] <= 0) { col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = 0; continue }
+      vel[i * 3 + 1] -= grav[i] * dt
+      pos[i * 3] += vel[i * 3] * dt
+      pos[i * 3 + 1] += vel[i * 3 + 1] * dt
+      pos[i * 3 + 2] += vel[i * 3 + 2] * dt
+      if (pos[i * 3 + 1] < 0.1) { // 바닥에 튕겨 잦아든다
+        pos[i * 3 + 1] = 0.1
+        vel[i * 3 + 1] *= -0.28
+        vel[i * 3] *= 0.6
+        vel[i * 3 + 2] *= 0.6
+      }
+      const f = life[i] / maxLife[i] // 1→0
+      col[i * 3] = base[i * 3] * f
+      col[i * 3 + 1] = base[i * 3 + 1] * f
+      col[i * 3 + 2] = base[i * 3 + 2] * f
+    }
+    geo.attributes.position.needsUpdate = true
+    geo.attributes.acolor.needsUpdate = true
+  }
+  return { emit, update }
+}
+
+// 걷기 모션 상태: 이동 거리로 보폭 위상을 굴려 속도에 따라 자연히 걸음 빨라진다(순수 클라).
+//  bounce(위아래 통통)·step(발 딛는 순간) 반환. 순간이동(blink/부활)은 큰 이동으로 걸러 튐 방지.
+function walkBounce(u, x, z, dt) {
+  const px = u.wx == null ? x : u.wx
+  const pz = u.wz == null ? z : u.wz
+  const moved = Math.hypot(x - px, z - pz)
+  u.wx = x
+  u.wz = z
+  if (moved > 6) return { amt: 0, bounce: 0, step: false } // 순간이동
+  const prev = u.wphase || 0
+  u.wphase = prev + moved * 0.75 // 보폭(한 걸음 거리)을 넓게 — 뒤뚱이 느긋해진다
+  const speed = dt > 0 ? moved / dt : 0
+  const amt = Math.min(1, speed / 6)
+  return {
+    amt,
+    bounce: Math.abs(Math.sin(u.wphase)) * amt,
+    step: amt > 0.15 && Math.floor(u.wphase / Math.PI) !== Math.floor(prev / Math.PI),
+  }
+}
+
 // 이름표 텍스처 (흰/노란 글씨 + 어두운 테두리)
 function makeNameTexture(text, color) {
   const c = document.createElement('canvas')
@@ -171,13 +351,32 @@ function makeHpBar(width = 2.6, color = ALLY_HP) {
   fg.center.set(0, 0.5)
   fg.position.x = -width / 2 + 0.05
   fg.scale.set(width - 0.1, 0.24, 1)
-  g.add(bg, fg)
-  g.userData = { fg, width: width - 0.1, fgLeft: -width / 2 + 0.05, segMaxHp: -1, segs: [] }
+  // 보호막(흡수) 게이지 — 남은 체력 오른쪽에 흰색으로 덧붙는다(평소 숨김)
+  const sh = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xffffff, opacity: 0.9, transparent: true, depthWrite: false }))
+  sh.center.set(0, 0.5)
+  sh.position.set(-width / 2 + 0.05, 0, 0.02)
+  sh.scale.set(0.001, 0.24, 1)
+  sh.visible = false
+  g.add(bg, fg, sh)
+  g.userData = { fg, sh, width: width - 0.1, fgLeft: -width / 2 + 0.05, segMaxHp: -1, segs: [] }
   return g
 }
 
 function setHpBar(bar, frac) {
   bar.userData.fg.scale.x = Math.max(0.001, bar.userData.width * Math.max(0, Math.min(1, frac)))
+}
+
+// 체력바 위 보호막 표시: 남은 체력 끝에서 흰 막대를 오른쪽으로 덧그린다(바 끝까지만).
+function setHpBarShield(bar, hpFrac, shFrac) {
+  const u = bar.userData
+  const sh = u.sh
+  if (!sh) return
+  const hp = Math.max(0, Math.min(1, hpFrac))
+  const w = Math.min(Math.max(0, shFrac), 1 - hp) * u.width
+  if (w <= 0.002) { sh.visible = false; return }
+  sh.visible = true
+  sh.scale.x = w
+  sh.position.x = u.fgLeft + hp * u.width
 }
 
 // 체력바를 100단위로 칸 나눠 표시한다 — 칸(눈금)이 많을수록 최대 체력이 큰 캐릭터.
@@ -864,13 +1063,31 @@ function buildHero(h, mine, barColor) {
   buff.rotation.x = -Math.PI / 2
   buff.position.y = 0.1
   buff.visible = false
-  // 탱커 방패막기 보호막
+  // 탱커 방패막기(피해 감소) — 파란 막 (막아낸다)
   const shield = new THREE.Mesh(
     new THREE.SphereGeometry(2.6 * s, 12, 8),
     new THREE.MeshBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: 0.3, depthWrite: false })
   )
   shield.position.y = 2.2 * s
   shield.visible = false
+  // 수호기사 흡수 보호막(barrierHp) — 금색 셸 (피해를 빨아들인다). 탱커 막기와 색으로 구분.
+  const barrier = new THREE.Mesh(
+    new THREE.SphereGeometry(2.75 * s, 14, 10),
+    new THREE.MeshBasicMaterial({
+      color: 0xffdf8a, transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending,
+    })
+  )
+  barrier.position.y = 2.2 * s
+  barrier.visible = false
+  // 수호기사 결속 — 묶인 아군(+수호기사)을 감싸는 투명한 청록 구체
+  const bindSphere = new THREE.Mesh(
+    new THREE.SphereGeometry(2.95 * s, 14, 10),
+    new THREE.MeshBasicMaterial({
+      color: 0xafe4ff, transparent: true, opacity: 0.14, depthWrite: false, blending: THREE.AdditiveBlending,
+    })
+  )
+  bindSphere.position.y = 2.2 * s
+  bindSphere.visible = false
   const stun = emojiSprite('💫', 2)
   stun.position.y = 5.4 * s
   stun.visible = false
@@ -922,11 +1139,11 @@ function buildHero(h, mine, barColor) {
     dpStartY[i] = 1.2 * s + rnd() * 2.6 * s
     dpPeak[i] = 0.3 + rnd() * 1.2
   }
-  g.add(shadow, body, face, name, bar, ring, buff, shield, stun, freeze, recall, recallBeam, deathPts)
+  g.add(shadow, body, face, name, bar, ring, buff, shield, barrier, bindSphere, stun, freeze, recall, recallBeam, deathPts)
   g.userData = {
     body, outline, face, name, nameColor, nameLvl: h.lvl, isMine: mine, shadow,
-    bodyBaseY: 2.2 * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, buff, shield, stun, freeze, recall, recallBeam, weapon, lastAtkSeq: h.atkSeq, animT: 1,
+    bodyBaseY: 2.2 * s, faceBaseY: 4.4 * s, bobPhase: (hashStr(h.id) % 628) / 100,
+    bar, ring, buff, shield, barrier, bindSphere, stun, freeze, recall, recallBeam, weapon, lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
@@ -954,6 +1171,8 @@ function setHeroDead(u, dead) {
   if (dead) {
     u.buff.visible = false
     u.shield.visible = false
+    u.barrier.visible = false
+    u.bindSphere.visible = false
     u.stun.visible = false
     u.freeze.visible = false
     u.recall.visible = false
@@ -1113,15 +1332,16 @@ function buildSummon(s, barColor) {
   return g
 }
 
+// glow = 후광 크기(반지름 배율), trail = 꼬리 발광 입자를 흘릴지 (스킬 투사체만 켠다)
 const PROJ_LOOK = {
-  bolt: { r: 0.4, y: 2.4, color: null }, // null → 팀 색
-  mbolt: { r: 0.26, y: 1.5, color: null }, // 원거리 미니언의 작은 화살 (낮고 작게)
-  fireball: { r: 0.95, y: 2, color: 0xff8c2e },
-  towerbolt: { r: 0.55, y: 4, color: null },
-  pierce: { r: 0.34, y: 2.2, color: 0xfff0a0 }, // 궁수 꿰뚫는 화살 (밝은 노랑)
-  lightarrow: { r: 0.6, y: 2.2, color: 0xfff4b0 }, // 빛의 화살 궁극기 (크고 환한 빛)
-  hawk: { r: 0.7, y: 5.5, color: 0xffe066 }, // 궁수 사냥매 (높이 떠 날아가는 빛점)
-  hook: { r: 0.55, y: 1.6, color: 0xcfd4e0 }, // 사슬잡이 갈고리 (낮게 직진하는 금속 집게)
+  bolt: { r: 0.4, y: 2.4, color: null, glow: 3 }, // null → 팀 색
+  mbolt: { r: 0.26, y: 1.5, color: null, glow: 2 }, // 원거리 미니언의 작은 화살 (낮고 작게)
+  fireball: { r: 0.95, y: 2, color: 0xff8c2e, glow: 4, trail: true },
+  towerbolt: { r: 0.55, y: 4, color: null, glow: 3 },
+  pierce: { r: 0.34, y: 2.2, color: 0xfff0a0, glow: 3.6, trail: true }, // 궁수 꿰뚫는 화살 (밝은 노랑)
+  lightarrow: { r: 0.6, y: 2.2, color: 0xfff4b0, glow: 5, trail: true }, // 빛의 화살 궁극기 (크고 환한 빛)
+  hawk: { r: 0.7, y: 5.5, color: 0xffe066, glow: 4, trail: true }, // 궁수 사냥매 (높이 떠 날아가는 빛점)
+  hook: { r: 0.55, y: 1.6, color: 0xcfd4e0, glow: 2.4 }, // 사슬잡이 갈고리 (낮게 직진하는 금속 집게)
 }
 
 // 돌풍술사 회오리 투사체 — 위로 갈수록 넓어지는 고리들을 쌓아 통째로 돌린다(앞으로 굴러가며 적을 띄움).
@@ -1532,7 +1752,7 @@ function createFog(map) {
 }
 
 export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') {
-  const { WORLD, NEXUS_POS, LANES, ROCKS, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT } = map
+  const { WORLD, NEXUS_POS, FOUNTAIN_POS, LANES, ROCKS, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT } = map
   const Q = QUALITY[quality] || QUALITY.med
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q.antialias })
   renderer.setPixelRatio(Math.min(Q.pixelRatio, window.devicePixelRatio || 1))
@@ -1619,21 +1839,27 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   scene.add(makeScatter(
     new THREE.DodecahedronGeometry(0.5),
     new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), laneStoneItems))
-  // 우물 (회복 지대) 표시 — 원판 + 빛나는 테두리
+  // 리스폰 존 (회복 지대) 표시 — 넥서스 뒤편에 원판 + 빛나는 테두리 + 회복 십자
   for (const team of ['blue', 'red']) {
+    const fp = FOUNTAIN_POS[team]
     const pad = new THREE.Mesh(
       new THREE.CircleGeometry(FOUNTAIN_RADIUS, 40),
-      new THREE.MeshLambertMaterial({ color: TEAM_COLOR[team], transparent: true, opacity: 0.3 })
+      new THREE.MeshLambertMaterial({ color: TEAM_COLOR[team], transparent: true, opacity: 0.32 })
     )
     pad.rotation.x = -Math.PI / 2
-    pad.position.set(NEXUS_POS[team].x, 0.04, NEXUS_POS[team].z)
+    pad.position.set(fp.x, 0.04, fp.z)
     const rim = new THREE.Mesh(
       new THREE.RingGeometry(FOUNTAIN_RADIUS - 0.9, FOUNTAIN_RADIUS, 48),
-      new THREE.MeshBasicMaterial({ color: TEAM_COLOR[team], transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: TEAM_COLOR[team], transparent: true, opacity: 0.6, side: THREE.DoubleSide })
     )
     rim.rotation.x = -Math.PI / 2
-    rim.position.set(NEXUS_POS[team].x, 0.05, NEXUS_POS[team].z)
-    scene.add(pad, rim)
+    rim.position.set(fp.x, 0.05, fp.z)
+    // 회복 십자(+) — 여기가 부활·치유 지점임을 알린다
+    const crossMat = new THREE.MeshBasicMaterial({ color: 0x8affc0, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
+    const bar1 = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.9), crossMat)
+    const bar2 = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 3.2), crossMat)
+    for (const b of [bar1, bar2]) { b.rotation.x = -Math.PI / 2; b.position.set(fp.x, 0.06, fp.z) }
+    scene.add(pad, rim, bar1, bar2)
   }
   // 정적 장식(나무·바위·둥지돌)은 안 움직이므로 셰이딩별 한 덩이로 병합한다 → 드로우콜 대폭 절감.
   //  수풀(은신)·성벽은 병합 대상에서 제외(게임플레이/구조물).
@@ -1873,6 +2099,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const projPool = new Map()
   const zonePool = new Map()
   const fxPool = new Map()
+  const bindPool = new Map() // 결속 끈: 묶인 아군 id → 수호기사에게 잇는 선
+  const particles = makeParticles(scene) // 타격 스파크·발자국 먼지·투사체 꼬리 공용
 
   // 시간술사 역행 미리보기: 내 영웅이 되돌아갈 과거 지점을 반투명 그림자로 보여 준다(궁극기 켜졌을 때만)
   const rewindGhost = new THREE.Group()
@@ -1948,6 +2176,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       mp[i * 3 + 1] = moteBaseY[i] + Math.sin(view.time * 0.6 + i * 1.3) * 1.2
     }
     moteGeo.attributes.position.needsUpdate = true
+    particles.update(dt) // 타격 스파크·발자국 먼지·투사체 꼬리 전진
     const me = view.heroes.find((h) => h.id === myId)
     const myTeam = me?.team || null // 관전이면 모든 게 보인다
     // 역행 미리보기 그림자: 궁극기가 켜져 있으면(view에 rewindGhost가 실림) 그 자리에 반투명 그림자
@@ -2073,8 +2302,18 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         obj.position.set(h.x, air * 3.2, h.z)
         // 회전베기(궁극기) 중엔 팽이처럼 빠르게 돈다, 띄워지면 허우적, 평소엔 바라보는 방향
         u.body.rotation.y = h.whirlT > 0 ? -view.time * 16 : h.airT > 0 ? -view.time * 8 : -h.dir
-        // 미세한 숨쉬기/제자리 둥실 모션
-        u.body.position.y = u.bodyBaseY + Math.sin(view.time * 2.2 + u.bobPhase) * 0.12
+        // 걷기: 서 있으면 숨쉬기 둥실, 움직이면 통통 튀며 좌우로 뒤뚱(속도에 따라 걸음 빨라짐)
+        const wk = walkBounce(u, h.x, h.z, dt)
+        const idleBob = Math.sin(view.time * 2.2 + u.bobPhase) * 0.12 * (1 - wk.amt)
+        const bobOff = idleBob + wk.bounce * 0.55
+        u.body.position.y = u.bodyBaseY + bobOff
+        u.face.position.y = u.faceBaseY + bobOff // 얼굴도 함께 떠올라 몸통이 뚫지 않게
+        if (h.whirlT <= 0 && h.airT <= 0) u.body.rotation.z = Math.sin(u.wphase) * 0.06 * wk.amt
+        else u.body.rotation.z = 0
+        // 발 딛는 순간 발밑에서 흙먼지가 퍼진다
+        if (wk.step && obj.visible) {
+          particles.emit(h.x, 0.2, h.z, 0xcbb894, 4, { spread: 2, up: 0.9, gravity: 4, size: 1.1, lifeMin: 0.22, lifeMax: 0.4 })
+        }
         if (h.lvl !== u.nameLvl) {
           u.nameLvl = h.lvl
           setNameText(u.name, heroLabel(h), u.nameColor) // 레벨이 오르면 이름표 갱신
@@ -2087,6 +2326,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         if (dHp > 0.5) {
           u.hitFlash = HITFLASH_T
           u.dmgAccum = (u.dmgAccum || 0) + dHp
+          // 타격 조각: 맞은 몸통 높이에서 선명한 주황빛 파편이 퐉! 사방으로 날카롭게 튀어 흩어진다(피 아님)
+          if (obj.visible) {
+            const n = Math.min(14, 6 + Math.round(dHp / 9))
+            particles.emit(h.x, u.bodyBaseY + 0.6, h.z, 0xffb42a, n, { spread: 9, up: 9, gravity: 22, size: 1.5, hard: true, lifeMin: 0.16, lifeMax: 0.34 })
+          }
         }
         u.dmgFlush = (u.dmgFlush || 0) - dt
         if ((u.dmgAccum || 0) > 0 && (u.dmgFlush <= 0 || u.dmgAccum >= 18)) {
@@ -2126,7 +2370,23 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           u.recallBeam.rotation.y = view.time * 1.2
           u.recallBeam.material.opacity = 0.22 + Math.abs(Math.sin(view.time * 4)) * 0.22 // 깜빡이는 빛
         }
-        u.shield.visible = h.shieldT > 0
+        u.shield.visible = h.shieldT > 0 // 탱커 방패막기(파란 막)
+        // 수호기사 흡수 보호막: barrierHp가 남아 있는 동안 금색 셸 + 체력바에 흰 게이지
+        const hasBarrier = h.barrierHp > 0
+        u.barrier.visible = hasBarrier
+        if (hasBarrier) {
+          const p = 0.26 + Math.abs(Math.sin(view.time * 5)) * 0.14 // 은은한 맥동
+          u.barrier.material.opacity = p
+          u.barrier.scale.setScalar(1 + Math.sin(view.time * 5) * 0.03)
+        }
+        setHpBarShield(u.bar, h.hp / h.maxHp, (h.barrierHp || 0) / h.maxHp)
+        // 수호기사 결속: 묶인 아군·수호기사를 투명한 청록 구체로 감싼다(끈 연출은 아래 별도 풀에서)
+        const bound = h.bindT > 0 || h.bindAnchorT > 0
+        u.bindSphere.visible = bound
+        if (bound) {
+          u.bindSphere.material.opacity = 0.12 + Math.abs(Math.sin(view.time * 4)) * 0.1
+          u.bindSphere.rotation.y = view.time * 1.5
+        }
         u.buff.visible = h.dragonT > 0 || h.baronT > 0
         u.buff.material.color.set(h.baronT > 0 ? 0x9b6bd6 : 0xffa94d)
         // 아군이 수풀에 숨거나 은신하면 반투명하게 (적에겐 아예 안 보인다)
@@ -2143,6 +2403,33 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         if (h.id === myId) u.ring.rotation.z = view.time * 1.5
       }
     )
+    // 결속의 끈: 묶인 아군 → 수호기사(bindBy)로 잇는 투명한 선. 양쪽이 다 보일 때만 그린다.
+    {
+      const seen = new Set()
+      for (const h of view.heroes) {
+        if (!(h.bindT > 0) || h.bindBy == null) continue
+        const gh = view.heroes.find((o) => o.id === h.bindBy)
+        if (!gh) continue
+        const ao = heroPool.get(h.id)
+        const go = heroPool.get(gh.id)
+        if (!ao || !go || !ao.visible || !go.visible) continue
+        seen.add(h.id)
+        let line = bindPool.get(h.id)
+        if (!line) { line = makeBindLine(); bindPool.set(h.id, line); scene.add(line) }
+        const p = line.geometry.attributes.position.array
+        p[0] = h.x; p[1] = 2.4; p[2] = h.z
+        p[3] = gh.x; p[4] = 2.4; p[5] = gh.z
+        line.geometry.attributes.position.needsUpdate = true
+        line.material.opacity = 0.4 + Math.abs(Math.sin(view.time * 5)) * 0.25 // 맥동하는 끈
+      }
+      for (const [id, line] of bindPool) {
+        if (seen.has(id)) continue
+        scene.remove(line)
+        line.geometry.dispose()
+        line.material.dispose()
+        bindPool.delete(id)
+      }
+    }
     // 미니언 — 시야 밖 적 미니언은 안 보인다
     syncPool(
       scene, minionPool, view.minions,
@@ -2158,6 +2445,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         if (mdHp > 0.5 && obj.visible) {
           popDamage(m.x, m.z, mdHp, 'dmg')
           u.hitFlash = HITFLASH_T
+          particles.emit(m.x, 1.3, m.z, 0xffb42a, 6, { spread: 6, up: 7, gravity: 22, size: 1.2, hard: true, lifeMin: 0.13, lifeMax: 0.3 })
         }
         if (u.hitFlash > 0) u.hitFlash = Math.max(0, u.hitFlash - dt)
         const mf = hitFxOn && u.hitFlash > 0 ? (u.hitFlash / HITFLASH_T) * 0.55 : 0
@@ -2173,6 +2461,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const lunge = (m.ranged ? -0.3 : 0.55) * pulse // 원거리는 뒤로 반동
         u.body.position.x = Math.cos(m.dir || 0) * lunge
         u.body.position.z = Math.sin(m.dir || 0) * lunge
+        u.body.position.y = walkBounce(u, m.x, m.z, dt).bounce * 0.35 // 걸을 때 통통
         u.body.rotation.z = m.ranged ? pulse * 0.3 : -pulse * 0.35 // 기울이기
       }
     )
@@ -2189,7 +2478,10 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const ud2 = obj.userData
         const jdHp = (ud2.lastHp == null ? m.hp : ud2.lastHp) - m.hp
         ud2.lastHp = m.hp
-        if (jdHp > 0.5 && obj.visible) popDamage(m.x, m.z, jdHp, 'dmg')
+        if (jdHp > 0.5 && obj.visible) {
+          popDamage(m.x, m.z, jdHp, 'dmg')
+          particles.emit(m.x, (MONSTER_LOOK[m.kind]?.r || 2), m.z, 0xffb42a, 9, { spread: 10, up: 10, gravity: 22, size: 1.6, hard: true, lifeMin: 0.16, lifeMax: 0.34 })
+        }
         // 분노(enrage): 교전이 길어질수록 붉게 달아오르고 거칠게 떤다
         const body = obj.userData.body
         if (body) {
@@ -2208,7 +2500,10 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       (obj, s) => {
         obj.visible = isUnitVisible(view, s, myTeam)
         const u = obj.userData
-        const bob = u.turret ? 0 : Math.sin(view.time * 3 + s.x) * 0.12
+        // 포탑은 고정, 펫은 걸을 때 통통 튄다(멈추면 숨쉬기 둥실)
+        const wkS = u.turret ? null : walkBounce(u, s.x, s.z, dt)
+        const bob = u.turret ? 0
+          : Math.sin(view.time * 3 + s.x) * 0.12 * (1 - wkS.amt) + wkS.bounce * 0.4
         // 사냥 명령 도약: leap(1→0) 동안 포물선으로 뛰어오른다
         const jump = s.leap ? Math.sin((1 - s.leap) * Math.PI) * 3.4 : 0
         obj.position.set(s.x, bob + jump, s.z)
@@ -2242,17 +2537,31 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     syncPool(scene, projPool, view.projectiles, (p) => {
       if (p.kind === 'tornado') return buildTornadoProj() // 돌풍술사 회오리 — 빙글빙글 도는 입체 회오리
       const look = PROJ_LOOK[p.kind] || PROJ_LOOK.bolt
-      const m = new THREE.Mesh(
+      const color = look.color ?? TEAM_COLOR[p.team]
+      // 단색 구체 대신 "발광체": 밝은 코어 + 가산 후광 스프라이트(맥동) + (스킬은) 혜성 꼬리
+      const g = new THREE.Group()
+      const core = new THREE.Mesh(
         new THREE.SphereGeometry(look.r, 8, 6),
-        new THREE.MeshBasicMaterial({ color: look.color ?? TEAM_COLOR[p.team] })
+        new THREE.MeshBasicMaterial({ color })
       )
-      m.position.y = look.y
-      return m
+      const halo = glowSprite(color, look.r * (look.glow || 3))
+      g.add(core, halo)
+      g.position.y = look.y
+      g.userData = { core, halo, color, haloBase: look.r * (look.glow || 3), trail: !!look.trail }
+      return g
     }, (obj, p) => {
       obj.position.x = p.x
       obj.position.z = p.z
       obj.visible = inVision(p.x, p.z) // 안개 속 투사체도 숨긴다
-      obj.userData.spin?.(view.time) // 회오리는 매 프레임 돈다
+      if (obj.userData.spin) { obj.userData.spin(view.time); return } // 회오리
+      const u = obj.userData
+      const pulse = 1 + Math.sin(view.time * 16 + p.x) * 0.2 // 발광 맥동
+      u.halo.scale.set(u.haloBase * pulse, u.haloBase * pulse, 1)
+      u.core.scale.setScalar(0.85 + Math.sin(view.time * 22 + p.z) * 0.15)
+      // 혜성 꼬리: 지나온 자리에 발광 알갱이를 흘려 서서히 잦아든다
+      if (u.trail && obj.visible) {
+        particles.emit(p.x, obj.position.y, p.z, u.color, 1, { spread: 0.6, up: 0.5, gravity: 2, size: 0.8, lifeMin: 0.18, lifeMax: 0.34 })
+      }
     })
     // 예고형 지면 범위(운석 조준+낙하)
     syncPool(scene, zonePool, view.zones || [], buildMeteorZone, (obj, z) => {

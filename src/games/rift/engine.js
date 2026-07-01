@@ -5,7 +5,7 @@
 //  - 수풀 은신 + 전장의 안개: 시야 밖 적은 안 보인다 (봇도 같은 규칙).
 //  - 호스트가 step()을 60Hz로 돌리고 makeView() 스냅샷을 전파한다.
 import {
-  NEXUS_POS, NEXUS_RADIUS, TOWER_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, enemyOf, buildMap,
+  NEXUS_POS, FOUNTAIN_POS, NEXUS_RADIUS, TOWER_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, enemyOf, buildMap,
 } from './map.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { ITEM_SLOTS, SELL_REFUND, ITEMS_BY_ID, sumStats } from './items.js'
@@ -133,7 +133,7 @@ export const CLASSES = {
     name: '수호기사', icon: '🔰', desc: '아군에 보호막을 둘러 지키는 인챈터 서포터',
     hp: 560, hpLvl: 60, atk: 44, atkLvl: 6, range: 8.5, atkCd: 0.9, speed: 12.6,
     skill: { name: '수호의 빛', icon: '🛡️', cd: 8, desc: '가장 다친 아군(나 포함)에게 피해를 흡수하는 보호막' },
-    skill2: { name: '결속', icon: '🔗', cd: 11, desc: '주변 아군(나 포함)이 잠시 받는 피해 감소' },
+    skill2: { name: '결속', icon: '🔗', cd: 11, desc: '근처 아군을 4초간 묶어, 그들이 받을 피해를 대신 받는다(50%+인원×10%, 최대 90% 감소)' },
     ult: { name: '불굴의 진형', icon: '✨', cd: 60, desc: '아군 전원에게 보호막 + 잠깐의 피해 감소' },
   },
   swordmaster: {
@@ -353,9 +353,15 @@ const GUARD_RANGE = 16 // 보호막을 줄 아군 탐색 거리
 const GUARD_SHIELD_BASE = 60 // 수호의 빛 흡수량 기본
 const GUARD_SHIELD_COEF = 1.0 // 주문력 계수 (AP 스케일) — 무아이템 기준 기존 곡선(120 + 26×Lv)과 동일
 const GUARD_SHIELD_T = 4 // 보호막 지속(초)
-const WARD_RADIUS = 14 // 결속 범위
-const WARD_TIME = 3 // 결속 지속(초)
-const WARD_CUT = 0.7 // 결속 중 받는 피해 배율(30% 감소)
+const WARD_RADIUS = 14 // (불굴의 진형용) 받는 피해 감소 범위
+const WARD_TIME = 3 // 받는 피해 감소 지속(초)
+const WARD_CUT = 0.7 // 받는 피해 배율(30% 감소) — 궁극기 진형에서 쓴다
+// 결속(P2 리메이크): 근처 아군을 4초간 묶어, 그들이 받을 피해를 수호기사가 대신 받는다(감소 후).
+const BIND_RADIUS = 14 // 결속으로 묶을 아군 탐색 거리
+const BIND_TIME = 4 // 결속 지속(초)
+const BIND_BASE_CUT = 0.5 // 대신 받는 피해 기본 감소(50%)
+const BIND_PER_ALLY = 0.1 // 결속된 아군 1명당 추가 감소(10%)
+const BIND_MAX_CUT = 0.9 // 최대 감소(90%)
 const BASTION_BARRIER_BASE = 48 // 불굴의 진형 흡수량 기본
 const BASTION_BARRIER_COEF = 0.7 // 주문력 계수 (AP 스케일) — 무아이템 기준 기존 곡선(90 + 18×Lv)과 동일
 const BASTION_WARD_T = 2.5 // 진형 결속 지속
@@ -559,12 +565,10 @@ const dist2 = (a, b) => (a.x - b.x) ** 2 + (a.z - b.z) ** 2
 const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z)
 const emojiOf = (zodiacId) => getZodiac(zodiacId)?.emoji || '🙂'
 
-// 진영별 출발 위치 (우물 안에 나란히 — 인원수에 맞춰 중앙 정렬)
+// 진영별 출발 위치 (넥서스 뒤편 리스폰 존 안에 나란히 — 인원수에 맞춰 중앙 정렬)
 function spawnPos(map, team, slot, teamSize) {
-  const n = map.NEXUS_POS[team]
-  const side = team === 'blue' ? 1 : -1
-  // 넥서스와 최후의 포탑 사이(뒤쪽)에서 부활 — 둘 다와 안 겹치게
-  return { x: n.x + side * 5, z: (slot - (teamSize - 1) / 2) * 5 }
+  const f = map.FOUNTAIN_POS[team]
+  return { x: f.x, z: f.z + (slot - (teamSize - 1) / 2) * 3.2 }
 }
 
 // 시야 계산은 state(.map 보유)와 makeView 스냅샷(.nexusPos) 양쪽에서 호출된다.
@@ -600,8 +604,8 @@ export function createGame(players, opts = {}) {
       role: null, // 봇 역할은 아래에서 직업 기준으로 배정 (사람은 null로 자유 이동)
       x: pos.x,
       z: pos.z,
-      homeX: map.NEXUS_POS[p.team].x, // 우물(회복 지대) 중심 — inFountain 판정용
-      homeZ: map.NEXUS_POS[p.team].z,
+      homeX: map.FOUNTAIN_POS[p.team].x, // 리스폰 존(회복 지대) 중심 — inFountain 판정용
+      homeZ: map.FOUNTAIN_POS[p.team].z,
       mx: 0, // 이동 입력 (-1~1)
       mz: 0,
       dir: p.team === 'blue' ? 0 : Math.PI, // 바라보는 방향 (적 본진 쪽)
@@ -630,7 +634,10 @@ export function createGame(players, opts = {}) {
       poisonBy: null, // 중독을 건 적 영웅 id(킬 크레딧)
       barrierHp: 0, // 수호기사 보호막 흡수 풀
       barrierT: 0, // 보호막 남은 시간
-      wardT: 0, // 수호기사 결속 — 받는 피해 감소 남은 시간
+      wardT: 0, // 받는 피해 감소 남은 시간(불굴의 진형)
+      bindT: 0, // 수호기사 결속 — 대신 맞아주는 결속에 묶인 남은 시간
+      bindBy: null, // 나를 결속한 수호기사 id(피해 리다이렉트 대상)
+      bindAnchorT: 0, // (수호기사) 결속 진형을 유지 중인 시간 — 링크/구체 연출용
       vulnT: 0, // 주술사 낙인 — 받는 피해 증가 남은 시간
       parryT: 0, // 검성 발도 카운터 유효 시간(받는 첫 피해 무효 + 반격)
       rootT: 0, // 사슬잡이 속박(옭아매기/단두대) — 이동 불가(공격/시전은 가능)
@@ -1060,11 +1067,11 @@ export function castRecall(state, id) {
 }
 
 // ── 골드 / 상점 ──
-// 자기 우물(넥서스 회복 지대) 안인가?
+// 자기 리스폰 존(회복 지대) 안인가? — 넥서스 뒤편에 분리돼 있다.
 export function inFountain(h) {
-  // 우물 중심은 영웅에 새겨 둔 home 좌표 (맵 크기와 무관하게 동작)
-  const cx = h.homeX ?? NEXUS_POS[h.team].x
-  const cz = h.homeZ ?? NEXUS_POS[h.team].z
+  // 회복 지대 중심은 영웅에 새겨 둔 home 좌표 (맵 크기와 무관하게 동작)
+  const cx = h.homeX ?? FOUNTAIN_POS[h.team].x
+  const cz = h.homeZ ?? FOUNTAIN_POS[h.team].z
   return (h.x - cx) ** 2 + (h.z - cz) ** 2 <= FOUNTAIN_RADIUS * FOUNTAIN_RADIUS
 }
 // 상점을 열 수 있나 — 우물 안이거나, 죽어 있는(부활 대기) 동안에도 가능.
@@ -1818,14 +1825,19 @@ const SKILLS2 = {
     })
     pushFx(state, 'plague', tx, tz, PLAGUE_RADIUS, h.team)
   },
-  // 수호기사 결속: 주변 아군(나 포함)이 잠시 받는 피해 감소
+  // 수호기사 결속: 근처 아군을 4초간 묶는다. 묶인 아군이 받을 피해를 수호기사가 대신 받는다(damageHero에서 리다이렉트).
   guardian(state, h) {
-    const r2 = WARD_RADIUS * WARD_RADIUS
+    const r2 = BIND_RADIUS * BIND_RADIUS
+    let count = 0
     for (const a of state.heroes) {
-      if (a.team !== h.team || a.respawnT > 0 || dist2(h, a) > r2) continue
-      a.wardT = Math.max(a.wardT, WARD_TIME)
+      if (a === h || a.team !== h.team || a.respawnT > 0 || dist2(h, a) > r2) continue
+      a.bindT = BIND_TIME
+      a.bindBy = h.id
+      count++
       pushFx(state, 'shield', a.x, a.z, 2, h.team)
     }
+    h.bindAnchorT = count > 0 ? BIND_TIME : 0
+    if (count > 0) pushFx(state, 'holylight', h.x, h.z, 2.5, h.team)
   },
   // 검성 잔영 스텝: 바라보는 방향으로 짧게 순간이동(리포지션, 피해 없음)
   swordmaster(state, h) {
@@ -2006,8 +2018,22 @@ function healHero(h, amount) {
 }
 
 // ── 피해 처리 ──
-function damageHero(state, victim, amount, attacker) {
+//  redirected=true 는 결속 리다이렉트로 수호기사가 대신 맞는 호출(무한 연쇄 방지 플래그).
+function damageHero(state, victim, amount, attacker, redirected = false) {
   if (victim.respawnT > 0 || state.status !== 'playing') return
+  // 수호기사 결속: 묶인 아군이 받을 피해를 수호기사가 "대신" 받는다(50%+10%×인원, 최대 90% 감소).
+  //  아군 자신은 피해를 전혀 받지 않는다. 리다이렉트된 피해엔 수호기사의 방어/보호막이 다시 적용된다.
+  if (!redirected && amount > 0 && victim.bindT > 0) {
+    const g = state.heroes.find((o) => o.id === victim.bindBy && o.team === victim.team && o.respawnT <= 0)
+    if (g && g !== victim) {
+      let n = 0
+      for (const a of state.heroes) if (a.bindBy === victim.bindBy && a.bindT > 0 && a.respawnT <= 0) n++
+      const cut = Math.min(BIND_MAX_CUT, BIND_BASE_CUT + BIND_PER_ALLY * n)
+      damageHero(state, g, amount * (1 - cut), attacker, true)
+      pushFx(state, 'shield', victim.x, victim.z, 1.6, victim.team) // 아군을 스치고 지나가는 결속의 빛
+      return
+    }
+  }
   // 검성 발도 카운터: 자세를 잡은 동안 받는 첫 피해를 무효화하고 그 2배를 되돌린다(상한 있음)
   if (victim.parryT > 0 && amount > 0) {
     victim.parryT = 0
@@ -2066,6 +2092,13 @@ function damageHero(state, victim, amount, attacker) {
   victim.barrierHp = 0
   victim.barrierT = 0
   victim.wardT = 0
+  // 결속 해제: 내가 묶여 있었으면 풀고, 내가 결속을 건 수호기사였으면 묶인 아군을 모두 풀어 준다
+  victim.bindT = 0
+  victim.bindBy = null
+  if (victim.bindAnchorT > 0) {
+    victim.bindAnchorT = 0
+    for (const a of state.heroes) if (a.bindBy === victim.id) { a.bindT = 0; a.bindBy = null }
+  }
   victim.vulnT = 0
   victim.parryT = 0
   victim.rootT = 0
@@ -2343,6 +2376,8 @@ function stepHero(state, h, dt) {
   h.berserkT = Math.max(0, h.berserkT - dt)
   h.rageT = Math.max(0, h.rageT - dt)
   h.wardT = Math.max(0, h.wardT - dt)
+  if (h.bindT > 0 && (h.bindT = Math.max(0, h.bindT - dt)) === 0) h.bindBy = null
+  h.bindAnchorT = Math.max(0, h.bindAnchorT - dt)
   h.vulnT = Math.max(0, h.vulnT - dt)
   h.parryT = Math.max(0, h.parryT - dt)
   h.rootT = Math.max(0, h.rootT - dt)
@@ -2478,9 +2513,9 @@ function stepHero(state, h, dt) {
   }
   state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
   h.bushI = state.map.bushIndexAt(h.x, h.z) // 수풀 은신 판정
-  // 우물: 우리 편이면 회복, 적이면 따끔!
+  // 리스폰 존(넥서스 뒤편 회복 지대): 우리 편이면 회복, 적이면 따끔!
   for (const team of ['blue', 'red']) {
-    if (dist2(h, state.map.NEXUS_POS[team]) > FOUNTAIN_RADIUS * FOUNTAIN_RADIUS) continue
+    if (dist2(h, state.map.FOUNTAIN_POS[team]) > FOUNTAIN_RADIUS * FOUNTAIN_RADIUS) continue
     if (team === h.team) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * FOUNTAIN_HEAL * dt)
     else damageHero(state, h, FOUNTAIN_DMG * dt, null)
   }
@@ -3184,7 +3219,7 @@ function stepSummons(state, dt) {
 }
 
 // ── 봇 AI ──
-// 체력이 낮으면 우물로 후퇴, "보이는" 적 영웅과는 직업 사거리에 맞춰 교전,
+// 체력이 낮으면 리스폰 존(넥서스 뒤편 회복 지대)으로 후퇴, "보이는" 적 영웅과는 직업 사거리에 맞춰 교전,
 // 평소엔 맡은 레인을 행군하며 지나는 길의 정글몹/용/바론도 사냥한다.
 const BOT_SIGHT = 18
 export const BOT_STUCK_T = 3 // 가려고도 싸우지도 못하고 이만큼 제자리면 "갈 곳 잃음"으로 보고 귀환
@@ -3451,7 +3486,7 @@ function stepBots(state, dt) {
       // 보조 스킬로 탈출: 은신(암살자)·광폭화(전사, CC 면역+가속)·가속(힐러)
       if (h.skill2Cd <= 0 && h.lvl >= SKILL2_LEVEL &&
         (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer' || h.cls === 'cryomancer' || h.cls === 'swordmaster' || h.cls === 'snarer')) castSkill2(state, h.id)
-      steerToward(state, h, state.map.NEXUS_POS[h.team])
+      steerToward(state, h, state.map.FOUNTAIN_POS[h.team]) // 넥서스가 아니라 뒤편 리스폰 존으로 후퇴해 회복
       botAttack(state, h, dt) // 도망치면서도 사거리 안이면 반격
       continue
     }
@@ -3522,7 +3557,7 @@ function stepBots(state, dt) {
       const winning = healthy && sc.allies >= sc.foes && sc.killT <= sc.lifeT * 1.33
       // 불리: 빈사거나 수적 열세거나 트레이드가 확실히 진다(여기 해당할 때만 물러난다)
       const losing = !healthy || sc.allies < sc.foes || sc.lifeT < sc.killT * 0.65
-      // ① 불리한데 적이 붙어 있으면 본진으로 뺀다(생존 우선). 방어·도주기를 쓰며 사거리 안이면 반격.
+      // ① 불리한데 적이 붙어 있으면 리스폰 존으로 뺀다(생존 우선). 방어·도주기를 쓰며 사거리 안이면 반격.
       if (losing && d < kite + 4) {
         if (h.cls === 'tank' && h.skillCd <= 0 && d < 10) castSkill(state, h.id) // 방패 켜고 후퇴
         if (
@@ -3532,7 +3567,7 @@ function stepBots(state, dt) {
         ) {
           castSkill2(state, h.id)
         }
-        steerToward(state, h, state.map.NEXUS_POS[h.team])
+        steerToward(state, h, state.map.FOUNTAIN_POS[h.team]) // 넥서스가 아니라 뒤편 리스폰 존으로 후퇴해 회복
         botAttack(state, h, dt)
         continue
       }
@@ -3963,6 +3998,9 @@ export function makeView(state) {
       poisonT: r2d(h.poisonT),
       barrierHp: Math.ceil(h.barrierHp),
       wardT: r2d(h.wardT),
+      bindT: r2d(h.bindT), // 결속: 묶여 있으면 >0 (구체 연출)
+      bindBy: h.bindBy, // 나를 결속한 수호기사 id (링크 연출)
+      bindAnchorT: r2d(h.bindAnchorT), // 수호기사 앵커 (구체 연출)
       vulnT: r2d(h.vulnT),
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
