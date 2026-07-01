@@ -419,6 +419,16 @@ function darken(hex, f = 0.6) {
   return new THREE.Color(hex).multiplyScalar(f).getHex()
 }
 
+// 두 점 A→B를 잇는 원통(팔·다리 연결용). 기본 원통은 Y축이라 방향에 맞춰 세운다.
+function limbBetween(a, b, r0, r1, mat) {
+  const dir = new THREE.Vector3().subVectors(b, a)
+  const len = dir.length() || 0.001
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, len, 8), mat)
+  m.position.copy(a).addScaledVector(dir, 0.5)
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.multiplyScalar(1 / len))
+  return m
+}
+
 // 시드 고정 난수 (장식 나무 배치가 모든 기기에서 동일하게)
 function lcg(seed) {
   let s = seed
@@ -973,6 +983,23 @@ function buildWeapon(cls) {
       top.rotation.y += 0.15 // 모래시계가 빙글 — 시간이 도는 느낌
       bot.rotation.y = top.rotation.y
     }
+  } else if (cls === 'snarer') {
+    // 넝쿨 올가미: 앞으로 던졌다 회수하는 초록 덩굴 고리
+    const vine = new THREE.MeshLambertMaterial({ color: 0x5aa34a })
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.8), vine)
+    shaft.rotation.z = Math.PI / 2
+    shaft.position.x = 0.4
+    const loop = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.07, 6, 14), vine)
+    loop.position.x = 1.0
+    loop.rotation.y = Math.PI / 2
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.34, 4), new THREE.MeshLambertMaterial({ color: 0x8fd06a }))
+    leaf.position.set(0.6, 0.14, 0)
+    leaf.rotation.z = -Math.PI / 3
+    g.add(shaft, loop, leaf)
+    g.position.set(0.5, 0.45, 0.5)
+    g.userData.pose = (t) => {
+      g.position.x = 0.5 + swing(t) * 1.6 // 올가미를 던졌다 회수
+    }
   } else {
     // 마법사/힐러: 지팡이 + 빛나는 구슬
     const color = cls === 'healer' ? 0x6ee7a0 : 0xb07ef0
@@ -1039,6 +1066,27 @@ function buildHero(h, mine, barColor) {
   cape.rotation.y = Math.PI / 2
   cape.position.set(-0.85 * s, 0.2 * s, 0)
   body.add(cape)
+  // 팔·다리 — 짧고 길쭉한 원통(살짝 테이퍼). 몸통 자식이라 바라보는 방향/걷기와 함께 움직인다.
+  const limbMat = new THREE.MeshLambertMaterial({ color: darken(col, 0.7) })
+  // 다리: 고관절 피벗 그룹으로 감싸 걸을 때 앞뒤로 엇갈려 흔든다(legs[0]=오른쪽 +z, [1]=왼쪽 -z)
+  const legs = []
+  for (const sz of [1, -1]) {
+    const hip = new THREE.Group()
+    hip.position.set(0, -0.775 * s, sz * 0.42 * s) // 고관절 위치(다리 윗끝)
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * s, 0.24 * s, 1.35 * s, 8), limbMat)
+    leg.position.y = -0.675 * s // 다리 중심을 고관절 아래로 내려 다리가 밑으로 뻗는다
+    hip.add(leg)
+    body.add(hip)
+    legs.push(hip)
+  }
+  // 왼팔(무기 없는 쪽) — 어깨 피벗 그룹. 걸을 때 앞뒤로 흔든다. 오른팔은 아래에서 무기와 함께 만든다.
+  const armL = new THREE.Group()
+  armL.position.set(0.05 * s, 0.95 * s, -1.0 * s) // 왼쪽 어깨
+  const armLMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * s, 0.17 * s, 1.2 * s, 8), limbMat)
+  armLMesh.position.y = -0.6 * s // 어깨에서 아래로 늘어뜨림
+  armLMesh.rotation.x = -0.12
+  armL.add(armLMesh)
+  body.add(armL)
   const shadow = blobShadow(2.0 * s)
   const face = emojiSprite(getZodiac(h.zodiacId)?.emoji || '🙂', 3.2)
   face.position.y = 4.4 * s
@@ -1112,9 +1160,30 @@ function buildHero(h, mine, barColor) {
   )
   recallBeam.position.y = 17
   recallBeam.visible = false
-  // 직업 무기 — 몸통에 붙여 바라보는 방향과 함께 돈다
+  // 직업 무기 — 오른팔(손)에 쥐게 한다. 팔 그룹은 어깨가 피벗이라 걸을 때 앞뒤로 흔들린다.
   const weapon = buildWeapon(h.cls)
-  body.add(weapon)
+  // 손 위치 = 무기 그룹의 원점(=손잡이). 무기마다 달라서 각자에 맞춰 팔을 뻗는다(고정값이면 어깨에 뜬 것처럼 보인다).
+  const hand = weapon.position.clone()
+  if (hand.lengthSq() < 0.04) hand.set(0.35, 0.2, 0.15) // 암살자 등 원점이 0인 무기는 손잡이 보정
+  const shoulderR = new THREE.Vector3(0.05 * s, 0.95 * s, 1.0 * s)
+  const armR = new THREE.Group()
+  armR.position.copy(shoulderR) // 오른쪽 어깨(회전 피벗)
+  armR.add(limbBetween(new THREE.Vector3(0, 0, 0), hand.clone().sub(shoulderR), 0.2 * s, 0.16 * s, limbMat))
+  const handMesh = new THREE.Mesh(new THREE.SphereGeometry(0.2 * s, 8, 6), limbMat)
+  handMesh.position.copy(hand).sub(shoulderR)
+  armR.add(handMesh)
+  // 무기를 손잡이(grip)를 축으로 45° 기울여 쥔 것처럼 보이게 한다.
+  //  tilt : 손잡이 위치에서 기울임 / inner : 몸통 좌표를 복원(공격 모션 좌표계 보존)
+  // → 손잡이는 손에 고정된 채 무기만 기울고, 팔이 흔들리면(armR) 함께 흔들린다.
+  const tilt = new THREE.Group()
+  tilt.position.copy(hand).sub(shoulderR) // 손잡이 위치(어깨 로컬)
+  tilt.rotation.z = -Math.PI / 4 // 약 45° 앞으로 기울여 겨눈 각도(+z는 등 뒤로 넘어감)
+  const inner = new THREE.Group()
+  inner.position.copy(hand).multiplyScalar(-1) // 몸통 원점 좌표 복원
+  inner.add(weapon)
+  tilt.add(inner)
+  armR.add(tilt)
+  body.add(armR)
   // 사망 시 분해 파티클: 몸에서 튀어 올랐다가 바닥에 쌓여 부활까지 남는다 (공중에서 사라지지 않게)
   const DEATH_N = 28
   const deathGeo = new THREE.BufferGeometry()
@@ -1143,7 +1212,7 @@ function buildHero(h, mine, barColor) {
   g.userData = {
     body, outline, face, name, nameColor, nameLvl: h.lvl, isMine: mine, shadow,
     bodyBaseY: 2.2 * s, faceBaseY: 4.4 * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, buff, shield, barrier, bindSphere, stun, freeze, recall, recallBeam, weapon, lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, buff, shield, barrier, bindSphere, stun, freeze, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
@@ -2310,6 +2379,16 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         u.face.position.y = u.faceBaseY + bobOff // 얼굴도 함께 떠올라 몸통이 뚫지 않게
         if (h.whirlT <= 0 && h.airT <= 0) u.body.rotation.z = Math.sin(u.wphase) * 0.06 * wk.amt
         else u.body.rotation.z = 0
+        // 다리 성큼성큼 + 팔 흔들기: 다리는 반대 위상, 팔은 같은 쪽 다리와 반대로(자연스러운 걸음)
+        if (u.legs) {
+          const stride = Math.sin(u.wphase) * 0.6 * wk.amt
+          u.legs[0].rotation.z = stride
+          u.legs[1].rotation.z = -stride
+          if (u.arms) {
+            u.arms[0].rotation.z = -stride * 0.65 // 오른팔(무기)은 오른다리와 반대로
+            u.arms[1].rotation.z = stride * 0.65 // 왼팔
+          }
+        }
         // 발 딛는 순간 발밑에서 흙먼지가 퍼진다
         if (wk.step && obj.visible) {
           particles.emit(h.x, 0.2, h.z, 0xcbb894, 4, { spread: 2, up: 0.9, gravity: 4, size: 1.1, lifeMin: 0.22, lifeMax: 0.4 })
