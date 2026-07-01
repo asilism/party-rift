@@ -12,7 +12,9 @@
 
 // ── 엔티티 크기(모드와 무관한 상수) ──
 export const NEXUS_RADIUS = 4.5
-export const FOUNTAIN_RADIUS = 13 // 넥서스 주변 회복 지대
+export const FOUNTAIN_RADIUS = 11 // 리스폰 존(회복 지대) 반경 — 넥서스가 아니라 뒤편에 넉넉하게 둔다
+// 넥서스 중심 → 리스폰 존 중심 거리. 넥서스 위에선 회복이 안 되게 뒤편으로 넉넉히(넥서스 지름 이상) 띄운다.
+export const RESPAWN_BACK = 40
 export const TOWER_RADIUS = 2.4 // 통행 막는 몸통 반경
 export const WALL_RADIUS = 3 // 벽 두께(충돌 원 반경)
 export const LANE_IDS = ['top', 'mid', 'bot']
@@ -227,6 +229,16 @@ export function buildMap(mode = '3v3') {
     blue: scalePt(BASE.NEXUS_POS.blue, s),
     red: scalePt(BASE.NEXUS_POS.red, s),
   }
+  // 리스폰(회복) 존 — 넥서스 뒤편(맵 중앙 반대쪽)으로 한 넥서스만큼 떨어뜨린다.
+  //  부활·귀환·HP리필이 여기서만 일어나므로, 넥서스에 붙어 무한 회복하며 버티지 못한다.
+  const FOUNTAIN_POS = {
+    blue: { x: NEXUS_POS.blue.x - RESPAWN_BACK, z: NEXUS_POS.blue.z },
+    red: { x: NEXUS_POS.red.x + RESPAWN_BACK, z: NEXUS_POS.red.z },
+  }
+  // 리스폰 존이 맵 밖으로 삐져나가지 않게 뒤편 경계를 넓힌다.
+  const backPad = FOUNTAIN_RADIUS + 6
+  WORLD.minX = Math.min(WORLD.minX, FOUNTAIN_POS.blue.x - backPad)
+  WORLD.maxX = Math.max(WORLD.maxX, FOUNTAIN_POS.red.x + backPad)
   const LANES = {
     top: BASE.LANES.top.map((p) => scalePt(p, s)),
     mid: BASE.LANES.mid.map((p) => scalePt(p, s)),
@@ -245,7 +257,7 @@ export function buildMap(mode = '3v3') {
   const WALLS = wallCircles(WALL_LINES)
 
   const geo = {
-    mode, WORLD, NEXUS_POS, LANES, LANE_IDS, TOWER_SPOTS, WALL_LINES, WALLS,
+    mode, WORLD, NEXUS_POS, FOUNTAIN_POS, LANES, LANE_IDS, TOWER_SPOTS, WALL_LINES, WALLS,
     ROCKS, BUSHES, WOLF_CAMPS, DRAGON_PIT, BARON_PIT,
     NEXUS_RADIUS, FOUNTAIN_RADIUS, TOWER_RADIUS, WALL_RADIUS, enemyOf,
   }
@@ -260,6 +272,7 @@ export function buildMap(mode = '3v3') {
 const M3 = buildMap('3v3')
 export const WORLD = M3.WORLD
 export const NEXUS_POS = M3.NEXUS_POS
+export const FOUNTAIN_POS = M3.FOUNTAIN_POS
 export const LANES = M3.LANES
 export const TOWER_SPOTS = M3.TOWER_SPOTS
 export const WALL_LINES = M3.WALL_LINES
