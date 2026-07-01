@@ -9,7 +9,7 @@ import { canShop, CLASSES, bountyGold } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { getItem, ITEM_SLOTS } from './items.js'
 import { sound } from '../../shared/sound.js'
-import { loadRiftControl, saveRiftControl, loadRiftHitFx, saveRiftHitFx } from '../../shared/storage.js'
+import { loadRiftControl, saveRiftControl, loadRiftHitFx, saveRiftHitFx, loadRiftGfx, saveRiftGfx } from '../../shared/storage.js'
 import { useRealtimeGame } from '../../net/useRealtimeGame.js'
 import { riftNet } from './netgame.js'
 import { NetWaiting } from '../../net/NetParts.jsx'
@@ -240,7 +240,9 @@ function RiftRoster({ hud, crown = null }) {
 }
 
 // 우상단 설정 버튼 하나로 통합한 메뉴: 팀 현황·일시정지·소리·전체화면·조작 방식·나가기를 분기 메뉴로 띄운다.
-function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onToggleSound, scheme, onSchemeChange, hitFx, onToggleHitFx, onExit }) {
+const GFX_LABEL = { high: '상 (최고화질)', med: '중 (균형)', low: '하 (성능)' }
+
+function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onToggleSound, scheme, onSchemeChange, hitFx, onToggleHitFx, gfx, onCycleGfx, onExit }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   useEffect(() => {
@@ -286,6 +288,9 @@ function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onTog
           </button>
           <button className="rift-settings__item" onClick={onToggleHitFx}>
             <span>{hitFx ? '💥' : '🚫'}</span> 타격 효과 {hitFx ? '켜짐' : '꺼짐'}
+          </button>
+          <button className="rift-settings__item" onClick={onCycleGfx}>
+            <span>🎨</span> 그래픽 {GFX_LABEL[gfx] || GFX_LABEL.med}
           </button>
           <div className="rift-settings__item rift-settings__item--full">
             <FullscreenButton />
@@ -339,6 +344,14 @@ function RiftPlay({
       return n
     })
   }
+  const [gfx, setGfx] = useState(loadRiftGfx) // 그래픽 품질: high(상)/med(중)/low(하)
+  function cycleGfx() {
+    setGfx((q) => {
+      const n = q === 'high' ? 'med' : q === 'med' ? 'low' : 'high' // 상→중→하→상 순환
+      saveRiftGfx(n)
+      return n
+    })
+  }
   // 배경음악(칩튠 루프): 경기 중에만 흐르고, 어느 한쪽 넥서스가 위태로우면 템포 업
   const bgmStatus = hud?.status
   const paused = !!hud?.paused
@@ -387,7 +400,7 @@ function RiftPlay({
 
   return (
     <div className="rift" onContextMenu={(e) => e.preventDefault()}>
-      <Rift3D sample={sample} myId={myId} mode={hud.mode || '3v3'} hitFx={hitFx} />
+      <Rift3D sample={sample} myId={myId} mode={hud.mode || '3v3'} hitFx={hitFx} gfx={gfx} />
 
       {me && !finished && (
         <RiftControls
@@ -434,6 +447,8 @@ function RiftPlay({
               onSchemeChange={changeScheme}
               hitFx={hitFx}
               onToggleHitFx={toggleHitFx}
+              gfx={gfx}
+              onCycleGfx={cycleGfx}
               onExit={onExit}
             />
           </div>

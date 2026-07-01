@@ -46,3 +46,27 @@ export function saveRiftHitFx(on) {
     /* 무시 */
   }
 }
+
+// ── 그래픽 품질(상/중/하) 보존 ──
+// high: 현재 화질 그대로 / med: 균형 / low: 저사양·모바일용 (픽셀레이트·장식·AA를 낮춘다)
+const RIFT_GFX_KEY = 'bgp.rift.gfx.v1'
+const RIFT_GFX_VALID = new Set(['high', 'med', 'low'])
+
+export function loadRiftGfx() {
+  try {
+    const v = localStorage.getItem(RIFT_GFX_KEY)
+    if (v && RIFT_GFX_VALID.has(v)) return v
+  } catch {
+    /* 무시 */
+  }
+  return 'med' // 기본값: 균형
+}
+
+export function saveRiftGfx(q) {
+  if (!RIFT_GFX_VALID.has(q)) return
+  try {
+    localStorage.setItem(RIFT_GFX_KEY, q)
+  } catch {
+    /* 무시 */
+  }
+}
