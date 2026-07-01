@@ -109,16 +109,23 @@ export const riftNet = {
       while (d < -Math.PI) d += 2 * Math.PI
       return x + d * f
     }
-    const lerpList = (la, lb, extra) =>
+    const lerpList = (la, lb, extra, snap) =>
       lb.map((eb) => {
         const ea = la?.find((o) => o.id === eb.id)
         if (!ea) return eb
+        // 순간이동/리스폰: 위치를 보간하면 맵을 가로질러 미끄러진다 → 최신 위치로 스냅
+        if (snap && snap(ea, eb)) return eb
         return { ...eb, x: lerp(ea.x, eb.x), z: lerp(ea.z, eb.z), ...(extra ? extra(ea, eb) : null) }
       })
+    // 리스폰(사망↔부활 전환) 또는 큰 도약(점멸·순간이동)이면 보간을 끊는다.
+    //  안 그러면 부활 순간 시체 위치→분수대로 몸이 미끄러지며 시야를 지나가 "누가 살아났는지" 새어 나간다.
+    const TELEPORT2 = 14 * 14
+    const heroSnap = (ea, eb) =>
+      ea.respawnT > 0 || eb.respawnT > 0 || (eb.x - ea.x) ** 2 + (eb.z - ea.z) ** 2 > TELEPORT2
     return {
       ...b.v,
       time: lerp(a.v.time ?? 0, b.v.time ?? 0),
-      heroes: lerpList(a.v.heroes, b.v.heroes, (ea, eb) => ({ dir: lerpAng(ea.dir, eb.dir) })),
+      heroes: lerpList(a.v.heroes, b.v.heroes, (ea, eb) => ({ dir: lerpAng(ea.dir, eb.dir) }), heroSnap),
       minions: lerpList(a.v.minions, b.v.minions, (ea, eb) => ({ dir: lerpAng(ea.dir || 0, eb.dir || 0) })),
       monsters: lerpList(a.v.monsters, b.v.monsters),
       projectiles: lerpList(a.v.projectiles, b.v.projectiles),
