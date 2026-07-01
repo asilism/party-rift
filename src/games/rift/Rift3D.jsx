@@ -5,7 +5,7 @@ import { buildMap } from './map.js'
 // 3D 캔버스. 매 프레임 sample()로 최신 뷰(호스트: 실시간 상태,
 // 게스트: 스냅샷 보간)를 받아 그린다. React 리렌더와 무관하게 60fps.
 // mode(3v3/5v5)가 바뀌면 맞는 크기의 맵으로 장면을 다시 만든다.
-export default function Rift3D({ sample, myId, mode = '3v3', hitFx = true }) {
+export default function Rift3D({ sample, myId, mode = '3v3', hitFx = true, gfx = 'med' }) {
   const canvasRef = useRef(null)
   const sampleRef = useRef(sample)
   sampleRef.current = sample
@@ -17,7 +17,7 @@ export default function Rift3D({ sample, myId, mode = '3v3', hitFx = true }) {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    const scene = createRiftScene(canvas, buildMap(mode))
+    const scene = createRiftScene(canvas, buildMap(mode), gfx)
     sceneRef.current = scene
     scene.setHitFx?.(hitFxRef.current) // 생성 직후 현재 설정 반영
     const holder = canvas.parentElement
@@ -39,7 +39,8 @@ export default function Rift3D({ sample, myId, mode = '3v3', hitFx = true }) {
       sceneRef.current = null
       scene.dispose()
     }
-  }, [mode])
+    // gfx가 바뀌면 렌더러(픽셀레이트·AA)를 새로 만들어야 해서 장면을 재생성한다
+  }, [mode, gfx])
 
   // 설정에서 타격 효과를 켜고 끄면 장면을 새로 만들지 않고 즉시 반영(비교하기 쉽게)
   useEffect(() => {

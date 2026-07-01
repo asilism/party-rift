@@ -3,11 +3,23 @@
 // 로블록스 풍 러프 3D: 단색 로우폴리 몸통 + 이모지 얼굴 스프라이트.
 // 내 팀 시야 기준으로 전장의 안개(어둠)와 수풀 은신을 그린다.
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import {
   NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, buildMap,
 } from './map.js'
 import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE } from './engine.js'
+
+// ── 그래픽 품질 프리셋 ──
+// 티어는 선명도(픽셀레이트·AA)와 안개 갱신율만 조절한다. 월드의 장식 개수·배치는 전 티어 동일 —
+// 정적 장식은 병합되고 산포물은 인스턴싱돼 개수가 성능에 거의 무관해졌기 때문(개수 줄여도 드로우콜 그대로).
+// 그래서 상/중/하는 세계의 "모양"이 아니라 "화질"만 바꾼다. high = 현재와 픽셀 단위로 동일한 최고 화질.
+//  픽셀레이트가 프래그먼트 비용의 지배적 요인. low는 1.25(1.0이면 이름표 한글이 뭉갠다) + AA 끔.
+const QUALITY = {
+  high: { pixelRatio: 2, antialias: true, fogEvery: 1 },
+  med: { pixelRatio: 1.5, antialias: true, fogEvery: 2 },
+  low: { pixelRatio: 1.25, antialias: false, fogEvery: 3 },
+}
 
 export const TEAM_COLOR = { blue: 0x4f8cff, red: 0xff6b6b }
 const ALLY_HP = 0x4ade80
@@ -323,6 +335,52 @@ function makeScatter(geo, mat, items) {
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
   mesh.frustumCulled = false // 인스턴스가 맵 전체에 퍼져 있어 컬링하면 사라질 수 있다
   return mesh
+}
+
+// ── 정적 장식 병합기 ──
+// 안 움직이는 장식(나무·바위)을 셰이딩별(flat/smooth) 한 덩이로 병합해 드로우콜을 확 줄인다.
+//  색은 각 메시의 머티리얼 색을 정점색(vertex color)으로 구워 넣고, 텍스처 없는 로우폴리라
+//  uv는 버려 어트리뷰트를 통일한다(병합 조건). 전부 non-indexed로 맞춰 인덱스 유무 불일치를 피한다.
+//  Lambert + 정점색은 단색 머티리얼과 픽셀 단위로 동일한 음영을 낸다.
+function makeStaticMerger() {
+  const buckets = { flat: [], smooth: [] }
+  const _c = new THREE.Color()
+  function addMesh(mesh) {
+    mesh.updateWorldMatrix(true, false) // 씬에 안 올린 메시라 월드행렬을 직접 갱신
+    const src = mesh.geometry
+    const g = src.index ? src.toNonIndexed() : src.clone()
+    g.applyMatrix4(mesh.matrixWorld) // 위치·회전·스케일을 정점에 굽는다(법선도 함께 변환)
+    if (g.hasAttribute('uv')) g.deleteAttribute('uv')
+    if (!g.hasAttribute('normal')) g.computeVertexNormals()
+    const n = g.attributes.position.count
+    _c.set(mesh.material.color)
+    const col = new Float32Array(n * 3)
+    for (let i = 0; i < n; i++) {
+      col[i * 3] = _c.r
+      col[i * 3 + 1] = _c.g
+      col[i * 3 + 2] = _c.b
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3))
+    ;(mesh.material.flatShading ? buckets.flat : buckets.smooth).push(g)
+  }
+  function addGroup(group) {
+    group.traverse((o) => { if (o.isMesh) addMesh(o) })
+  }
+  function build(scene) {
+    for (const key of ['flat', 'smooth']) {
+      const geos = buckets[key]
+      if (!geos.length) continue
+      const merged = mergeGeometries(geos, false)
+      for (const g of geos) g.dispose()
+      merged.computeBoundingSphere()
+      scene.add(new THREE.Mesh(
+        merged,
+        new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: key === 'flat' })
+      ))
+      buckets[key] = []
+    }
+  }
+  return { addMesh, addGroup, build }
 }
 
 // 레인 리본: 경유지를 따라 일정 폭의 길을 깐다 (map을 주면 흙길 텍스처를 입힌다)
@@ -1473,10 +1531,11 @@ function createFog(map) {
   return { plane, update }
 }
 
-export function createRiftScene(canvas, map = buildMap('3v3')) {
+export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') {
   const { WORLD, NEXUS_POS, LANES, ROCKS, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT } = map
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
+  const Q = QUALITY[quality] || QUALITY.med
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q.antialias })
+  renderer.setPixelRatio(Math.min(Q.pixelRatio, window.devicePixelRatio || 1))
   const scene = new THREE.Scene()
   // 무거운 황혼 분위기 — 어둑한 하늘 + 가까이 깔리는 대기 안개
   scene.background = new THREE.Color(0x2b3550)
@@ -1576,6 +1635,10 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
     rim.position.set(NEXUS_POS[team].x, 0.05, NEXUS_POS[team].z)
     scene.add(pad, rim)
   }
+  // 정적 장식(나무·바위·둥지돌)은 안 움직이므로 셰이딩별 한 덩이로 병합한다 → 드로우콜 대폭 절감.
+  //  수풀(은신)·성벽은 병합 대상에서 제외(게임플레이/구조물).
+  const staticDecor = makeStaticMerger()
+
   // 용/바론 둥지 (모래 바닥 + 테두리 돌무더기)
   const pitRnd = lcg(4242)
   for (const pit of [DRAGON_PIT, BARON_PIT]) {
@@ -1596,7 +1659,7 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
       )
       rock.position.set(pit.x + Math.cos(a) * 8, rr * 0.5, pit.z + Math.sin(a) * 8)
       rock.rotation.set(pitRnd() * 3, pitRnd() * 3, pitRnd() * 3)
-      scene.add(rock)
+      staticDecor.addMesh(rock)
     }
   }
   // 바위 — 큰 돌 + 둘레에 작은 돌이 흩어진 군집 (저폴리 면처리로 거칠게)
@@ -1631,7 +1694,7 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
       g.add(m)
     }
     g.position.set(r.x, 0, r.z)
-    scene.add(g)
+    staticDecor.addGroup(g)
   }
   // 성벽: 길이 아닌 곳을 막는 능선 + 윗면에 성가퀴(merlon) 톱니
   const wallMat = new THREE.MeshLambertMaterial({ color: 0x7d8494 })
@@ -1764,8 +1827,9 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
     }
     tree.position.set(x, 0, z)
     tree.rotation.y = rnd() * Math.PI
-    scene.add(tree)
+    staticDecor.addGroup(tree)
   }
+  staticDecor.build(scene) // 나무·바위·둥지돌을 flat/smooth 두 메시로 병합 완료
 
   // ── 전장의 안개 ──
   const fog = createFog(map)
@@ -1838,7 +1902,9 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
   scene.add(endFlash)
 
   const camTarget = new THREE.Vector3(0, 0, 0)
+  const _want = new THREE.Vector3() // 카메라 목표점 — 매 프레임 재사용(할당 방지)
   let camInit = false
+  let frameN = 0 // 안개 갱신 스로틀용 프레임 카운터
   let lastT = null // 공격 모션 진행용 프레임 시간
   let hitFxOn = true // 피격 테두리 on/off (데미지 숫자는 항상 표시)
   let prevStatus = null // 직전 프레임의 경기 상태 (finished 전환 감지)
@@ -1873,6 +1939,7 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
   function render(view, myId) {
     const dt = lastT == null ? 0 : Math.max(0, Math.min(0.1, view.time - lastT))
     lastT = view.time
+    frameN++
     waterTex.offset.y -= dt * 0.04 // 강물이 천천히 흐른다
     // 빛 입자: 위아래로 흔들리며 옆으로 살랑인다
     const mp = moteGeo.attributes.position.array
@@ -2216,8 +2283,12 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
     }
 
     // 전장의 안개 (관전자는 안개 없음 / 경기가 끝나면 걷어 폭발 연출이 또렷이 보이게)
-    fog.plane.visible = !!myTeam && view.status !== 'finished'
-    if (fog.plane.visible) fog.update(view, myTeam)
+    // 시야는 천천히 변하므로 품질에 따라 몇 프레임에 한 번만 캔버스를 다시 그려 재업로드 비용을 아낀다.
+    const fogVisible = !!myTeam && view.status !== 'finished'
+    if (fogVisible) {
+      if (!fog.plane.visible || frameN % Q.fogEvery === 0) fog.update(view, myTeam) // 켜진 첫 프레임엔 즉시 갱신
+    }
+    fog.plane.visible = fogVisible
 
     // 넥서스 폭발 연출: finished로 막 바뀐 순간 진 쪽 넥서스를 크게 "펑" 번쩍(+카메라가 그리로 모인다)
     const loser = view.winner === 'blue' ? 'red' : view.winner === 'red' ? 'blue' : null
@@ -2236,7 +2307,7 @@ export function createRiftScene(canvas, map = buildMap('3v3')) {
     }
 
     // 카메라: 평소엔 내 영웅을, 경기가 끝나면 터진 넥서스로 모아 폭발을 보여 준다(관전은 위에서 전체)
-    const want = new THREE.Vector3()
+    const want = _want
     let offY = 42
     let offZ = 30
     const endNexus = view.status === 'finished' && loser ? NEXUS_POS[loser] : null
