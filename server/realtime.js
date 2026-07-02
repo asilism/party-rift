@@ -1,5 +1,5 @@
 // 실시간 게임 세션(④ 서버 권위). 방 하나당 하나.
-//  - 서버가 engine 시뮬을 고정틱으로 굴리고(60Hz), 20Hz로 스냅샷을 바이너리 델타로 방송한다.
+//  - 서버가 engine 시뮬을 고정틱으로 굴리고(60Hz), 30Hz로 스냅샷을 바이너리 델타로 방송한다.
 //  - 입력/액션은 어느 기기든 받아 "그 기기가 조종하는 엔티티"에만 적용(소유권은 서버가 판정).
 //  - 사람이 나가면 그 엔티티는 봇이 인계.
 import { RealtimeSim } from '../src/net/realtime/sim.js'
@@ -7,7 +7,7 @@ import { encodeSnapshot } from '../src/net/realtime/codec.js'
 import { racerIdFor } from '../src/net/realtime/roster.js'
 import { GAMES } from './games.js'
 
-const TICK_MS = 50 // 20Hz 방송 / 시뮬은 실제 경과만큼 60Hz로 따라잡음
+const TICK_MS = 33 // 30Hz 방송(저지연) / 시뮬은 실제 경과만큼 60Hz로 따라잡음. 델타 스냅샷이라 대역폭 부담은 작다.
 
 function allPlayersOf(room) {
   const out = []

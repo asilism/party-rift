@@ -6,7 +6,7 @@
 //  1) 클라가 hello(deviceId)로 접속. 진행 중이던 큐/매치가 있으면 그대로 이어준다(재접속 복구).
 //  2) queue(mode)로 대기열 입장. 목표 인원이 차거나 1분이 지나면 매치 생성(빈자리는 봇).
 //  3) 매치: 랜덤 팀 배정 → 스네이크 드래프트(사람 10초/봇 자동) → 3초 카운트다운 → 플레이.
-//  4) 플레이: realtime 세션이 60Hz 시뮬 / 20Hz 바이너리 델타 스냅샷을 방송.
+//  4) 플레이: realtime 세션이 60Hz 시뮬 / 30Hz 바이너리 델타 스냅샷을 방송.
 import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -47,7 +47,8 @@ const httpServer = http.createServer((req, res) => {
   fs.createReadStream(file).pipe(res)
 })
 
-const wss = new WebSocketServer({ server: httpServer, path: '/ws' })
+// 저지연: 압축(perMessageDeflate)은 작은 스냅샷 프레임엔 CPU·지연만 더한다 — 명시적으로 끈다.
+const wss = new WebSocketServer({ server: httpServer, path: '/ws', perMessageDeflate: false })
 const mm = createMatchmaker()
 
 // deviceId -> { ws }
@@ -203,6 +204,7 @@ const loopTimer = setInterval(loop, LOOP_MS)
 
 // ── 연결 ──
 wss.on('connection', (ws) => {
+  ws._socket?.setNoDelay?.(true) // 저지연: Nagle 비활성 — 작은 입력/스냅샷 프레임이 묶여 늦게 나가는 걸 막는다
   ws.isAlive = true
   ws.on('pong', () => (ws.isAlive = true))
   let deviceId = null
@@ -278,6 +280,11 @@ wss.on('connection', (ws) => {
       case 'rtResync': {
         // 클라가 막 구독함 → 다음 틱에 full 스냅샷 한 장을 보내 동기화 보장
         entryOf(deviceId)?.session?.deviceJoined(deviceId)
+        break
+      }
+      case 'ping': {
+        // 클라 RTT 계측용 에코 — 클라 타임스탬프(ct)를 그대로 돌려준다
+        send(ws, { t: 'pong', ct: msg.ct })
         break
       }
       default:

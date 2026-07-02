@@ -15,7 +15,7 @@ import { riftNet } from './netgame.js'
 import { NetWaiting } from '../../net/NetParts.jsx'
 
 // 조디악 러쉬 — 3:3 AOS. 온라인 방 전용(기기마다 조이스틱이 필요해서).
-//  - 서버 권위(④): 서버가 60Hz로 시뮬레이션을 돌리고 20Hz로 바이너리 델타 스냅샷을 방송.
+//  - 서버 권위(④): 서버가 60Hz로 시뮬레이션을 돌리고 30Hz로 바이너리 델타 스냅샷을 방송.
 //  - 클라(①③): 내 영웅은 입력 즉시 반영(예측)·권위 보정, 남의 유닛은 보간으로 부드럽게.
 //      모든 동기화 배관은 useRealtimeGame이 담당.
 //  - 영웅은 기기당 1명: 그 기기가 드래프트에서 고른 영웅을 조종한다.
@@ -25,6 +25,13 @@ export default function RiftGame({ onExit, net }) {
   const ctrlRef = useRef({ mx: 0, mz: 0 })
   const { view, sample, myId, sendAction } = useRealtimeGame(net, riftNet, ctrlRef)
   const [soundOn, setSoundOn] = useState(true)
+  // 핑(왕복 지연) — RoomClient가 2초마다 계측한 값을 1초 주기로 읽어 HUD에 보여 준다
+  const [rtt, setRtt] = useState(0)
+  useEffect(() => {
+    if (!net?.getRtt) return undefined
+    const t = setInterval(() => setRtt(net.getRtt() || 0), 1000)
+    return () => clearInterval(t)
+  }, [net])
 
   // 전장 진입 시 사운드 준비(첫 입력에서 unlock)
   useEffect(() => {
@@ -85,6 +92,7 @@ export default function RiftGame({ onExit, net }) {
       onSell={sell}
       onResetShop={resetShopBuys}
       onUseItem={useItemSlot}
+      rtt={rtt}
       onTogglePause={null}
       onExit={onExit}
       soundOn={soundOn}
@@ -330,7 +338,7 @@ function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onTog
 
 // 전투 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function RiftPlay({
-  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onUseItem, onTogglePause, onExit, soundOn, onToggleSound,
+  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onUseItem, rtt = 0, onTogglePause, onExit, soundOn, onToggleSound,
 }) {
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
@@ -440,6 +448,15 @@ function RiftPlay({
                 </>
               )}
               <span className="rift__stats-time">⏱{fmtTime(hud.timeLeft)}</span>
+              {rtt > 0 && (
+                <span
+                  className="rift__stats-ping"
+                  title={`서버 왕복 지연 ${rtt}ms`}
+                  style={{ color: rtt < 80 ? '#7ae08a' : rtt < 150 ? '#ffd34d' : '#ff7a6a' }}
+                >
+                  📶{rtt}
+                </span>
+              )}
             </div>
             <RiftSettingsMenu
               hud={hud}

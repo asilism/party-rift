@@ -27,6 +27,8 @@ export function wsUrl() {
 export function createRoomClient({ url = wsUrl(), deviceId = getDeviceId() } = {}) {
   let ws = null
   let closedByUser = false
+  let rtt = 0 // 왕복 지연(ms) — 주기적 ping/pong으로 계측한 지수이동평균
+  let pingTimer = null
   const listeners = new Map() // type -> Set<fn>
 
   const emit = (type, payload) => {
@@ -58,8 +60,18 @@ export function createRoomClient({ url = wsUrl(), deviceId = getDeviceId() } = {
       } catch {
         return
       }
+      if (msg.t === 'pong' && msg.ct) {
+        const sample = Date.now() - msg.ct
+        rtt = rtt ? rtt * 0.6 + sample * 0.4 : sample // 튀는 값은 EMA로 눌러 표시가 안정되게
+        return
+      }
       emit(msg.t, msg)
     }
+    // RTT 계측: 2초마다 ping — 서버가 타임스탬프를 그대로 에코한다
+    clearInterval(pingTimer)
+    pingTimer = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) send({ t: 'ping', ct: Date.now() })
+    }, 2000)
     sock.onclose = () => {
       if (sock !== ws) return // 재연결로 교체된 옛 소켓 → 무시
       if (!closedByUser) emit('disconnect')
@@ -73,6 +85,7 @@ export function createRoomClient({ url = wsUrl(), deviceId = getDeviceId() } = {
 
   function close() {
     closedByUser = true
+    clearInterval(pingTimer)
     try {
       ws?.close()
     } catch {
@@ -91,6 +104,7 @@ export function createRoomClient({ url = wsUrl(), deviceId = getDeviceId() } = {
     connect,
     close,
     on,
+    getRtt: () => Math.round(rtt), // 최근 왕복 지연(ms, EMA) — HUD 핑 표시용
     // 매치메이킹 큐 / 드래프트
     joinQueue: (mode) => send({ t: 'queue', mode }),
     leaveQueue: () => send({ t: 'leaveQueue' }),
