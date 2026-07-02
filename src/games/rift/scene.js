@@ -766,6 +766,7 @@ export const CLS_SCALE = {
   beastmaster: 1.08, swordmaster: 1.0, engineer: 1.0, snarer: 1.0,
   archer: 0.95, healer: 0.95, mage: 0.95, warlock: 0.95, cryomancer: 0.95, chronomancer: 0.95,
   windcaller: 0.92, assassin: 0.9,
+  terramancer: 1.15, fearmonger: 0.95, illusionist: 0.9,
 }
 
 const ATK_ANIM_T = 0.35 // 공격 모션 길이 (초)
@@ -952,6 +953,38 @@ export function buildClassParts(cls, s, body) {
     hand.position.set(-1.05 * s, 1.3 * s, 0)
     hand.rotation.x = 0.6
     body.add(hand)
+  } else if (cls === 'fearmonger') {
+    // 어깨 위를 떠도는 창백한 혼불 한 쌍
+    const soul = glow(0x9fc8e8, 0.7)
+    for (const [dy, dz] of [[1.5, 0.85], [1.3, -0.95]]) {
+      const wisp = new THREE.Mesh(new THREE.SphereGeometry(0.2 * s, 7, 6), soul)
+      wisp.position.set(-0.5 * s, dy * s, dz * s)
+      body.add(wisp)
+    }
+  } else if (cls === 'illusionist') {
+    // 뒤통수의 하얀 가면 — 앞뒤 어느 쪽이 진짜 얼굴인가
+    const mask = new THREE.Mesh(new THREE.SphereGeometry(0.55 * s, 9, 7), new THREE.MeshLambertMaterial({ color: 0xf0ead8 }))
+    mask.scale.set(0.35, 1, 0.8)
+    mask.position.set(-1.0 * s, 1.15 * s, 0)
+    body.add(mask)
+    const eyeMat = new THREE.MeshLambertMaterial({ color: 0x3a3550 })
+    for (const dz of [0.2, -0.2]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.08 * s, 5, 4), eyeMat)
+      eye.position.set(-1.18 * s, 1.25 * s, dz * s)
+      body.add(eye)
+    }
+  } else if (cls === 'terramancer') {
+    // 어깨의 바위 덩어리 + 등에 떠 있는 잔돌
+    const stone = new THREE.MeshLambertMaterial({ color: 0x9a8f7c, flatShading: true })
+    for (const sz of [1, -1]) {
+      const chunk = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42 * s, 0), stone)
+      chunk.position.set(0, 1.4 * s, sz * 1.05 * s)
+      chunk.rotation.set(sz, sz * 2, 0)
+      body.add(chunk)
+    }
+    const pebble = new THREE.Mesh(new THREE.IcosahedronGeometry(0.18 * s, 0), stone)
+    pebble.position.set(-1.1 * s, 1.6 * s, 0)
+    body.add(pebble)
   }
   // 그 외 직업은 파츠 없음 — 무기와 몸집만으로 구분
 }
@@ -1191,6 +1224,53 @@ function buildWeapon(cls) {
     g.userData.pose = (t) => {
       g.position.x = 0.5 + swing(t) * 1.6 // 올가미를 던졌다 회수
     }
+  } else if (cls === 'fearmonger') {
+    // 유령 등불 지팡이: 검은 장대 끝에 창백하게 떠는 혼불
+    const dark = new THREE.MeshLambertMaterial({ color: 0x2e2a44 })
+    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 2.1), dark)
+    staff.position.y = 0.3
+    const cage = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.05, 6, 10), dark)
+    cage.position.y = 1.5
+    const soul = new THREE.Mesh(
+      new THREE.SphereGeometry(0.22, 8, 6),
+      new THREE.MeshLambertMaterial({ color: 0xbfe8ff, emissive: 0x8ac0e8, emissiveIntensity: 0.7 })
+    )
+    soul.position.y = 1.5
+    g.add(staff, cage, soul)
+    g.position.set(0.4, 0.2, 0.9)
+    g.userData.pose = (t) => {
+      const s = swing(t)
+      g.rotation.z = -s * 0.8
+      soul.material.emissiveIntensity = 0.7 + s * 1.8
+    }
+  } else if (cls === 'illusionist') {
+    // 쌍초승달 검: 좌우로 흩뿌리듯 교차 베기
+    const blade = new THREE.MeshLambertMaterial({ color: 0xe8ddf5, emissive: 0x5a4a86, emissiveIntensity: 0.25 })
+    for (const side of [0.5, -0.5]) {
+      const crescent = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.09, 6, 12, Math.PI * 1.1), blade)
+      crescent.rotation.x = Math.PI / 2
+      crescent.position.set(0.55, 0.2, side)
+      g.add(crescent)
+    }
+    g.userData.pose = (t) => {
+      const s = swing(t)
+      g.position.x = s * 0.7
+      g.rotation.y = s * 1.4 // 교차 베기
+    }
+  } else if (cls === 'terramancer') {
+    // 돌망치: 굵은 자루 + 큰 바윗덩이 — 땅을 쿵 찍는다
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 1.9), wood)
+    handle.position.y = 0.45
+    const rock = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(0.55, 0),
+      new THREE.MeshLambertMaterial({ color: 0x9a8f7c, flatShading: true })
+    )
+    rock.position.y = 1.5
+    g.add(handle, rock)
+    g.position.set(0.5, 0.2, 0.95)
+    g.userData.pose = (t) => {
+      g.rotation.z = 0.5 - swing(t) * 1.7 // 번쩍 들었다 쿵!
+    }
   } else {
     // 마법사/힐러: 지팡이 + 빛나는 구슬
     const color = cls === 'healer' ? 0x6ee7a0 : 0xb07ef0
@@ -1334,6 +1414,9 @@ function buildHero(h, mine, barColor) {
   const freeze = emojiSprite('❄️', 1.7)
   freeze.position.y = 5.0 * s
   freeze.visible = false
+  const fear = emojiSprite('😱', 1.7)
+  fear.position.y = 5.0 * s
+  fear.visible = false
   // 귀환 채널링 링 (발밑에서 청록색으로 돈다)
   const recall = new THREE.Mesh(
     new THREE.RingGeometry(1.7, 2.4, 28),
@@ -1400,11 +1483,11 @@ function buildHero(h, mine, barColor) {
     dpStartY[i] = 1.2 * s + rnd() * 2.6 * s
     dpPeak[i] = 0.3 + rnd() * 1.2
   }
-  g.add(shadow, body, face, name, bar, ring, buff, shield, barrier, bindSphere, stun, freeze, recall, recallBeam, deathPts)
+  g.add(shadow, body, face, name, bar, ring, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, deathPts)
   g.userData = {
     body, outline, face, name, nameColor, nameLvl: h.lvl, isMine: mine, shadow,
     bodyBaseY: 2.2 * s, faceBaseY: 4.4 * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, buff, shield, barrier, bindSphere, stun, freeze, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
@@ -1436,6 +1519,7 @@ function setHeroDead(u, dead) {
     u.bindSphere.visible = false
     u.stun.visible = false
     u.freeze.visible = false
+    u.fear.visible = false
     u.recall.visible = false
     u.recallBeam.visible = false
   }
@@ -1751,6 +1835,12 @@ const SUMMON_LOOK = {
 }
 
 function buildSummon(s, barColor) {
+  // 환영무희 분신: 본체와 완전히 똑같이 그린다(몸/무기/이모지/이름표) — 적을 속이는 미끼
+  if (s.kind === 'clone') {
+    const g = buildHero({ ...s, id: String(s.id), atkSeq: 0 }, false, barColor)
+    g.userData.isClone = true
+    return g
+  }
   const look = SUMMON_LOOK[s.kind] || SUMMON_LOOK.wolfpet
   const col = TEAM_COLOR[s.team]
   const g = new THREE.Group()
@@ -1904,6 +1994,12 @@ const FX_LOOK = {
   tornado: { color: 0xd6f0ff, tornado: true, pcolor: 0xffffff },
   // 바론 독 뿜기 착탄 — 초록 튐 + 웅덩이는 zone(venom)이 그린다
   venom: { color: 0x86d94a, ring: true, mode: 'out', pcolor: 0xb7f06a },
+  // 공포술사: 어둠 계열(창백한 보라)
+  dread: { color: 0x7a5fae, line: true, mode: 'forward', pcolor: 0xb9a3e0, w: 5 }, // 공포의 시선 — 넓은 어둠 물결
+  shriek: { color: 0x8a6bc0, ring: true, mode: 'out', pcolor: 0xcdb3f0, ring2: true }, // 단말마 — 이중 공포 파동
+  // 대지술사: 대지 계열(황토)
+  quake: { color: 0xc9863c, line: true, mode: 'forward', pcolor: 0xd9b586, w: 2.6, ground: true }, // 융기 — 벽이 솟는 자리
+  cage: { color: 0xc9863c, ring: true, mode: 'out', pcolor: 0xd9b586, spikes: 0xa8927a }, // 바위감옥 — 돌가시 원환
 }
 
 // 시드 고정 파티클 구름 — 호스트/게스트 모두 같은 fx(id)에서 같은 모양이 나오게 lcg 시드.
@@ -2195,6 +2291,28 @@ function buildFxObject(n) {
     ups.push((t) => debris.userData.update(t))
   }
   g.userData.update = (t) => { for (const u of ups) u(t) }
+  return g
+}
+
+// 대지술사 임시 돌벽 — 충돌 원 하나당 바위 기둥 하나. 콱 솟았다가 수명이 다하면 가라앉는다.
+function buildStoneWall(w) {
+  const g = new THREE.Group()
+  g.position.set(w.x, 0, w.z)
+  const rnd = lcg(((w.id | 0) + 5) * 2246822519 >>> 0)
+  const stone = new THREE.MeshLambertMaterial({ color: 0x9a8f7c, flatShading: true })
+  const pillar = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.3, 4.6, 7), stone)
+  pillar.position.y = 2.3
+  pillar.rotation.y = rnd() * 3
+  const cap = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6, 0), stone)
+  cap.position.y = 4.8
+  cap.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3)
+  g.add(pillar, cap)
+  g.userData.update = (ww) => {
+    const rise = Math.min(1, ww.t / 0.18) // 콱 솟는다
+    const rem = (ww.life ?? 3) - ww.t
+    const k = Math.max(0.001, rem < 0.35 ? (rem / 0.35) * rise : rise) // 마지막 0.35초에 가라앉는다
+    g.scale.y = k
+  }
   return g
 }
 
@@ -2849,6 +2967,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const summonPool = new Map()
   const projPool = new Map()
   const zonePool = new Map()
+  const stoneWallPool = new Map() // 대지술사 임시 돌벽
   const fxPool = new Map()
   const bindPool = new Map() // 결속 끈: 묶인 아군 id → 수호기사에게 잇는 선
   const particles = makeParticles(scene) // 타격 스파크·발자국 먼지·투사체 꼬리 공용
@@ -3102,6 +3221,9 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         // 기절: 머리 위 💫가 빙글빙글 돈다 (어지러운 상태 표시) — 공중에 띄워진 동안은 띄우기 연출로 대체
         u.stun.visible = h.stunT > 0 && !(h.airT > 0)
         if (u.stun.visible) u.stun.material.rotation = view.time * 6
+        // 공포: 머리 위 😱 — 부들부들 떨며 강제로 도망치는 중
+        u.fear.visible = h.fearT > 0
+        if (u.fear.visible) u.fear.material.rotation = Math.sin(view.time * 14) * 0.25
         // 빙결: 머리 위 ❄️ + 몸이 푸르게 얼어붙는다 / 광폭화: 몸이 빨갛게 달아오른다
         const frozen = h.freezeT > 0
         u.freeze.visible = frozen
@@ -3275,6 +3397,22 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       (obj, s) => {
         obj.visible = isUnitVisible(view, s, myTeam)
         const u = obj.userData
+        // 분신: 영웅과 같은 몸이라 위치/회전/체력바 + 걷기 다리 흔들기만 얹는다
+        if (u.isClone) {
+          obj.position.set(s.x, 0, s.z)
+          u.body.rotation.y = -(s.dir || 0)
+          setHpBar(u.bar, s.hp / s.maxHp)
+          const stride = Math.sin(view.time * 9 + s.id) * 0.55
+          if (u.legs) {
+            u.legs[0].rotation.z = stride * 0.65
+            u.legs[1].rotation.z = -stride * 0.65
+          }
+          if (u.arms) {
+            u.arms[0].rotation.z = -stride * 0.5
+            u.arms[1].rotation.z = stride * 0.5
+          }
+          return
+        }
         // 포탑은 고정, 펫은 걸을 때 통통 튄다(멈추면 숨쉬기 둥실)
         const wkS = u.turret ? null : walkBounce(u, s.x, s.z, dt)
         const bob = u.turret ? 0
@@ -3337,6 +3475,10 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       if (u.trail && obj.visible) {
         particles.emit(p.x, obj.position.y, p.z, u.color, 1, { spread: 0.6, up: 0.5, gravity: 2, size: 0.8, lifeMin: 0.18, lifeMax: 0.34 })
       }
+    })
+    // 대지술사 임시 돌벽 — 물리적 지형이라 안개와 무관하게 항상 보인다(안 보이는 벽에 막히면 억울하다)
+    syncPool(scene, stoneWallPool, view.stoneWalls || [], buildStoneWall, (obj, w) => {
+      obj.userData.update?.(w)
     })
     // 지면 범위 장판 (운석 조준+낙하 / 바론 독 웅덩이)
     syncPool(

@@ -50,6 +50,9 @@ const ROLE_PREF = {
   beastmaster: ['jungle', 'top', 'mid', 'bot'], // 소환사 — 정글
   engineer: ['mid', 'top', 'bot'], // 포탑 설치 — 미드/사이드
   snarer: ['jungle', 'bot', 'mid', 'top'], // 속박 정글러 — 정글/갱킹
+  fearmonger: ['mid', 'bot', 'top'], // 공포 메이지 — 미드
+  illusionist: ['jungle', 'mid', 'top', 'bot'], // 분신 암살자 — 정글
+  terramancer: ['top', 'support', 'mid', 'bot'], // 지형 브루저 — 탑/지원
 }
 // 한 봇에게 그 모드의 역할 풀에서 직업 선호에 맞는 빈 역할을 고른다(겹치면 다음 후보 → 남은 자리).
 function pickRole(cls, mode, taken) {
@@ -185,6 +188,27 @@ export const CLASSES = {
     skill2: { name: '시간 지연', icon: '⏱️', cd: 11, desc: '겨눈 자리에 시간이 느려지는 장판 — 머무는 적의 이동·공격을 늦추고 갉아먹는다(추격·고립)' },
     ult: { name: '역행', icon: '⏪', cd: 60, desc: '4초 전 위치·체력으로 되돌아가며 주변에 충격파 피해' },
   },
+  fearmonger: {
+    name: '공포술사', icon: '👻', desc: '적을 공포에 질려 달아나게 하는 심리전 메이지 — 도망치는 등 뒤를 노려라',
+    hp: 460, hpLvl: 50, atk: 41, atkLvl: 6, range: 9.5, atkCd: 0.95, speed: 12.4,
+    skill: { name: '공포의 시선', icon: '👁️', cd: 10, desc: '전방 부채꼴의 적에게 피해를 주고 1.2초 공포 — 내게서 강제로 달아난다' },
+    skill2: { name: '망령걸음', icon: '🌫️', cd: 12, desc: '유령처럼 흐려져 잠깐 발이 빨라지고 어둠 장막(피해 흡수)을 두른다' },
+    ult: { name: '단말마', icon: '💀', cd: 60, desc: '주변 모든 적을 1.6초 공포에 빠뜨리고, 달아나는 동안 어둠이 갉아먹는다(도트)' },
+  },
+  illusionist: {
+    name: '환영무희', icon: '🎭', desc: '분신으로 적을 속이는 정보전 암살자 — 셋 중 진짜는 하나',
+    hp: 450, hpLvl: 48, atk: 46, atkLvl: 6.5, range: 3.8, atkCd: 0.75, speed: 13.4,
+    skill: { name: '환영 분신', icon: '🪞', cd: 10, desc: '똑같이 생긴 분신이 내 앞길을 대신 걷고, 나는 잠깐 은신한다' },
+    skill2: { name: '자리바꿈', icon: '🔀', cd: 9, desc: '내 분신과 위치를 맞바꾼다 — 진입도 탈출도 자유자재' },
+    ult: { name: '환영난무', icon: '✨', cd: 60, desc: '분신 둘을 흩뿌리고 은신하며 주변을 벤다 — 누가 진짜인가?' },
+  },
+  terramancer: {
+    name: '대지술사', icon: '🪨', desc: '돌벽을 세워 전장을 바꾸는 지형 술사 — 길을 막고, 가두고, 갈라놓는다',
+    hp: 540, hpLvl: 60, atk: 43, atkLvl: 6, range: 8.5, atkCd: 1.0, speed: 12.0, def: 0.9,
+    skill: { name: '융기', icon: '⛰️', cd: 13, desc: '전방에 돌벽을 솟게 해 3초간 길을 막는다 — 추격 차단·적 분단' },
+    skill2: { name: '돌팔매', icon: '🪃', cd: 8, desc: '큰 바위를 던져 피해 + 잠깐 둔화' },
+    ult: { name: '바위감옥', icon: '🏔️', cd: 65, desc: '보이는 적 하나를 원형 돌벽으로 2.5초 가둔다 — 강제 1:1' },
+  },
 }
 export const CLASS_IDS = Object.keys(CLASSES)
 
@@ -192,11 +216,11 @@ export const CLASS_IDS = Object.keys(CLASSES)
 //  mage(AP 딜) · marksman(AD 원거리) · fighter(AD 근접/브루저/탱) · support(서폿)
 //  jungle(정글러): 갑자기 합류해 적을 속박·제압하며 아군을 지원 — 암살자(버스트 갱)·사슬잡이(끌기·속박)
 export const CLASS_ROLE = {
-  mage: 'mage', cryomancer: 'mage', warlock: 'mage', windcaller: 'mage',
+  mage: 'mage', cryomancer: 'mage', warlock: 'mage', windcaller: 'mage', fearmonger: 'mage',
   archer: 'marksman', engineer: 'marksman',
-  warrior: 'fighter', gladiator: 'fighter', swordmaster: 'fighter', tank: 'fighter', beastmaster: 'fighter',
+  warrior: 'fighter', gladiator: 'fighter', swordmaster: 'fighter', tank: 'fighter', beastmaster: 'fighter', terramancer: 'fighter',
   healer: 'support', guardian: 'support',
-  assassin: 'jungle', catcher: 'jungle', snarer: 'jungle', chronomancer: 'jungle',
+  assassin: 'jungle', catcher: 'jungle', snarer: 'jungle', chronomancer: 'jungle', illusionist: 'jungle',
 }
 // 봇 팀이 채우고 싶어하는 역할 우선순위(앞에서부터 한 자리씩) — 균형 잡힌 조합.
 //  3v3는 앞 3개(근접·마법·원거리)로 코어가 서고, 5v5는 서폿·정글까지 다섯 분야가 한 명씩.
@@ -223,6 +247,9 @@ export const ABILITY_SCALING = {
   snarer: { skill: { dmg: [40, 0.6], note: '명중 시 1.3초 속박' }, ult: { dmg: [70, 0.8], note: '범위 속박' } },
   windcaller: { skill: { dmg: [44, 0.7], note: '1.5초 공중에 띄움' }, skill2: { dmg: [26, 0.4], note: '사방으로 밀침 · 벽에 박으면 기절' }, ult: { dmg: [70, 0.8], note: '바깥으로 날림 + 둔화' } },
   chronomancer: { skill: { dmg: [40, 0.9], note: '적 뒤로 순간이동' }, skill2: { dot: [10, 0.2], dotDur: 3, note: '장판 안 이동·공격 둔화' }, ult: { dmg: [60, 0.9], note: '도착 충격파 · 4초 전 체력 복원' } },
+  fearmonger: { skill: { dmg: [30, 0.55], note: '1.2초 공포(강제 도주)' }, skill2: { shield: [45, 0.7], note: '가속 + 어둠 장막' }, ult: { dmg: [40, 0.6], dot: [10, 0.18], dotDur: 2, note: '주변 전체 1.6초 공포' } },
+  illusionist: { skill: { note: '분신 소환 + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '분신 2 + 1.4초 은신' } },
+  terramancer: { skill: { note: '전방 돌벽 3초(길 막기)' }, skill2: { dmg: [45, 0.8], note: '0.9초 둔화' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
 }
 
 // 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 하이브리드는 공·주 평균, 그 외는 공격력.
@@ -654,6 +681,8 @@ export function createGame(players, opts = {}) {
       pullT: 0, // 갈고리에 끌려오는 남은 시간(그동안 스턴)
       pullBy: null, // 나를 끌어당기는 사슬잡이 id
       stealthT: 0, // 암살자 은신 남은 시간 — 적에게 안 보인다
+      fearT: 0, // 공포(공포술사) — 시전자 반대 방향으로 강제 도주, 행동 불가
+      fearFrom: null, // 공포 도주 기준점 {x, z}
       hasteT: 0, // 힐러 가속 남은 시간 — 이동 속도 ↑
       tauntT: 0, // 탱커 도발에 걸린 시간 — tauntBy만 평타치게 된다
       tauntBy: null, // 나를 도발한 탱커 id
@@ -750,6 +779,7 @@ export function createGame(players, opts = {}) {
     hawks: [], // 궁수 사냥매 {id, team, owner, x, z, vx, vz, travel, max, dropAt}
     reveals: [], // 사냥매가 걷어 둔 시야 흔적 {team, x, z, r, t, life}
     zones: [], // 예고 후 발동하는 지면 범위 {id, kind:'meteor', x, z, r, t, delay, dmg, ...}
+    tempWalls: [], // 대지술사 임시 돌벽 충돌 원 {id, x, z, alive, t, life} — colliders()가 타워와 함께 취급
     summons: [], // 소환물(야수조련사 펫/엔지니어 포탑) {id, kind, team, owner, x, z, hp, ...}
     fx: [], // 시각 효과 {id, kind, x, z, r, t, team}
     kills: { blue: 0, red: 0 },
@@ -830,7 +860,55 @@ function trailSampleBack(h, secs) {
   return h.trail[i]
 }
 
-const canAct = (h) => h.respawnT <= 0 && h.stunT <= 0
+const canAct = (h) => h.respawnT <= 0 && h.stunT <= 0 && h.fearT <= 0 // 공포 중엔 공격/시전 불가(도망만)
+
+// ── 신규 직업 상수 ──
+// 공포술사: 공포 = 시전자 반대 방향으로 강제 도주(새 CC). 넉백(밀침)·도발(끌림)과 구분되는 심리 CC.
+const FEAR_RANGE = 10 // 공포의 시선 부채꼴 길이
+const FEAR_HALF_ANG = 0.55 // 부채꼴 절반 각(rad)
+const FEAR_T = 1.2 // 스킬 공포 지속
+const SPECTRE_T = 2.2 // 망령걸음(가속+어둠 장막) 지속
+const SHRIEK_RADIUS = 9 // 단말마 반경
+const SHRIEK_FEAR_T = 1.6
+const FEAR_FLEE_SPD = 0.9 // 도주 속도 배율(본인 이속 기준)
+// 환영무희: 분신(공격하지 않는 미끼) + 자리바꿈
+const CLONE_LIFE = 6 // 분신 수명(초)
+const CLONE_HP_COEF = 1.6 // 분신 체력 = 주력 스탯 × 계수 (잘 속을 만큼은 단단하게)
+const CLONE_STEALTH_T = 0.9 // 분신 소환 시 본체 은신
+const DANCE_STEALTH_T = 1.4 // 환영난무 은신
+// 대지술사: 임시 돌벽(동적 지형)
+const QUAKE_WALL_LIFE = 3 // 융기 벽 지속(초)
+const QUAKE_WALL_AHEAD = 5.5 // 벽이 서는 전방 거리
+const QUAKE_WALL_SPAN = 3.3 // 벽 충돌 원 간격(원 반경 TOWER_RADIUS와 겹치게)
+const SLING_RANGE = 12 // 돌팔매 사거리
+const SLING_SLOW_T = 0.9 // 돌팔매 둔화(빙결 재활용)
+const CAGE_RANGE = 14 // 바위감옥 시전 사거리
+const CAGE_RADIUS = 5.2 // 감옥 반지름
+const CAGE_LIFE = 2.5 // 감옥 지속
+
+// 공포 부여 — 검투의 분노(CC 감소) 존중, 귀환 채널링도 끊는다
+function applyFear(e, from, t) {
+  const cc = e.rageT > 0 ? RAGE_CC_CUT : 1
+  e.fearT = Math.max(e.fearT, t * cc)
+  e.fearFrom = { x: from.x, z: from.z }
+  cancelRecall(e)
+}
+
+// 이동 충돌체 = 타워 + 대지술사의 임시 돌벽 (벽 원은 alive:true라 타워와 같은 규칙으로 밀어낸다)
+const colliders = (state) =>
+  state.tempWalls && state.tempWalls.length ? state.towers.concat(state.tempWalls) : state.towers
+
+// 임시 돌벽 선분 생성: 중심에서 수직 방향으로 충돌 원들을 깐다
+function raiseWallLine(state, cx, cz, alongDir, count) {
+  const nx = Math.cos(alongDir)
+  const nz = Math.sin(alongDir)
+  for (let i = 0; i < count; i++) {
+    const off = (i - (count - 1) / 2) * QUAKE_WALL_SPAN
+    state.tempWalls.push({
+      id: state.nextId++, x: cx + nx * off, z: cz + nz * off, alive: true, t: 0, life: QUAKE_WALL_LIFE,
+    })
+  }
+}
 // 광폭화 세기: 첫 BERSERK_FULL초는 전력(1), 그 뒤 BERSERK_FADE초 동안 0으로 잦아든다
 const berserkStrength = (h) =>
   h.berserkT <= 0 ? 0 : h.berserkT > BERSERK_FADE ? 1 : h.berserkT / BERSERK_FADE
@@ -842,11 +920,11 @@ const atkOf = (h) => heroAtk(h) * dmgMult(h)
 //  · 마법 계열(마법사·힐러)은 레벨로 성장하는 기본 주문력 + 아이템 주문력을 쓴다.
 //  · 그 외(전사·궁수·암살자·탱커)는 공격력(heroAtk)을 그대로 주력 스탯으로 쓴다.
 //  수호기사도 AP 인챈터로 편입 — 보호막이 주문력에 비례한다.
-const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock', 'guardian', 'windcaller', 'chronomancer'])
+const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock', 'guardian', 'windcaller', 'chronomancer', 'fearmonger', 'terramancer'])
 //  하이브리드: 소환수 피해를 공격력·주문력 절반씩으로 키운다(AD/AP 아이템 어느 쪽이든 도움).
 const HYBRID_CLASSES = new Set(['beastmaster', 'engineer'])
-const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46, windcaller: 42, chronomancer: 44 }
-const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7, windcaller: 10, chronomancer: 10 }
+const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46, windcaller: 42, chronomancer: 44, fearmonger: 42, terramancer: 40 }
+const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7, windcaller: 10, chronomancer: 10, fearmonger: 10, terramancer: 9 }
 const spellPower = (h) =>
   (SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power
 // 캐릭터 주력 스탯 — 스킬 계수가 곱해지는 값
@@ -1147,13 +1225,15 @@ export function useItem(state, id, slot) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.25)
     pushFx(state, 'heal', h.x, h.z, 3, h.team)
   } else if (item.active.kind === 'cleanse') {
-    const hadCC = h.stunT > 0 || h.freezeT > 0 || h.rootT > 0 || h.tauntT > 0 || h.slowT > 0 || h.poisonT > 0
+    const hadCC = h.stunT > 0 || h.freezeT > 0 || h.rootT > 0 || h.tauntT > 0 || h.slowT > 0 || h.poisonT > 0 || h.fearT > 0
     if (!hadCC) return state // 해제할 게 없으면 아깝게 안 쓴다
     h.stunT = 0
     h.freezeT = 0
     h.rootT = 0
     h.slowT = 0
     h.poisonT = 0
+    h.fearT = 0
+    h.fearFrom = null
     if (h.tauntT > 0) {
       h.tauntT = 0
       h.tauntBy = null
@@ -1252,7 +1332,7 @@ const SKILLS = {
     h.dir = dir
     h.x += Math.cos(dir) * d
     h.z += Math.sin(dir) * d
-    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
     const dmg = skillDmg(h, 15, 0.4) // 공격력 계수 (전사) — 폭딜 억제(절반)
     lineDamage(state, h, sx, sz, dir, d + DASH_CONE, DASH_HALF, dmg * 0.6, 0) // 지나간 길의 적
     coneDamage(state, h, h.x, h.z, dir, DASH_CONE, 1.0, dmg, 1) // 착지 전방 강타 + 1초 기절
@@ -1316,7 +1396,7 @@ const SKILLS = {
     const d = dist(h, foe) || 1
     h.x = foe.x + ((foe.x - h.x) / d) * 1.8 // 등 뒤로
     h.z = foe.z + ((foe.z - h.z) / d) * 1.8
-    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
     h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
     damageHero(state, foe, skillDmg(h, 30, 0.95), h) // 공격력 계수 (암살자)
     if (foe.respawnT > 0) h.resetSkillCd = true // 이 일격으로 처치 → 점멸 쿨 초기화 (castSkill에서 적용)
@@ -1476,10 +1556,46 @@ const SKILLS = {
     const d = dist(h, foe) || 1
     h.x = foe.x + ((foe.x - h.x) / d) * 1.8 // 등 뒤로
     h.z = foe.z + ((foe.z - h.z) / d) * 1.8
-    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
     h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
     damageHero(state, foe, skillDmg(h, 40, 0.9), h) // 주문력 계수
     pushFx(state, 'timeleap', h.x, h.z, 3, h.team)
+  },
+  // 공포술사 공포의 시선: 전방 부채꼴의 적에게 피해 + 공포(내게서 강제 도주)
+  fearmonger(state, h) {
+    const foe = nearestFoeHero(state, h, FEAR_RANGE)
+    if (!foe) return false
+    const dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    h.dir = dir
+    let hitAny = false
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0) continue
+      if (dist(h, e) > FEAR_RANGE) continue
+      let da = Math.atan2(e.z - h.z, e.x - h.x) - dir
+      while (da > Math.PI) da -= 2 * Math.PI
+      while (da < -Math.PI) da += 2 * Math.PI
+      if (Math.abs(da) > FEAR_HALF_ANG) continue
+      damageHero(state, e, skillDmg(h, 30, 0.55), h) // 주문력 계수
+      applyFear(e, h, FEAR_T)
+      hitAny = true
+    }
+    if (!hitAny) return false
+    pushFxDir(state, 'dread', h.x, h.z, FEAR_RANGE, dir, h.team)
+  },
+  // 환영무희 환영 분신: 내 앞길을 대신 걷는 분신 + 본인 잠깐 은신
+  illusionist(state, h) {
+    spawnClone(state, h)
+    h.stealthT = Math.max(h.stealthT, CLONE_STEALTH_T)
+    pushFx(state, 'stealth', h.x, h.z, 2.5, h.team)
+  },
+  // 대지술사 융기: 전방에 가로 돌벽(충돌 원 4개) — 3초간 길을 막는다(순수 지형, 피해 없음)
+  terramancer(state, h) {
+    const cx = h.x + Math.cos(h.dir) * QUAKE_WALL_AHEAD
+    const cz = h.z + Math.sin(h.dir) * QUAKE_WALL_AHEAD
+    const along = h.dir + Math.PI / 2
+    raiseWallLine(state, cx, cz, along, 4)
+    const half = QUAKE_WALL_SPAN * 1.5 + 1.2
+    pushFxDir(state, 'quake', cx - Math.cos(along) * half, cz - Math.sin(along) * half, half * 2, along, h.team)
   },
 }
 
@@ -1688,12 +1804,55 @@ const ULTS = {
     const sx = h.x, sz = h.z
     h.x = past.x
     h.z = past.z
-    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
     h.hp = Math.min(h.maxHp, Math.max(h.hp, past.hp))
     aoeDamage(state, h, h.x, h.z, REWIND_RADIUS, skillDmg(h, 60, 0.9), 0) // 도착 충격파
     pushFx(state, 'rewind', sx, sz, 3, h.team)
     pushFx(state, 'rewind', h.x, h.z, REWIND_RADIUS, h.team)
     h.revealT = Math.max(h.revealT, REVEAL_TIME)
+  },
+  // 공포술사 단말마: 주변 모든 적을 공포에 빠뜨리고, 달아나는 동안 어둠이 갉아먹는다
+  fearmonger(state, h) {
+    let hitAny = false
+    const r2 = SHRIEK_RADIUS * SHRIEK_RADIUS
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || dist2(h, e) > r2) continue
+      damageHero(state, e, skillDmg(h, 40, 0.6), h) // 주문력 계수
+      applyFear(e, h, SHRIEK_FEAR_T)
+      applyPoison(e, h, skillDmg(h, 10, 0.18), 2) // 도주 중 어둠 도트
+      hitAny = true
+    }
+    if (!hitAny) return false
+    pushFx(state, 'shriek', h.x, h.z, SHRIEK_RADIUS, h.team)
+  },
+  // 환영무희 환영난무: 좌우로 분신 둘을 흩뿌리고 은신하며 주변을 벤다
+  illusionist(state, h) {
+    aoeDamage(state, h, h.x, h.z, 6, skillDmg(h, 40, 0.75), 0) // 공격력 계수
+    spawnClone(state, h, h.dir - 0.9)
+    spawnClone(state, h, h.dir + 0.9)
+    h.stealthT = Math.max(h.stealthT, DANCE_STEALTH_T)
+    pushFx(state, 'stealth', h.x, h.z, 4, h.team)
+  },
+  // 대지술사 바위감옥: 보이는 가장 가까운 적 하나를 원형 돌벽으로 가둔다 (강제 1:1)
+  terramancer(state, h) {
+    let foe = null
+    let bd = CAGE_RANGE * CAGE_RANGE
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || !isHeroVisible(state, e, h.team)) continue
+      const d = dist2(h, e)
+      if (d < bd) { bd = d; foe = e }
+    }
+    if (!foe) return false
+    const n = 8
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2
+      state.tempWalls.push({
+        id: state.nextId++, x: foe.x + Math.cos(a) * CAGE_RADIUS, z: foe.z + Math.sin(a) * CAGE_RADIUS,
+        alive: true, t: 0, life: CAGE_LIFE,
+      })
+    }
+    damageHero(state, foe, skillDmg(h, 35, 0.5), h)
+    pushFx(state, 'cage', foe.x, foe.z, CAGE_RADIUS, h.team)
   },
 }
 
@@ -1731,9 +1890,9 @@ export function castSkill2(state, id) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
   if (!h || h.respawnT > 0 || h.skill2Cd > 0 || h.lvl < SKILL2_LEVEL || h.castT > 0) return state
-  // 광폭화는 상태이상을 떨쳐내는 용도라 기절/빙결 중에도 쓸 수 있다(자가 해제).
+  // 광폭화는 상태이상을 떨쳐내는 용도라 기절/빙결/공포 중에도 쓸 수 있다(자가 해제).
   // 그 밖의 보조 스킬은 행동 가능할 때만.
-  if (h.stunT > 0 && h.cls !== 'warrior') return state
+  if ((h.stunT > 0 || h.fearT > 0) && h.cls !== 'warrior') return state
   const fn = SKILLS2[h.cls]
   if (!fn) return state // 마법사 등 보조 스킬이 없는 직업
   const ok = fn(state, h)
@@ -1749,6 +1908,8 @@ const SKILLS2 = {
     h.berserkT = BERSERK_TIME
     h.stunT = 0
     h.freezeT = 0
+    h.fearT = 0 // 공포도 떨쳐낸다
+    h.fearFrom = null
     h.revealT = Math.max(h.revealT, REVEAL_TIME)
     pushFx(state, 'berserk', h.x, h.z, 3.5, h.team)
   },
@@ -1852,7 +2013,7 @@ const SKILLS2 = {
     h.dir = dir
     h.x += Math.cos(dir) * d
     h.z += Math.sin(dir) * d
-    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
     coneDamage(state, h, h.x, h.z, dir, GLAD_LEAP_CONE, 1.0, skillDmg(h, 25, 0.5), 0)
     pushFxDir(state, 'dash', sx, sz, d + GLAD_LEAP_CONE, dir, h.team)
   },
@@ -1888,7 +2049,7 @@ const SKILLS2 = {
     const sx = h.x, sz = h.z
     h.x += Math.cos(dir) * STEP_DIST
     h.z += Math.sin(dir) * STEP_DIST
-    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
     pushFxDir(state, 'dash', sx, sz, STEP_DIST, dir, h.team)
   },
   // 사슬잡이 옭아매기: 주변 적을 사슬로 묶어 잠시 이동 불가 + 피해
@@ -1960,7 +2121,7 @@ const SKILLS2 = {
     const sx = h.x, sz = h.z
     h.x = best.x + Math.cos(h.dir) * 0.6 // 살짝 옆으로 떨궈 겹침 방지
     h.z = best.z + Math.sin(h.dir) * 0.6
-    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
     pushFx(state, 'blink', sx, sz, 2.5, h.team)
     pushFx(state, 'blink', h.x, h.z, 2.5, h.team)
     h.revealT = Math.max(h.revealT, REVEAL_TIME)
@@ -1990,6 +2151,41 @@ const SKILLS2 = {
       slowDps: skillDmg(h, 10, 0.2),
     })
     pushFx(state, 'timewarp', tx, tz, TIMEWARP_RADIUS, h.team)
+  },
+  // 공포술사 망령걸음: 유령처럼 흐려짐 — 가속 + 어둠 장막(피해 흡수)
+  fearmonger(state, h) {
+    h.hasteT = Math.max(h.hasteT, SPECTRE_T)
+    h.barrierHp = Math.max(h.barrierHp, skillDmg(h, 45, 0.7)) // 주문력 계수 장막
+    h.barrierT = Math.max(h.barrierT, SPECTRE_T)
+    pushFx(state, 'stealth', h.x, h.z, 3, h.team)
+  },
+  // 환영무희 자리바꿈: 내 분신(가장 최근)과 위치를 맞바꾼다 — 분신이 없으면 쿨 환불
+  illusionist(state, h) {
+    const clones = state.summons.filter((s) => s.kind === 'clone' && s.owner === h.id)
+    const c = clones[clones.length - 1]
+    if (!c) return false
+    const hx = h.x
+    const hz = h.z
+    h.x = c.x
+    h.z = c.z
+    c.x = hx
+    c.z = hz
+    c.decoyTx = c.x + Math.cos(c.dir) * 40 // 분신은 새 자리에서 가던 방향으로 계속 걷는다
+    c.decoyTz = c.z + Math.sin(c.dir) * 40
+    state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
+    h.bushI = state.map.bushIndexAt(h.x, h.z)
+    pushFx(state, 'blink', hx, hz, 2.5, h.team)
+    pushFx(state, 'blink', h.x, h.z, 2.5, h.team)
+  },
+  // 대지술사 돌팔매: 가장 가까운 적에게 바위 — 피해 + 잠깐 둔화(이동·공격 느려짐)
+  terramancer(state, h) {
+    const foe = nearestFoeHero(state, h, SLING_RANGE)
+    if (!foe) return false
+    h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    damageHero(state, foe, skillDmg(h, 45, 0.8), h) // 주문력 계수
+    const cc = foe.rageT > 0 ? RAGE_CC_CUT : 1
+    foe.freezeT = Math.max(foe.freezeT, SLING_SLOW_T * cc)
+    pushFx(state, 'boom', foe.x, foe.z, 2.6, h.team)
   },
 }
 
@@ -2148,6 +2344,8 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   victim.bladeT = 0
   victim.hookWindT = 0
   victim.pullT = 0
+  victim.fearT = 0
+  victim.fearFrom = null
   // 영웅은 공중 분해 버스트 대신, 렌더러가 시체를 바닥에 쌓이는 파티클로 표현한다(부활까지 유지).
   // 킬 크레딧: 마지막으로 때린 적 영웅이 최근(KILL_CREDIT_T 초)일 때만. 오래됐으면
   //  미니언/타워에 의한 처형으로 보고 개인 크레딧/킬 보상 없이 처리한다.
@@ -2341,6 +2539,10 @@ export function step(state, dt) {
   stepHawks(state, dt)
   stepZones(state, dt)
   stepSummons(state, dt)
+  // 대지술사 임시 돌벽: 수명이 다하면 가라앉는다
+  if (state.tempWalls.length) {
+    state.tempWalls = state.tempWalls.filter((w) => (w.t += dt) < w.life)
+  }
   state.fx = state.fx.filter((n) => (n.t += dt) < (n.life || 0.8))
   // 시간 초과: 부순 타워 → 킬 → 넥서스 체력으로 판정
   if (state.status === 'playing' && state.time >= COUNTDOWN_TIME + TIME_LIMIT) {
@@ -2432,6 +2634,7 @@ function stepHero(state, h, dt) {
   h.bladeT = Math.max(0, h.bladeT - dt)
   if (h.barrierT > 0 && (h.barrierT = Math.max(0, h.barrierT - dt)) === 0) h.barrierHp = 0
   h.stealthT = Math.max(0, h.stealthT - dt)
+  if (h.fearT > 0 && (h.fearT = Math.max(0, h.fearT - dt)) === 0) h.fearFrom = null
   h.hasteT = Math.max(0, h.hasteT - dt)
   if (h.tauntT > 0 && (h.tauntT = Math.max(0, h.tauntT - dt)) === 0) h.tauntBy = null
   h.revealT = Math.max(0, h.revealT - dt)
@@ -2515,7 +2718,7 @@ function stepHero(state, h, dt) {
         const frac = Math.min(1, dt / h.pullT) // 남은 시간 대비 이번 틱 이동 비율 → 끝날 때 도착
         h.x += dx * frac
         h.z += dz * frac
-        state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+        state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
         h.bushI = state.map.bushIndexAt(h.x, h.z)
       }
     }
@@ -2528,7 +2731,7 @@ function stepHero(state, h, dt) {
     const px = h.x, pz = h.z
     h.x += h.knockVx * dt
     h.z += h.knockVz * dt
-    state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+    state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
     const moved = Math.hypot(h.x - px, h.z - pz)
     if (h.knockStun > 0 && want > 0.05 && moved < want * KNOCK_WALL_FRAC) {
       h.stunT = Math.max(h.stunT, h.knockStun) // 벽꽝!
@@ -2540,8 +2743,16 @@ function stepHero(state, h, dt) {
     if (h.knockT <= 0) { h.knockVx = 0; h.knockVz = 0; h.knockStun = 0 }
     h.bushI = state.map.bushIndexAt(h.x, h.z)
   }
-  // 이동 — 기절·정신집중·귀환 채널·속박·발사준비·넉백 중엔 제자리에 멈춘다(이동 입력 무시)
-  if (h.stunT <= 0 && h.castT <= 0 && h.recallT <= 0 && h.rootT <= 0 && h.hookWindT <= 0 && h.knockT <= 0) {
+  // 공포(공포술사): 시전자 반대 방향으로 강제 도주 — 이동 입력 무시 (기절/속박이 겹치면 그쪽이 우선)
+  if (h.fearT > 0 && h.stunT <= 0 && h.rootT <= 0 && h.knockT <= 0 && h.pullT <= 0 && h.fearFrom) {
+    const away = Math.atan2(h.z - h.fearFrom.z, h.x - h.fearFrom.x)
+    h.dir = away
+    const sp = heroSpeed(h) * FEAR_FLEE_SPD * (h.freezeT > 0 ? FREEZE_MOVE : 1)
+    h.x += Math.cos(away) * sp * dt
+    h.z += Math.sin(away) * sp * dt
+  }
+  // 이동 — 기절·정신집중·귀환 채널·속박·발사준비·넉백·공포 중엔 제자리에 멈춘다(이동 입력 무시)
+  if (h.stunT <= 0 && h.castT <= 0 && h.recallT <= 0 && h.rootT <= 0 && h.hookWindT <= 0 && h.knockT <= 0 && h.fearT <= 0) {
     const len = Math.hypot(h.mx, h.mz)
     if (len > 0.12) {
       // 공격 직후엔 발이 무겁고, 탱커는 방패막기 중 돌진 가속, 빙결 중엔 굼뜨다,
@@ -2558,7 +2769,7 @@ function stepHero(state, h, dt) {
       h.z += (h.mz / len) * sp * dt
     }
   }
-  state.map.resolveTerrain(h, HERO_RADIUS, state.towers)
+  state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
   h.bushI = state.map.bushIndexAt(h.x, h.z) // 수풀 은신 판정
   // 리스폰 존(넥서스 뒤편 회복 지대): 우리 편이면 회복, 적이면 따끔!
   for (const team of ['blue', 'red']) {
@@ -2788,7 +2999,7 @@ function stepMinions(state, dt) {
 // 목표를 향해 이동하되, 길을 막는 성벽/바위/타워는 접선으로 비켜 간다.
 // (자기 편 타워가 레인 위에 있어도 미니언이 끼지 않고 돌아간다)
 function moveToward(state, e, to, speed, dt, selfR = 1) {
-  const dir = state.map.avoidDir(e, to.x, to.z, state.towers, selfR)
+  const dir = state.map.avoidDir(e, to.x, to.z, colliders(state), selfR)
   e.x += dir.x * speed * dt
   e.z += dir.z * speed * dt
   if (dir.x || dir.z) e.dir = Math.atan2(dir.z, dir.x)
@@ -3168,6 +3379,21 @@ function stepZones(state, dt) {
   if (remove.size) state.zones = state.zones.filter((z) => !remove.has(z.id))
 }
 
+// 환영무희 분신: 공격하지 않는 미끼 — 소환 시점 바라보던 방향으로 계속 걸어간다.
+// 렌더러가 본체와 똑같이 그릴 수 있게 겉모습(띠/직업/이름/레벨)을 복사해 둔다.
+function spawnClone(state, h, dir = h.dir) {
+  const hp = Math.round(powerStat(h) * CLONE_HP_COEF + h.maxHp * 0.25)
+  state.summons.push({
+    id: state.nextId++, kind: 'clone', owner: h.id, team: h.team,
+    x: h.x, z: h.z, dir,
+    hp, maxHp: hp,
+    atkCd: 0, dmg: 0, range: 0, aggro: 0, speed: heroSpeed(h), mobile: true, cd: 99, life: CLONE_LIFE,
+    chargeT: 0,
+    decoyTx: h.x + Math.cos(dir) * 40, decoyTz: h.z + Math.sin(dir) * 40,
+    zodiacId: h.zodiacId, cls: h.cls, name: h.name, lvl: h.lvl, isBot: h.isBot,
+  })
+}
+
 // 소환물 생성(펫/포탑). 주인(owner)의 팀/위치 기준.
 function spawnSummon(state, owner, kind, x, z) {
   const spec = SUMMON_SPEC[kind]
@@ -3203,6 +3429,11 @@ function stepSummons(state, dt) {
       continue
     }
     const owner = state.heroes.find((h) => h.id === s.owner)
+    // 환영무희 분신: 공격하지 않고 소환 방향으로 계속 걸어가는 미끼 (지형은 피해 간다)
+    if (s.kind === 'clone') {
+      moveToward(state, s, { x: s.decoyTx, z: s.decoyTz }, s.speed, dt, 1)
+      continue
+    }
     // 사냥 명령 도약: 적에게 달려드는 중 — 보간 이동(점프), 그동안 다른 행동은 멈춘다.
     //  표적이 도망가도 매 틱 위치를 추적하고, 착지 시점엔 표적과 같은 자리에 내려서 무조건 한 번 문다.
     if (s.leapT > 0) {
@@ -3229,7 +3460,7 @@ function stepSummons(state, dt) {
         s.leapTo = null
         s.leapTargetId = null
         s.leapTk = null
-        state.map.resolveTerrain(s, 1.0, state.towers) // 착지 위치 보정
+        state.map.resolveTerrain(s, 1.0, colliders(state)) // 착지 위치 보정
       }
       continue
     }
@@ -3269,7 +3500,7 @@ function stepSummons(state, dt) {
       if (d > reach && s.mobile) {
         s.x += Math.cos(s.dir) * s.speed * dt
         s.z += Math.sin(s.dir) * s.speed * dt
-        state.map.resolveTerrain(s, 1.0, state.towers)
+        state.map.resolveTerrain(s, 1.0, colliders(state))
       } else if (d <= reach + 0.6 && s.atkCd <= 0) {
         s.atkCd = s.cd * (s.chargeT > 0 ? OVERCHARGE_ASPD : 1)
         const att = owner && owner.respawnT <= 0 ? owner : { id: s.owner, team: s.team }
@@ -3284,7 +3515,7 @@ function stepSummons(state, dt) {
         s.dir = Math.atan2(owner.z - s.z, owner.x - s.x)
         s.x += Math.cos(s.dir) * s.speed * dt
         s.z += Math.sin(s.dir) * s.speed * dt
-        state.map.resolveTerrain(s, 1.0, state.towers)
+        state.map.resolveTerrain(s, 1.0, colliders(state))
       }
     }
   }
@@ -3364,6 +3595,12 @@ const BOT_BUILD = {
   windcaller: ['orb', 'wisdom_hat', 'flame_core', 'guardian_cloak', 'heal_flask'],
   // 시간술사: 버스트 다이버 — 주문력 + 폭딜 + 약간의 생존(되감기로 버틴다)
   chronomancer: ['orb', 'flame_core', 'void_staff', 'guardian_cloak', 'heal_flask'],
+  // 공포술사: 컨트롤 메이지 — 주문력 + 쿨감 + 무른 몸 보강
+  fearmonger: ['orb', 'wisdom_hat', 'flame_core', 'guardian_cloak', 'heal_flask'],
+  // 환영무희: 치고 빠지는 암살자 — 공격력 + 이속 + 흡혈
+  illusionist: ['dagger', 'berserker_axe', 'vampire_scythe', 'executioner', 'heal_flask'],
+  // 대지술사: 지형 브루저 — 단단함 + 주문력 겸용
+  terramancer: ['leather', 'frost_staff', 'mirror_shield', 'giant_heart', 'heal_flask'],
 }
 
 // 봇 자동 구매: 우물 안 + 빈 칸 있으면 빌드 우선순위에서 안 가진 첫 구매 가능 아이템을 산다.
@@ -3661,7 +3898,7 @@ function stepBots(state, dt) {
       if (h.cls === 'tank' && h.skillCd <= 0) castSkill(state, h.id) // 방패 켜고 도망!
       // 보조 스킬로 탈출: 은신(암살자)·광폭화(전사, CC 면역+가속)·가속(힐러)
       if (h.skill2Cd <= 0 && h.lvl >= SKILL2_LEVEL &&
-        (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer' || h.cls === 'cryomancer' || h.cls === 'swordmaster' || h.cls === 'snarer')) castSkill2(state, h.id)
+        (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer' || h.cls === 'cryomancer' || h.cls === 'swordmaster' || h.cls === 'snarer' || h.cls === 'fearmonger' || h.cls === 'illusionist')) castSkill2(state, h.id)
       // 적이 안 보이고 한숨 돌렸으면(최근 피격 없음) 먼 길을 걷지 않고 귀환 채널링으로 복귀
       if (
         h.recallT <= 0 && !inFountain(h) &&
@@ -3756,7 +3993,7 @@ function stepBots(state, dt) {
         if (
           h.skill2Cd <= 0 &&
           h.lvl >= SKILL2_LEVEL &&
-          (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer' || h.cls === 'cryomancer' || h.cls === 'swordmaster' || h.cls === 'snarer')
+          (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer' || h.cls === 'cryomancer' || h.cls === 'swordmaster' || h.cls === 'snarer' || h.cls === 'fearmonger' || h.cls === 'illusionist')
         ) {
           castSkill2(state, h.id)
         }
@@ -3898,6 +4135,9 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     }
     else if (h.cls === 'windcaller' && d < REPULSE_RADIUS) castSkill2(state, h.id) // 붙으면 밀쳐낸다(피일)
     else if (h.cls === 'chronomancer' && d < TIMEWARP_RANGE - 1) castSkill2(state, h.id) // 시간 지연으로 둔화·고립
+    else if (h.cls === 'fearmonger' && h.hp < h.maxHp * 0.6) castSkill2(state, h.id) // 망령걸음(장막)으로 버틴다
+    else if (h.cls === 'illusionist' && h.hp < h.maxHp * 0.45) castSkill2(state, h.id) // 분신과 자리바꿈으로 이탈
+    else if (h.cls === 'terramancer' && d < SLING_RANGE - 1) castSkill2(state, h.id) // 돌팔매 견제
   }
   const ready = h.skillCd <= 0
   if (ready) {
@@ -3914,6 +4154,9 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'windcaller' && d < GUST_RANGE - 1) castSkill(state, h.id) // 돌풍으로 밀쳐낸다
     else if (h.cls === 'chronomancer' && d < TIMELEAP_RANGE - 1 && h.hp > h.maxHp * 0.4) castSkill(state, h.id) // 시간 도약으로 파고든다
     else if (h.cls === 'swordmaster' && d < 6) castSkill(state, h.id) // 붙으면 발도 카운터(반격)
+    else if (h.cls === 'fearmonger' && d < FEAR_RANGE - 1) castSkill(state, h.id) // 공포의 시선으로 흩어놓는다
+    else if (h.cls === 'illusionist' && d < 10) castSkill(state, h.id) // 분신+은신으로 교란
+    else if (h.cls === 'terramancer' && d < QUAKE_WALL_AHEAD + 3 && foe.hp < foe.maxHp * 0.6) castSkill(state, h.id) // 도주로에 벽
     // 힐러 치유·수호기사 보호막은 stepBots 위쪽에서 항상 챙긴다
   }
   if (h.ultCd > 0 || h.lvl < ULT_LEVEL) return
@@ -3947,13 +4190,19 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     castUlt(state, h.id) // 태풍으로 한타를 날려버린다
   } else if (h.cls === 'chronomancer' && (h.hp < h.maxHp * 0.35 || (nearCount >= 1 && foe.hp < foe.maxHp * 0.4))) {
     castUlt(state, h.id) // 역행 — 위기 탈출/막타 후 안전 귀환
+  } else if (h.cls === 'fearmonger' && (nearCount >= 2 || (d < SHRIEK_RADIUS && h.hp < h.maxHp * 0.5))) {
+    castUlt(state, h.id) // 단말마 — 한타를 흩어놓거나 몰린 위기 탈출
+  } else if (h.cls === 'illusionist' && (nearCount >= 1 || h.hp < h.maxHp * 0.5)) {
+    castUlt(state, h.id) // 환영난무 — 교란 + 은신
+  } else if (h.cls === 'terramancer' && d < CAGE_RANGE - 1 && foe.hp < foe.maxHp * 0.55) {
+    castUlt(state, h.id) // 바위감옥 — 빈사 적을 가둬 마무리
   }
   // 수호기사 궁극(불굴의 진형)은 stepBots 위쪽 능동 블록에서 챙긴다
 }
 
 // 봇 조향: 직선이 막히면 접선으로 비켜 가는 방향을 입력으로 넣는다
 function steerToward(state, h, to) {
-  const dir = state.map.avoidDir(h, to.x, to.z, state.towers, 1.3)
+  const dir = state.map.avoidDir(h, to.x, to.z, colliders(state), 1.3)
   h.mx = dir.x
   h.mz = dir.z
 }
@@ -4212,6 +4461,7 @@ export function makeView(state) {
       ultLocked: h.lvl < ULT_LEVEL,
       stunT: r2d(h.stunT),
       freezeT: r2d(h.freezeT),
+      fearT: r2d(h.fearT),
       whirlT: r2d(h.whirlT),
       shieldT: r2d(h.shieldT),
       berserkT: r2d(h.berserkT),
@@ -4278,6 +4528,8 @@ export function makeView(state) {
     summons: state.summons.map((s) => ({
       id: s.id, kind: s.kind, team: s.team, x: r1(s.x), z: r1(s.z), dir: r2d(s.dir),
       hp: Math.ceil(s.hp), maxHp: s.maxHp, charge: s.chargeT > 0 ? 1 : 0, dormant: s.dormant ? 1 : 0,
+      // 분신: 렌더러가 본체와 똑같이 그리도록 겉모습을 싣는다
+      ...(s.kind === 'clone' ? { zodiacId: s.zodiacId, cls: s.cls, name: s.name, lvl: s.lvl, isBot: s.isBot } : null),
       // leap: 도약 진행도(1→0, 점프 모션용) · idle: 포탑 휴면까지 남은 유예 시간(타이머 표시용)
       leap: s.leapT > 0 && s.leapDur > 0 ? r2d(s.leapT / s.leapDur) : 0,
       idle: s.kind === 'turret' && !s.dormant && s.idleT > 0 ? r1(ENGI_IDLE_GRACE - s.idleT) : 0,
@@ -4318,6 +4570,7 @@ export function makeView(state) {
     // 사냥매가 걷어 둔 시야 흔적 — 렌더러 시야/안개 + isHeroVisible(inSight)가 함께 본다
     reveals: state.reveals.map((rv) => ({ team: rv.team, x: r1(rv.x), z: r1(rv.z), r: rv.r })),
     // 예고 범위는 운석(조준점)만 클라에 보낸다 — 대지균열 파는 거의 즉발이라 fx로만 보인다
+    stoneWalls: state.tempWalls.map((w) => ({ id: w.id, x: r1(w.x), z: r1(w.z), t: r2d(w.t), life: w.life })),
     zones: state.zones.filter((z) => z.kind === 'meteor' || z.kind === 'venom').map((z) => ({
       id: z.id, kind: z.kind, team: z.team, x: r1(z.x), z: r1(z.z),
       r: z.r, t: r2d(z.t), delay: z.delay,

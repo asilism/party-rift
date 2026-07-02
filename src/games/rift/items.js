@@ -121,7 +121,7 @@ export const ITEMS = [
     desc: '사용하면 즉시 최대 체력의 25%를 회복한다 (아이콘 탭/클릭).', stats: { hp: 80 },
     active: { kind: 'heal', cd: 45, label: '25% 회복' } },
   { id: 'cleanse_bell', cat: 'util', name: '정화의 종', icon: '🔔', cost: 700,
-    desc: '사용하면 기절·빙결·속박·도발·둔화·중독을 즉시 해제한다 (CC 중에도 사용 가능).', stats: { hp: 60, speed: 1 },
+    desc: '사용하면 기절·빙결·속박·도발·둔화·중독·공포를 즉시 해제한다 (CC 중에도 사용 가능).', stats: { hp: 60, speed: 1 },
     active: { kind: 'cleanse', cd: 60, label: 'CC 해제' } },
   { id: 'sage_stone', cat: 'util', name: '현자의 돌', icon: '💎', cost: 1300, from: ['orb', 'dagger'],
     desc: '모든 능력치를 조금씩.', stats: { power: 15, atk: 10, hp: 120, cdr: 0.12, speed: 1 } },
