@@ -3411,6 +3411,15 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             u.arms[0].rotation.z = -stride * 0.5
             u.arms[1].rotation.z = stride * 0.5
           }
+          // 전투형 분신의 평타: 본체와 같은 무기 휘두름 모션
+          if (s.atkSeq !== u.lastAtkSeq) {
+            u.lastAtkSeq = s.atkSeq
+            u.animT = 0
+          }
+          if (u.weapon?.userData.pose && u.animT < 1) {
+            u.animT = Math.min(1, u.animT + dt / ATK_ANIM_T)
+            u.weapon.userData.pose(u.animT)
+          }
           return
         }
         // 포탑은 고정, 펫은 걸을 때 통통 튄다(멈추면 숨쉬기 둥실)
