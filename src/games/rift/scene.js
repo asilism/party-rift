@@ -1505,11 +1505,157 @@ function buildMinion(m, barColor) {
 
 const MONSTER_LOOK = {
   wolf: { emoji: '🐺', size: 2.6, body: 0x9aa3b2, r: 1.2 },
-  dragon: { emoji: '🐉', size: 4.6, body: 0x59b96a, r: 2.4 },
+  dragon: { emoji: '🐉', size: 4.6, body: 0x59b96a, r: 2.4 }, // r은 피격 파티클 높이로도 쓴다
   baron: { emoji: '👹', size: 5, body: 0x9b6bd6, r: 2.8 },
 }
 
+// 용: 웅크린 저폴리 드래곤 — 몸통/목/머리/뿔/날개(퍼덕임)/꼬리. 로컬 +x가 정면.
+// userData.rageMats(분노 붉힘 대상)와 userData.anim(날개/꼬리)을 렌더 루프가 쓴다.
+function buildDragon(m) {
+  const g = new THREE.Group()
+  const skin = new THREE.MeshLambertMaterial({ color: 0x4fae63 })
+  const belly = new THREE.MeshLambertMaterial({ color: 0xcfe8a8 })
+  const membrane = new THREE.MeshLambertMaterial({ color: 0x2e7a44, side: THREE.DoubleSide })
+  const horn = new THREE.MeshLambertMaterial({ color: 0xe8e2d2 })
+  const model = new THREE.Group()
+  const body = new THREE.Mesh(new THREE.SphereGeometry(2.2, 10, 8), skin)
+  body.scale.set(1.5, 0.95, 1.1)
+  body.position.y = 2.2
+  const chest = new THREE.Mesh(new THREE.SphereGeometry(1.6, 8, 7), belly)
+  chest.scale.set(1.1, 0.8, 0.85)
+  chest.position.set(1.2, 1.8, 0)
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1.05, 3.4, 8), skin)
+  neck.position.set(3.0, 4.0, 0)
+  neck.rotation.z = -0.65 // 앞-위로 치켜든 목
+  const head = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.1, 1.3), skin)
+  head.position.set(4.5, 5.5, 0)
+  const snout = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.55, 0.9), belly)
+  snout.position.set(5.6, 5.25, 0)
+  model.add(body, chest, neck, head, snout)
+  for (const sz of [1, -1]) {
+    const hn = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.2, 5), horn)
+    hn.position.set(3.85, 6.3, sz * 0.5)
+    hn.rotation.z = 0.55 // 뒤로 휘어진 뿔
+    model.add(hn)
+    const eye = new THREE.Mesh(
+      new THREE.SphereGeometry(0.18, 6, 5),
+      new THREE.MeshLambertMaterial({ color: 0xffcf4d, emissive: 0xffb020, emissiveIntensity: 0.9 })
+    )
+    eye.position.set(4.85, 5.8, sz * 0.58)
+    model.add(eye)
+  }
+  // 날개 — 어깨 피벗 그룹을 퍼덕인다
+  const wings = []
+  for (const sz of [1, -1]) {
+    const wing = new THREE.Group()
+    wing.position.set(-0.3, 3.7, sz * 1.0)
+    const mem = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.12, 3.6), membrane)
+    mem.position.set(-0.5, 0.7, sz * 1.9)
+    const rib = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 3.8, 6), skin)
+    rib.rotation.x = sz * (Math.PI / 2)
+    rib.position.set(0.4, 0.7, sz * 1.9)
+    wing.add(mem, rib)
+    model.add(wing)
+    wings.push({ wing, sz })
+  }
+  // 꼬리 — 뒤로 가늘어지는 마디 + 가시 끝
+  const tailSegs = []
+  for (let i = 0; i < 3; i++) {
+    const seg = new THREE.Mesh(new THREE.SphereGeometry(1.0 - i * 0.28, 7, 6), skin)
+    seg.position.set(-3.2 - i * 1.3, 1.7 - i * 0.35, 0)
+    model.add(seg)
+    tailSegs.push(seg)
+  }
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.3, 1.1, 5), horn)
+  tip.rotation.z = Math.PI / 2 // 뒤(-x)를 향한 가시
+  tip.position.set(-7.0, 0.9, 0)
+  model.add(tip)
+  model.rotation.y = -Math.atan2(0 - m.z, 0 - m.x) // 맵 중앙(강 건너편)을 바라본다
+  const bar = makeHpBar(5.2, 0xffd34d)
+  bar.position.y = 8.6
+  const shadow = blobShadow(3.4)
+  g.add(shadow, model, bar)
+  g.userData = {
+    bar, body: model, rageMats: [skin, membrane],
+    anim: (t) => {
+      for (const { wing, sz } of wings) wing.rotation.x = sz * (0.18 + Math.sin(t * 2.2) * 0.28) // 천천히 퍼덕
+      for (let i = 0; i < tailSegs.length; i++) tailSegs[i].position.z = Math.sin(t * 1.6 + i * 0.9) * (0.25 + i * 0.2) // 꼬리 살랑
+    },
+  }
+  return g
+}
+
+// 바론: 앞으로 숙인 거구의 뿔 달린 괴수 — 너클워크 팔/등 가시/붉은 눈. 로컬 +x가 정면.
+function buildBaron(m) {
+  const g = new THREE.Group()
+  const skin = new THREE.MeshLambertMaterial({ color: 0x8a5fc0 })
+  const dark = new THREE.MeshLambertMaterial({ color: 0x5a3a86 })
+  const horn = new THREE.MeshLambertMaterial({ color: 0xe8e2d2 })
+  const model = new THREE.Group()
+  const torso = new THREE.Mesh(new THREE.SphereGeometry(2.7, 10, 8), skin)
+  torso.scale.set(1.1, 1.25, 1.0)
+  torso.position.y = 3.6
+  torso.rotation.z = -0.22 // 앞으로 숙인 거체
+  const head = new THREE.Mesh(new THREE.SphereGeometry(1.25, 9, 7), dark)
+  head.position.set(2.1, 5.9, 0)
+  model.add(torso, head)
+  for (const sz of [1, -1]) {
+    // 위로 벌어진 큰 뿔
+    const hn = new THREE.Mesh(new THREE.ConeGeometry(0.34, 2.0, 5), horn)
+    hn.position.set(1.9, 7.2, sz * 0.85)
+    hn.rotation.x = sz * 0.5
+    model.add(hn)
+    // 붉게 타는 눈
+    const eye = new THREE.Mesh(
+      new THREE.SphereGeometry(0.2, 6, 5),
+      new THREE.MeshLambertMaterial({ color: 0xff5a3a, emissive: 0xff2a1a, emissiveIntensity: 1 })
+    )
+    eye.position.set(3.1, 6.1, sz * 0.5)
+    model.add(eye)
+    // 너클워크 팔 — 어깨에서 앞바닥으로 내려 짚는다
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.75, 4.4, 8), skin)
+    arm.position.set(2.3, 2.4, sz * 2.3)
+    arm.rotation.z = -0.5
+    arm.rotation.x = sz * 0.16
+    const fist = new THREE.Mesh(new THREE.SphereGeometry(0.95, 8, 6), dark)
+    fist.position.set(3.4, 0.85, sz * 2.6)
+    model.add(arm, fist)
+    // 주먹의 발톱
+    for (const c of [-0.35, 0.35]) {
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.6, 4), horn)
+      claw.rotation.z = -Math.PI / 2 // 앞(+x)을 향한 발톱
+      claw.position.set(4.3, 0.7, sz * 2.6 + c)
+      model.add(claw)
+    }
+  }
+  // 등 가시 — 목덜미에서 등줄기로 갈수록 작아진다
+  for (let i = 0; i < 4; i++) {
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.4 - i * 0.06, 1.7 - i * 0.3, 5), horn)
+    spike.position.set(0.4 - i * 1.1, 6.4 - i * 0.5, 0)
+    spike.rotation.z = 0.35 + i * 0.12 // 뒤로 누운 가시
+    model.add(spike)
+  }
+  const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 1.1), skin)
+  jaw.position.set(3.0, 5.35, 0)
+  model.add(jaw)
+  model.rotation.y = -Math.atan2(0 - m.z, 0 - m.x) // 맵 중앙을 바라본다
+  const bar = makeHpBar(5.6, 0xffd34d)
+  bar.position.y = 9.4
+  const shadow = blobShadow(3.8)
+  g.add(shadow, model, bar)
+  g.userData = {
+    bar, body: model, rageMats: [skin, dark],
+    anim: (t) => {
+      torso.scale.y = 1.25 + Math.sin(t * 1.8) * 0.03 // 낮게 그르렁대는 숨
+      head.position.y = 5.9 + Math.sin(t * 1.8 + 0.6) * 0.08
+    },
+  }
+  return g
+}
+
 function buildMonster(m) {
+  if (m.kind === 'dragon') return buildDragon(m)
+  if (m.kind === 'baron') return buildBaron(m)
   const look = MONSTER_LOOK[m.kind]
   const g = new THREE.Group()
   const body = new THREE.Mesh(
@@ -2979,14 +3125,19 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           particles.emit(m.x, (MONSTER_LOOK[m.kind]?.r || 2), m.z, 0xffb42a, 9, { spread: 10, up: 10, gravity: 22, size: 1.6, hard: true, lifeMin: 0.16, lifeMax: 0.34 })
         }
         // 분노(enrage): 교전이 길어질수록 붉게 달아오르고 거칠게 떤다
+        //  용/바론은 멀티파트 모델이라 살갗 재질 목록(rageMats)을 물들인다
         const body = obj.userData.body
         if (body) {
           const rage = Math.min(1, (m.enrage || 0) / 6)
-          body.material.emissive.setRGB(rage, 0, 0)
-          body.material.emissiveIntensity = rage
+          const mats = ud2.rageMats || (body.material ? [body.material] : [])
+          for (const mt of mats) {
+            mt.emissive.setRGB(rage, 0, 0)
+            mt.emissiveIntensity = rage
+          }
           const shake = rage > 0 ? 1 + Math.sin(view.time * 18) * 0.06 * rage : 1
           body.scale.setScalar(shake)
         }
+        ud2.anim?.(view.time) // 용 날개 퍼덕임 / 바론 숨쉬기
       }
     )
     // 소환물(펫/포탑) — 적 소환물은 시야 밖이면 안 보인다
