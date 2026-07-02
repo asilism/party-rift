@@ -1,7 +1,9 @@
 // 조디악 러쉬 아이템 상점 데이터 (순수 JS — three.js / 엔진 의존 없음).
 //  - 미니언/정글몹/타워/적 영웅을 처치하면 골드를 얻는다.
 //  - 넥서스 회복 지대(우물)에서 상점을 열어 아이템을 산다 (인벤토리 4칸).
-//  - 카테고리 4종(마법/공격/방어/유틸) × 6개 = 24종 (각 타입에 2천 골드 이상 최종 장비 1개). 조합은 없음(초안).
+//  - 카테고리 4종(마법/공격/방어/유틸), 26종 (각 타입에 2천 골드 이상 최종 장비 1개).
+//  - 조합: 상위 아이템의 from(재료)을 갖고 있으면 그 가격만큼 깎아 사고 재료는 소모된다(슬롯 확보).
+//  - 액티브: active 필드가 있는 아이템은 전투 중 사용 효과(자힐/정화)를 쿨다운마다 쓸 수 있다.
 //
 // 각 아이템은 stats로 영웅 능력치에 더해진다(패시브):
 //   atk        기본공격 공격력 +
@@ -55,62 +57,88 @@ export const ITEMS = [
   // ── 마법 (주문 위력 / 쿨다운) ──
   { id: 'orb', cat: 'magic', name: '마력의 구슬', icon: '🔮', cost: 300,
     desc: '주문 위력을 살짝 올려준다.', stats: { power: 20 } },
-  { id: 'flame_core', cat: 'magic', name: '화염의 핵', icon: '🔥', cost: 700,
+  { id: 'flame_core', cat: 'magic', name: '화염의 핵', icon: '🔥', cost: 700, from: ['orb'],
     desc: '스킬·궁극기 위력이 크게 오른다.', stats: { power: 45 } },
-  { id: 'wisdom_hat', cat: 'magic', name: '지혜의 모자', icon: '🎩', cost: 850,
+  { id: 'wisdom_hat', cat: 'magic', name: '지혜의 모자', icon: '🎩', cost: 850, from: ['orb'],
     desc: '주문 위력 + 쿨다운 감소.', stats: { power: 30, cdr: 0.15 } },
-  { id: 'frost_staff', cat: 'magic', name: '서리 지팡이', icon: '❄️', cost: 900,
+  { id: 'frost_staff', cat: 'magic', name: '서리 지팡이', icon: '❄️', cost: 900, from: ['orb', 'leather'],
     desc: '주문 위력 + 단단함.', stats: { power: 35, hp: 150 } },
-  { id: 'void_staff', cat: 'magic', name: '공허의 지팡이', icon: '🌌', cost: 1150,
+  { id: 'void_staff', cat: 'magic', name: '공허의 지팡이', icon: '🌌', cost: 1150, from: ['flame_core'],
     desc: '주문 위력을 폭발적으로 올린다.', stats: { power: 70 } },
-  { id: 'archmage_staff', cat: 'magic', name: '대마법사의 홀', icon: '🪄', cost: 2400,
+  { id: 'archmage_staff', cat: 'magic', name: '대마법사의 홀', icon: '🪄', cost: 2400, from: ['void_staff', 'wisdom_hat'],
     desc: '주문 위력 + 쿨다운 + 체력. 마법 최종 장비.', stats: { power: 90, cdr: 0.2, hp: 200 } },
 
   // ── 공격 (기본공격 위주) ──
   { id: 'dagger', cat: 'attack', name: '단검', icon: '🗡️', cost: 250,
     desc: '값싼 공격력.', stats: { atk: 12 } },
-  { id: 'longsword', cat: 'attack', name: '장검', icon: '⚔️', cost: 550,
+  { id: 'longsword', cat: 'attack', name: '장검', icon: '⚔️', cost: 550, from: ['dagger'],
     desc: '묵직한 공격력.', stats: { atk: 30 } },
-  { id: 'vampire_scythe', cat: 'attack', name: '흡혈낫', icon: '🩸', cost: 800,
+  { id: 'vampire_scythe', cat: 'attack', name: '흡혈낫', icon: '🩸', cost: 800, from: ['dagger'],
     desc: '공격력 + 때릴 때마다 흡혈.', stats: { atk: 20, lifesteal: 0.15 } },
-  { id: 'rage_gloves', cat: 'attack', name: '광폭의 장갑', icon: '🥊', cost: 800,
+  { id: 'rage_gloves', cat: 'attack', name: '광폭의 장갑', icon: '🥊', cost: 800, from: ['dagger'],
     desc: '공격 속도를 크게 올린다.', stats: { atkSpeed: 0.25, atk: 12 } },
-  { id: 'executioner', cat: 'attack', name: '처형자의 대검', icon: '💀', cost: 1150,
+  { id: 'executioner', cat: 'attack', name: '처형자의 대검', icon: '💀', cost: 1150, from: ['longsword'],
     desc: '압도적인 공격력.', stats: { atk: 55 } },
-  { id: 'dragon_blade', cat: 'attack', name: '용살자의 대검', icon: '🐲', cost: 2300,
+  { id: 'dragon_blade', cat: 'attack', name: '용살자의 대검', icon: '🐲', cost: 2300, from: ['executioner', 'rage_gloves'],
     desc: '엄청난 공격력 + 공격 속도 + 흡혈. 공격 최종 장비.', stats: { atk: 75, atkSpeed: 0.2, lifesteal: 0.12 } },
 
   // ── 방어 (체력 / 피해 감소) ──
   { id: 'leather', cat: 'defense', name: '가죽 갑옷', icon: '🧥', cost: 300,
     desc: '값싼 체력.', stats: { hp: 150 } },
-  { id: 'plate', cat: 'defense', name: '강철 판금', icon: '🛡️', cost: 750,
+  { id: 'plate', cat: 'defense', name: '강철 판금', icon: '🛡️', cost: 750, from: ['leather'],
     desc: '체력 + 피해 감소.', stats: { hp: 250, def: 0.08 } },
-  { id: 'guardian_cloak', cat: 'defense', name: '수호의 망토', icon: '🧣', cost: 850,
+  { id: 'guardian_cloak', cat: 'defense', name: '수호의 망토', icon: '🧣', cost: 850, from: ['leather', 'orb'],
     desc: '받는 피해를 크게 줄이고 주문 위력도 더해 준다 — 무른 마법사용 방어구.', stats: { def: 0.15, power: 25 } },
-  { id: 'giant_heart', cat: 'defense', name: '거인의 심장', icon: '🫀', cost: 1050,
+  { id: 'giant_heart', cat: 'defense', name: '거인의 심장', icon: '🫀', cost: 1050, from: ['leather'],
     desc: '엄청난 체력.', stats: { hp: 450 } },
-  { id: 'thornmail', cat: 'defense', name: '가시 갑옷', icon: '🌵', cost: 1000,
+  { id: 'thornmail', cat: 'defense', name: '가시 갑옷', icon: '🌵', cost: 1000, from: ['plate'],
     desc: '체력 + 피해 감소 + 재생.', stats: { hp: 200, def: 0.1, regen: 0.01 } },
-  { id: 'immortal_plate', cat: 'defense', name: '불멸의 갑주', icon: '🏰', cost: 2400,
+  { id: 'immortal_plate', cat: 'defense', name: '불멸의 갑주', icon: '🏰', cost: 2400, from: ['giant_heart', 'plate'],
     desc: '거대한 체력 + 피해 감소 + 재생 + 주문 위력. 마법사도 단단해지는 방어 최종 장비.', stats: { hp: 500, def: 0.18, regen: 0.015, power: 50 } },
 
-  // ── 유틸 (속도 / 쿨다운 / 재생 / 사거리) ──
+  // ── 유틸 (속도 / 쿨다운 / 재생 / 사거리 / 사용 효과) ──
   { id: 'boots', cat: 'util', name: '신속의 장화', icon: '👟', cost: 300,
     desc: '발이 빨라진다.', stats: { speed: 2.8 } },
   { id: 'light_charm', cat: 'util', name: '빛의 부적', icon: '🪬', cost: 700,
     desc: '스킬을 더 자주 쓴다.', stats: { cdr: 0.2 } },
-  { id: 'hunter_seal', cat: 'util', name: '사냥꾼의 인장', icon: '🎯', cost: 650,
+  { id: 'hunter_seal', cat: 'util', name: '사냥꾼의 인장', icon: '🎯', cost: 650, from: ['dagger'],
     desc: '사거리 + 약간의 공격력.', stats: { range: 3, atk: 8 } },
   { id: 'regen_pendant', cat: 'util', name: '재생의 목걸이', icon: '📿', cost: 500,
     desc: '체력이 꾸준히 차오른다.', stats: { regen: 0.018, hp: 100 } },
-  { id: 'sage_stone', cat: 'util', name: '현자의 돌', icon: '💎', cost: 1300,
+  { id: 'heal_flask', cat: 'util', name: '회복의 물병', icon: '🧪', cost: 500,
+    desc: '사용하면 즉시 최대 체력의 25%를 회복한다 (아이콘 탭/클릭).', stats: { hp: 80 },
+    active: { kind: 'heal', cd: 45, label: '25% 회복' } },
+  { id: 'cleanse_bell', cat: 'util', name: '정화의 종', icon: '🔔', cost: 700,
+    desc: '사용하면 기절·빙결·속박·도발·둔화·중독을 즉시 해제한다 (CC 중에도 사용 가능).', stats: { hp: 60, speed: 1 },
+    active: { kind: 'cleanse', cd: 60, label: 'CC 해제' } },
+  { id: 'sage_stone', cat: 'util', name: '현자의 돌', icon: '💎', cost: 1300, from: ['orb', 'dagger'],
     desc: '모든 능력치를 조금씩.', stats: { power: 15, atk: 10, hp: 120, cdr: 0.12, speed: 1 } },
-  { id: 'time_hourglass', cat: 'util', name: '시간의 모래시계', icon: '⏳', cost: 2500,
+  { id: 'time_hourglass', cat: 'util', name: '시간의 모래시계', icon: '⏳', cost: 2500, from: ['light_charm', 'sage_stone'],
     desc: '쿨다운·이동 속도·위력·체력을 두루. 유틸 최종 장비.', stats: { cdr: 0.25, speed: 3, power: 30, hp: 150 } },
 ]
 
 export const ITEMS_BY_ID = Object.fromEntries(ITEMS.map((it) => [it.id, it]))
 export const getItem = (id) => ITEMS_BY_ID[id] || null
+
+// 조합 구매 견적: 인벤토리에서 소모될 재료 슬롯(consumes)과 실제 지불가(price)를 계산한다.
+//  직접 재료(from)만 인정 — 재료의 재료까지 재귀하진 않는다(단계적으로 사 올라가는 구조).
+export function buildQuote(ownedIds, itemId) {
+  const item = ITEMS_BY_ID[itemId]
+  if (!item) return null
+  const consumes = []
+  if (item.from) {
+    const used = new Set()
+    for (const compId of item.from) {
+      const idx = (ownedIds || []).findIndex((id, i) => id === compId && !used.has(i))
+      if (idx >= 0) {
+        used.add(idx)
+        consumes.push(idx)
+      }
+    }
+  }
+  const discount = consumes.reduce((sum, i) => sum + ITEMS_BY_ID[ownedIds[i]].cost, 0)
+  return { price: Math.max(0, item.cost - discount), consumes }
+}
 
 // 가진 아이템 id 목록 → 합산 보너스(능력치). 효과 배율 후 상한을 적용한다.
 export function sumStats(itemIds) {

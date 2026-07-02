@@ -2306,6 +2306,18 @@ body {
   display: flex; align-items: center; justify-content: center; font-size: 15px;
   background: rgba(8, 12, 26, 0.6); border: 1px solid rgba(255, 255, 255, 0.12);
 }
+/* 액티브 아이템(물병/종): 아이콘이 곧 사용 버튼 — 준비되면 금테로 빛나고, 쿨다운 중엔 남은 초 표시 */
+.rift__me-item--active {
+  position: relative; cursor: pointer; padding: 0; color: inherit;
+  border-color: var(--accent); box-shadow: 0 0 7px rgba(255, 207, 77, 0.45);
+}
+.rift__me-item--active:active { transform: scale(0.92); }
+.rift__me-item--cd { border-color: rgba(255, 255, 255, 0.15); box-shadow: none; opacity: 0.75; cursor: default; }
+.rift__me-item-cd {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 12, 26, 0.72); border-radius: 6px;
+  font-size: 11px; font-weight: 900; color: #dfe6f5;
+}
 
 /* 넥서스 상점 버튼 (우물 안에서만 뜬다) */
 .rift-shop-fab {
@@ -2402,6 +2414,9 @@ body {
 .rift-shop__item-cost {
   flex: none; font-weight: 900; color: #ffd34d; font-size: 13px; white-space: nowrap;
 }
+.rift-shop__item-full { color: var(--muted); font-weight: 600; margin-right: 2px; } /* 조합 전 원가(취소선) */
+.rift-shop__item-recipe { margin-left: 5px; font-size: 11px; opacity: 0.75; } /* 재료 아이콘 미리보기 */
+.rift-shop__item-active { margin-left: 4px; font-size: 11px; color: var(--accent); } /* 사용 효과 표시 ⚡ */
 .rift-shop__foot { margin: 0; text-align: center; color: var(--muted); font-size: 12px; }
 
 @media (max-width: 560px) {

@@ -8,7 +8,7 @@ import {
   NEXUS_POS, FOUNTAIN_POS, NEXUS_RADIUS, TOWER_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, enemyOf, buildMap,
 } from './map.js'
 import { getZodiac } from '../../shared/zodiac.js'
-import { ITEM_SLOTS, SELL_REFUND, ITEMS_BY_ID, sumStats } from './items.js'
+import { ITEM_SLOTS, SELL_REFUND, ITEMS_BY_ID, sumStats, buildQuote } from './items.js'
 
 export { ITEM_SLOTS } from './items.js'
 
@@ -613,6 +613,7 @@ export function createGame(players, opts = {}) {
       xp: 0,
       gold: START_GOLD,
       items: [], // 산 아이템 id (최대 ITEM_SLOTS칸)
+      itemCd: {}, // 액티브 아이템 남은 쿨다운 (itemId → 초)
       // 상점 세션(우물/사망 중) 동안의 무료 취소용 — 진입 시점 스냅샷 + 그동안의 순지출
       shopEntryItems: null, // 세션 진입 시점의 아이템(되돌리기 목표). null이면 세션 아님
       shopSpent: 0, // 이번 세션의 순지출(구매 +, 판매 -). 되돌리면 이만큼 골드 환원
@@ -1112,14 +1113,50 @@ export function buyItem(state, id, itemId) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
   if (!h || !canShop(h)) return state
-  if (h.items.length >= ITEM_SLOTS) return state
   const item = ITEMS_BY_ID[itemId]
-  if (!item || h.gold < item.cost) return state
-  h.gold -= item.cost
+  if (!item) return state
+  // 조합: 인벤토리의 직접 재료(from)를 소모하고 그 가격만큼 깎아 산다 → 슬롯도 함께 비워진다
+  const quote = buildQuote(h.items, itemId)
+  if (h.items.length - quote.consumes.length >= ITEM_SLOTS) return state
+  if (h.gold < quote.price) return state
+  for (const idx of [...quote.consumes].sort((a, b) => b - a)) h.items.splice(idx, 1)
+  h.gold -= quote.price
   h.items.push(itemId)
-  h.shopSpent += item.cost // 이번 세션 순지출 — 되돌리기로 환원
+  h.shopSpent += quote.price // 이번 세션 순지출 — 되돌리기로 환원
   h.shopChanged = true
   applyItems(h)
+  return state
+}
+
+// ── 액티브 아이템 사용: 물병(자힐)은 행동 가능할 때, 정화의 종은 CC 중에도 쓸 수 있다 ──
+export function useItem(state, id, slot) {
+  if (state.status !== 'playing') return state
+  const h = getHero(state, id)
+  if (!h || h.respawnT > 0) return state
+  const itemId = h.items[slot]
+  const item = ITEMS_BY_ID[itemId]
+  if (!item?.active || (h.itemCd[itemId] || 0) > 0) return state
+  if (item.active.kind === 'heal') {
+    if (!canAct(h) || h.hp >= h.maxHp) return state // 기절 중엔 못 마시고, 만피면 아깝게 안 쓴다
+    h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.25)
+    pushFx(state, 'heal', h.x, h.z, 3, h.team)
+  } else if (item.active.kind === 'cleanse') {
+    const hadCC = h.stunT > 0 || h.freezeT > 0 || h.rootT > 0 || h.tauntT > 0 || h.slowT > 0 || h.poisonT > 0
+    if (!hadCC) return state // 해제할 게 없으면 아깝게 안 쓴다
+    h.stunT = 0
+    h.freezeT = 0
+    h.rootT = 0
+    h.slowT = 0
+    h.poisonT = 0
+    if (h.tauntT > 0) {
+      h.tauntT = 0
+      h.tauntBy = null
+    }
+    pushFx(state, 'shield', h.x, h.z, 3, h.team)
+  } else {
+    return state
+  }
+  h.itemCd[itemId] = item.active.cd
   return state
 }
 
@@ -2368,6 +2405,10 @@ function stepHero(state, h, dt) {
   h.skillCd = Math.max(0, h.skillCd - dt)
   h.skill2Cd = Math.max(0, h.skill2Cd - dt)
   h.ultCd = Math.max(0, h.ultCd - dt)
+  for (const k in h.itemCd) {
+    h.itemCd[k] = Math.max(0, h.itemCd[k] - dt)
+    if (h.itemCd[k] === 0) delete h.itemCd[k] // 다 돈 쿨은 지워 스냅샷을 가볍게
+  }
   h.dragonT = Math.max(0, h.dragonT - dt)
   h.baronT = Math.max(0, h.baronT - dt)
   h.shieldT = Math.max(0, h.shieldT - dt)
@@ -3293,12 +3334,16 @@ const BOT_BUILD = {
 }
 
 // 봇 자동 구매: 우물 안 + 빈 칸 있으면 빌드 우선순위에서 안 가진 첫 구매 가능 아이템을 산다.
+//  조합으로 상위템에 흡수된 재료는 "이미 거친 것"으로 보고 다시 사지 않는다.
 function botShop(state, h) {
   if (h.items.length >= ITEM_SLOTS || !inFountain(h)) return
+  const upgraded = new Set()
+  for (const id of h.items) for (const c of ITEMS_BY_ID[id]?.from || []) upgraded.add(c)
   for (const itemId of BOT_BUILD[h.cls] || []) {
-    if (h.items.includes(itemId)) continue
-    const item = ITEMS_BY_ID[itemId]
-    if (item && h.gold >= item.cost) {
+    if (h.items.includes(itemId) || upgraded.has(itemId)) continue
+    if (!ITEMS_BY_ID[itemId]) continue
+    const quote = buildQuote(h.items, itemId) // 재료 보유 시 조합 할인가로 판단
+    if (h.gold >= quote.price) {
       buyItem(state, h.id, itemId)
       return
     }
@@ -3516,6 +3561,13 @@ function stepBots(state, dt) {
   const defendPlan = computeDefensePlan(state)
   for (const h of state.heroes) {
     if (!h.isBot || h.respawnT > 0) continue
+    // 액티브 아이템: 위기에 물병(빈사)·정화의 종(굵직한 CC)을 쓴다 — CC 판정보다 먼저(정화는 기절 중에도)
+    for (let i = 0; i < h.items.length; i++) {
+      const it = ITEMS_BY_ID[h.items[i]]
+      if (!it?.active || (h.itemCd[it.id] || 0) > 0) continue
+      if (it.active.kind === 'heal' && h.hp < h.maxHp * 0.45) useItem(state, h.id, i)
+      else if (it.active.kind === 'cleanse' && (h.stunT > 0.5 || h.freezeT > 0.5 || h.rootT > 0.5)) useItem(state, h.id, i)
+    }
     if (h.stunT > 0 || h.castT > 0) {
       h.mx = 0
       h.mz = 0
@@ -4113,6 +4165,7 @@ export function makeView(state) {
       xpNeed: h.lvl >= MAX_LEVEL ? 0 : xpNeed(h.lvl),
       gold: Math.floor(h.gold),
       items: h.items.slice(),
+      itemCds: h.items.map((id) => r2d(h.itemCd[id] || 0)), // 슬롯별 액티브 남은 쿨(초)
       shopUndo: !!h.shopChanged, // 이번 상점 세션에 무료 취소할 변경이 있나
       power: Math.round(powerStat(h)), // 스킬 계수가 곱해지는 주력 스탯(공격력/주문력) — 툴팁 계산용
       dmgMult: r2d(dmgMult(h)), // 버프 피해 배율(용/바론) — 툴팁 계산용

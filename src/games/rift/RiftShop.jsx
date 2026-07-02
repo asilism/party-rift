@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CATEGORIES, ITEMS, getItem, sumStats, STAT_LABEL, ITEM_SLOTS, SELL_REFUND } from './items.js'
+import { CATEGORIES, ITEMS, getItem, sumStats, STAT_LABEL, ITEM_SLOTS, SELL_REFUND, buildQuote } from './items.js'
 import { CLASSES } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 
@@ -98,27 +98,46 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
           ))}
         </div>
 
-        {/* 아이템 목록 */}
+        {/* 아이템 목록 — 재료(from)를 갖고 있으면 조합 할인가를 보여 준다 */}
         <div className="rift-shop__grid">
           {shown.map((it) => {
             const have = owned.has(it.id)
-            const afford = me.gold >= it.cost
-            const canBuy = !have && !full && afford
+            const quote = buildQuote(items, it.id)
+            const combining = quote.consumes.length > 0
+            const afford = me.gold >= quote.price
+            const hasRoom = items.length - quote.consumes.length < ITEM_SLOTS
+            const canBuy = !have && hasRoom && afford
+            const recipe = (it.from || []).map((c) => getItem(c)?.name).join(' + ')
+            const tip = [
+              it.desc,
+              recipe && `조합 재료: ${recipe} (갖고 있으면 그 가격만큼 할인 + 슬롯 확보)`,
+              it.active && `사용 효과: ${it.active.label} (쿨다운 ${it.active.cd}초)`,
+            ].filter(Boolean).join('\n')
             return (
               <button
                 key={it.id}
                 className={`rift-shop__item ${canBuy ? '' : 'rift-shop__item--off'}`}
                 disabled={!canBuy}
                 onClick={() => onBuy(it.id)}
-                title={it.desc}
+                title={tip}
               >
                 <span className="rift-shop__item-icon">{it.icon}</span>
                 <span className="rift-shop__item-body">
-                  <span className="rift-shop__item-name">{it.name}</span>
+                  <span className="rift-shop__item-name">
+                    {it.name}
+                    {it.active && <span className="rift-shop__item-active" title="사용 효과가 있는 아이템">⚡</span>}
+                    {it.from && (
+                      <span className="rift-shop__item-recipe">
+                        {it.from.map((c) => getItem(c)?.icon).join('')}▶
+                      </span>
+                    )}
+                  </span>
                   <StatTags stats={sumStats([it.id])} />
                 </span>
                 <span className="rift-shop__item-cost">
-                  {have ? '보유중' : <>💰 {it.cost}</>}
+                  {have ? '보유중' : combining
+                    ? <><s className="rift-shop__item-full">{it.cost}</s> 🔧💰{quote.price}</>
+                    : <>💰 {it.cost}</>}
                 </span>
               </button>
             )
