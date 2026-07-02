@@ -1,9 +1,9 @@
-# Render Blueprint — 파티 리프트(영속 Node + WebSocket) 무료 배포.
+# Render Blueprint — 조디악 러쉬(영속 Node + WebSocket) 무료 배포.
 # Render 대시보드에서 New → Blueprint 로 이 리포를 연결하면 자동으로 읽힌다.
 # Dockerfile을 그대로 빌드하므로 별도 빌드/시작 명령이 필요 없다.
 services:
   - type: web
-    name: party-rift
+    name: party-rift # 서비스 식별자 — 바꾸면 Render가 새 서비스를 만들므로 유지한다
     runtime: docker
     plan: free
     region: singapore
