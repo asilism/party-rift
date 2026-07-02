@@ -2426,3 +2426,62 @@ test('신규 직업 스모크: 돌풍술사·시간술사 봇이 낀 게임이 N
   assert.ok(v.heroes.every((h) => Number.isFinite(h.x) && Number.isFinite(h.z)), '좌표가 유한값')
   assert.ok(v.heroes.every((h) => h.hp >= 0 && h.hp <= h.maxHp), '체력이 정상 범위')
 })
+
+// ── 봇 AI 지능화: 안전 귀환 / 오브젝트 콜 / 수비 콜 ──
+
+test('봇 후퇴: 적이 안 보이면 먼 길을 걷지 않고 귀환 채널링으로 우물 복귀', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const bot = makeBot(g, g.heroes[0].id) // blue 마법사를 봇으로
+  const fp = g.map.FOUNTAIN_POS[bot.team]
+  // 우물에서 40 떨어진 조용한 자리에 빈사 상태로 — 적 영웅은 전부 자기 우물(시야 밖)
+  bot.x = fp.x + 40
+  bot.z = fp.z
+  bot.hp = bot.maxHp * 0.2
+  run(g, 0.6)
+  assert.equal(bot.botRetreat, true, '빈사면 후퇴 모드')
+  assert.ok(bot.recallT > 0 && bot.botRecall, '걸어가는 대신 귀환 채널링을 시작한다')
+  run(g, RECALL_TIME)
+  assert.ok(Math.hypot(bot.x - fp.x, bot.z - fp.z) < 12, '채널링을 마치고 우물로 복귀했다')
+})
+
+test('오브젝트 콜: 용이 잡을 만하면 봇들이 집결해 함께 잡는다', () => {
+  // blue 전원 봇 / red는 사람(우물에 방치 — 용 근처 시야 없음)
+  const players = humans().map((p) => (p.team === 'blue' ? { ...p, isBot: true } : p))
+  const g = createGame(players)
+  startPlaying(g)
+  const dragon = g.monsters.find((m) => m.id === 'dragon')
+  dragon.alive = true
+  dragon.respawnT = 0
+  dragon.hp = dragon.maxHp = 400 // 저레벨 3인 화력으로도 "확실히 잡는다" 판정이 서는 체력
+  const bots = g.heroes.filter((h) => h.team === 'blue')
+  const toCenter = dragon.x > 0 ? -1 : 1
+  bots.forEach((b, i) => {
+    b.x = dragon.x + toCenter * 32
+    b.z = dragon.z + (i - 1) * 5 // 집결 반경(65) 안, 어그로 밖에서 출발
+  })
+  let gathered = false
+  for (let i = 0; i < 40 && dragon.alive; i++) {
+    run(g, 0.25)
+    const near = bots.filter((b) => Math.hypot(b.x - dragon.x, b.z - dragon.z) < 20).length
+    if (near >= 2) gathered = true
+  }
+  assert.ok(gathered, '봇 2명 이상이 용 굴에 집결했다')
+  assert.ok(!dragon.alive, '집결한 봇들이 용을 처치했다')
+})
+
+test('수비 콜: 내곽 타워에 적 영웅이 붙으면 한가한 봇이 달려와 막는다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const bot = makeBot(g, g.heroes[0].id) // blue 마법사를 봇으로
+  const tower = g.towers.find((t) => t.team === 'blue' && t.lane === 'mid' && t.tier === 2)
+  const raider = g.heroes.find((h) => h.team === 'red')
+  raider.x = tower.x + 6 // 타워 시야(24) 안 — 수비 콜 발동 조건
+  raider.z = tower.z
+  bot.x = tower.x + 45 // 수비 배정 반경(20) 밖의 한가한 봇
+  bot.z = tower.z + 10
+  const before = Math.hypot(bot.x - tower.x, bot.z - tower.z)
+  run(g, 3)
+  const after = Math.hypot(bot.x - tower.x, bot.z - tower.z)
+  assert.ok(after < before - 8, `봇이 위협받는 타워로 이동한다 (before=${before.toFixed(1)}, after=${after.toFixed(1)})`)
+})

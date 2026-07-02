@@ -3359,13 +3359,10 @@ function botChaseScore(state, h, foe) {
   return { killT, lifeT, foes, allies }
 }
 
-// 용/바론을 "확실히 잡는다"는 확신이 설 때만 true.
-// 곁의 아군 합산 DPS로 처치 시간을 추정하고, 그동안 몬스터(분노 가속)가 쏟아낼
+// 용/바론을 "확실히 잡는다"는 확신이 설 때만 true. (아군 목록을 받는 공용 판정)
+// 합산 DPS로 처치 시간을 추정하고, 그동안 몬스터(분노 가속)가 쏟아낼
 // 총 피해를 우리 팀의 총 유효 체력으로 버틸 수 있어야 친다. (저레벨·소수 자폭 방지)
-function canTakeMonster(state, h, big) {
-  const allies = state.heroes.filter(
-    (o) => o.team === h.team && o.respawnT <= 0 && dist(o, big) < 26
-  )
+function teamCanTakeMonster(allies, big) {
   if (!allies.length) return false
   let dps = 0
   for (const a of allies) dps += heroDps(a)
@@ -3378,6 +3375,94 @@ function canTakeMonster(state, h, big) {
   let teamEffHp = 0
   for (const a of allies) teamEffHp += a.hp / dmgTakenMult(a)
   return monsterTotal < teamEffHp * 0.6 // 팀 유효 체력의 60% 안쪽 피해면 감당 가능으로 본다
+}
+
+// 실제로 곁에 모인(26 안) 아군 기준 — 이 판정이 서면 그때 몬스터에 붙는다.
+function canTakeMonster(state, h, big) {
+  return teamCanTakeMonster(
+    state.heroes.filter((o) => o.team === h.team && o.respawnT <= 0 && dist(o, big) < 26),
+    big
+  )
+}
+
+// ── 팀 단위 콜: 매 틱 새로 계산한다(지속 상태 없음 — 재접속/봇 인계에 안전) ──
+const BOT_RALLY_DIST = 65 // 봇이 오브젝트 콜에 응해 달려오는 최대 거리
+const RALLY_HOLD = 13 // 인원이 모여 확신이 서기 전까지 어그로 없이 대기하는 거리
+
+// 오브젝트 콜: 집결 가능한 건강한 팀원(봇은 집결 반경, 사람은 이미 곁에 있을 때만 셈)으로
+// 용/바론을 확실히 잡을 수 있고 + 근처 적이 우리보다 많지 않으면 그 몬스터를 노린다.
+function computeObjectiveCall(state, team) {
+  const need = Math.ceil((TEAM_SIZES[state.mode] ?? 3) / 2) // 3:3→2명, 5:5→3명
+  for (const big of state.monsters) {
+    if (!big.alive || big.kind === 'wolf') continue
+    const cands = state.heroes.filter(
+      (o) =>
+        o.team === team && o.respawnT <= 0 && o.hp > o.maxHp * 0.55 &&
+        dist(o, big) < (o.isBot ? BOT_RALLY_DIST : 30)
+    )
+    if (cands.length < need || !teamCanTakeMonster(cands, big)) continue
+    let foes = 0
+    for (const e of state.heroes) {
+      if (e.team === team || e.respawnT > 0 || !isHeroVisible(state, e, team)) continue
+      if (dist(e, big) < 32) foes++
+    }
+    if (foes >= cands.length) continue // 적이 우리만큼 보이면 오브젝트 싸움을 걸지 않는다
+    return big.id
+  }
+  return null
+}
+
+// 수비 콜: 가장 위협받는 우리 구조물(적 영웅이 붙은 타워, 웨이브가 닿은 넥서스)을 찾아
+// 모자란 만큼(공격 영웅 수 − 이미 곁의 아군 수) 가까운 봇을 수비로 배정한다.
+function computeDefensePlan(state) {
+  const plan = new Map()
+  for (const team of ['blue', 'red']) {
+    const en = enemyOf(team)
+    const spots = state.towers.filter((t) => t.team === team && t.alive)
+    spots.push({ ...state.map.NEXUS_POS[team], tier: 4 }) // 넥서스도 수비 지점(최고 가중치)
+    let spot = null
+    let need = 0
+    let score = 0
+    for (const t of spots) {
+      let hs = 0
+      for (const e of state.heroes) {
+        if (e.team !== en || e.respawnT > 0 || !isHeroVisible(state, e, team)) continue
+        if (dist(e, t) < TOWER_RANGE + 10) hs++
+      }
+      let mn = 0
+      for (const m of state.minions) if (m.team === en && dist(m, t) < TOWER_RANGE + 4) mn++
+      // 평상시 라인전은 수비 콜이 아니다: 내곽부터는 적 영웅 1명, 외곽은 2명부터,
+      // 넥서스는 영웅 없이 웨이브(3마리)만 닿아도 위험으로 본다.
+      const danger = (t.tier >= 2 ? hs >= 1 : hs >= 2) || (t.tier === 4 && mn >= 3)
+      if (!danger) continue
+      const s =
+        (hs * 2 + (mn >= 4 ? 1 : 0)) *
+        (t.tier === 4 ? 2.2 : t.tier === 3 ? 1.8 : t.tier === 2 ? 1.3 : 1)
+      if (s > score) {
+        score = s
+        spot = t
+        need = Math.max(1, hs)
+      }
+    }
+    if (!spot) continue
+    const already = state.heroes.filter(
+      (a) => a.team === team && a.respawnT <= 0 && dist(a, spot) < 20
+    ).length
+    let want = need - already
+    if (want <= 0) continue
+    const free = state.heroes
+      .filter(
+        (a) =>
+          a.team === team && a.isBot && a.respawnT <= 0 && !a.botRetreat &&
+          a.hp > a.maxHp * 0.45 && dist(a, spot) >= 20
+      )
+      .sort((a, b) => dist2(a, spot) - dist2(b, spot))
+    for (const a of free) {
+      if (want-- <= 0) break
+      plan.set(a.id, spot)
+    }
+  }
+  return plan
 }
 
 // 정글이 비었을 때 라인 지원: 적 압박이 큰(우리 타워가 위협받는) 레인을 우선 방어하고,
@@ -3423,6 +3508,12 @@ function botSupportLane(state, h) {
 }
 
 function stepBots(state, dt) {
+  // 팀 콜(오브젝트 집결/구조물 수비)은 틱마다 새로 계산한다
+  const objCall = {
+    blue: computeObjectiveCall(state, 'blue'),
+    red: computeObjectiveCall(state, 'red'),
+  }
+  const defendPlan = computeDefensePlan(state)
   for (const h of state.heroes) {
     if (!h.isBot || h.respawnT > 0) continue
     if (h.stunT > 0 || h.castT > 0) {
@@ -3486,6 +3577,23 @@ function stepBots(state, dt) {
       // 보조 스킬로 탈출: 은신(암살자)·광폭화(전사, CC 면역+가속)·가속(힐러)
       if (h.skill2Cd <= 0 && h.lvl >= SKILL2_LEVEL &&
         (h.cls === 'assassin' || h.cls === 'warrior' || h.cls === 'healer' || h.cls === 'cryomancer' || h.cls === 'swordmaster' || h.cls === 'snarer')) castSkill2(state, h.id)
+      // 적이 안 보이고 한숨 돌렸으면(최근 피격 없음) 먼 길을 걷지 않고 귀환 채널링으로 복귀
+      if (
+        h.recallT <= 0 && !inFountain(h) &&
+        state.time - h.lastHurt > 2 &&
+        dist(h, state.map.FOUNTAIN_POS[h.team]) > 26 && // 가까우면 걷는 게 채널링(4초)보다 빠르다
+        !state.heroes.some(
+          (e) => e.team !== h.team && e.respawnT <= 0 && isHeroVisible(state, e, h.team) && dist2(e, h) < 24 * 24
+        )
+      ) {
+        castRecall(state, h.id)
+        if (h.recallT > 0) {
+          h.botRecall = true
+          h.mx = 0
+          h.mz = 0
+          continue
+        }
+      }
       steerToward(state, h, state.map.FOUNTAIN_POS[h.team]) // 넥서스가 아니라 뒤편 리스폰 존으로 후퇴해 회복
       botAttack(state, h, dt) // 도망치면서도 사거리 안이면 반격
       continue
@@ -3607,6 +3715,34 @@ function stepBots(state, dt) {
     }
     // 교전 상대가 없으면 임무 수행
     botAttack(state, h, dt) // 미니언/정글/타워 등 사거리 안 아무거나
+    // 수비 콜: 위협받는 우리 구조물로 달려간다 (도착하면 위 교전/평타 로직이 싸움을 잡는다)
+    const dp = defendPlan.get(h.id)
+    if (dp) {
+      if (dist(h, dp) > 6) steerToward(state, h, dp)
+      else {
+        h.mx = 0
+        h.mz = 0
+      }
+      continue
+    }
+    // 오브젝트 콜: 팀이 용/바론을 노린다 — 인원이 모여 확신(canTakeMonster)이 서기 전엔
+    // 어그로가 끌리지 않는 거리(RALLY_HOLD)에서 대기하며 팀원을 기다린다.
+    const call = objCall[h.team]
+    if (call && h.hp > h.maxHp * 0.55) {
+      const big = state.monsters.find((m) => m.id === call && m.alive)
+      if (big) {
+        if (canTakeMonster(state, h, big)) {
+          if (dist(h, big) > CLASSES[h.cls].range - 1) steerToward(state, h, big)
+          else {
+            h.mx = 0
+            h.mz = 0
+          }
+        } else {
+          botHoldOutside(state, h, big, RALLY_HOLD)
+        }
+        continue
+      }
+    }
     // 궁수: 이따금 사냥매를 띄워 앞쪽 안개를 정찰
     if (h.cls === 'archer' && h.skill2Cd <= 0 && h.lvl >= SKILL2_LEVEL && state.rng() < 0.006) {
       castSkill2(state, h.id)
@@ -3773,9 +3909,8 @@ function botJungleMove(state, h) {
   return true
 }
 
-// 적 타워에서 안전거리(사거리 밖)를 두고 대기 — 제자리 진동 없이 한 자리에 머문다.
-function botHoldOutside(state, h, objective) {
-  const hold = TOWER_RANGE + 3
+// 목표에서 안전거리(기본: 타워 사거리 밖)를 두고 대기 — 제자리 진동 없이 한 자리에 머문다.
+function botHoldOutside(state, h, objective, hold = TOWER_RANGE + 3) {
   const d = dist(h, objective)
   if (d < hold - 1) {
     const away = Math.atan2(h.z - objective.z, h.x - objective.x)
