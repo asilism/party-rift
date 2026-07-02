@@ -2130,14 +2130,15 @@ body {
   background: rgba(40, 180, 196, 0.9);
 }
 .rift-btn--recall small { font-size: 11px; }
-/* 액티브 아이템(물병/종): 스킬 호를 이어 귀환 → 아이템1 → 아이템2 순으로
-   왼쪽 위로 감아 올라가는 부채꼴 배치 — 스킬 버튼보다 작게(60), 사면 나타난다 */
+/* 액티브 아이템(물병/종): 공격 버튼을 중심으로 귀환과 같은 반지름의 바깥 고리를
+   귀환 → 아이템1 → 아이템2 순으로 오른쪽 위로(스킬 무리를 감싸며) 감아 올라간다.
+   스킬 버튼보다 작게(60), 사면 나타난다 */
 .rift-btn--item0 {
-  right: 354px; bottom: 92px; width: 60px; height: 60px; font-size: 20px;
+  right: 258px; bottom: 148px; width: 60px; height: 60px; font-size: 20px;
   background: rgba(212, 164, 50, 0.92);
 }
 .rift-btn--item1 {
-  right: 402px; bottom: 162px; width: 60px; height: 60px; font-size: 20px;
+  right: 198px; bottom: 232px; width: 60px; height: 60px; font-size: 20px;
   background: rgba(212, 164, 50, 0.92);
 }
 .rift-btn--item0 small, .rift-btn--item1 small { font-size: 10px; }
