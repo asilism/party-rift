@@ -2013,7 +2013,7 @@ function createFog(map) {
 }
 
 export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') {
-  const { WORLD, NEXUS_POS, FOUNTAIN_POS, LANES, ROCKS, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT } = map
+  const { WORLD, NEXUS_POS, FOUNTAIN_POS, LANES, ROCKS, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT, WOLF_CAMPS } = map
   const Q = QUALITY[quality] || QUALITY.med
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q.antialias })
   renderer.setPixelRatio(Math.min(Q.pixelRatio, window.devicePixelRatio || 1))
@@ -2126,12 +2126,18 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   //  수풀(은신)·성벽은 병합 대상에서 제외(게임플레이/구조물).
   const staticDecor = makeStaticMerger()
 
-  // 용/바론 둥지 (모래 바닥 + 테두리 돌무더기)
+  // 용/바론 둥지 — 같은 돌 테두리 구조에 서로 다른 테마를 입혀 멀리서도 구분되게 한다.
+  //  용 굴: 그을린 모래 + 이글대는 호박빛 결정 / 바론 둥지: 창백한 보랏빛 + 마력 결정 + 짐승 뼈 가시
   const pitRnd = lcg(4242)
-  for (const pit of [DRAGON_PIT, BARON_PIT]) {
+  const PIT_THEMES = [
+    { pit: DRAGON_PIT, pad: 0xd4a878, rock: 0x99856e, crystal: 0xff9d4d, boneSpikes: 0 },
+    { pit: BARON_PIT, pad: 0xaaa2bd, rock: 0x6d6a82, crystal: 0xc07dff, boneSpikes: 3 },
+  ]
+  for (const theme of PIT_THEMES) {
+    const pit = theme.pit
     const pad = new THREE.Mesh(
       new THREE.CircleGeometry(8, 32),
-      new THREE.MeshLambertMaterial({ color: 0xc9b285 })
+      new THREE.MeshLambertMaterial({ color: theme.pad })
     )
     pad.rotation.x = -Math.PI / 2
     pad.position.set(pit.x, 0.05, pit.z)
@@ -2142,12 +2148,100 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       const rr = 0.6 + pitRnd() * 0.5
       const rock = new THREE.Mesh(
         new THREE.IcosahedronGeometry(rr, 0),
-        new THREE.MeshLambertMaterial({ color: 0x8a8f9c, flatShading: true })
+        new THREE.MeshLambertMaterial({ color: theme.rock, flatShading: true })
       )
       rock.position.set(pit.x + Math.cos(a) * 8, rr * 0.5, pit.z + Math.sin(a) * 8)
       rock.rotation.set(pitRnd() * 3, pitRnd() * 3, pitRnd() * 3)
       staticDecor.addMesh(rock)
     }
+    // 서식지의 기운 — 빛나는 결정 4개 (발광이라 병합 불가 → 개별 메시, 둥지당 4드로우콜)
+    const crysMat = new THREE.MeshLambertMaterial({
+      color: theme.crystal, emissive: theme.crystal, emissiveIntensity: 0.55, flatShading: true,
+    })
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.5
+      const size = 0.5 + pitRnd() * 0.4
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(size), crysMat)
+      crystal.position.set(pit.x + Math.cos(a) * 6.4, size * 0.8, pit.z + Math.sin(a) * 6.4)
+      crystal.rotation.y = pitRnd() * 3
+      scene.add(crystal)
+    }
+    // 바론 둥지의 짐승 뼈 가시 (무광 → 병합)
+    for (let i = 0; i < theme.boneSpikes; i++) {
+      const a = (i / Math.max(1, theme.boneSpikes)) * Math.PI * 2 + 1.1
+      const bone = new THREE.Mesh(
+        new THREE.ConeGeometry(0.35, 3.2 + pitRnd() * 1.2, 5),
+        new THREE.MeshLambertMaterial({ color: 0xe8e2d2, flatShading: true })
+      )
+      bone.position.set(pit.x + Math.cos(a) * 4.6, 1.5, pit.z + Math.sin(a) * 4.6)
+      bone.rotation.set((pitRnd() - 0.5) * 0.7, 0, (pitRnd() - 0.5) * 0.7)
+      staticDecor.addMesh(bone)
+    }
+  }
+  // 강 건널목 유적 — 각 레인이 강(x=0)을 건너는 지점 양옆의 이끼 낀 부러진 돌기둥.
+  //  옛 다리의 잔해가 "여기서 강을 건넌다"는 랜드마크가 된다. 전부 무광 정적 → 병합.
+  const ruinRnd = lcg(1717)
+  for (const lane of LANE_IDS) {
+    const wps = LANES[lane]
+    let crossZ = null
+    for (let i = 0; i < wps.length - 1; i++) {
+      const a = wps[i]
+      const b = wps[i + 1]
+      if ((a.x <= 0 && b.x >= 0) || (a.x >= 0 && b.x <= 0)) {
+        const t = Math.abs(b.x - a.x) < 1e-6 ? 0 : (0 - a.x) / (b.x - a.x)
+        crossZ = a.z + (b.z - a.z) * t
+        break
+      }
+    }
+    if (crossZ === null) continue
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        const h = 1.6 + ruinRnd() * 1.4 // 부러진 높이가 제각각
+        const g = new THREE.Group()
+        const stump = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.8, 0.95, h, 7),
+          new THREE.MeshLambertMaterial({ color: 0xa8a495, flatShading: true })
+        )
+        stump.position.y = h / 2
+        g.add(stump)
+        const moss = new THREE.Mesh(
+          new THREE.SphereGeometry(0.75, 7, 5, 0, Math.PI * 2, 0, Math.PI / 2.2),
+          new THREE.MeshLambertMaterial({ color: 0x4a7a3e })
+        )
+        moss.position.y = h
+        moss.scale.y = 0.45
+        g.add(moss)
+        g.position.set(sx * 9.8, 0, crossZ + sz * 5.6) // 강둑 양옆 × 길 양옆 = 기둥 4개
+        g.rotation.y = ruinRnd() * 3
+        staticDecor.addGroup(g)
+      }
+    }
+  }
+  // 늑대 캠프 표식 — 물어뜯긴 뼈 무더기: 정글러가 캠프 위치를 한눈에 알아본다. 무광 정적 → 병합.
+  const campRnd = lcg(909)
+  const boneColor = 0xe8e2d2
+  for (const c of WOLF_CAMPS) {
+    const g = new THREE.Group()
+    for (let i = 0; i < 3; i++) {
+      const stick = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.09, 0.13, 1.1 + campRnd() * 0.5, 5),
+        new THREE.MeshLambertMaterial({ color: boneColor, flatShading: true })
+      )
+      const a = campRnd() * Math.PI * 2
+      const r = 3.4 + campRnd() * 1.2
+      stick.position.set(Math.cos(a) * r, 0.12, Math.sin(a) * r)
+      stick.rotation.set(Math.PI / 2, 0, campRnd() * 3) // 바닥에 눕힌 뼈
+      g.add(stick)
+    }
+    const skull = new THREE.Mesh(
+      new THREE.SphereGeometry(0.34, 7, 5),
+      new THREE.MeshLambertMaterial({ color: boneColor, flatShading: true })
+    )
+    const sa = campRnd() * Math.PI * 2
+    skull.position.set(Math.cos(sa) * 3.2, 0.28, Math.sin(sa) * 3.2)
+    g.add(skull)
+    g.position.set(c.x, 0, c.z)
+    staticDecor.addGroup(g)
   }
   // 바위 — 큰 돌 + 둘레에 작은 돌이 흩어진 군집 (저폴리 면처리로 거칠게)
   const rockRnd = lcg(88)
