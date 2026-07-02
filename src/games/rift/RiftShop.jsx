@@ -52,7 +52,7 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
           </div>
         </div>
 
-        {/* 인벤토리 3칸 */}
+        {/* 인벤토리 (ITEM_SLOTS칸) */}
         <div className="rift-shop__inv">
           {Array.from({ length: ITEM_SLOTS }).map((_, i) => {
             const it = getItem(items[i])

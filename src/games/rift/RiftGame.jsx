@@ -201,10 +201,10 @@ const fmtTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padSt
 
 // 조작 방식 목록. 'lol'(롤 방식)은 아직 미구현이라 선택 불가(추후 도입).
 const CONTROL_SCHEMES = [
-  { id: 'wasd', icon: '⌨️', label: 'WASD 키보드', desc: 'WASD·화살표 이동, H/J/K 스킬, L 평타' },
+  { id: 'wasd', icon: '⌨️', label: 'WASD 키보드', desc: 'WASD·화살표 이동, H/J/K 스킬, L 평타, 1·2 아이템' },
   { id: 'lol', icon: '🖱️', label: '롤 방식', desc: '추후 도입 예정', soon: true },
   { id: 'mobile', icon: '📱', label: '모바일', desc: '드래그 조이스틱 + 터치 버튼' },
-  { id: 'xbox', icon: '🎮', label: 'Xbox 컨트롤러', desc: '스틱 이동, A 평타, X/Y/B 스킬' },
+  { id: 'xbox', icon: '🎮', label: 'Xbox 컨트롤러', desc: '스틱 이동, A 평타, X/Y/B 스킬, LB·RB 아이템' },
 ]
 
 // 양 팀 현황판(팀 킬 스코어 + 영웅별 K/D/A·레벨·아이템). 두 팀 카드를 나란히 반환한다 —
@@ -417,6 +417,7 @@ function RiftPlay({
           onSkill2={() => onCast('skill2')}
           onUlt={() => onCast('ult')}
           onRecall={() => onCast('recall')}
+          onUseItem={onUseItem}
           me={me}
           disabled={me.respawnT > 0 || paused}
           scheme={scheme}
