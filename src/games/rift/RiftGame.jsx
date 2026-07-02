@@ -108,6 +108,8 @@ const FX_SOUND = {
   boom: 'magic', meteorhit: 'magic', fissure: 'magic', chain: 'magic', frost: 'magic', // 마법 타격
   curse: 'magic', frostnova: 'magic', abszero: 'magic', plague: 'magic', doom: 'magic', // 직업 전용 마법
   venom: 'magic', // 바론 독 뿜기
+  dread: 'magic', shriek: 'magic', // 공포술사
+  quake: 'tower', cage: 'magic', // 대지술사 (융기는 돌 구르는 묵직함 → 타워 계열음)
   heal: 'heal', holylight: 'heal', shield: 'shield', // 보조
   berserk: 'melee', taunt: 'shield', haste: 'heal', stealth: 'shield', hawk: 'ranged', // 보조 스킬
   summon: 'magic', deploy: 'shield', // 소환/설치

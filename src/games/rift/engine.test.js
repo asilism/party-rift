@@ -2585,6 +2585,91 @@ test('buildQuote: 재료가 없으면 정가, 중복 재료도 슬롯 단위로 
   assert.deepEqual([...q.consumes].sort(), [0, 1])
 })
 
+// ── 신규 직업 3종: 공포(강제 도주) / 분신 / 임시 돌벽 ──
+
+test('공포술사 공포의 시선: 적이 반대 방향으로 강제 도주 + 행동 불가, 정화의 종으로 해제', () => {
+  const g = duo('fearmonger', 'tank')
+  startPlaying(g)
+  const f = g.heroes[0]
+  const t = g.heroes[1]
+  f.x = 0; f.z = 0; f.dir = 0
+  t.x = 6; t.z = 0
+  castSkill(g, f.id)
+  assert.ok(t.fearT > 0, '공포에 걸렸다')
+  const x0 = t.x
+  run(g, 0.5)
+  assert.ok(t.x > x0 + 1, '시전자 반대(+x)로 강제 도주한다')
+  t.skillCd = 0
+  castSkill(g, t.id)
+  assert.equal(t.skillCd, 0, '공포 중엔 스킬을 못 쓴다')
+  t.items.push('cleanse_bell')
+  useItem(g, t.id, t.items.length - 1)
+  assert.equal(t.fearT, 0, '정화의 종이 공포를 해제한다')
+})
+
+test('환영무희: 분신이 내 겉모습으로 걷고, 자리바꿈으로 위치를 맞바꾼다', () => {
+  const g = duo('illusionist', 'tank')
+  startPlaying(g)
+  const i = g.heroes[0]
+  i.x = 0; i.z = 0; i.dir = 0
+  castSkill(g, i.id)
+  const c = g.summons.find((s) => s.kind === 'clone')
+  assert.ok(c, '분신이 생성됐다')
+  assert.equal(c.zodiacId, i.zodiacId, '분신 겉모습(띠)이 본체와 같다')
+  assert.ok(i.stealthT > 0, '본체는 잠깐 은신한다')
+  run(g, 0.5)
+  assert.ok(c.x > 1, '분신이 바라보던 방향으로 계속 걸어간다')
+  const cx = c.x
+  const cz = c.z
+  i.lvl = SKILL2_LEVEL // 보조 스킬 해금
+  castSkill2(g, i.id)
+  assert.ok(Math.hypot(i.x - cx, i.z - cz) < 2, '자리바꿈: 본체가 분신 자리로 이동')
+  const v = makeView(g)
+  const vc = v.summons.find((s) => s.kind === 'clone')
+  assert.equal(vc.cls, 'illusionist', '스냅샷에 분신 겉모습이 실린다')
+})
+
+test('환영무희 자리바꿈: 분신이 없으면 쿨다운을 쓰지 않는다(환불)', () => {
+  const g = duo('illusionist', 'tank')
+  startPlaying(g)
+  const i = g.heroes[0]
+  i.lvl = SKILL2_LEVEL
+  castSkill2(g, i.id)
+  assert.equal(i.skill2Cd, 0, '대상 분신이 없으면 쿨을 안 쓴다')
+})
+
+test('대지술사 융기: 돌벽이 길을 막고 수명이 다하면 사라진다', () => {
+  const g = duo('terramancer', 'tank')
+  startPlaying(g)
+  const t = g.heroes[0]
+  const foe = g.heroes[1]
+  t.x = 0; t.z = 0; t.dir = 0
+  foe.x = 9; foe.z = 0
+  castSkill(g, t.id) // 전방(x≈5.5)에 가로 돌벽
+  assert.ok(g.tempWalls.length >= 4, '벽 충돌 원이 깔렸다')
+  setInput(g, foe.id, { mx: -1, mz: 0 }) // 벽을 향해 직진
+  run(g, 0.8)
+  assert.ok(foe.x > 3.5, '돌벽에 막혀 시전자 쪽으로 못 넘어온다')
+  run(g, 2.6) // 벽 수명(3초) 경과
+  assert.equal(g.tempWalls.length, 0, '벽이 가라앉아 사라졌다')
+  const v = makeView(g)
+  assert.deepEqual(v.stoneWalls, [], '스냅샷의 돌벽 목록도 비워진다')
+})
+
+test('신규 직업 스모크: 공포술사·환영무희·대지술사 봇 게임이 NaN 없이 돈다', () => {
+  const defs = [
+    ['rat', 'fearmonger', 'blue'], ['ox', 'illusionist', 'blue'], ['tiger', 'terramancer', 'blue'],
+    ['rabbit', 'tank', 'red'], ['dragon', 'healer', 'red'], ['snake', 'archer', 'red'],
+  ]
+  const g = createGame(defs.map(([id, cls, team]) => ({ id, name: id, zodiacId: id, color: '#abc', cls, team })))
+  for (const h of g.heroes) makeBot(g, h.id)
+  startPlaying(g)
+  run(g, 25)
+  const v = makeView(g)
+  assert.ok(v.heroes.every((h) => Number.isFinite(h.x) && Number.isFinite(h.z)), '좌표가 유한값')
+  assert.ok(v.heroes.every((h) => h.hp >= 0 && h.hp <= h.maxHp), '체력이 정상 범위')
+})
+
 test('바론 독 뿜기: 표적을 바라보고, 명중 자리에 독 웅덩이가 남아 도트 피해를 준다', () => {
   const g = createGame(humans())
   startPlaying(g)
