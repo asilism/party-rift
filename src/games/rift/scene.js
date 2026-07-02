@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import {
-  NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, buildMap,
+  NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, RESPAWN_ARC_HALF, buildMap,
 } from './map.js'
 import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE } from './engine.js'
 
@@ -2011,6 +2011,48 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     }
     g.position.set((w.x1 + w.x2) / 2, 0, (w.z1 + w.z2) / 2)
     g.rotation.y = -Math.atan2(w.z2 - w.z1, w.x2 - w.x1)
+    scene.add(g)
+  }
+
+  // 리스폰 존 뒤쪽 절반을 감싸는 반호(半弧) 성벽 — 부활 지점을 등지고 보호하는 물리 구조물.
+  //  맵 중앙 반대편(블루 -x / 레드 +x) 절반만 두른다. 두께 있는 곡면 슬래브로, 충돌(map.js)과
+  //  반경을 공유한다: 안쪽 면 = FOUNTAIN_RADIUS, 중심선 = FOUNTAIN_RADIUS + RESPAWN_ARC_HALF.
+  const t = RESPAWN_ARC_HALF
+  const Ri = FOUNTAIN_RADIUS // 안쪽 면(회복 원판 가장자리)
+  const Ro = FOUNTAIN_RADIUS + 2 * t // 바깥 면
+  const Rmid = FOUNTAIN_RADIUS + t // 중심선(성가퀴 배치)
+  const H = 4.6
+  for (const team of ['blue', 'red']) {
+    const fp = FOUNTAIN_POS[team]
+    const g = new THREE.Group()
+    // 반호 링을 위로 밀어 세운 곡면 벽체. ExtrudeGeometry는 shape의 (x,y)→월드(x,-z)로 눕힌다.
+    //  월드 x<0(블루)/x>0(레드) 절반이 되도록 각을 잡는다.
+    const a0 = team === 'blue' ? Math.PI / 2 : -Math.PI / 2
+    const a1 = team === 'blue' ? (3 * Math.PI) / 2 : Math.PI / 2
+    const shape = new THREE.Shape()
+    shape.absarc(0, 0, Ro, a0, a1, false)
+    shape.absarc(0, 0, Ri, a1, a0, true)
+    const bodyGeo = new THREE.ExtrudeGeometry(shape, { depth: H, bevelEnabled: false, curveSegments: 28 })
+    bodyGeo.rotateX(-Math.PI / 2) // depth(0..H)를 높이(y)로 세운다
+    const body = new THREE.Mesh(bodyGeo, wallMat)
+    body.position.set(fp.x, 0, fp.z)
+    g.add(body)
+    // 윗면 이끼 띠(살짝 얇게 얹은 같은 반호) — 성벽 능선 위 풀과 통일
+    const capGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.6, bevelEnabled: false, curveSegments: 28 })
+    capGeo.rotateX(-Math.PI / 2)
+    const cap = new THREE.Mesh(capGeo, wallTopMat)
+    cap.position.set(fp.x, H, fp.z)
+    g.add(cap)
+    // 성가퀴(merlon) 톱니 — 반호를 따라 일정 간격으로 (충돌 각 규칙: x=R·sinθ, z=R·cosθ)
+    const thetaStart = team === 'blue' ? Math.PI : 0
+    const mn = 10
+    for (let i = 0; i <= mn; i++) {
+      const theta = thetaStart + (i / mn) * Math.PI
+      const mer = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.5, 2 * t + 0.3), merlonMat)
+      mer.position.set(fp.x + Rmid * Math.sin(theta), H + 0.75, fp.z + Rmid * Math.cos(theta))
+      mer.rotation.y = theta // 폭이 벽면 접선을 따르도록
+      g.add(mer)
+    }
     scene.add(g)
   }
 

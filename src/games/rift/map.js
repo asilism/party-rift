@@ -109,6 +109,24 @@ const EXTRA_CAMPS_5V5 = [
 
 const scalePt = (p, s) => ({ ...p, x: p.x * s.x, z: p.z * s.z })
 
+// 반호(半弧) 성벽 두께의 절반 = 충돌 원 반경. 벽 중심선을 FOUNTAIN_RADIUS 바깥으로 이만큼 띄우면
+//  벽 안쪽 면이 회복 원판 가장자리에 딱 맞고, 플레이어(HERO_RADIUS) 표면이 벽 면과 정확히 일치한다.
+export const RESPAWN_ARC_HALF = 1.5
+
+// 리스폰 존 뒤쪽 절반(반원) 성벽을 충돌 원 체인으로 깐다. 시각(scene.js)과 반경·각도를 공유한다.
+//  backSign<0(블루): -x 절반 / backSign>0(레드): +x 절반. (x=R·sinθ, z=R·cosθ 규칙)
+function respawnArcCircles(cx, cz, backSign) {
+  const R = FOUNTAIN_RADIUS + RESPAWN_ARC_HALF
+  const thetaStart = backSign < 0 ? Math.PI : 0
+  const n = Math.max(6, Math.ceil((Math.PI * R) / 2.0)) // 촘촘히 겹쳐 빠져나갈 틈이 없게
+  const out = []
+  for (let i = 0; i <= n; i++) {
+    const th = thetaStart + (Math.PI * i) / n
+    out.push({ x: cx + R * Math.sin(th), z: cz + R * Math.cos(th), r: RESPAWN_ARC_HALF })
+  }
+  return out
+}
+
 // 선분(성벽)을 따라 충돌용 원을 깐다.
 function wallCircles(lines) {
   return lines.flatMap((w) => {
@@ -255,6 +273,11 @@ export function buildMap(mode = '3v3') {
   const DRAGON_PIT = scalePt(BASE.DRAGON_PIT, s)
   const BARON_PIT = scalePt(BASE.BARON_PIT, s)
   const WALLS = wallCircles(WALL_LINES)
+  // 리스폰 존 뒤쪽 절반을 감싸는 반호 성벽을 물리 장벽으로 등록 (블루 -x / 레드 +x 절반).
+  WALLS.push(
+    ...respawnArcCircles(FOUNTAIN_POS.blue.x, FOUNTAIN_POS.blue.z, -1),
+    ...respawnArcCircles(FOUNTAIN_POS.red.x, FOUNTAIN_POS.red.z, 1),
+  )
 
   const geo = {
     mode, WORLD, NEXUS_POS, FOUNTAIN_POS, LANES, LANE_IDS, TOWER_SPOTS, WALL_LINES, WALLS,
