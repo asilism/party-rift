@@ -46,6 +46,9 @@ export default function RiftGame({ onExit, net }) {
   function resetShopBuys() {
     sendAction({ type: 'resetShop' }) // 소유권은 서버가 판정(내 영웅에만 적용)
   }
+  function useItemSlot(slot) {
+    sendAction({ type: 'useItem', slot }) // 액티브 아이템(물병/종) 사용
+  }
 
   function toggleSound() {
     const n = !soundOn
@@ -81,6 +84,7 @@ export default function RiftGame({ onExit, net }) {
       onBuy={buy}
       onSell={sell}
       onResetShop={resetShopBuys}
+      onUseItem={useItemSlot}
       onTogglePause={null}
       onExit={onExit}
       soundOn={soundOn}
@@ -326,7 +330,7 @@ function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onTog
 
 // 전투 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function RiftPlay({
-  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onTogglePause, onExit, soundOn, onToggleSound,
+  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onUseItem, onTogglePause, onExit, soundOn, onToggleSound,
 }) {
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
@@ -476,10 +480,26 @@ function RiftPlay({
             </div>
             <span className="rift__me-items">
               {Array.from({ length: ITEM_SLOTS }).map((_, i) => {
-                const it = (me.items || [])[i]
+                const it = getItem((me.items || [])[i])
+                // 액티브 아이템(물병/종)은 아이콘 자체가 사용 버튼 — 쿨다운 중엔 남은 초를 덮어 보여 준다
+                if (it?.active) {
+                  const cd = me.itemCds?.[i] || 0
+                  return (
+                    <button
+                      key={i}
+                      className={`rift__me-item rift__me-item--active ${cd > 0 ? 'rift__me-item--cd' : ''}`}
+                      disabled={cd > 0 || me.respawnT > 0}
+                      onClick={() => onUseItem(i)}
+                      title={`${it.name} — ${it.active.label} (쿨다운 ${it.active.cd}초)`}
+                    >
+                      {it.icon}
+                      {cd > 0 && <span className="rift__me-item-cd">{Math.ceil(cd)}</span>}
+                    </button>
+                  )
+                }
                 return (
                   <span key={i} className="rift__me-item">
-                    {it ? getItem(it)?.icon : '·'}
+                    {it ? it.icon : '·'}
                   </span>
                 )
               })}

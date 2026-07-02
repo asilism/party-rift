@@ -1,6 +1,6 @@
 // 조디악 러쉬 — 실시간 네트코드 어댑터(서버 권위 + 클라 예측/보간 공용).
 import {
-  createGame, setInput, castAttack, castSkill, castSkill2, castUlt, castRecall, buyItem, sellItem, resetShop,
+  createGame, setInput, castAttack, castSkill, castSkill2, castUlt, castRecall, buyItem, sellItem, resetShop, useItem,
   step, makeView, makeBot, STEP, TEAM_SIZE, TEAM_SIZES, CLASS_IDS,
 } from './engine.js'
 import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
@@ -67,6 +67,7 @@ export const riftNet = {
     } else if (action.type === 'buy') buyItem(state, pid, action.itemId)
     else if (action.type === 'sell') sellItem(state, pid, action.slot)
     else if (action.type === 'resetShop') resetShop(state, pid)
+    else if (action.type === 'useItem') useItem(state, pid, action.slot)
   },
   step,
   makeView,
