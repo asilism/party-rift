@@ -14,7 +14,7 @@ import { useRealtimeGame } from '../../net/useRealtimeGame.js'
 import { riftNet } from './netgame.js'
 import { NetWaiting } from '../../net/NetParts.jsx'
 
-// 파티 리프트 — 3:3 AOS. 온라인 방 전용(기기마다 조이스틱이 필요해서).
+// 조디악 러쉬 — 3:3 AOS. 온라인 방 전용(기기마다 조이스틱이 필요해서).
 //  - 서버 권위(④): 서버가 60Hz로 시뮬레이션을 돌리고 20Hz로 바이너리 델타 스냅샷을 방송.
 //  - 클라(①③): 내 영웅은 입력 즉시 반영(예측)·권위 보정, 남의 유닛은 보간으로 부드럽게.
 //      모든 동기화 배관은 useRealtimeGame이 담당.
@@ -59,7 +59,7 @@ export default function RiftGame({ onExit, net }) {
     return (
       <div className="net-screen">
         <div className="net-screen__icon">⚔️</div>
-        <p>파티 리프트는 온라인 방 전용이에요. 각자 기기로 접속해 주세요!</p>
+        <p>조디악 러쉬는 온라인 방 전용이에요. 각자 기기로 접속해 주세요!</p>
         <button className="btn btn--primary" onClick={onExit}>← 돌아가기</button>
       </div>
     )

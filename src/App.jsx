@@ -5,7 +5,7 @@ import DraftScreen from './lobby/DraftScreen.jsx'
 import ErrorBoundary from './shared/ErrorBoundary.jsx'
 import { MatchProvider, useMatch } from './net/MatchContext.jsx'
 
-// 파티 리프트 — 단독 게임. three.js(3D)를 쓰므로 전장에 들어갈 때만 내려받는다(번들 분리).
+// 조디악 러쉬 — 단독 게임. three.js(3D)를 쓰므로 전장에 들어갈 때만 내려받는다(번들 분리).
 const RiftGame = lazy(() => import('./games/rift/RiftGame.jsx'))
 
 // 서버 권위 + 매치메이킹.  화면 흐름은 서버가 주도한다:

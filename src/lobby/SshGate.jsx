@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { sound } from '../shared/sound.js'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
 import { TEAM_SIZES } from '../games/rift/engine.js'
+import { ZODIAC } from '../shared/zodiac.js'
 
-// 접속 대문 — SSH 터미널 "창" 느낌(상단 바 + 프롬프트)에 깔끔한 로고.
-// 모드(3:3 / 5:5)를 고르고 대기열에 입장한다.
+// 접속 대문 — 타이틀 화면. 12지신이 로고 주위를 도는 궤도 링 + 모드(3:3 / 5:5) 선택.
 const MODES = [
   { id: '3v3', label: '3 vs 3', size: TEAM_SIZES['3v3'], desc: '빠른 교전 · 봇 의존 낮음', emoji: '⚔️' },
   { id: '5v5', label: '5 vs 5', size: TEAM_SIZES['5v5'], desc: '큰 맵 · 정글 오브젝트', emoji: '🐉' },
@@ -24,19 +24,27 @@ export default function SshGate({ onQueue, notice }) {
         <FullscreenButton />
       </div>
 
-      <div className="gate__term" role="group" aria-label="파티 리프트 접속">
+      <div className="gate__term" role="group" aria-label="조디악 러쉬 접속">
         <div className="gate__bar">
           <span className="gate__dot gate__dot--r" />
           <span className="gate__dot gate__dot--y" />
           <span className="gate__dot gate__dot--g" />
-          <span className="gate__bar-title">rift@party — secure shell</span>
+          <span className="gate__bar-title">zodiac@rush — matchmaking</span>
         </div>
 
         <div className="gate__body">
           <div className="gate__brand">
-            <div className="gate__crest">⚔️</div>
-            <h1 className="gate__name">PARTY<span> RIFT</span></h1>
-            <p className="gate__tag">3D AOS · 레인을 밀고 넥서스를 터뜨려라</p>
+            <div className="gate__orbit" aria-hidden="true">
+              {ZODIAC.map((z, i) => (
+                <span key={z.id} className="gate__zod" style={{ '--i': i }}>
+                  <span className="gate__zod-e">{z.emoji}</span>
+                </span>
+              ))}
+              <div className="gate__crest">⚡</div>
+            </div>
+            <h1 className="gate__name">ZODIAC<span> RUSH</span></h1>
+            <p className="gate__sub">조디악 러쉬</p>
+            <p className="gate__tag">12지신이 달린다 · 넥서스를 터뜨려라!</p>
           </div>
 
           <div className="gate__modes">

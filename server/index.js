@@ -1,4 +1,4 @@
-// 파티 리프트 온라인 서버 (서버 권위, 매치메이킹 큐 기반).
+// 조디악 러쉬(ZODIAC RUSH) 온라인 서버 (서버 권위, 매치메이킹 큐 기반).
 //  - /ws : 큐 입장 → 드래프트 → 카운트다운 → 실시간 전투의 전 생애주기를 서버가 주도.
 //  - 그 외 : dist/ 정적 파일 서빙(빌드돼 있을 때) → 한 포트로 배포 가능.
 //
@@ -40,7 +40,7 @@ const httpServer = http.createServer((req, res) => {
   if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(DIST, 'index.html')
   if (!fs.existsSync(file)) {
     res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
-    res.end('파티 리프트 서버 동작 중. 앱은 `npm run build` 후 이 포트로, 개발 중엔 vite(5173)로 접속하세요.')
+    res.end('조디악 러쉬 서버 동작 중. 앱은 `npm run build` 후 이 포트로, 개발 중엔 vite(5173)로 접속하세요.')
     return
   }
   res.writeHead(200, { 'content-type': MIME[path.extname(file)] || 'application/octet-stream' })
@@ -339,5 +339,5 @@ wss.on('close', () => {
 })
 
 httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log(`[party-rift] 서버 시작: http://0.0.0.0:${PORT} (ws: /ws)`)
+  console.log(`[zodiac-rush] 서버 시작: http://0.0.0.0:${PORT} (ws: /ws)`)
 })

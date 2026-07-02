@@ -1,4 +1,4 @@
-# 파티 리프트 — 단일 Node 호스트(Railway/Render/Fly/Cloud Run 등)용 컨테이너.
+# 조디악 러쉬 — 단일 Node 호스트(Railway/Render/Fly/Cloud Run 등)용 컨테이너.
 # server/index.js 한 프로세스가 dist/ 정적 파일 + /ws WebSocket을 같은 포트로 서빙한다.
 # (Vercel 같은 서버리스에는 영속 WebSocket·60Hz 루프가 안 올라가므로 영속 Node 호스트가 필요하다.)
 
