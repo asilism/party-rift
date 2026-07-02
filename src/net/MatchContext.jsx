@@ -98,6 +98,7 @@ export function MatchProvider({ children }) {
               rtInput: client.rtInput,
               rtAction: client.rtAction,
               rtResync: client.rtResync,
+              getRtt: client.getRtt, // 핑(왕복 지연) 표시용
             }
           : null,
     }

@@ -11,8 +11,8 @@ import { racerIdFor } from './realtime/roster.js'
 //  - 입력은 변했을 때만 INPUT_MS 주기로 서버에 보낸다.
 //
 // 게임은 adapter(netgame.js)와 입력 ref(ctrlRef)만 넘기면 된다. 다른 게임도 동일.
-const INTERP_DELAY = 110 // 남의 엔티티 보간 지연(ms)
-const INPUT_MS = 66 // 입력 전송 주기(ms)
+const INTERP_DELAY = 80 // 남의 엔티티 보간 지연(ms) — 30Hz 방송(33ms) 두 틱 + 지터 여유
+const INPUT_MS = 33 // 입력 전송 주기(ms) — 변했을 때만 보내므로 유휴 비용은 없다
 const EASE = 0.22 // 예측 → 권위 보정 강도(프레임당)
 const SNAP_DIST = 14 // 이 이상 어긋나면(리스폰/순간이동) 즉시 맞춘다
 
