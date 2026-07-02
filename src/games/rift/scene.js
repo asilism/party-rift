@@ -1631,25 +1631,30 @@ function buildTornadoProj() {
 
 // 스킬 이펙트 색 + 파티클 모드 (kind → 색/파티클 움직임).
 //  mode: out(바깥으로) · rise(위로) · fall(위에서 아래로) · forward(앞으로, dir 방향)
+// 추가 원형(archetype) 플래그:
+//   ring2: true  — 한 박자 늦게 퍼지는 두 번째 충격파(큰 폭발의 여운)
+//   slash: true  — 무기 높이에서 빠르게 한 바퀴 도는 베기 궤적(호)
+//   spikes: 색   — 지면에서 원형으로 솟았다 가라앉는 가시들(얼음/넝쿨)
+//   pillar: true — 땅에서 하늘로 솟는 빛기둥
 const FX_LOOK = {
-  whirl: { color: 0xffa94d, ring: true, mode: 'out', pcolor: 0xffe0b0 },
-  storm: { color: 0x9b6bd6, ring: true, mode: 'out', pcolor: 0xd0a0ff },
+  whirl: { color: 0xffa94d, ring: true, mode: 'out', pcolor: 0xffe0b0, slash: true, ring2: true }, // 전사 회전베기 — 도는 칼날 궤적
+  storm: { color: 0x9b6bd6, ring: true, mode: 'out', pcolor: 0xd0a0ff, ring2: true },
   rain: { color: 0xff5f5f, ring: true, mode: 'fall', pcolor: 0xffc0c0 },
   sanctuary: { color: 0x6ee7a0, ring: true, mode: 'rise', pcolor: 0xb6f5cf },
   heal: { color: 0x6ee7a0, ring: true, mode: 'rise', pcolor: 0xb6f5cf },
   holylight: { color: 0xfff3b0, ring: true, mode: 'rise', pcolor: 0xfff7d0, beam: true }, // 하늘에서 내리쬐는 성광
-  meteorhit: { color: 0xff7a2e, ring: true, mode: 'out', pcolor: 0xffd28a }, // 운석 낙하 충격
-  boom: { color: 0xff8c2e, ring: true, mode: 'out', pcolor: 0xffd28a },
+  meteorhit: { color: 0xff7a2e, ring: true, mode: 'out', pcolor: 0xffd28a, ring2: true }, // 운석 낙하 충격 — 이중 충격파
+  boom: { color: 0xff8c2e, ring: true, mode: 'out', pcolor: 0xffd28a, ring2: true },
   blink: { color: 0x9a7bff, ring: true, mode: 'out', pcolor: 0xc9b8ff },
-  execute: { color: 0xff3b3b, ring: true, mode: 'out', pcolor: 0xff9a9a },
-  level: { color: 0xffe066, ring: true, mode: 'rise', pcolor: 0xfff0a0 },
-  towerfall: { color: 0xff8c2e, ring: true, mode: 'out', pcolor: 0xffcaa0, debris: { count: 16, rock: 0x8c8c98, dur: 1.7 } }, // 포탑 붕괴 — 돌무더기 와르르
-  nexusfall: { color: 0xffe066, ring: true, mode: 'out', pcolor: 0xfff3b0, debris: { count: 24, rock: 0xb0b6c4, burst: true, dur: 2.0 } }, // 넥서스 폭발 — 펑! 파편이 터져나간다
+  execute: { color: 0xff3b3b, ring: true, mode: 'out', pcolor: 0xff9a9a, slash: true }, // 암살자 처형 — 붉은 참격
+  level: { color: 0xffe066, ring: true, mode: 'rise', pcolor: 0xfff0a0, pillar: true }, // 레벨 업 — 금빛 기둥
+  towerfall: { color: 0xff8c2e, ring: true, mode: 'out', pcolor: 0xffcaa0, ring2: true, debris: { count: 16, rock: 0x8c8c98, dur: 1.7 } }, // 포탑 붕괴 — 돌무더기 와르르
+  nexusfall: { color: 0xffe066, ring: true, mode: 'out', pcolor: 0xfff3b0, ring2: true, debris: { count: 24, rock: 0xb0b6c4, burst: true, dur: 2.0 } }, // 넥서스 폭발 — 펑! 파편이 터져나간다
   death: { color: 0x39405c, ring: true, mode: 'out' },
   shield: { color: 0x9fd0ff, ring: true, mode: 'rise', pcolor: 0xd0eaff },
   recall: { color: 0x4ad6e0, ring: true, mode: 'rise', pcolor: 0xa0f0f7 },
   // 보조 스킬(Lv3) 이펙트
-  berserk: { color: 0xff3b30, ring: true, mode: 'out', pcolor: 0xff8a7a }, // 전사 광폭화 — 붉은 폭발
+  berserk: { color: 0xff3b30, ring: true, mode: 'out', pcolor: 0xff8a7a, ring2: true }, // 전사 광폭화 — 붉은 이중 폭발
   taunt: { color: 0xff5fa0, ring: true, mode: 'out', pcolor: 0xffb0d0 }, // 탱커 도발 — 퍼지는 동심원
   haste: { color: 0x7ad8ff, ring: true, mode: 'rise', pcolor: 0xc0f0ff }, // 힐러 가속 — 시원한 바람
   stealth: { color: 0x8a8fb0, ring: true, mode: 'rise', pcolor: 0xcfd4f0 }, // 암살자 은신 — 연기처럼 사라짐
@@ -1664,22 +1669,22 @@ const FX_LOOK = {
   curse: { color: 0xb46bff, line: true, mode: 'forward', pcolor: 0xd9b3ff, w: 1.2 }, // 주술사 저주살 — 보랏빛 저주 줄기
   lightarrow: { color: 0xfff4b0, line: true, mode: 'forward', pcolor: 0xfffbe0, w: 7 }, // 화면 끝까지 관통하는 넓은 빛줄기
   // 직업 전용 광역/소환 이펙트 (색을 직업 테마에 맞춤)
-  frostnova: { color: 0x8fdcff, ring: true, mode: 'out', pcolor: 0xd6f3ff }, // 한빙술사 서리고리 — 솟는 얼음가시
-  abszero: { color: 0x6fc8ff, ring: true, mode: 'rise', pcolor: 0xcdeeff }, // 한빙술사 절대영도 — 거대한 한기
+  frostnova: { color: 0x8fdcff, ring: true, mode: 'out', pcolor: 0xd6f3ff, spikes: 0xbfeaff }, // 한빙술사 서리고리 — 진짜로 솟는 얼음가시
+  abszero: { color: 0x6fc8ff, ring: true, mode: 'rise', pcolor: 0xcdeeff, pillar: true, spikes: 0xbfeaff }, // 절대영도 — 거대한 한기 기둥 + 가시
   plague: { color: 0x7fc24a, ring: true, mode: 'rise', pcolor: 0xbfe88a }, // 주술사 역병안개 — 피어오르는 독 구름
-  doom: { color: 0x8a3bd0, ring: true, mode: 'out', pcolor: 0xc89af0 }, // 주술사 파멸의 낙인 — 어두운 보랏빛 낙인
+  doom: { color: 0x8a3bd0, ring: true, mode: 'out', pcolor: 0xc89af0, ring2: true }, // 주술사 파멸의 낙인 — 이중 낙인
   summon: { color: 0xffd06a, ring: true, mode: 'rise', pcolor: 0xffe6a8 }, // 야수조련사 소환 — 솟아오르는 마력
   deploy: { color: 0x9fb0c4, ring: true, mode: 'out', pcolor: 0xd6e0ec }, // 엔지니어 설치 — 기계 조립 불꽃
-  snare: { color: 0x6fbf3a, ring: true, mode: 'out', pcolor: 0xbfe88a }, // 넝쿨사냥꾼 포획망 — 옭아매는 넝쿨 그물
+  snare: { color: 0x6fbf3a, ring: true, mode: 'out', pcolor: 0xbfe88a, spikes: 0x77c24a }, // 넝쿨사냥꾼 포획망 — 솟는 넝쿨 가시
   vine: { color: 0x5fae33, line: true, mode: 'forward', pcolor: 0xbfe88a, w: 2.4, ground: true }, // 올가미 — 땅에서 솟아 앞으로 뻗는 넝쿨
   // 돌풍술사: 바람 계열(흰빛~하늘빛)
   gust: { color: 0xd6f0ff, line: true, mode: 'forward', pcolor: 0xffffff, w: 3.0 }, // 돌풍 — 앞으로 뿜는 강풍 줄기
-  repulse: { color: 0xcfe8ff, ring: true, mode: 'out', pcolor: 0xffffff }, // 밀쳐내기 — 사방으로 퍼지는 바람
-  typhoon: { color: 0x9fd6f0, ring: true, mode: 'out', pcolor: 0xe6f6ff }, // 태풍 — 휘몰아치는 거대한 회오리
+  repulse: { color: 0xcfe8ff, ring: true, mode: 'out', pcolor: 0xffffff, ring2: true }, // 밀쳐내기 — 이중 바람 파동
+  typhoon: { color: 0x9fd6f0, ring: true, mode: 'out', pcolor: 0xe6f6ff, ring2: true }, // 태풍 — 휘몰아치는 거대한 회오리
   // 시간술사: 시간 계열(청록~보랏빛)
-  timeleap: { color: 0x6fe0d0, ring: true, mode: 'out', pcolor: 0xc0fff0 }, // 시간 도약 — 시간을 가르는 잔상
+  timeleap: { color: 0x6fe0d0, ring: true, mode: 'out', pcolor: 0xc0fff0, ring2: true }, // 시간 도약 — 겹잔상 파동
   timewarp: { color: 0x8a7bf0, ring: true, mode: 'rise', pcolor: 0xd6cdff }, // 시간 지연 장판 — 느려진 시간(보랏빛)
-  rewind: { color: 0x7ac0ff, ring: true, mode: 'rise', pcolor: 0xd0eaff }, // 역행 — 시간을 거슬러 되감기는 빛
+  rewind: { color: 0x7ac0ff, ring: true, mode: 'rise', pcolor: 0xd0eaff, pillar: true }, // 역행 — 시간을 거슬러 솟는 빛기둥
   // 회오리 기둥(돌풍술사 돌풍/태풍) — 실제로 빙글빙글 도는 입체 회오리
   tornado: { color: 0xd6f0ff, tornado: true, pcolor: 0xffffff },
 }
@@ -1876,6 +1881,90 @@ function buildFxObject(n) {
       const tn = Math.min(1, t / 0.8)
       beam.material.opacity = (1 - tn) * 0.5
       beam.scale.set(1 + tn * 0.3, 1, 1 + tn * 0.3)
+    })
+  }
+  if (look.ring2) {
+    // 두 번째 충격파 — 한 박자(0.12초) 늦게, 더 얇고 빠르게 퍼져 폭발의 여운을 준다
+    const ring2 = new THREE.Mesh(
+      new THREE.RingGeometry(0.55, 0.72, 32),
+      new THREE.MeshBasicMaterial({ color: look.color, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+    )
+    ring2.rotation.x = -Math.PI / 2
+    ring2.position.y = 0.42
+    g.add(ring2)
+    ups.push((t) => {
+      const tt = Math.max(0, t - 0.12)
+      const f = Math.min(1, tt / 0.55)
+      ring2.scale.setScalar(1 + f * (n.r || 4) * 1.15)
+      ring2.material.opacity = tt <= 0 ? 0 : (1 - f) * 0.8
+    })
+  }
+  if (look.slash) {
+    // 베기 궤적 — 무기 높이의 호가 빠르게 한 바퀴 돌며 커진다
+    const wrap = new THREE.Group()
+    const arc = new THREE.Mesh(
+      new THREE.TorusGeometry(Math.max(2, (n.r || 4) * 0.72), 0.26, 6, 24, Math.PI * 0.9),
+      new THREE.MeshBasicMaterial({ color: look.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })
+    )
+    arc.rotation.x = Math.PI / 2
+    wrap.add(arc)
+    wrap.position.y = 1.7
+    g.add(wrap)
+    ups.push((t) => {
+      const tn = Math.min(1, t / 0.5)
+      wrap.rotation.y = -t * 15 // 휙 도는 참격
+      wrap.scale.setScalar(0.55 + tn * 0.55)
+      arc.material.opacity = (1 - tn) * 0.95
+    })
+  }
+  if (look.spikes) {
+    // 지면에서 원형으로 솟았다 가라앉는 가시들 (얼음/넝쿨) — 시드 고정으로 모든 기기 동일
+    const cnt = 8
+    const rnd = lcg(((n.id | 0) + 3) * 3266489917 >>> 0)
+    const mat = new THREE.MeshLambertMaterial({ color: look.spikes, transparent: true, flatShading: true })
+    const spikes = []
+    for (let i = 0; i < cnt; i++) {
+      const a = (i / cnt) * Math.PI * 2 + rnd() * 0.6
+      const rr = (n.r || 4) * (0.5 + rnd() * 0.42)
+      const hgt = 1.5 + rnd() * 1.7
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.34, hgt, 5), mat)
+      cone.position.set(Math.cos(a) * rr, 0, Math.sin(a) * rr)
+      cone.rotation.y = rnd() * 3
+      cone.rotation.x = (rnd() - 0.5) * 0.35
+      cone.scale.y = 0.001
+      g.add(cone)
+      spikes.push({ cone, hgt, d: rnd() * 0.12 })
+    }
+    ups.push((t) => {
+      for (const s of spikes) {
+        const tt = Math.max(0, t - s.d)
+        const up = Math.min(1, tt / 0.16) // 콱 솟았다가
+        const down = Math.min(1, Math.max(0, (tt - 0.5) / 0.3)) // 스르륵 가라앉는다
+        const k = Math.max(0.001, up * (1 - down))
+        s.cone.scale.y = k
+        s.cone.position.y = (s.hgt / 2) * k
+      }
+      mat.opacity = 1 - Math.min(1, Math.max(0, (t - 0.55) / 0.35))
+    })
+  }
+  if (look.pillar) {
+    // 땅에서 하늘로 솟는 빛기둥 — 성광(beam)과 반대로 아래에서 위로 자란다
+    const pr = Math.max(1.2, (n.r || 4) * 0.26)
+    const pillar = new THREE.Mesh(
+      new THREE.CylinderGeometry(pr * 0.8, pr, 10, 12, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: look.color, transparent: true, opacity: 0,
+        side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
+      })
+    )
+    pillar.scale.y = 0.001
+    g.add(pillar)
+    ups.push((t) => {
+      const grow = Math.min(1, t / 0.22)
+      const tn = Math.min(1, t / 0.8)
+      pillar.scale.y = grow
+      pillar.position.y = 5 * grow // 바닥에 발을 붙인 채 위로 자란다
+      pillar.material.opacity = (1 - tn) * 0.55
     })
   }
   if (look.pcolor !== undefined || look.mode) {
