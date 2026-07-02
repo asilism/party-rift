@@ -2629,6 +2629,27 @@ test('환영무희: 분신이 내 겉모습으로 걷고, 자리바꿈으로 위
   assert.equal(vc.cls, 'illusionist', '스냅샷에 분신 겉모습이 실린다')
 })
 
+test('환영난무: 전투형 분신이 봇처럼 적을 쫓아가 평타(본체의 80%)를 치고, 미끼 분신은 비전투', () => {
+  const g = duo('illusionist', 'tank')
+  startPlaying(g)
+  const i = g.heroes[0]
+  const t = g.heroes[1]
+  i.lvl = ULT_LEVEL
+  i.x = 0; i.z = 0; i.dir = 0
+  t.x = 8; t.z = 0 // 분신 인지 범위(14) 안
+  castUlt(g, i.id)
+  const clones = g.summons.filter((s) => s.kind === 'clone')
+  assert.equal(clones.length, 2, '전투형 분신 둘이 나온다')
+  assert.ok(clones.every((c) => c.combat && c.dmg > 0 && c.aggro > 0), '전투형: 평타 피해/인지 보유')
+  const hp0 = t.hp
+  run(g, 2)
+  assert.ok(t.hp < hp0, '분신들이 쫓아가 평타로 체력을 깎는다')
+  // 미끼 분신(기본 스킬)은 여전히 공격하지 않는다
+  castSkill(g, i.id)
+  const decoys = g.summons.filter((s) => s.kind === 'clone' && !s.combat)
+  assert.ok(decoys.length >= 1 && decoys.every((c) => c.dmg === 0 && c.aggro === 0), '미끼는 비전투로 유지')
+})
+
 test('환영무희 자리바꿈: 분신이 없으면 쿨다운을 쓰지 않는다(환불)', () => {
   const g = duo('illusionist', 'tank')
   startPlaying(g)

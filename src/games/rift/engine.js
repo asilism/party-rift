@@ -200,7 +200,7 @@ export const CLASSES = {
     hp: 450, hpLvl: 48, atk: 46, atkLvl: 6.5, range: 3.8, atkCd: 0.75, speed: 13.4,
     skill: { name: '환영 분신', icon: '🪞', cd: 10, desc: '똑같이 생긴 분신이 내 앞길을 대신 걷고, 나는 잠깐 은신한다' },
     skill2: { name: '자리바꿈', icon: '🔀', cd: 9, desc: '내 분신과 위치를 맞바꾼다 — 진입도 탈출도 자유자재' },
-    ult: { name: '환영난무', icon: '✨', cd: 60, desc: '분신 둘을 흩뿌리고 은신하며 주변을 벤다 — 누가 진짜인가?' },
+    ult: { name: '환영난무', icon: '✨', cd: 60, desc: '봇처럼 싸우는 분신 둘(평타, 내 공격력의 80%)을 흩뿌리고 은신하며 주변을 벤다 — 누가 진짜인가?' },
   },
   terramancer: {
     name: '대지술사', icon: '🪨', desc: '돌벽을 세워 전장을 바꾸는 지형 술사 — 길을 막고, 가두고, 갈라놓는다',
@@ -248,7 +248,7 @@ export const ABILITY_SCALING = {
   windcaller: { skill: { dmg: [44, 0.7], note: '1.5초 공중에 띄움' }, skill2: { dmg: [26, 0.4], note: '사방으로 밀침 · 벽에 박으면 기절' }, ult: { dmg: [70, 0.8], note: '바깥으로 날림 + 둔화' } },
   chronomancer: { skill: { dmg: [40, 0.9], note: '적 뒤로 순간이동' }, skill2: { dot: [10, 0.2], dotDur: 3, note: '장판 안 이동·공격 둔화' }, ult: { dmg: [60, 0.9], note: '도착 충격파 · 4초 전 체력 복원' } },
   fearmonger: { skill: { dmg: [30, 0.55], note: '1.2초 공포(강제 도주)' }, skill2: { shield: [45, 0.7], note: '가속 + 어둠 장막' }, ult: { dmg: [40, 0.6], dot: [10, 0.18], dotDur: 2, note: '주변 전체 1.6초 공포' } },
-  illusionist: { skill: { note: '분신 소환 + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '분신 2 + 1.4초 은신' } },
+  illusionist: { skill: { note: '미끼 분신 + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '전투 분신 2(평타 80%) + 1.4초 은신' } },
   terramancer: { skill: { note: '전방 돌벽 3초(길 막기)' }, skill2: { dmg: [45, 0.8], note: '0.9초 둔화' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
 }
 
@@ -871,11 +871,13 @@ const SPECTRE_T = 2.2 // 망령걸음(가속+어둠 장막) 지속
 const SHRIEK_RADIUS = 9 // 단말마 반경
 const SHRIEK_FEAR_T = 1.6
 const FEAR_FLEE_SPD = 0.9 // 도주 속도 배율(본인 이속 기준)
-// 환영무희: 분신(공격하지 않는 미끼) + 자리바꿈
+// 환영무희: 분신(미끼/전투형) + 자리바꿈
 const CLONE_LIFE = 6 // 분신 수명(초)
 const CLONE_HP_COEF = 1.6 // 분신 체력 = 주력 스탯 × 계수 (잘 속을 만큼은 단단하게)
 const CLONE_STEALTH_T = 0.9 // 분신 소환 시 본체 은신
 const DANCE_STEALTH_T = 1.4 // 환영난무 은신
+const CLONE_ATK_COEF = 0.8 // 전투형 분신(궁극기) 평타 = 본체 공격력의 80%
+const CLONE_AGGRO = 14 // 전투형 분신의 적 인지 범위
 // 대지술사: 임시 돌벽(동적 지형)
 const QUAKE_WALL_LIFE = 3 // 융기 벽 지속(초)
 const QUAKE_WALL_AHEAD = 5.5 // 벽이 서는 전방 거리
@@ -1825,11 +1827,11 @@ const ULTS = {
     if (!hitAny) return false
     pushFx(state, 'shriek', h.x, h.z, SHRIEK_RADIUS, h.team)
   },
-  // 환영무희 환영난무: 좌우로 분신 둘을 흩뿌리고 은신하며 주변을 벤다
+  // 환영무희 환영난무: 전투형 분신 둘(봇처럼 추격·평타, 본체 공격력 80%)을 흩뿌리고 은신 + 주변을 벤다
   illusionist(state, h) {
     aoeDamage(state, h, h.x, h.z, 6, skillDmg(h, 40, 0.75), 0) // 공격력 계수
-    spawnClone(state, h, h.dir - 0.9)
-    spawnClone(state, h, h.dir + 0.9)
+    spawnClone(state, h, h.dir - 0.9, true)
+    spawnClone(state, h, h.dir + 0.9, true)
     h.stealthT = Math.max(h.stealthT, DANCE_STEALTH_T)
     pushFx(state, 'stealth', h.x, h.z, 4, h.team)
   },
@@ -3379,16 +3381,23 @@ function stepZones(state, dt) {
   if (remove.size) state.zones = state.zones.filter((z) => !remove.has(z.id))
 }
 
-// 환영무희 분신: 공격하지 않는 미끼 — 소환 시점 바라보던 방향으로 계속 걸어간다.
-// 렌더러가 본체와 똑같이 그릴 수 있게 겉모습(띠/직업/이름/레벨)을 복사해 둔다.
-function spawnClone(state, h, dir = h.dir) {
+// 환영무희 분신 — 렌더러가 본체와 똑같이 그릴 수 있게 겉모습(띠/직업/이름/레벨)을 복사해 둔다.
+//  · 미끼(기본 스킬): 공격하지 않고 소환 시점 바라보던 방향으로 계속 걸어간다.
+//  · 전투형(궁극기, combat=true): 봇처럼 적을 쫓아다니며 평타만 친다 — 피해는 본체 공격력의 80%.
+function spawnClone(state, h, dir = h.dir, combat = false) {
   const hp = Math.round(powerStat(h) * CLONE_HP_COEF + h.maxHp * 0.25)
   state.summons.push({
     id: state.nextId++, kind: 'clone', owner: h.id, team: h.team,
     x: h.x, z: h.z, dir,
     hp, maxHp: hp,
-    atkCd: 0, dmg: 0, range: 0, aggro: 0, speed: heroSpeed(h), mobile: true, cd: 99, life: CLONE_LIFE,
-    chargeT: 0,
+    atkCd: 0,
+    dmg: combat ? Math.round(atkOf(h) * CLONE_ATK_COEF) : 0,
+    range: combat ? CLASSES[h.cls].range : 0,
+    aggro: combat ? CLONE_AGGRO : 0, // 인지 0이면 영영 공격하지 않는 순수 미끼
+    speed: heroSpeed(h), mobile: true,
+    cd: combat ? CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed) : 99,
+    life: CLONE_LIFE,
+    chargeT: 0, combat,
     decoyTx: h.x + Math.cos(dir) * 40, decoyTz: h.z + Math.sin(dir) * 40,
     zodiacId: h.zodiacId, cls: h.cls, name: h.name, lvl: h.lvl, isBot: h.isBot,
   })
@@ -3429,8 +3438,9 @@ function stepSummons(state, dt) {
       continue
     }
     const owner = state.heroes.find((h) => h.id === s.owner)
-    // 환영무희 분신: 공격하지 않고 소환 방향으로 계속 걸어가는 미끼 (지형은 피해 간다)
-    if (s.kind === 'clone') {
+    // 환영무희 미끼 분신(기본 스킬): 공격하지 않고 소환 방향으로 계속 걸어간다 (지형은 피해 간다)
+    //  전투형 분신(궁극기)은 아래 공용 전투 로직(적 인지 → 추격 → 평타)을 그대로 탄다 — 봇처럼 싸운다.
+    if (s.kind === 'clone' && !s.combat) {
       moveToward(state, s, { x: s.decoyTx, z: s.decoyTz }, s.speed, dt, 1)
       continue
     }
@@ -3503,6 +3513,7 @@ function stepSummons(state, dt) {
         state.map.resolveTerrain(s, 1.0, colliders(state))
       } else if (d <= reach + 0.6 && s.atkCd <= 0) {
         s.atkCd = s.cd * (s.chargeT > 0 ? OVERCHARGE_ASPD : 1)
+        s.atkSeq = (s.atkSeq || 0) + 1 // 렌더러 공격 모션 트리거(분신 무기 휘두름 등)
         const att = owner && owner.respawnT <= 0 ? owner : { id: s.owner, team: s.team }
         if (tk === 'hero') damageHero(state, target, s.dmg, att)
         else if (tk === 'minion') damageMinion(state, target, s.dmg, att)
@@ -4528,8 +4539,8 @@ export function makeView(state) {
     summons: state.summons.map((s) => ({
       id: s.id, kind: s.kind, team: s.team, x: r1(s.x), z: r1(s.z), dir: r2d(s.dir),
       hp: Math.ceil(s.hp), maxHp: s.maxHp, charge: s.chargeT > 0 ? 1 : 0, dormant: s.dormant ? 1 : 0,
-      // 분신: 렌더러가 본체와 똑같이 그리도록 겉모습을 싣는다
-      ...(s.kind === 'clone' ? { zodiacId: s.zodiacId, cls: s.cls, name: s.name, lvl: s.lvl, isBot: s.isBot } : null),
+      // 분신: 렌더러가 본체와 똑같이 그리도록 겉모습을 싣는다 (atkSeq는 평타 모션용)
+      ...(s.kind === 'clone' ? { zodiacId: s.zodiacId, cls: s.cls, name: s.name, lvl: s.lvl, isBot: s.isBot, atkSeq: s.atkSeq || 0 } : null),
       // leap: 도약 진행도(1→0, 점프 모션용) · idle: 포탑 휴면까지 남은 유예 시간(타이머 표시용)
       leap: s.leapT > 0 && s.leapDur > 0 ? r2d(s.leapT / s.leapDur) : 0,
       idle: s.kind === 'turret' && !s.dormant && s.idleT > 0 ? r1(ENGI_IDLE_GRACE - s.idleT) : 0,
