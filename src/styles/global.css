@@ -2130,6 +2130,16 @@ body {
   background: rgba(40, 180, 196, 0.9);
 }
 .rift-btn--recall small { font-size: 11px; }
+/* 액티브 아이템(물병/종): 귀환 버튼 위로 세로 스택 — 사면 나타난다 */
+.rift-btn--item0 {
+  right: 284px; bottom: 146px; width: 64px; height: 64px; font-size: 22px;
+  background: rgba(212, 164, 50, 0.92);
+}
+.rift-btn--item1 {
+  right: 284px; bottom: 220px; width: 64px; height: 64px; font-size: 22px;
+  background: rgba(212, 164, 50, 0.92);
+}
+.rift-btn--item0 small, .rift-btn--item1 small { font-size: 10px; }
 .rift-btn--channel-on { border-color: #8af0f7; box-shadow: 0 0 22px rgba(74, 214, 224, 0.9); }
 .rift-btn--ready { border-color: #fff; }
 .rift-btn--atk.rift-btn--ready { box-shadow: 0 0 22px rgba(255, 160, 80, 0.8); }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { CLASSES, RECALL_TIME, ABILITY_SCALING, powerLabel } from './engine.js'
+import { getItem } from './items.js'
 
 // 스킬 한 줄 데미지/회복/보호막 공식 + 현재 수치를 만든다(툴팁용).
 //  me.power(주력 스탯)·me.dmgMult(버프 배율)·me.lvl로 실제 값을 계산한다.
@@ -137,7 +138,7 @@ function RecallButton({ recallT, onPress, interactive = true, pulse = 0 }) {
   )
 }
 
-export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUlt, onRecall, me, disabled, scheme = 'mobile' }) {
+export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUlt, onRecall, onUseItem, me, disabled, scheme = 'mobile' }) {
   const [joy, setJoy] = useState(null) // {ox, oy, dx, dy}
   const joyPointer = useRef(null)
   const onMoveRef = useRef(onMove)
@@ -159,6 +160,16 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
   disabledRef.current = disabled
   const atkTimer = useRef(null)
   const cls = CLASSES[me?.cls] || CLASSES.warrior
+  // 보유 중인 액티브 아이템(물병/종, 최대 2개) — 슬롯 번호를 들고 있어야 서버 useItem 액션에 넣는다.
+  //  키보드/패드 이펙트는 마운트 시 한 번만 등록되므로 ref로 최신 목록을 넘긴다.
+  const onUseItemRef = useRef(onUseItem)
+  onUseItemRef.current = onUseItem
+  const actives = (me?.items || [])
+    .map((id, slot) => ({ item: getItem(id), slot }))
+    .filter((x) => x.item?.active)
+    .slice(0, 2)
+  const activesRef = useRef(actives)
+  activesRef.current = actives
 
   const mobile = scheme === 'mobile' // 터치(조이스틱+버튼)로만 조작
   const keyboard = scheme === 'wasd' // WASD/화살표 + 스킬 키
@@ -195,6 +206,12 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
       if (e.key === 'j' || e.key === 'J') { firePulse('skill2'); return onSkill2Ref.current?.() }
       if (e.key === 'k' || e.key === 'K') { firePulse('ult'); return onUltRef.current?.() }
       if (e.key === 'b' || e.key === 'B') { firePulse('recall'); return onRecallRef.current?.() }
+      // 1/2: 액티브 아이템(물병/종) 사용
+      if (e.key === '1' || e.key === '2') {
+        const a = activesRef.current[Number(e.key) - 1]
+        if (a) { firePulse(`item${Number(e.key) - 1}`); onUseItemRef.current?.(a.slot) }
+        return
+      }
       for (const set of Object.values(KEYS)) {
         if (set.has(e.key)) {
           e.preventDefault()
@@ -223,7 +240,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
     if (!gamepad) return undefined
     if (typeof navigator === 'undefined' || !navigator.getGamepads) return undefined
     const DEADZONE = 0.18 // 스틱 표류 무시
-    const BTN = { atk: 0, skill: 2, skill2: 3, ult: 1, recall: 9 } // A, X, Y, B, ≡
+    const BTN = { atk: 0, skill: 2, skill2: 3, ult: 1, recall: 9, item0: 4, item1: 5 } // A, X, Y, B, ≡, LB, RB
     const prev = {} // 버튼 직전 눌림 상태(라이징 엣지 판정)
     let padMoving = false // 스틱으로 이동 중인가 — idle일 땐 멈춤 신호를 한 번만 보낸다
     let lastAtk = 0
@@ -263,6 +280,15 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
       edge(gp, BTN.skill2, () => { firePulse('skill2'); onSkill2Ref.current?.() })
       edge(gp, BTN.ult, () => { firePulse('ult'); onUltRef.current?.() })
       edge(gp, BTN.recall, () => { firePulse('recall'); onRecallRef.current?.() })
+      // LB/RB: 액티브 아이템(물병/종) 사용
+      edge(gp, BTN.item0, () => {
+        const a = activesRef.current[0]
+        if (a) { firePulse('item0'); onUseItemRef.current?.(a.slot) }
+      })
+      edge(gp, BTN.item1, () => {
+        const a = activesRef.current[1]
+        if (a) { firePulse('item1'); onUseItemRef.current?.(a.slot) }
+      })
     }
     raf = requestAnimationFrame(poll)
     return () => {
@@ -393,6 +419,22 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
         interactive={mobile}
         pulse={pulses.atk || 0}
       />
+      {/* 액티브 아이템 버튼 (물병/종) — 사면 나타난다. 키보드 1·2, 패드 LB·RB, 모바일 터치. */}
+      {actives.map((a, i) => (
+        <CdButton
+          key={a.item.id}
+          className={`rift-btn--item${i}`}
+          icon={a.item.icon}
+          label={a.item.active.label}
+          name={a.item.name}
+          desc={`${a.item.desc}${keyboard ? ` (단축키 ${i + 1})` : gamepad ? ` (${i === 0 ? 'LB' : 'RB'})` : ''}`}
+          cd={me?.itemCds?.[a.slot] ?? 0}
+          cdMax={a.item.active.cd}
+          onPress={() => onUseItem?.(a.slot)}
+          interactive={mobile}
+          pulse={pulses[`item${i}`] || 0}
+        />
+      ))}
       <RecallButton recallT={me?.recallT ?? 0} onPress={onRecall} interactive={mobile} pulse={pulses.recall || 0} />
     </>
   )

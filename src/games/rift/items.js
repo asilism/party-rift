@@ -1,7 +1,7 @@
 // 조디악 러쉬 아이템 상점 데이터 (순수 JS — three.js / 엔진 의존 없음).
 //  - 미니언/정글몹/타워/적 영웅을 처치하면 골드를 얻는다.
-//  - 넥서스 회복 지대(우물)에서 상점을 열어 아이템을 산다 (인벤토리 4칸).
-//  - 카테고리 4종(마법/공격/방어/유틸), 26종 (각 타입에 2천 골드 이상 최종 장비 1개).
+//  - 넥서스 회복 지대(우물)에서 상점을 열어 아이템을 산다 (인벤토리 5칸).
+//  - 카테고리 4종(마법/공격/방어/유틸) × 8개 = 32종 (각 타입에 2천 골드 이상 최종 장비 1개).
 //  - 조합: 상위 아이템의 from(재료)을 갖고 있으면 그 가격만큼 깎아 사고 재료는 소모된다(슬롯 확보).
 //  - 액티브: active 필드가 있는 아이템은 전투 중 사용 효과(자힐/정화)를 쿨다운마다 쓸 수 있다.
 //
@@ -17,7 +17,7 @@
 //   lifesteal  기본공격 피해의 이 비율만큼 흡혈
 //   range      기본공격 사거리 +
 
-export const ITEM_SLOTS = 4 // 인벤토리 칸 수 (성장 가속: 파워 상한을 한 칸 더 연다)
+export const ITEM_SLOTS = 5 // 인벤토리 칸 수 — 조합 도입으로 칸 순환이 빨라져 한 칸 더 연다
 export const SELL_REFUND = 0.6 // 되팔 때 돌려받는 비율
 
 // 카테고리 메타 (상점 탭)
@@ -63,6 +63,10 @@ export const ITEMS = [
     desc: '주문 위력 + 쿨다운 감소.', stats: { power: 30, cdr: 0.15 } },
   { id: 'frost_staff', cat: 'magic', name: '서리 지팡이', icon: '❄️', cost: 900, from: ['orb', 'leather'],
     desc: '주문 위력 + 단단함.', stats: { power: 35, hp: 150 } },
+  { id: 'soul_lantern', cat: 'magic', name: '영혼의 등불', icon: '🏮', cost: 800, from: ['orb'],
+    desc: '주문 위력 + 꾸준한 재생 — 라인에 오래 버티는 마법사용.', stats: { power: 30, regen: 0.015 } },
+  { id: 'storm_scepter', cat: 'magic', name: '폭풍의 셉터', icon: '🌩️', cost: 1000, from: ['orb', 'dagger'],
+    desc: '주문 위력 + 공격 속도 — 평타를 섞어 싸우는 전투 마법사용.', stats: { power: 40, atkSpeed: 0.15 } },
   { id: 'void_staff', cat: 'magic', name: '공허의 지팡이', icon: '🌌', cost: 1150, from: ['flame_core'],
     desc: '주문 위력을 폭발적으로 올린다.', stats: { power: 70 } },
   { id: 'archmage_staff', cat: 'magic', name: '대마법사의 홀', icon: '🪄', cost: 2400, from: ['void_staff', 'wisdom_hat'],
@@ -77,6 +81,10 @@ export const ITEMS = [
     desc: '공격력 + 때릴 때마다 흡혈.', stats: { atk: 20, lifesteal: 0.15 } },
   { id: 'rage_gloves', cat: 'attack', name: '광폭의 장갑', icon: '🥊', cost: 800, from: ['dagger'],
     desc: '공격 속도를 크게 올린다.', stats: { atkSpeed: 0.25, atk: 12 } },
+  { id: 'berserker_axe', cat: 'attack', name: '광전사의 도끼', icon: '🪓', cost: 850, from: ['dagger'],
+    desc: '공격력 + 이동 속도 — 추격전에 강하다.', stats: { atk: 25, speed: 1.8 } },
+  { id: 'duelist_rapier', cat: 'attack', name: '결투가의 레이피어', icon: '🤺', cost: 900, from: ['dagger'],
+    desc: '공격력 + 쿨다운 감소 — 스킬을 섞어 싸우는 전사용.', stats: { atk: 28, cdr: 0.12 } },
   { id: 'executioner', cat: 'attack', name: '처형자의 대검', icon: '💀', cost: 1150, from: ['longsword'],
     desc: '압도적인 공격력.', stats: { atk: 55 } },
   { id: 'dragon_blade', cat: 'attack', name: '용살자의 대검', icon: '🐲', cost: 2300, from: ['executioner', 'rage_gloves'],
@@ -91,6 +99,10 @@ export const ITEMS = [
     desc: '받는 피해를 크게 줄이고 주문 위력도 더해 준다 — 무른 마법사용 방어구.', stats: { def: 0.15, power: 25 } },
   { id: 'giant_heart', cat: 'defense', name: '거인의 심장', icon: '🫀', cost: 1050, from: ['leather'],
     desc: '엄청난 체력.', stats: { hp: 450 } },
+  { id: 'war_banner', cat: 'defense', name: '전장의 깃발', icon: '🚩', cost: 800, from: ['leather'],
+    desc: '체력 + 공격력 — 맞으면서 때리는 브루저용.', stats: { hp: 200, atk: 15 } },
+  { id: 'mirror_shield', cat: 'defense', name: '거울 방패', icon: '🪞', cost: 950, from: ['leather'],
+    desc: '피해 감소 + 체력 + 쿨다운 감소.', stats: { def: 0.12, hp: 120, cdr: 0.1 } },
   { id: 'thornmail', cat: 'defense', name: '가시 갑옷', icon: '🌵', cost: 1000, from: ['plate'],
     desc: '체력 + 피해 감소 + 재생.', stats: { hp: 200, def: 0.1, regen: 0.01 } },
   { id: 'immortal_plate', cat: 'defense', name: '불멸의 갑주', icon: '🏰', cost: 2400, from: ['giant_heart', 'plate'],

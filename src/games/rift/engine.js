@@ -3303,34 +3303,35 @@ function stepAutoAttack(state) {
 // 봇 직업별 아이템 우선순위 — 우물에 들어왔을 때 위에서부터 살 수 있는 걸 산다.
 // (사람 플레이어가 아이템으로 일방적 우위를 갖지 않게 봇도 장비를 갖춘다)
 const BOT_BUILD = {
-  warrior: ['longsword', 'vampire_scythe', 'plate', 'executioner'],
-  assassin: ['dagger', 'vampire_scythe', 'executioner', 'boots'],
-  archer: ['rage_gloves', 'longsword', 'executioner', 'boots'],
-  mage: ['orb', 'flame_core', 'void_staff', 'guardian_cloak'],
-  healer: ['orb', 'wisdom_hat', 'frost_staff', 'plate'],
-  tank: ['leather', 'plate', 'giant_heart', 'thornmail'],
+  // 5칸: 코어 4개 + 회복의 물병(위기 자힐 액티브 — stepBots가 빈사에 사용한다)
+  warrior: ['longsword', 'vampire_scythe', 'plate', 'executioner', 'heal_flask'],
+  assassin: ['dagger', 'vampire_scythe', 'executioner', 'boots', 'heal_flask'],
+  archer: ['rage_gloves', 'longsword', 'executioner', 'boots', 'heal_flask'],
+  mage: ['orb', 'flame_core', 'void_staff', 'guardian_cloak', 'heal_flask'],
+  healer: ['orb', 'wisdom_hat', 'frost_staff', 'plate', 'heal_flask'],
+  tank: ['leather', 'plate', 'giant_heart', 'thornmail', 'heal_flask'],
   // 한빙술사: 컨트롤 메이지 — 주문력 + 약간의 생존(무른 몸)
-  cryomancer: ['orb', 'frost_staff', 'flame_core', 'guardian_cloak'],
-  // 검투사: 흡혈 브루저 — 공격력 + 흡혈 + 체력
-  gladiator: ['longsword', 'vampire_scythe', 'giant_heart', 'executioner'],
+  cryomancer: ['orb', 'frost_staff', 'flame_core', 'guardian_cloak', 'heal_flask'],
+  // 검투사: 흡혈 브루저 — 공격력 + 흡혈 + 추격(도끼) + 체력
+  gladiator: ['longsword', 'vampire_scythe', 'berserker_axe', 'giant_heart', 'heal_flask'],
   // 주술사: DoT zoner — 주문력 위주 + 무른 몸 보강(주문력 방어구)
-  warlock: ['orb', 'flame_core', 'void_staff', 'guardian_cloak'],
+  warlock: ['orb', 'flame_core', 'void_staff', 'guardian_cloak', 'heal_flask'],
   // 수호기사: AP 인챈터 서폿 — 주문력(보호막) + 쿨감(자주 시전) + 생존
-  guardian: ['orb', 'wisdom_hat', 'frost_staff', 'archmage_staff'],
+  guardian: ['orb', 'wisdom_hat', 'frost_staff', 'archmage_staff', 'heal_flask'],
   // 검성: 평타 듀얼리스트 — 공격속도 + 공격력 + 흡혈
-  swordmaster: ['rage_gloves', 'vampire_scythe', 'executioner', 'dragon_blade'],
-  // 사슬잡이: 이니시에이터 — 단단함 + 약간의 공격력
-  catcher: ['plate', 'longsword', 'giant_heart', 'executioner'],
-  // 넝쿨사냥꾼: 속박 정글러 — 단단함 + 약간의 공격력(갱킹 합류)
-  snarer: ['plate', 'longsword', 'giant_heart', 'executioner'],
+  swordmaster: ['rage_gloves', 'vampire_scythe', 'executioner', 'dragon_blade', 'heal_flask'],
+  // 사슬잡이: 이니시에이터 — 단단함 + 체력/공격 겸용 깃발
+  catcher: ['plate', 'war_banner', 'giant_heart', 'executioner', 'heal_flask'],
+  // 넝쿨사냥꾼: 속박 정글러 — 단단함 + 체력/공격 겸용 깃발(갱킹 합류)
+  snarer: ['plate', 'war_banner', 'giant_heart', 'executioner', 'heal_flask'],
   // 야수조련사: 하이브리드 소환사 — 공/주 혼합(현자의 돌) + 주문·공격 섞어 소환수 강화 + 생존
-  beastmaster: ['sage_stone', 'flame_core', 'longsword', 'giant_heart'],
+  beastmaster: ['sage_stone', 'flame_core', 'longsword', 'giant_heart', 'heal_flask'],
   // 엔지니어: 하이브리드 포탑 — 주문력 위주 혼합 + 약간의 생존(후방)
-  engineer: ['sage_stone', 'flame_core', 'void_staff', 'plate'],
+  engineer: ['sage_stone', 'flame_core', 'void_staff', 'plate', 'heal_flask'],
   // 돌풍술사: 넉백 컨트롤러 — 주문력 + 쿨감(자주 시전) + 무른 몸 보강
-  windcaller: ['orb', 'wisdom_hat', 'flame_core', 'guardian_cloak'],
+  windcaller: ['orb', 'wisdom_hat', 'flame_core', 'guardian_cloak', 'heal_flask'],
   // 시간술사: 버스트 다이버 — 주문력 + 폭딜 + 약간의 생존(되감기로 버틴다)
-  chronomancer: ['orb', 'flame_core', 'void_staff', 'guardian_cloak'],
+  chronomancer: ['orb', 'flame_core', 'void_staff', 'guardian_cloak', 'heal_flask'],
 }
 
 // 봇 자동 구매: 우물 안 + 빈 칸 있으면 빌드 우선순위에서 안 가진 첫 구매 가능 아이템을 산다.
