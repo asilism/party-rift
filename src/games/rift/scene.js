@@ -760,10 +760,201 @@ function buildNexus(team) {
   return g
 }
 
-// 직업별 몸집: 탱커는 듬직하게, 암살자는 날렵하게
-const CLS_SCALE = { tank: 1.25, warrior: 1.1, assassin: 0.9 }
+// 직업별 몸집: 브루저·탱커는 듬직하게, 마법사·암살자 계열은 날렵하게 — 실루엣 1차 구분
+export const CLS_SCALE = {
+  tank: 1.25, gladiator: 1.18, guardian: 1.12, warrior: 1.1, catcher: 1.1,
+  beastmaster: 1.08, swordmaster: 1.0, engineer: 1.0, snarer: 1.0,
+  archer: 0.95, healer: 0.95, mage: 0.95, warlock: 0.95, cryomancer: 0.95, chronomancer: 0.95,
+  windcaller: 0.92, assassin: 0.9,
+}
 
 const ATK_ANIM_T = 0.35 // 공격 모션 길이 (초)
+
+// 직업별 몸 파츠(어깨·등 장식) — 무기와 함께 실루엣만으로 직업이 읽히게 한다.
+// 전부 몸통(body)의 "정적" 자식: 프레임별 갱신이 없고 바라보는 방향/까딱임과 함께 움직인다.
+// 팀 식별색은 몸통 캡슐이 유지하고, 파츠는 직업 고유색 포인트만 얹는다. 로컬 +x = 정면, -x = 등.
+// 주의: 얼굴 이모지 스프라이트(y≈4.4s)와 겹치지 않게 파츠 상단은 로컬 y 2.0s 아래로 유지한다.
+export function buildClassParts(cls, s, body) {
+  const metal = new THREE.MeshLambertMaterial({ color: 0xc9d2e0 })
+  const dark = new THREE.MeshLambertMaterial({ color: 0x3c4358 })
+  const wood = new THREE.MeshLambertMaterial({ color: 0x8a6242 })
+  const glow = (color, intensity = 0.5) =>
+    new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: intensity })
+  if (cls === 'warrior') {
+    // 뿔 달린 견갑 — 양어깨 스파이크
+    for (const sz of [1, -1]) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.2 * s, 0.7 * s, 6), metal)
+      spike.position.set(0, 1.5 * s, sz * 1.1 * s)
+      spike.rotation.x = sz * 0.55
+      body.add(spike)
+    }
+  } else if (cls === 'archer') {
+    // 등에 비스듬한 화살통 + 삐져나온 화살 깃
+    const quiver = new THREE.Mesh(new THREE.CylinderGeometry(0.28 * s, 0.32 * s, 1.4 * s, 8), wood)
+    quiver.position.set(-0.8 * s, 0.7 * s, -0.35 * s)
+    quiver.rotation.x = -0.35
+    body.add(quiver)
+    const feather = new THREE.MeshLambertMaterial({ color: 0xff8f5a })
+    for (const dz of [-0.14, 0.12]) {
+      const f = new THREE.Mesh(new THREE.ConeGeometry(0.1 * s, 0.38 * s, 4), feather)
+      f.position.set(-0.8 * s, 1.55 * s, (dz - 0.35 * 0.5) * s)
+      body.add(f)
+    }
+  } else if (cls === 'mage') {
+    // 등 뒤에 떠 있는 룬 구슬 3개 — 마력의 흔적
+    const rune = glow(0xb07ef0, 0.65)
+    for (const [dy, dz] of [[1.3, 0], [0.9, 0.55], [0.9, -0.55]]) {
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.17 * s, 8, 6), rune)
+      orb.position.set(-1.15 * s, dy * s, dz * s)
+      body.add(orb)
+    }
+  } else if (cls === 'healer') {
+    // 등 뒤 연둣빛 광륜
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.62 * s, 0.09 * s, 8, 20), glow(0x6ee7a0, 0.6))
+    halo.rotation.y = Math.PI / 2
+    halo.position.set(-1.05 * s, 1.15 * s, 0)
+    body.add(halo)
+  } else if (cls === 'assassin') {
+    // 등에 교차한 쌍단검 (X자)
+    for (const dir of [1, -1]) {
+      const sheath = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 1.15 * s, 0.2 * s), dark)
+      sheath.rotation.x = dir * 0.7
+      sheath.position.set(-1.0 * s, 0.95 * s, 0)
+      body.add(sheath)
+      const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.11 * s, 6, 5), metal)
+      pommel.position.set(-1.0 * s, (0.95 + 0.62 * Math.cos(0.7)) * s, dir * 0.62 * Math.sin(0.7) * s)
+      body.add(pommel)
+    }
+  } else if (cls === 'tank') {
+    // 대형 사각 파울드론 + 등에 원형 방패
+    for (const sz of [1, -1]) {
+      const pauldron = new THREE.Mesh(new THREE.BoxGeometry(0.85 * s, 0.4 * s, 0.6 * s), metal)
+      pauldron.position.set(0, 1.42 * s, sz * 1.05 * s)
+      pauldron.rotation.x = sz * 0.18
+      body.add(pauldron)
+    }
+    const backShield = new THREE.Mesh(new THREE.CylinderGeometry(0.75 * s, 0.75 * s, 0.12 * s, 14), dark)
+    backShield.rotation.z = Math.PI / 2
+    backShield.position.set(-1.05 * s, 0.6 * s, 0)
+    body.add(backShield)
+  } else if (cls === 'cryomancer') {
+    // 어깨의 얼음 결정들
+    const ice = glow(0x8fdcff, 0.55)
+    for (const [sz, sc] of [[1, 1], [-1, 0.7]]) {
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.32 * s * sc), ice)
+      crystal.position.set(0, 1.45 * s, sz * 1.0 * s)
+      crystal.rotation.z = sz * 0.3
+      body.add(crystal)
+    }
+  } else if (cls === 'gladiator') {
+    // 한쪽 어깨만 가시 돋친 대형 견갑 — 비대칭 실루엣
+    const pauldron = new THREE.Mesh(new THREE.SphereGeometry(0.72 * s, 10, 8), dark)
+    pauldron.scale.y = 0.75
+    pauldron.position.set(0, 1.4 * s, 1.0 * s)
+    body.add(pauldron)
+    for (const a of [-0.5, 0, 0.5]) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.12 * s, 0.45 * s, 5), metal)
+      spike.position.set(Math.sin(a) * 0.5 * s, 1.85 * s, (1.0 + Math.abs(a) * 0.2) * s)
+      spike.rotation.z = -a
+      body.add(spike)
+    }
+  } else if (cls === 'warlock') {
+    // 굽은 어깨 뿔 한 쌍 — 저주받은 실루엣
+    const horn = new THREE.MeshLambertMaterial({ color: 0x4a3f66 })
+    for (const sz of [1, -1]) {
+      const base = new THREE.Mesh(new THREE.ConeGeometry(0.18 * s, 0.85 * s, 6), horn)
+      base.position.set(-0.15 * s, 1.55 * s, sz * 1.05 * s)
+      base.rotation.x = sz * 0.9
+      body.add(base)
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.09 * s, 6, 5), glow(0x9ad06a, 0.7))
+      tip.position.set(-0.15 * s, 1.9 * s, sz * 1.45 * s)
+      body.add(tip)
+    }
+  } else if (cls === 'guardian') {
+    // 등 뒤 금색 광륜 — 수호의 상징 (힐러의 연둣빛과 색으로 구분)
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(0.68 * s, 0.1 * s, 8, 20), glow(0xffdf8a, 0.55))
+    halo.rotation.y = Math.PI / 2
+    halo.position.set(-1.05 * s, 1.2 * s, 0)
+    body.add(halo)
+  } else if (cls === 'swordmaster') {
+    // 등에 멘 긴 칼집 + 금장 매듭
+    const sheath = new THREE.Mesh(new THREE.BoxGeometry(0.14 * s, 1.9 * s, 0.26 * s), dark)
+    sheath.rotation.x = 0.6
+    sheath.position.set(-1.0 * s, 0.7 * s, 0.1 * s)
+    body.add(sheath)
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.18 * s, 0.16 * s, 0.3 * s), glow(0xffe8a8, 0.35))
+    band.rotation.x = 0.6
+    band.position.set(-1.0 * s, 1.35 * s, 0.55 * s)
+    body.add(band)
+  } else if (cls === 'catcher') {
+    // 몸에 비스듬히 두른 사슬
+    const chain = new THREE.Mesh(new THREE.TorusGeometry(1.12 * s, 0.11 * s, 6, 18), metal)
+    chain.rotation.x = Math.PI / 2
+    chain.rotation.z = 0.5
+    chain.position.y = 0.35 * s
+    body.add(chain)
+  } else if (cls === 'beastmaster') {
+    // 어깨에 두른 모피 + 목의 발톱 장식
+    const fur = new THREE.MeshLambertMaterial({ color: 0x7a5a3a })
+    for (const sz of [1, -1]) {
+      const pelt = new THREE.Mesh(new THREE.SphereGeometry(0.62 * s, 8, 6), fur)
+      pelt.scale.set(0.8, 0.55, 1)
+      pelt.position.set(-0.15 * s, 1.4 * s, sz * 0.95 * s)
+      body.add(pelt)
+    }
+    const claw = new THREE.Mesh(new THREE.ConeGeometry(0.1 * s, 0.4 * s, 5), new THREE.MeshLambertMaterial({ color: 0xf0e6d0 }))
+    claw.position.set(0.95 * s, 0.85 * s, 0)
+    claw.rotation.z = Math.PI // 아래로 향한 발톱 목걸이
+    body.add(claw)
+  } else if (cls === 'engineer') {
+    // 등의 공구 배낭 + 안테나 불빛
+    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.55 * s, 1.0 * s, 0.9 * s), new THREE.MeshLambertMaterial({ color: 0x6a5a40 }))
+    pack.position.set(-1.05 * s, 0.55 * s, 0)
+    body.add(pack)
+    const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.035 * s, 0.035 * s, 0.9 * s), metal)
+    antenna.position.set(-1.05 * s, 1.5 * s, -0.25 * s)
+    body.add(antenna)
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.1 * s, 6, 5), glow(0xffcf4d, 0.8))
+    bulb.position.set(-1.05 * s, 1.95 * s, -0.25 * s)
+    body.add(bulb)
+  } else if (cls === 'snarer') {
+    // 어깨를 감은 넝쿨과 잎
+    const vine = new THREE.MeshLambertMaterial({ color: 0x5aa34a })
+    const wrap = new THREE.Mesh(new THREE.TorusGeometry(0.95 * s, 0.09 * s, 6, 16), vine)
+    wrap.rotation.x = Math.PI / 2
+    wrap.rotation.z = -0.35
+    wrap.position.y = 0.9 * s
+    body.add(wrap)
+    const leafMat = new THREE.MeshLambertMaterial({ color: 0x8fd06a })
+    for (const [dy, dz, rot] of [[1.25, 0.85, 0.5], [1.1, -0.9, -0.7]]) {
+      const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.14 * s, 0.5 * s, 4), leafMat)
+      leaf.position.set(-0.2 * s, dy * s, dz * s)
+      leaf.rotation.x = rot
+      body.add(leaf)
+    }
+  } else if (cls === 'windcaller') {
+    // 등 뒤 바람 깃털 세 갈래
+    const featherMat = glow(0xd6f0ff, 0.35)
+    for (const [dz, rot] of [[-0.5, -0.4], [0, 0], [0.5, 0.4]]) {
+      const plume = new THREE.Mesh(new THREE.ConeGeometry(0.13 * s, 0.9 * s, 4), featherMat)
+      plume.position.set(-1.05 * s, 1.3 * s, dz * s)
+      plume.rotation.x = rot
+      plume.scale.z = 0.4 // 납작한 깃털
+      body.add(plume)
+    }
+  } else if (cls === 'chronomancer') {
+    // 등 뒤 시계 링 + 시침 — 시간의 고리
+    const ringPart = new THREE.Mesh(new THREE.TorusGeometry(0.66 * s, 0.08 * s, 8, 20), glow(0x7ac0ff, 0.55))
+    ringPart.rotation.y = Math.PI / 2
+    ringPart.position.set(-1.05 * s, 1.15 * s, 0)
+    body.add(ringPart)
+    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.05 * s, 0.5 * s, 0.06 * s), metal)
+    hand.position.set(-1.05 * s, 1.3 * s, 0)
+    hand.rotation.x = 0.6
+    body.add(hand)
+  }
+  // 그 외 직업은 파츠 없음 — 무기와 몸집만으로 구분
+}
 
 // 직업별 무기: 몸통(바라보는 방향으로 회전하는 메시)에 붙어 함께 돈다.
 // userData.pose(t)로 공격 모션 진행도(0→1)를 그린다. 로컬 +x = 정면.
@@ -1066,6 +1257,7 @@ function buildHero(h, mine, barColor) {
   cape.rotation.y = Math.PI / 2
   cape.position.set(-0.85 * s, 0.2 * s, 0)
   body.add(cape)
+  buildClassParts(h.cls, s, body) // 직업별 어깨·등 파츠 — 실루엣 구분
   // 팔·다리 — 짧고 길쭉한 원통(살짝 테이퍼). 몸통 자식이라 바라보는 방향/걷기와 함께 움직인다.
   const limbMat = new THREE.MeshLambertMaterial({ color: darken(col, 0.7) })
   // 다리: 고관절 피벗 그룹으로 감싸 걸을 때 앞뒤로 엇갈려 흔든다(legs[0]=오른쪽 +z, [1]=왼쪽 -z)
