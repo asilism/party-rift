@@ -532,6 +532,12 @@ const DRAGON = { hp: 2350, dmg: 56, range: 4, cd: 1.3, speed: 6, xp: 110, spawn:
 const BARON = { hp: 4500, dmg: 92, range: 5, cd: 1.5, speed: 5, xp: 150, spawn: 210, respawn: 120, enrage: 0.9, rageSpd: 0.6 }
 const ENRAGE_MAX = 40 // 분노 누적 상한(초)
 const CAMP_LEASH = 24 // 캠프에서 이만큼 멀어지면 포기하고 복귀(회복)
+// 바론 독 뿜기 — 공격이 명중한 자리에 독 웅덩이가 남아 그 안의 "모든" 영웅에게 도트 피해.
+//  중립 위험 지대라 팀을 가리지 않는다 → 바론 앞에서 자리싸움이 생긴다.
+const VENOM_R = 4.2 // 웅덩이 반경
+const VENOM_LIFE = 3.5 // 웅덩이 지속(초)
+const VENOM_TICK = 0.5 // 도트 주기
+const VENOM_DPS = 26 // 초당 피해
 export const DRAGON_BUFF_T = 60 // 용 버프: 공격력 +25%
 export const BARON_BUFF_T = 75 // 바론 버프: 공격력 +40% + 빠른 회복
 
@@ -2825,18 +2831,29 @@ function stepMonsters(state, dt) {
       m.aggro = null
       m.combatT = 0 // 캠프로 복귀 → 분노 초기화
       if (dist(m, m.camp) > 1) {
+        m.dir = Math.atan2(m.camp.z - m.z, m.camp.x - m.x) // 복귀 방향을 바라본다
         moveToward(state, m, m.camp, spec.speed * 1.5, dt, 1.2)
         m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.5 * dt) // 복귀 중 쑥쑥 회복
       }
       continue
     }
+    m.dir = Math.atan2(tgt.z - m.z, tgt.x - m.x) // 공격 대상을 바라본다 (렌더러 회전용)
     // 교전이 길어질수록 분노가 쌓여 피해/이동속도가 오른다 (용·바론만)
     m.combatT = Math.min(ENRAGE_MAX, (m.combatT || 0) + dt)
     const rage = 1 + spec.enrage * m.combatT
     if (dist(m, tgt) <= spec.range + 1) {
       if (m.atkCd <= 0) {
         m.atkCd = spec.cd
+        m.atkSeq = (m.atkSeq || 0) + 1 // 렌더러 공격 모션 트리거
         damageHero(state, tgt, spec.dmg * rage, null)
+        if (m.kind === 'baron') {
+          // 바론 독 뿜기: 표적 자리에 독 웅덩이 — life 동안 그 안의 모든 영웅이 도트 피해
+          state.zones.push({
+            id: state.nextId++, kind: 'venom', team: null, owner: null,
+            x: tgt.x, z: tgt.z, r: VENOM_R, t: 0, tickT: 0, life: VENOM_LIFE,
+          })
+          pushFx(state, 'venom', tgt.x, tgt.z, VENOM_R, null)
+        }
       }
     } else {
       // 분노가 쌓이면 발도 빨라져 도망치는(카이팅) 사냥꾼을 따라잡는다
@@ -3091,6 +3108,21 @@ function stepZones(state, dt) {
           if (m.team !== z.team && (m.x - z.x) ** 2 + (m.z - z.z) ** 2 <= r2) damageMinion(state, m, z.poisonDps * PLAGUE_TICK, owner)
         }
         pushFx(state, 'boom', z.x, z.z, z.r * 0.6, z.team)
+      }
+      if (z.t >= z.life) remove.add(z.id)
+      continue
+    }
+    // 바론 독 웅덩이: 중립 위험 지대 — life 동안 그 안의 모든 영웅이 도트 피해를 받는다
+    if (z.kind === 'venom') {
+      z.tickT -= dt
+      if (z.tickT <= 0) {
+        z.tickT += VENOM_TICK
+        const r2 = z.r * z.r
+        for (const e of state.heroes) {
+          if (e.respawnT > 0) continue
+          if ((e.x - z.x) ** 2 + (e.z - z.z) ** 2 > r2) continue
+          damageHero(state, e, VENOM_DPS * VENOM_TICK, null)
+        }
       }
       if (z.t >= z.life) remove.add(z.id)
       continue
@@ -4235,6 +4267,9 @@ export function makeView(state) {
       alive: m.alive,
       x: r1(m.x),
       z: r1(m.z),
+      // 바라보는 방향 — 교전 전엔 맵 중앙(강 건너)을 향한다
+      dir: r2d(m.dir != null ? m.dir : Math.atan2(0 - m.z, 0 - m.x)),
+      atkSeq: m.atkSeq || 0, // 렌더러 공격 모션 트리거
       hp: Math.ceil(m.hp),
       maxHp: m.maxHp,
       respawnT: m.alive ? 0 : Math.ceil(m.respawnT),
@@ -4283,9 +4318,10 @@ export function makeView(state) {
     // 사냥매가 걷어 둔 시야 흔적 — 렌더러 시야/안개 + isHeroVisible(inSight)가 함께 본다
     reveals: state.reveals.map((rv) => ({ team: rv.team, x: r1(rv.x), z: r1(rv.z), r: rv.r })),
     // 예고 범위는 운석(조준점)만 클라에 보낸다 — 대지균열 파는 거의 즉발이라 fx로만 보인다
-    zones: state.zones.filter((z) => z.kind === 'meteor').map((z) => ({
+    zones: state.zones.filter((z) => z.kind === 'meteor' || z.kind === 'venom').map((z) => ({
       id: z.id, kind: z.kind, team: z.team, x: r1(z.x), z: r1(z.z),
       r: z.r, t: r2d(z.t), delay: z.delay,
+      ...(z.life != null ? { life: z.life } : null), // 지속 장판(독 웅덩이)의 사라짐 페이드용
     })),
     fx: state.fx.map((n) => ({
       id: n.id, kind: n.kind, x: r1(n.x), z: r1(n.z), r: n.r, t: r2d(n.t), team: n.team,

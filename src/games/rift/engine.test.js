@@ -2585,6 +2585,28 @@ test('buildQuote: 재료가 없으면 정가, 중복 재료도 슬롯 단위로 
   assert.deepEqual([...q.consumes].sort(), [0, 1])
 })
 
+test('바론 독 뿜기: 표적을 바라보고, 명중 자리에 독 웅덩이가 남아 도트 피해를 준다', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const baron = g.monsters.find((m) => m.id === 'baron')
+  baron.alive = true
+  baron.respawnT = 0
+  const victim = g.heroes[0]
+  victim.x = baron.x + 3 // 사거리(5) 안
+  victim.z = baron.z
+  baron.aggro = victim.id
+  run(g, 0.2) // 첫 공격 (atkCd 0에서 즉시)
+  assert.ok((baron.atkSeq || 0) >= 1, '공격 모션 시퀀스가 증가한다')
+  const want = Math.atan2(victim.z - baron.z, victim.x - baron.x)
+  assert.ok(Math.abs(baron.dir - want) < 0.2, '표적을 바라본다')
+  assert.ok(g.zones.some((z) => z.kind === 'venom'), '독 웅덩이가 생겼다')
+  const afterHit = victim.hp
+  run(g, 1.0) // 다음 직격(쿨 1.5초) 전 — 웅덩이 도트만 들어오는 구간
+  assert.ok(victim.hp < afterHit, '웅덩이 위에 서 있으면 도트 피해를 계속 받는다')
+  const v = makeView(g)
+  assert.ok(v.zones.some((z) => z.kind === 'venom' && z.life > 0), '스냅샷에 독 웅덩이가 실린다')
+})
+
 test('수비 콜: 내곽 타워에 적 영웅이 붙으면 한가한 봇이 달려와 막는다', () => {
   const g = createGame(humans())
   startPlaying(g)

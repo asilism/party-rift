@@ -107,6 +107,7 @@ const FX_SOUND = {
   volley: 'ranged', lightarrow: 'ranged', // 원거리 타격
   boom: 'magic', meteorhit: 'magic', fissure: 'magic', chain: 'magic', frost: 'magic', // 마법 타격
   curse: 'magic', frostnova: 'magic', abszero: 'magic', plague: 'magic', doom: 'magic', // 직업 전용 마법
+  venom: 'magic', // 바론 독 뿜기
   heal: 'heal', holylight: 'heal', shield: 'shield', // 보조
   berserk: 'melee', taunt: 'shield', haste: 'heal', stealth: 'shield', hawk: 'ranged', // 보조 스킬
   summon: 'magic', deploy: 'shield', // 소환/설치
