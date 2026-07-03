@@ -2663,6 +2663,27 @@ test('환영 분신: 직진하다 적 영웅을 만나면 내리찍어 피해를
   assert.ok(!g.summons.some((s) => s.kind === 'clone'), '내리찍은 분신은 펑 하고 사라진다')
 })
 
+test('환영 분신: 경로 밖의 적도 인지 반경 안이면 쫓아가고, 도망쳐도 내리찍기는 반드시 명중한다', () => {
+  const g = duo('illusionist', 'tank')
+  startPlaying(g)
+  const i = g.heroes[0]
+  const t = g.heroes[1]
+  i.x = 0; i.z = 0; i.dir = 0 // 직진 경로는 +x축
+  t.x = 5; t.z = 5 // 경로에서 벗어났지만 인지 반경(10) 안
+  castSkill(g, i.id)
+  const c = g.summons.find((s) => s.kind === 'clone')
+  // 추적: 직진(+x, z=0)이 아니라 적 쪽(z>0)으로 꺾어 간다
+  for (let n = 0; n < 600 && !(c.slamT > 0); n++) step(g, STEP)
+  assert.ok(c.slamT > 0, '적을 쫓아가 내리찍기를 시작했다')
+  assert.ok(c.z > 1.5, '직진 경로를 벗어나 적 쪽으로 추적했다')
+  // 모션 도중 적이 멀리 도망쳐도(점멸 수준) 도약 추적으로 반드시 맞는다
+  t.x += 14
+  const hp0 = t.hp
+  run(g, 0.6)
+  assert.ok(t.hp < hp0, '도망쳐도 내리찍기가 명중한다')
+  assert.ok(!g.summons.some((s) => s.kind === 'clone'), '분신은 표적 위에서 펑 사라진다')
+})
+
 test('환영난무: 연막 자리에서 본체가 앞으로 튀어나온다', () => {
   const g = duo('illusionist', 'tank')
   startPlaying(g)
