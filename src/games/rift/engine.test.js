@@ -2629,6 +2629,35 @@ test('환영무희: 분신이 내 겉모습으로 걷고, 자리바꿈으로 위
   assert.equal(vc.cls, 'illusionist', '스냅샷에 분신 겉모습이 실린다')
 })
 
+test('환영 분신: 직진하다 적 영웅을 만나면 내리찍어 피해를 주고 펑 사라진다', () => {
+  const g = duo('illusionist', 'tank')
+  startPlaying(g)
+  const i = g.heroes[0]
+  const t = g.heroes[1]
+  i.x = 0; i.z = 0; i.dir = 0
+  t.x = 7; t.z = 0 // 분신 진행 경로 위
+  castSkill(g, i.id)
+  const c = g.summons.find((s) => s.kind === 'clone')
+  assert.ok(c && c.slamDmg > 0, '내리찍기 피해가 시전 시점에 스냅샷된다')
+  const hp0 = t.hp
+  run(g, 1.2) // 접근(~4유닛) + 내리찍기 모션(0.35초)
+  assert.ok(t.hp < hp0, '내리찍기 피해가 들어갔다')
+  assert.ok(!g.summons.some((s) => s.kind === 'clone'), '내리찍은 분신은 펑 하고 사라진다')
+})
+
+test('환영난무: 연막 자리에서 본체가 앞으로 튀어나온다', () => {
+  const g = duo('illusionist', 'tank')
+  startPlaying(g)
+  const i = g.heroes[0]
+  i.lvl = ULT_LEVEL
+  i.x = 0; i.z = 0; i.dir = 0
+  castUlt(g, i.id)
+  assert.ok(i.x > 2, '본체가 정면(+x)으로 튀어나왔다')
+  assert.ok(g.fx.some((n) => n.kind === 'poof'), '연막 펑 이펙트')
+  const clones = g.summons.filter((s) => s.kind === 'clone')
+  assert.ok(clones.every((s) => Math.hypot(s.x, s.z) > 2), '분신들도 연막 밖으로 튀어나왔다')
+})
+
 test('환영난무: 전투형 분신이 봇처럼 적을 쫓아가 평타(본체의 80%)를 치고, 미끼 분신은 비전투', () => {
   const g = duo('illusionist', 'tank')
   startPlaying(g)

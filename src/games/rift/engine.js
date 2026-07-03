@@ -198,9 +198,9 @@ export const CLASSES = {
   illusionist: {
     name: '환영무희', icon: '🎭', desc: '분신으로 적을 속이는 정보전 암살자 — 셋 중 진짜는 하나',
     hp: 450, hpLvl: 48, atk: 46, atkLvl: 6.5, range: 3.8, atkCd: 0.75, speed: 13.4,
-    skill: { name: '환영 분신', icon: '🪞', cd: 10, desc: '똑같이 생긴 분신이 내 앞길을 대신 걷고, 나는 잠깐 은신한다' },
+    skill: { name: '환영 분신', icon: '🪞', cd: 10, desc: '분신이 앞길을 대신 걷다가 적을 만나면 강하게 내리찍고(피해) 펑 사라진다 — 나는 잠깐 은신' },
     skill2: { name: '자리바꿈', icon: '🔀', cd: 9, desc: '내 분신과 위치를 맞바꾼다 — 진입도 탈출도 자유자재' },
-    ult: { name: '환영난무', icon: '✨', cd: 60, desc: '봇처럼 싸우는 분신 둘(평타, 내 공격력의 80%)을 흩뿌리고 은신하며 주변을 벤다 — 누가 진짜인가?' },
+    ult: { name: '환영난무', icon: '✨', cd: 60, desc: '연막이 펑! 세 몸(본체+분신 둘)이 튀어나온다 — 분신은 봇처럼 싸운다(평타, 내 공격력의 80%)' },
   },
   terramancer: {
     name: '대지술사', icon: '🪨', desc: '돌벽을 세워 전장을 바꾸는 지형 술사 — 길을 막고, 가두고, 갈라놓는다',
@@ -248,7 +248,7 @@ export const ABILITY_SCALING = {
   windcaller: { skill: { dmg: [44, 0.7], note: '1.5초 공중에 띄움' }, skill2: { dmg: [26, 0.4], note: '사방으로 밀침 · 벽에 박으면 기절' }, ult: { dmg: [70, 0.8], note: '바깥으로 날림 + 둔화' } },
   chronomancer: { skill: { dmg: [40, 0.9], note: '적 뒤로 순간이동' }, skill2: { dot: [10, 0.2], dotDur: 3, note: '장판 안 이동·공격 둔화' }, ult: { dmg: [60, 0.9], note: '도착 충격파 · 4초 전 체력 복원' } },
   fearmonger: { skill: { dmg: [30, 0.55], note: '1.2초 공포(강제 도주)' }, skill2: { shield: [45, 0.7], note: '가속 + 어둠 장막' }, ult: { dmg: [40, 0.6], dot: [10, 0.18], dotDur: 2, note: '주변 전체 1.6초 공포' } },
-  illusionist: { skill: { note: '미끼 분신 + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '전투 분신 2(평타 80%) + 1.4초 은신' } },
+  illusionist: { skill: { dmg: [50, 0.9], note: '분신이 적을 만나면 내리찍고 소멸 + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '연막 펑 — 3체 돌출, 전투 분신 2(평타 80%)' } },
   terramancer: { skill: { note: '전방 돌벽 3초(길 막기)' }, skill2: { dmg: [45, 0.8], note: '0.9초 둔화' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
 }
 
@@ -878,6 +878,11 @@ const CLONE_STEALTH_T = 0.9 // 분신 소환 시 본체 은신
 const DANCE_STEALTH_T = 1.4 // 환영난무 은신
 const CLONE_ATK_COEF = 0.8 // 전투형 분신(궁극기) 평타 = 본체 공격력의 80%
 const CLONE_AGGRO = 14 // 전투형 분신의 적 인지 범위
+// 미끼 분신의 내리찍기: 직진하다 적 영웅을 만나면 강하게 내리찍고 펑 사라진다 — 초반 유일한 딜 수단
+export const CLONE_SLAM_WINDUP = 0.35 // 내리찍기 모션 시간(렌더러와 공유)
+const CLONE_SLAM_TRIGGER = 3 // 이 거리 안에 적 영웅이 오면 내리찍기 시작
+const CLONE_SLAM_RADIUS = 3.4 // 내리찍기 피해 반경
+const DANCE_BURST_DIST = 3 // 환영난무: 연막에서 세 몸(본체+분신2)이 튀어나가는 거리
 // 대지술사: 임시 돌벽(동적 지형)
 const QUAKE_WALL_LIFE = 3 // 융기 벽 지속(초)
 const QUAKE_WALL_AHEAD = 5.5 // 벽이 서는 전방 거리
@@ -1827,13 +1832,21 @@ const ULTS = {
     if (!hitAny) return false
     pushFx(state, 'shriek', h.x, h.z, SHRIEK_RADIUS, h.team)
   },
-  // 환영무희 환영난무: 전투형 분신 둘(봇처럼 추격·평타, 본체 공격력 80%)을 흩뿌리고 은신 + 주변을 벤다
+  // 환영무희 환영난무: 연막이 펑! 터지며 세 몸(본체+전투형 분신 둘)이 사방으로 튀어나온다.
+  //  분신은 봇처럼 추격·평타(본체 공격력 80%), 본체는 은신 + 주변 참격.
   illusionist(state, h) {
-    aoeDamage(state, h, h.x, h.z, 6, skillDmg(h, 40, 0.75), 0) // 공격력 계수
-    spawnClone(state, h, h.dir - 0.9, true)
-    spawnClone(state, h, h.dir + 0.9, true)
+    const sx = h.x
+    const sz = h.z
+    aoeDamage(state, h, sx, sz, 6, skillDmg(h, 40, 0.75), 0) // 공격력 계수
+    pushFx(state, 'poof', sx, sz, 4.5, h.team) // 연막 펑!
+    spawnClone(state, h, h.dir - 0.9, true, DANCE_BURST_DIST)
+    spawnClone(state, h, h.dir + 0.9, true, DANCE_BURST_DIST)
+    // 본체도 정면으로 튀어나온다 — 셋이 동시에 연막을 찢고 나오는 그림
+    h.x = sx + Math.cos(h.dir) * DANCE_BURST_DIST
+    h.z = sz + Math.sin(h.dir) * DANCE_BURST_DIST
+    state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
+    h.bushI = state.map.bushIndexAt(h.x, h.z)
     h.stealthT = Math.max(h.stealthT, DANCE_STEALTH_T)
-    pushFx(state, 'stealth', h.x, h.z, 4, h.team)
   },
   // 대지술사 바위감옥: 보이는 가장 가까운 적 하나를 원형 돌벽으로 가둔다 (강제 1:1)
   terramancer(state, h) {
@@ -3382,25 +3395,30 @@ function stepZones(state, dt) {
 }
 
 // 환영무희 분신 — 렌더러가 본체와 똑같이 그릴 수 있게 겉모습(띠/직업/이름/레벨)을 복사해 둔다.
-//  · 미끼(기본 스킬): 공격하지 않고 소환 시점 바라보던 방향으로 계속 걸어간다.
+//  · 미끼(기본 스킬): 소환 방향으로 직진하다 적 영웅을 만나면 내리찍고(피해) 펑 사라진다.
 //  · 전투형(궁극기, combat=true): 봇처럼 적을 쫓아다니며 평타만 친다 — 피해는 본체 공격력의 80%.
-function spawnClone(state, h, dir = h.dir, combat = false) {
+//  burst > 0이면 그 거리만큼 진행 방향으로 튀어나간 자리에서 나타난다(연막 연출용).
+function spawnClone(state, h, dir = h.dir, combat = false, burst = 0) {
   const hp = Math.round(powerStat(h) * CLONE_HP_COEF + h.maxHp * 0.25)
-  state.summons.push({
+  const s = {
     id: state.nextId++, kind: 'clone', owner: h.id, team: h.team,
-    x: h.x, z: h.z, dir,
+    x: h.x + Math.cos(dir) * burst, z: h.z + Math.sin(dir) * burst, dir,
     hp, maxHp: hp,
     atkCd: 0,
     dmg: combat ? Math.round(atkOf(h) * CLONE_ATK_COEF) : 0,
     range: combat ? CLASSES[h.cls].range : 0,
-    aggro: combat ? CLONE_AGGRO : 0, // 인지 0이면 영영 공격하지 않는 순수 미끼
+    aggro: combat ? CLONE_AGGRO : 0, // 인지 0이면 평타하지 않는 미끼(내리찍기 한 방만)
     speed: heroSpeed(h), mobile: true,
     cd: combat ? CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed) : 99,
     life: CLONE_LIFE,
     chargeT: 0, combat,
+    slamT: 0, // 미끼 내리찍기 모션 남은 시간(>0이면 시전 중)
+    slamDmg: combat ? 0 : Math.round(skillDmg(h, 50, 0.9)), // 내리찍기 피해 — 시전 시점 스냅샷(공격력 계수)
     decoyTx: h.x + Math.cos(dir) * 40, decoyTz: h.z + Math.sin(dir) * 40,
     zodiacId: h.zodiacId, cls: h.cls, name: h.name, lvl: h.lvl, isBot: h.isBot,
-  })
+  }
+  state.summons.push(s)
+  return s
 }
 
 // 소환물 생성(펫/포탑). 주인(owner)의 팀/위치 기준.
@@ -3438,9 +3456,39 @@ function stepSummons(state, dt) {
       continue
     }
     const owner = state.heroes.find((h) => h.id === s.owner)
-    // 환영무희 미끼 분신(기본 스킬): 공격하지 않고 소환 방향으로 계속 걸어간다 (지형은 피해 간다)
+    // 환영무희 미끼 분신(기본 스킬): 소환 방향으로 직진하다 적 영웅을 만나면
+    //  제자리에서 내리찍기 모션(slamT) 후 광역 피해를 주고 펑 사라진다.
     //  전투형 분신(궁극기)은 아래 공용 전투 로직(적 인지 → 추격 → 평타)을 그대로 탄다 — 봇처럼 싸운다.
     if (s.kind === 'clone' && !s.combat) {
+      if (s.slamT > 0) {
+        s.slamT -= dt
+        if (s.slamT <= 0) {
+          // 쾅! 주변 적 영웅에게 피해 + 펑 하고 소멸 (킬 크레딧은 본체에게)
+          const att = owner && owner.respawnT <= 0 ? owner : { id: s.owner, team: s.team }
+          const r2 = CLONE_SLAM_RADIUS * CLONE_SLAM_RADIUS
+          for (const e of state.heroes) {
+            if (e.team === s.team || e.respawnT > 0 || dist2(s, e) > r2) continue
+            damageHero(state, e, s.slamDmg, att)
+          }
+          pushFx(state, 'poof', s.x, s.z, CLONE_SLAM_RADIUS, s.team)
+          remove.add(s.id)
+        }
+        continue
+      }
+      // 적 영웅이 코앞에 오면 내리찍기 시작 — 무기를 치켜드는 모션(atkSeq)과 함께
+      let foe = null
+      let bd = CLONE_SLAM_TRIGGER * CLONE_SLAM_TRIGGER
+      for (const e of state.heroes) {
+        if (e.team === s.team || e.respawnT > 0) continue
+        const d = dist2(s, e)
+        if (d < bd) { bd = d; foe = e }
+      }
+      if (foe) {
+        s.slamT = CLONE_SLAM_WINDUP
+        s.dir = Math.atan2(foe.z - s.z, foe.x - s.x)
+        s.atkSeq = (s.atkSeq || 0) + 1
+        continue
+      }
       moveToward(state, s, { x: s.decoyTx, z: s.decoyTz }, s.speed, dt, 1)
       continue
     }
@@ -4539,8 +4587,10 @@ export function makeView(state) {
     summons: state.summons.map((s) => ({
       id: s.id, kind: s.kind, team: s.team, x: r1(s.x), z: r1(s.z), dir: r2d(s.dir),
       hp: Math.ceil(s.hp), maxHp: s.maxHp, charge: s.chargeT > 0 ? 1 : 0, dormant: s.dormant ? 1 : 0,
-      // 분신: 렌더러가 본체와 똑같이 그리도록 겉모습을 싣는다 (atkSeq는 평타 모션용)
-      ...(s.kind === 'clone' ? { zodiacId: s.zodiacId, cls: s.cls, name: s.name, lvl: s.lvl, isBot: s.isBot, atkSeq: s.atkSeq || 0 } : null),
+      // 분신: 렌더러가 본체와 똑같이 그리도록 겉모습을 싣는다 (atkSeq=평타 모션, slam=내리찍기 모션)
+      ...(s.kind === 'clone'
+        ? { zodiacId: s.zodiacId, cls: s.cls, name: s.name, lvl: s.lvl, isBot: s.isBot, atkSeq: s.atkSeq || 0, slam: r2d(s.slamT || 0) }
+        : null),
       // leap: 도약 진행도(1→0, 점프 모션용) · idle: 포탑 휴면까지 남은 유예 시간(타이머 표시용)
       leap: s.leapT > 0 && s.leapDur > 0 ? r2d(s.leapT / s.leapDur) : 0,
       idle: s.kind === 'turret' && !s.dormant && s.idleT > 0 ? r1(ENGI_IDLE_GRACE - s.idleT) : 0,
