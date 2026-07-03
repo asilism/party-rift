@@ -2000,6 +2000,8 @@ const FX_LOOK = {
   // 대지술사: 대지 계열(황토)
   quake: { color: 0xc9863c, line: true, mode: 'forward', pcolor: 0xd9b586, w: 2.6, ground: true }, // 융기 — 벽이 솟는 자리
   cage: { color: 0xc9863c, ring: true, mode: 'out', pcolor: 0xd9b586, spikes: 0xa8927a }, // 바위감옥 — 돌가시 원환
+  // 환영무희: 연기가 펑! — 분신 내리찍기 소멸/환영난무 연막
+  poof: { color: 0xcfd4e0, ring: true, mode: 'rise', pcolor: 0xe8ecf5, ring2: true },
 }
 
 // 시드 고정 파티클 구름 — 호스트/게스트 모두 같은 fx(id)에서 같은 모양이 나오게 lcg 시드.
@@ -3419,6 +3421,14 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           if (u.weapon?.userData.pose && u.animT < 1) {
             u.animT = Math.min(1, u.animT + dt / ATK_ANIM_T)
             u.weapon.userData.pose(u.animT)
+          }
+          // 미끼 분신의 내리찍기: 살짝 떠올라 몸을 앞으로 크게 숙이며 내려찍는다 (끝나면 poof fx가 이어진다)
+          if (s.slam > 0) {
+            const p = 1 - s.slam / 0.35 // CLONE_SLAM_WINDUP 진행도 0→1
+            obj.position.y = Math.sin(p * Math.PI) * 1.3
+            u.body.rotation.z = -Math.sin(p * Math.PI) * 0.65
+          } else {
+            u.body.rotation.z = 0
           }
           return
         }
