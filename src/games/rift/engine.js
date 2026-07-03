@@ -198,7 +198,7 @@ export const CLASSES = {
   illusionist: {
     name: '환영무희', icon: '🎭', desc: '분신으로 적을 속이는 정보전 암살자 — 셋 중 진짜는 하나',
     hp: 450, hpLvl: 48, atk: 46, atkLvl: 6.5, range: 3.8, atkCd: 0.75, speed: 13.4,
-    skill: { name: '환영 분신', icon: '🪞', cd: 10, desc: '분신이 앞길을 대신 걷다가 적을 만나면 강하게 내리찍고(피해) 펑 사라진다 — 나는 잠깐 은신' },
+    skill: { name: '환영 분신', icon: '🪞', cd: 10, desc: '분신이 앞길을 걷다 적을 발견하면 쫓아가 내리찍는다(반드시 명중) — 펑 사라지고, 나는 잠깐 은신' },
     skill2: { name: '자리바꿈', icon: '🔀', cd: 9, desc: '내 분신과 위치를 맞바꾼다 — 진입도 탈출도 자유자재' },
     ult: { name: '환영난무', icon: '✨', cd: 60, desc: '연막이 펑! 세 몸(본체+분신 둘)이 튀어나온다 — 분신은 봇처럼 싸운다(평타, 내 공격력의 80%)' },
   },
@@ -248,7 +248,7 @@ export const ABILITY_SCALING = {
   windcaller: { skill: { dmg: [44, 0.7], note: '1.5초 공중에 띄움' }, skill2: { dmg: [26, 0.4], note: '사방으로 밀침 · 벽에 박으면 기절' }, ult: { dmg: [70, 0.8], note: '바깥으로 날림 + 둔화' } },
   chronomancer: { skill: { dmg: [40, 0.9], note: '적 뒤로 순간이동' }, skill2: { dot: [10, 0.2], dotDur: 3, note: '장판 안 이동·공격 둔화' }, ult: { dmg: [60, 0.9], note: '도착 충격파 · 4초 전 체력 복원' } },
   fearmonger: { skill: { dmg: [30, 0.55], note: '1.2초 공포(강제 도주)' }, skill2: { shield: [45, 0.7], note: '가속 + 어둠 장막' }, ult: { dmg: [40, 0.6], dot: [10, 0.18], dotDur: 2, note: '주변 전체 1.6초 공포' } },
-  illusionist: { skill: { dmg: [50, 0.9], note: '분신이 적을 만나면 내리찍고 소멸 + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '연막 펑 — 3체 돌출, 전투 분신 2(평타 80%)' } },
+  illusionist: { skill: { dmg: [50, 0.9], note: '분신이 적을 쫓아가 내리찍음(확정 명중) + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '연막 펑 — 3체 돌출, 전투 분신 2(평타 80%)' } },
   terramancer: { skill: { note: '전방 돌벽 3초(길 막기)' }, skill2: { dmg: [45, 0.8], note: '0.9초 둔화' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
 }
 
@@ -878,10 +878,12 @@ const CLONE_STEALTH_T = 0.9 // 분신 소환 시 본체 은신
 const DANCE_STEALTH_T = 1.4 // 환영난무 은신
 const CLONE_ATK_COEF = 0.8 // 전투형 분신(궁극기) 평타 = 본체 공격력의 80%
 const CLONE_AGGRO = 14 // 전투형 분신의 적 인지 범위
-// 미끼 분신의 내리찍기: 직진하다 적 영웅을 만나면 강하게 내리찍고 펑 사라진다 — 초반 유일한 딜 수단
+// 미끼 분신의 내리찍기: 직진하다 "보이는" 적 영웅을 발견하면 쫓아가 강하게 내리찍고 펑 사라진다.
+//  내리찍기가 시작되면 표적을 끝까지 따라붙어(도약) 반드시 명중한다 — 초반 유일한 딜 수단.
 export const CLONE_SLAM_WINDUP = 0.35 // 내리찍기 모션 시간(렌더러와 공유)
+const CLONE_SEEK_RANGE = 10 // 이 반경 안에 보이는 적 영웅이 오면 직진을 멈추고 쫓아간다
 const CLONE_SLAM_TRIGGER = 3 // 이 거리 안에 적 영웅이 오면 내리찍기 시작
-const CLONE_SLAM_RADIUS = 3.4 // 내리찍기 피해 반경
+const CLONE_SLAM_RADIUS = 3.4 // 내리찍기 휩쓸림(주변 적) 피해 반경
 const DANCE_BURST_DIST = 3 // 환영난무: 연막에서 세 몸(본체+분신2)이 튀어나가는 거리
 // 대지술사: 임시 돌벽(동적 지형)
 const QUAKE_WALL_LIFE = 3 // 융기 벽 지속(초)
@@ -3413,6 +3415,8 @@ function spawnClone(state, h, dir = h.dir, combat = false, burst = 0) {
     life: CLONE_LIFE,
     chargeT: 0, combat,
     slamT: 0, // 미끼 내리찍기 모션 남은 시간(>0이면 시전 중)
+    slamTargetId: null, // 내리찍기 고정 표적 — 도약 추적으로 반드시 명중
+    slamFrom: null, // 도약 시작 지점 {x, z}
     slamDmg: combat ? 0 : Math.round(skillDmg(h, 50, 0.9)), // 내리찍기 피해 — 시전 시점 스냅샷(공격력 계수)
     decoyTx: h.x + Math.cos(dir) * 40, decoyTz: h.z + Math.sin(dir) * 40,
     zodiacId: h.zodiacId, cls: h.cls, name: h.name, lvl: h.lvl, isBot: h.isBot,
@@ -3456,18 +3460,31 @@ function stepSummons(state, dt) {
       continue
     }
     const owner = state.heroes.find((h) => h.id === s.owner)
-    // 환영무희 미끼 분신(기본 스킬): 소환 방향으로 직진하다 적 영웅을 만나면
-    //  제자리에서 내리찍기 모션(slamT) 후 광역 피해를 주고 펑 사라진다.
+    // 환영무희 미끼 분신(기본 스킬): 직진하다 보이는 적 영웅이 인지 반경에 들어오면 쫓아가고,
+    //  코앞에 오면 내리찍기 모션(slamT) — 그동안 표적을 끝까지 따라붙어(도약) 반드시 명중 후 펑 사라진다.
     //  전투형 분신(궁극기)은 아래 공용 전투 로직(적 인지 → 추격 → 평타)을 그대로 탄다 — 봇처럼 싸운다.
     if (s.kind === 'clone' && !s.combat) {
       if (s.slamT > 0) {
         s.slamT -= dt
+        // 도약 추적: 모션 진행도만큼 표적 현재 위치로 따라붙는다 → 도망쳐도 반드시 맞는다
+        const tgt = state.heroes.find((e) => e.id === s.slamTargetId && e.respawnT <= 0)
+        if (tgt && s.slamFrom) {
+          const k = 1 - Math.max(0, s.slamT) / CLONE_SLAM_WINDUP
+          s.x = s.slamFrom.x + (tgt.x - s.slamFrom.x) * k
+          s.z = s.slamFrom.z + (tgt.z - s.slamFrom.z) * k
+          if (dist2(s, tgt) > 0.01) s.dir = Math.atan2(tgt.z - s.z, tgt.x - s.x)
+        }
         if (s.slamT <= 0) {
-          // 쾅! 주변 적 영웅에게 피해 + 펑 하고 소멸 (킬 크레딧은 본체에게)
           const att = owner && owner.respawnT <= 0 ? owner : { id: s.owner, team: s.team }
+          if (tgt) {
+            s.x = tgt.x // 착지 = 표적 머리 위 — 확정 명중
+            s.z = tgt.z
+            damageHero(state, tgt, s.slamDmg, att)
+          }
+          // 착지 지점 주변의 다른 적도 휩쓸린다
           const r2 = CLONE_SLAM_RADIUS * CLONE_SLAM_RADIUS
           for (const e of state.heroes) {
-            if (e.team === s.team || e.respawnT > 0 || dist2(s, e) > r2) continue
+            if (e === tgt || e.team === s.team || e.respawnT > 0 || dist2(s, e) > r2) continue
             damageHero(state, e, s.slamDmg, att)
           }
           pushFx(state, 'poof', s.x, s.z, CLONE_SLAM_RADIUS, s.team)
@@ -3475,21 +3492,25 @@ function stepSummons(state, dt) {
         }
         continue
       }
-      // 적 영웅이 코앞에 오면 내리찍기 시작 — 무기를 치켜드는 모션(atkSeq)과 함께
+      // 인지: 보이는 가장 가까운 적 영웅 (전장의 안개 규칙 준수 — 안 보이는 적은 못 쫓는다)
       let foe = null
-      let bd = CLONE_SLAM_TRIGGER * CLONE_SLAM_TRIGGER
+      let bd = CLONE_SEEK_RANGE * CLONE_SEEK_RANGE
       for (const e of state.heroes) {
-        if (e.team === s.team || e.respawnT > 0) continue
+        if (e.team === s.team || e.respawnT > 0 || !isHeroVisible(state, e, s.team)) continue
         const d = dist2(s, e)
         if (d < bd) { bd = d; foe = e }
       }
-      if (foe) {
+      // 코앞이면 내리찍기 시작 — 무기를 치켜드는 모션(atkSeq)과 함께 표적 고정
+      if (foe && bd <= CLONE_SLAM_TRIGGER * CLONE_SLAM_TRIGGER) {
         s.slamT = CLONE_SLAM_WINDUP
+        s.slamTargetId = foe.id
+        s.slamFrom = { x: s.x, z: s.z }
         s.dir = Math.atan2(foe.z - s.z, foe.x - s.x)
         s.atkSeq = (s.atkSeq || 0) + 1
         continue
       }
-      moveToward(state, s, { x: s.decoyTx, z: s.decoyTz }, s.speed, dt, 1)
+      // 인지 반경 안의 적은 쫓아가고, 없으면 소환 방향으로 직진
+      moveToward(state, s, foe || { x: s.decoyTx, z: s.decoyTz }, s.speed, dt, 1)
       continue
     }
     // 사냥 명령 도약: 적에게 달려드는 중 — 보간 이동(점프), 그동안 다른 행동은 멈춘다.
