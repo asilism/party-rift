@@ -1908,6 +1908,7 @@ const PROJ_LOOK = {
   lightarrow: { r: 0.6, y: 2.2, color: 0xfff4b0, glow: 5, trail: true }, // 빛의 화살 궁극기 (크고 환한 빛)
   hawk: { r: 0.7, y: 5.5, color: 0xffe066, glow: 4, trail: true }, // 궁수 사냥매 (높이 떠 날아가는 빛점)
   hook: { r: 0.55, y: 1.6, color: 0xcfd4e0, glow: 2.4 }, // 사슬잡이 갈고리 (낮게 직진하는 금속 집게)
+  rock: { r: 0.55, y: 1.8, color: 0xb0a48c, glow: 1.6 }, // 대지술사 돌덩이 (묵직한 갈색 돌)
 }
 
 // 돌풍술사 회오리 투사체 — 위로 갈수록 넓어지는 고리들을 쌓아 통째로 돌린다(앞으로 굴러가며 적을 띄움).
