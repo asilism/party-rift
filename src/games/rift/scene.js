@@ -1914,16 +1914,16 @@ const PROJ_LOOK = {
 function buildRockProj(p) {
   const g = new THREE.Group()
   const main = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(0.62, 0),
+    new THREE.IcosahedronGeometry(0.95, 0),
     new THREE.MeshLambertMaterial({ color: 0x8a8f9c, flatShading: true })
   )
   const chip = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(0.3, 0),
+    new THREE.IcosahedronGeometry(0.42, 0),
     new THREE.MeshLambertMaterial({ color: 0x7c818d, flatShading: true })
   )
-  chip.position.set(0.4, 0.25, 0.15)
+  chip.position.set(0.6, 0.38, 0.22)
   g.add(main, chip)
-  g.position.y = 1.8
+  g.position.y = 2.0
   const phase = (p.id % 20) * 0.7 // 돌마다 구르는 위상이 다르게
   g.userData.spin = (t) => {
     g.rotation.x = t * 9 + phase // 데굴데굴
@@ -2022,6 +2022,7 @@ const FX_LOOK = {
   // 대지술사: 대지 계열(황토)
   quake: { color: 0xc9863c, line: true, mode: 'forward', pcolor: 0xd9b586, w: 2.6, ground: true }, // 융기 — 벽이 솟는 자리
   cage: { color: 0xc9863c, ring: true, mode: 'out', pcolor: 0xd9b586, spikes: 0xa8927a }, // 바위감옥 — 돌가시 원환
+  rocksplash: { color: 0xc9863c, ring: true, mode: 'out', pcolor: 0xd9b586, debris: { count: 7, rock: 0x8a8f9c, dur: 0.8 } }, // 돌팔매 착탄 — 흙먼지 파동 + 튀어 구르는 돌 파편
   // 환영무희: 연기가 펑! — 분신 내리찍기 소멸/환영난무 연막
   poof: { color: 0xcfd4e0, ring: true, mode: 'rise', pcolor: 0xe8ecf5, ring2: true },
 }
