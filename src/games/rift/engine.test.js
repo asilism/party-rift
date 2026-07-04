@@ -2734,19 +2734,19 @@ test('대지술사 융기(보조): 돌벽이 길을 막고, 벽에 맞은 적은
   const foe = g.heroes[1]
   t.lvl = SKILL2_LEVEL // 보조 스킬 해금
   t.x = 0; t.z = 0; t.dir = 0
-  foe.x = 5.5; foe.z = 0 // 벽이 솟는 자리에 서 있다
+  foe.x = 9; foe.z = 0 // 벽이 솟는 자리에 서 있다
   const hp0 = foe.hp
-  castSkill2(g, t.id) // 전방(x≈5.5)에 가로 돌벽
+  castSkill2(g, t.id) // 전방(x≈9)에 가로 돌벽
   assert.ok(g.tempWalls.length >= 4, '벽 충돌 원이 깔렸다')
   assert.ok(foe.stunT >= 1.4, '벽에 맞은 적은 1.5초 기절한다')
   assert.ok(foe.hp < hp0, '미미한 피해도 들어간다')
   run(g, 0.2)
-  assert.ok(Math.abs(foe.x - 5.5) + Math.abs(foe.z) > 1, '벽이 솟으며 적을 밀쳐낸다')
+  assert.ok(Math.abs(foe.x - 9) + Math.abs(foe.z) > 1, '벽이 솟으며 적을 밀쳐낸다')
   // 멀리 있던 적은 벽을 못 넘는다
-  foe.x = 9; foe.z = 0; foe.stunT = 0
+  foe.x = 12.5; foe.z = 0; foe.stunT = 0
   setInput(g, foe.id, { mx: -1, mz: 0 })
   run(g, 0.6)
-  assert.ok(foe.x > 3.5, '돌벽에 막혀 시전자 쪽으로 못 넘어온다')
+  assert.ok(foe.x > 7, '돌벽에 막혀 시전자 쪽으로 못 넘어온다')
   run(g, 2.5) // 벽 수명(3초) 경과
   assert.equal(g.tempWalls.length, 0, '벽이 가라앉아 사라졌다')
   const v = makeView(g)
@@ -2771,6 +2771,33 @@ test('대지술사 돌팔매(기본): 첫 발 각도로 고정된 채 0.5초 간
   assert.equal(t.slingN, 0, '세 발을 모두 던졌다')
   const dealt = hp0 - foe.hp
   assert.ok(Math.abs(dealt - one * 3) < 2, `각도 고정으로 3발 전부 명중 (${dealt} ≈ ${one * 3})`)
+})
+
+test('대지술사 돌팔매: 착탄 지점 주변에 파편 스플래시 — 직격 대상은 이중 피해 없음', () => {
+  // 미니언은 레인을 따라 걸어버려 위치가 안 잡히므로, 가만히 서 있는 영웅들로 검증한다
+  const g = createGame([
+    { id: 'tm', name: 'T', zodiacId: 'rat', color: '#abc', cls: 'terramancer', team: 'blue' },
+    { id: 'tk', name: 'K', zodiacId: 'ox', color: '#abc', cls: 'tank', team: 'red' },
+    { id: 'wr', name: 'W', zodiacId: 'tiger', color: '#abc', cls: 'warrior', team: 'red' },
+    { id: 'ar', name: 'A', zodiacId: 'rabbit', color: '#abc', cls: 'healer', team: 'red' },
+  ], { mode: '3v3', rng: () => 0.5 })
+  startPlaying(g)
+  const [t, foe, near, far] = g.heroes
+  t.x = 0; t.z = 0; t.dir = 0
+  foe.x = 10; foe.z = 0 // 직격 대상 — 돌 경로(z=0) 위
+  near.x = 10; near.z = 2.5 // 착탄 지점 곁 — 직격 판정(2.0) 밖, 스플래시 범위(3.4) 안
+  far.x = 10; far.z = 8 // 스플래시 범위 밖 (모두 평타 사거리 밖이라 자동평타 간섭 없음)
+  const hp0 = foe.hp
+  const nearHp0 = near.hp
+  const farHp0 = far.hp
+  castSkill(g, t.id) // 가장 가까운 적(foe) 방향으로 조준 고정
+  run(g, 0.45) // 첫 발 착탄까지 (다음 발은 0.5초 뒤)
+  const direct = hp0 - foe.hp
+  const splashed = nearHp0 - near.hp
+  assert.ok(direct > 0, '직격 대상이 맞았다')
+  assert.ok(splashed > 0, '곁의 적에게 파편 스플래시 피해')
+  assert.ok(splashed < direct, '스플래시는 직격보다 약하다(60%) — 직격 대상은 스플래시 중복이 없다')
+  assert.equal(far.hp, farHp0, '범위 밖의 적은 무사하다')
 })
 
 test('신규 직업 스모크: 공포술사·환영무희·대지술사 봇 게임이 NaN 없이 돈다', () => {
