@@ -205,8 +205,8 @@ export const CLASSES = {
   terramancer: {
     name: '대지술사', icon: '🪨', desc: '돌벽을 세워 전장을 바꾸는 지형 술사 — 길을 막고, 가두고, 갈라놓는다',
     hp: 540, hpLvl: 60, atk: 43, atkLvl: 6, range: 8.5, atkCd: 1.0, speed: 12.0, def: 0.9,
-    skill: { name: '융기', icon: '⛰️', cd: 13, desc: '전방에 돌벽을 솟게 해 3초간 길을 막는다 — 추격 차단·적 분단' },
-    skill2: { name: '돌팔매', icon: '🪃', cd: 8, desc: '큰 바위를 던져 피해 + 잠깐 둔화' },
+    skill: { name: '돌팔매', icon: '🪃', cd: 9, desc: '바라보는 방향으로 돌을 0.5초 간격 3연투 — 각도는 첫 발에 고정, 다 맞으면 꽤 아프다' },
+    skill2: { name: '융기', icon: '⛰️', cd: 14, desc: '전방에 돌벽을 솟게 해 3초간 길을 막는다 — 벽에 맞은 적은 밀쳐지며 1.5초 기절(돌팔매 연계)' },
     ult: { name: '바위감옥', icon: '🏔️', cd: 65, desc: '보이는 적 하나를 원형 돌벽으로 2.5초 가둔다 — 강제 1:1' },
   },
 }
@@ -249,7 +249,7 @@ export const ABILITY_SCALING = {
   chronomancer: { skill: { dmg: [40, 0.9], note: '적 뒤로 순간이동' }, skill2: { dot: [10, 0.2], dotDur: 3, note: '장판 안 이동·공격 둔화' }, ult: { dmg: [60, 0.9], note: '도착 충격파 · 4초 전 체력 복원' } },
   fearmonger: { skill: { dmg: [30, 0.55], note: '1.2초 공포(강제 도주)' }, skill2: { shield: [45, 0.7], note: '가속 + 어둠 장막' }, ult: { dmg: [40, 0.6], dot: [10, 0.18], dotDur: 2, note: '주변 전체 1.6초 공포' } },
   illusionist: { skill: { dmg: [50, 0.9], note: '분신이 적을 쫓아가 내리찍음(확정 명중) + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '연막 펑 — 3체 돌출, 전투 분신 2(평타 80%)' } },
-  terramancer: { skill: { note: '전방 돌벽 3초(길 막기)' }, skill2: { dmg: [45, 0.8], note: '0.9초 둔화' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
+  terramancer: { skill: { dmg: [30, 0.55], note: '0.5초 간격 3연투 · 각도는 첫 발에 고정' }, skill2: { dmg: [15, 0.25], note: '벽 명중 시 1.5초 기절 + 3초 길막' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
 }
 
 // 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 하이브리드는 공·주 평균, 그 외는 공격력.
@@ -683,6 +683,10 @@ export function createGame(players, opts = {}) {
       stealthT: 0, // 암살자 은신 남은 시간 — 적에게 안 보인다
       fearT: 0, // 공포(공포술사) — 시전자 반대 방향으로 강제 도주, 행동 불가
       fearFrom: null, // 공포 도주 기준점 {x, z}
+      slingN: 0, // 대지술사 돌팔매 — 남은 연투 수 (>0이면 시퀀스 진행 중)
+      slingT: 0, // 다음 발사까지 남은 시간
+      slingDir: 0, // 첫 발에 고정된 발사 각도
+      slingDmg: 0, // 발당 피해(시전 시점 스냅샷)
       hasteT: 0, // 힐러 가속 남은 시간 — 이동 속도 ↑
       tauntT: 0, // 탱커 도발에 걸린 시간 — tauntBy만 평타치게 된다
       tauntBy: null, // 나를 도발한 탱커 id
@@ -889,8 +893,12 @@ const DANCE_BURST_DIST = 3 // 환영난무: 연막에서 세 몸(본체+분신2)
 const QUAKE_WALL_LIFE = 3 // 융기 벽 지속(초)
 const QUAKE_WALL_AHEAD = 5.5 // 벽이 서는 전방 거리
 const QUAKE_WALL_SPAN = 3.3 // 벽 충돌 원 간격(원 반경 TOWER_RADIUS와 겹치게)
-const SLING_RANGE = 12 // 돌팔매 사거리
-const SLING_SLOW_T = 0.9 // 돌팔매 둔화(빙결 재활용)
+const SLING_RANGE = 12 // 돌팔매 조준 보조(가장 가까운 적) 탐색 반경
+const SLING_COUNT = 3 // 3연투
+const SLING_INTERVAL = 0.5 // 던지는 간격(초)
+const ROCK_SPEED = 26 // 돌덩이 비행 속도
+const ROCK_RANGE = 13 // 돌덩이 최대 비행 거리
+const QUAKE_STUN = 1.5 // 융기 벽에 맞은 적의 기절(돌팔매 연계 셋업)
 const CAGE_RANGE = 14 // 바위감옥 시전 사거리
 const CAGE_RADIUS = 5.2 // 감옥 반지름
 const CAGE_LIFE = 2.5 // 감옥 지속
@@ -1597,14 +1605,15 @@ const SKILLS = {
     h.stealthT = Math.max(h.stealthT, CLONE_STEALTH_T)
     pushFx(state, 'stealth', h.x, h.z, 2.5, h.team)
   },
-  // 대지술사 융기: 전방에 가로 돌벽(충돌 원 4개) — 3초간 길을 막는다(순수 지형, 피해 없음)
+  // 대지술사 돌팔매: 바라보는 방향으로 돌을 0.5초 간격 3연투 — 각도는 첫 발에 고정.
+  //  실제 발사는 stepHero의 slingN 시퀀스가 처리한다(이동하며 던질 수 있지만 각도는 안 바뀐다).
   terramancer(state, h) {
-    const cx = h.x + Math.cos(h.dir) * QUAKE_WALL_AHEAD
-    const cz = h.z + Math.sin(h.dir) * QUAKE_WALL_AHEAD
-    const along = h.dir + Math.PI / 2
-    raiseWallLine(state, cx, cz, along, 4)
-    const half = QUAKE_WALL_SPAN * 1.5 + 1.2
-    pushFxDir(state, 'quake', cx - Math.cos(along) * half, cz - Math.sin(along) * half, half * 2, along, h.team)
+    const foe = nearestFoeHero(state, h, SLING_RANGE)
+    if (foe) h.dir = Math.atan2(foe.z - h.z, foe.x - h.x) // 조준 보조 — 이 순간의 각도로 3발 고정
+    h.slingDir = h.dir
+    h.slingN = SLING_COUNT
+    h.slingT = 0 // 첫 발은 즉시
+    h.slingDmg = Math.round(skillDmg(h, 30, 0.55)) // 발당 피해 — 시전 시점 스냅샷(주문력 계수)
   },
 }
 
@@ -2194,15 +2203,31 @@ const SKILLS2 = {
     pushFx(state, 'blink', hx, hz, 2.5, h.team)
     pushFx(state, 'blink', h.x, h.z, 2.5, h.team)
   },
-  // 대지술사 돌팔매: 가장 가까운 적에게 바위 — 피해 + 잠깐 둔화(이동·공격 느려짐)
+  // 대지술사 융기: 전방에 가로 돌벽(충돌 원 4개) — 3초간 길을 막는다.
+  //  벽이 솟는 자리에 있던 적은 밀쳐지며(충돌이 처리) 미미한 피해 + 1.5초 기절 → 돌팔매 연계.
   terramancer(state, h) {
-    const foe = nearestFoeHero(state, h, SLING_RANGE)
-    if (!foe) return false
-    h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
-    damageHero(state, foe, skillDmg(h, 45, 0.8), h) // 주문력 계수
-    const cc = foe.rageT > 0 ? RAGE_CC_CUT : 1
-    foe.freezeT = Math.max(foe.freezeT, SLING_SLOW_T * cc)
-    pushFx(state, 'boom', foe.x, foe.z, 2.6, h.team)
+    const cx = h.x + Math.cos(h.dir) * QUAKE_WALL_AHEAD
+    const cz = h.z + Math.sin(h.dir) * QUAKE_WALL_AHEAD
+    const along = h.dir + Math.PI / 2
+    const before = state.tempWalls.length
+    raiseWallLine(state, cx, cz, along, 4)
+    // 벽 원에 깔린 적: 피해(미미) + 기절 — 방금 세운 원들만 검사
+    const hitR = TOWER_RADIUS + HERO_RADIUS + 0.4
+    const dmg = skillDmg(h, 15, 0.25) // 주문력 계수(낮음 — 셋업기)
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0) continue
+      let struck = false
+      for (let i = before; i < state.tempWalls.length && !struck; i++) {
+        const w = state.tempWalls[i]
+        if ((e.x - w.x) ** 2 + (e.z - w.z) ** 2 <= hitR * hitR) struck = true
+      }
+      if (!struck) continue
+      const cc = e.rageT > 0 ? RAGE_CC_CUT : 1
+      e.stunT = Math.max(e.stunT, QUAKE_STUN * cc)
+      damageHero(state, e, dmg, h)
+    }
+    const half = QUAKE_WALL_SPAN * 1.5 + 1.2
+    pushFxDir(state, 'quake', cx - Math.cos(along) * half, cz - Math.sin(along) * half, half * 2, along, h.team)
   },
 }
 
@@ -2363,6 +2388,7 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   victim.pullT = 0
   victim.fearT = 0
   victim.fearFrom = null
+  victim.slingN = 0 // 죽으면 남은 연투도 끊긴다
   // 영웅은 공중 분해 버스트 대신, 렌더러가 시체를 바닥에 쌓이는 파티클로 표현한다(부활까지 유지).
   // 킬 크레딧: 마지막으로 때린 적 영웅이 최근(KILL_CREDIT_T 초)일 때만. 오래됐으면
   //  미니언/타워에 의한 처형으로 보고 개인 크레딧/킬 보상 없이 처리한다.
@@ -2814,6 +2840,23 @@ function stepHero(state, h, dt) {
       h.revealT = Math.max(h.revealT, 0.4)
     }
   }
+  // 대지술사 돌팔매 3연투: 고정 각도(slingDir)로 SLING_INTERVAL마다 돌을 던진다.
+  //  이동하며 던질 수 있지만 각도는 안 바뀌고, 기절/공포 중엔 멈췄다가 풀리면 이어 던진다.
+  if (h.slingN > 0) {
+    h.slingT -= dt
+    if (h.slingT <= 0 && canAct(h)) {
+      h.slingT += SLING_INTERVAL
+      h.slingN--
+      h.dir = h.slingDir // 던지는 순간엔 고정 각도를 바라본다
+      state.projectiles.push({
+        id: state.nextId++, kind: 'rock', team: h.team, owner: h.id,
+        x: h.x + Math.cos(h.slingDir) * 1.4, z: h.z + Math.sin(h.slingDir) * 1.4,
+        vx: Math.cos(h.slingDir) * ROCK_SPEED, vz: Math.sin(h.slingDir) * ROCK_SPEED,
+        travel: 0, dmg: h.slingDmg,
+      })
+      h.revealT = Math.max(h.revealT, 0.5)
+    }
+  }
   // 시간술사: 일정 간격으로 현재 위치·체력 표본을 남긴다(깜빡임/역행이 과거로 되돌아갈 좌표).
   if (h.cls === 'chronomancer') {
     h.trailT -= dt
@@ -3220,6 +3263,43 @@ function stepProjectiles(state, dt) {
         if (owner) damageHero(state, grabbed, skillDmg(owner, 40, 0.7), owner) // 공격력 계수
         pushFx(state, 'blink', grabbed.x, grabbed.z, 2.5, p.team)
       } else if (p.travel >= p.max) {
+        remove.add(p.id)
+      }
+      continue
+    }
+    if (p.kind === 'rock') {
+      // 대지술사 돌덩이: 직선 비행 — 첫 적(영웅 > 미니언 > 정글몹)에 명중하면 피해 후 소멸
+      p.x += p.vx * dt
+      p.z += p.vz * dt
+      p.travel += ROCK_SPEED * dt
+      const owner = state.heroes.find((hh) => hh.id === p.owner) || { id: p.owner, team: p.team }
+      let done = false
+      for (const e of state.heroes) {
+        if (e.team === p.team || e.respawnT > 0 || dist2(p, e) > 1.7 * 1.7) continue
+        damageHero(state, e, p.dmg, owner)
+        done = true
+        break
+      }
+      if (!done) {
+        for (const m of state.minions) {
+          if (m.team === p.team || dist2(p, m) > 1.5 * 1.5) continue
+          damageMinion(state, m, p.dmg, owner)
+          done = true
+          break
+        }
+      }
+      if (!done) {
+        for (const m of state.monsters) {
+          if (!m.alive || dist2(p, m) > 2.4 * 2.4) continue
+          damageMonster(state, m, p.dmg, owner)
+          done = true
+          break
+        }
+      }
+      if (done) {
+        pushFx(state, 'boom', p.x, p.z, 1.6, p.team)
+        remove.add(p.id)
+      } else if (p.travel >= ROCK_RANGE) {
         remove.add(p.id)
       }
       continue
@@ -4217,7 +4297,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'chronomancer' && d < TIMEWARP_RANGE - 1) castSkill2(state, h.id) // 시간 지연으로 둔화·고립
     else if (h.cls === 'fearmonger' && h.hp < h.maxHp * 0.6) castSkill2(state, h.id) // 망령걸음(장막)으로 버틴다
     else if (h.cls === 'illusionist' && h.hp < h.maxHp * 0.45) castSkill2(state, h.id) // 분신과 자리바꿈으로 이탈
-    else if (h.cls === 'terramancer' && d < SLING_RANGE - 1) castSkill2(state, h.id) // 돌팔매 견제
+    else if (h.cls === 'terramancer' && d < QUAKE_WALL_AHEAD + 2) castSkill2(state, h.id) // 융기 기절 → 돌팔매 연계
   }
   const ready = h.skillCd <= 0
   if (ready) {
@@ -4236,7 +4316,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'swordmaster' && d < 6) castSkill(state, h.id) // 붙으면 발도 카운터(반격)
     else if (h.cls === 'fearmonger' && d < FEAR_RANGE - 1) castSkill(state, h.id) // 공포의 시선으로 흩어놓는다
     else if (h.cls === 'illusionist' && d < 10) castSkill(state, h.id) // 분신+은신으로 교란
-    else if (h.cls === 'terramancer' && d < QUAKE_WALL_AHEAD + 3 && foe.hp < foe.maxHp * 0.6) castSkill(state, h.id) // 도주로에 벽
+    else if (h.cls === 'terramancer' && d < SLING_RANGE - 2) castSkill(state, h.id) // 돌팔매 3연투
     // 힐러 치유·수호기사 보호막은 stepBots 위쪽에서 항상 챙긴다
   }
   if (h.ultCd > 0 || h.lvl < ULT_LEVEL) return
