@@ -1908,7 +1908,28 @@ const PROJ_LOOK = {
   lightarrow: { r: 0.6, y: 2.2, color: 0xfff4b0, glow: 5, trail: true }, // 빛의 화살 궁극기 (크고 환한 빛)
   hawk: { r: 0.7, y: 5.5, color: 0xffe066, glow: 4, trail: true }, // 궁수 사냥매 (높이 떠 날아가는 빛점)
   hook: { r: 0.55, y: 1.6, color: 0xcfd4e0, glow: 2.4 }, // 사슬잡이 갈고리 (낮게 직진하는 금속 집게)
-  rock: { r: 0.55, y: 1.8, color: 0xb0a48c, glow: 1.6 }, // 대지술사 돌덩이 (묵직한 갈색 돌)
+}
+
+// 대지술사 돌덩이 — 맵에 놓인 바위와 같은 저폴리 돌(면처리 회색)이 데굴데굴 구르며 날아간다
+function buildRockProj(p) {
+  const g = new THREE.Group()
+  const main = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.62, 0),
+    new THREE.MeshLambertMaterial({ color: 0x8a8f9c, flatShading: true })
+  )
+  const chip = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.3, 0),
+    new THREE.MeshLambertMaterial({ color: 0x7c818d, flatShading: true })
+  )
+  chip.position.set(0.4, 0.25, 0.15)
+  g.add(main, chip)
+  g.position.y = 1.8
+  const phase = (p.id % 20) * 0.7 // 돌마다 구르는 위상이 다르게
+  g.userData.spin = (t) => {
+    g.rotation.x = t * 9 + phase // 데굴데굴
+    g.rotation.z = t * 7 + phase
+  }
+  return g
 }
 
 // 돌풍술사 회오리 투사체 — 위로 갈수록 넓어지는 고리들을 쌓아 통째로 돌린다(앞으로 굴러가며 적을 띄움).
@@ -3469,6 +3490,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     // 투사체
     syncPool(scene, projPool, view.projectiles, (p) => {
       if (p.kind === 'tornado') return buildTornadoProj() // 돌풍술사 회오리 — 빙글빙글 도는 입체 회오리
+      if (p.kind === 'rock') return buildRockProj(p) // 대지술사 돌덩이 — 발광체가 아니라 진짜 돌
       const look = PROJ_LOOK[p.kind] || PROJ_LOOK.bolt
       const color = look.color ?? TEAM_COLOR[p.team]
       // 단색 구체 대신 "발광체": 밝은 코어 + 가산 후광 스프라이트(맥동) + (스킬은) 혜성 꼬리
