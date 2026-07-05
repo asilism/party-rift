@@ -78,6 +78,29 @@ function emojiSprite(emoji, scale = 2) {
   return sp
 }
 
+// ── 얼굴 이모지 좌우반전 ──
+// 옆모습 지신(🐴말·🐑양·🐔닭·🐍뱀 등)은 글꼴 기본이 왼쪽 보기라, 오른쪽으로 갈 때 뒤집어야
+// 이동 방향을 바라본다. 카메라가 -z를 내려다보므로 화면 오른쪽 = 월드 +x → cos(dir) 부호로 판정.
+// 위아래로 걸을 땐(|cos|이 작음) 마지막 판정을 유지해 얼굴이 파닥거리지 않게 한다(히스테리시스).
+export function mirrorFromDir(prev, dir) {
+  const dx = Math.cos(dir || 0)
+  if (dx > 0.25) return true
+  if (dx < -0.25) return false
+  return !!prev
+}
+
+// three의 Sprite는 음수 scale이 안 먹힌다(셰이더가 행렬 컬럼 length로 크기를 뽑음) —
+// 스프라이트마다 고유 캔버스 텍스처이므로 UV를 뒤집는다(repeat.x=-1). 판정 상태는 스프라이트에 기억.
+function faceToward(face, dir) {
+  const mirrored = mirrorFromDir(face.userData.mirrored, dir)
+  if (face.userData.mirrored === mirrored) return
+  face.userData.mirrored = mirrored
+  const tex = face.material.map
+  if (!tex) return
+  tex.repeat.x = mirrored ? -1 : 1
+  tex.offset.x = mirrored ? 1 : 0
+}
+
 // 부드러운 방사형 발광 텍스처 (가운데 흰빛 → 가장자리 투명). 발광체 후광·타격 스파크에 공용.
 let _glowTex = null
 function glowTexture() {
@@ -1822,7 +1845,7 @@ function buildMonster(m) {
   bar.position.y = look.r * 2 + look.size * 0.9
   const shadow = blobShadow(look.r * 1.3)
   g.add(shadow, body, face, bar)
-  g.userData = { bar, body }
+  g.userData = { bar, body, face }
   return g
 }
 
@@ -3203,6 +3226,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const bobOff = idleBob + wk.bounce * 0.55
         u.body.position.y = u.bodyBaseY + bobOff
         u.face.position.y = u.faceBaseY + bobOff // 얼굴도 함께 떠올라 몸통이 뚫지 않게
+        faceToward(u.face, h.dir) // 옆모습 지신은 가는 쪽을 본다
         if (h.whirlT <= 0 && h.airT <= 0) u.body.rotation.z = Math.sin(u.wphase) * 0.06 * wk.amt
         else u.body.rotation.z = 0
         // 다리 성큼성큼 + 팔 흔들기: 다리는 반대 위상, 팔은 같은 쪽 다리와 반대로(자연스러운 걸음)
@@ -3405,6 +3429,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
         ud2.anim?.(view.time) // 용 날갯짓·꼬리 / 바론 몸놀림·혀
         ud2.turn?.(m.dir ?? 0) // 공격 대상(또는 복귀 방향)을 부드럽게 바라본다
+        if (ud2.face) faceToward(ud2.face, m.dir ?? 0) // 이모지 얼굴 정글몹(늑대 등)도 좌우를 본다
         // 공격 모션: atkSeq가 바뀌면 0.45초짜리 물기/스트라이크 포즈를 재생한다
         if (ud2.pose) {
           if (m.atkSeq !== ud2.lastAtkSeq) {
@@ -3426,6 +3451,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         if (u.isClone) {
           obj.position.set(s.x, 0, s.z)
           u.body.rotation.y = -(s.dir || 0)
+          faceToward(u.face, s.dir) // 본체와 똑같이 얼굴도 가는 쪽을 봐야 분신 티가 안 난다
           setHpBar(u.bar, s.hp / s.maxHp)
           const stride = Math.sin(view.time * 9 + s.id) * 0.55
           if (u.legs) {
@@ -3466,6 +3492,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         // 포탑은 포신만, 펫은 몸 전체가 바라보는 방향으로 돈다
         const turn = u.turret ? u.body.userData?.head : u.body
         if (turn) turn.rotation.y = -(s.dir || 0)
+        if (!u.turret) faceToward(u.face, s.dir) // 늑대/곰 얼굴도 가는 쪽을 본다 (공구 이모지는 제외)
         // 휴면(zzz): 잠든 포탑은 표시를 띄우고 얼굴을 흐리게
         if (u.zzz) {
           u.zzz.visible = obj.visible && !!s.dormant
