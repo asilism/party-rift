@@ -1862,9 +1862,10 @@ function buildSummon(s, barColor) {
       new THREE.MeshLambertMaterial({ color: col, emissive: col, emissiveIntensity: 0.3 })
     )
     barrel.rotation.z = Math.PI / 2
-    barrel.position.set(look.r * 0.95, 0.35 + look.r * 0.7, 0)
-    body.add(base, head, barrel)
-    body.userData = { head } // 회전은 head/barrel만
+    barrel.position.set(look.r * 0.95, 0, 0) // head 기준 좌표 — head가 돌면 포신도 함께 돈다
+    head.add(barrel) // 포신을 head에 붙여야 s.dir 회전(발사 방향)과 포신이 일치한다
+    body.add(base, head)
+    body.userData = { head } // 회전은 head(+포신)만
   } else {
     body = new THREE.Mesh(
       new THREE.SphereGeometry(look.r, 9, 7),
