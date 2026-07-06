@@ -2805,18 +2805,28 @@ test('buildQuote: 재료가 없으면 정가, 중복 재료도 슬롯 단위로 
 
 // ── 신규 직업 3종: 공포(강제 도주) / 분신 / 임시 돌벽 ──
 
-test('공포술사 공포의 시선: 적이 반대 방향으로 강제 도주 + 행동 불가, 정화의 종으로 해제', () => {
+test('공포술사 공포의 시선: 통제를 잃고 랜덤 방향으로 내달린다(둔화) + 행동 불가, 정화의 종으로 해제', () => {
   const g = duo('fearmonger', 'tank')
   startPlaying(g)
   const f = g.heroes[0]
   const t = g.heroes[1]
   f.x = 0; f.z = 0; f.dir = 0
   t.x = 6; t.z = 0
+  // duo의 rng는 상수(0.5) 스텁 — 방향 "재추첨"을 보려면 호출마다 값이 달라져야 한다
+  let n = 0
+  g.rng = () => ((n += 0.37) % 1)
   castSkill(g, f.id)
-  assert.ok(t.fearT > 0, '공포에 걸렸다')
+  assert.ok(t.fearT >= 1.5, '공포에 걸렸다 — 갈팡질팡이 보일 만큼 길게(1.5초)')
   const x0 = t.x
+  const z0 = t.z
+  const dir0 = t.fearDir
   run(g, 0.5)
-  assert.ok(t.x > x0 + 1, '시전자 반대(+x)로 강제 도주한다')
+  const moved = Math.hypot(t.x - x0, t.z - z0)
+  assert.ok(moved > 0.5, '제자리에 있지 않고 어딘가로 달려간다')
+  // 0.5초 사이 방향 재추첨(0.4초 주기)이 한 번 일어난다 — 도주가 아니라 갈팡질팡
+  assert.notEqual(t.fearDir, dir0, '질주 방향이 무작위로 다시 뽑힌다')
+  // 약한 슬로우: 같은 시간 정상 이동(속도 배율 1)보다 짧게 간다 (0.7배 + 방향 꺾임)
+  assert.ok(moved < CLASSES[t.cls].speed * 0.5 * 0.95, '질주는 정상 이속보다 느리다(둔화)')
   t.skillCd = 0
   castSkill(g, t.id)
   assert.equal(t.skillCd, 0, '공포 중엔 스킬을 못 쓴다')
