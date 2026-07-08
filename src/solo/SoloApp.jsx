@@ -3,7 +3,7 @@ import { CLASSES, CLASS_IDS, TEAM_SIZE, TEAM_SIZES } from '../games/rift/engine.
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
 import { riftNet } from '../games/rift/netgame.js'
 import { createLocalNet } from '../net/localNet.js'
-import { loadSoloPick, saveSoloPick } from '../shared/storage.js'
+import { loadSoloPick, saveSoloPick, loadGuideSeen, saveGuideSeen } from '../shared/storage.js'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
 
 const RiftGame = lazy(() => import('../games/rift/RiftGame.jsx'))
@@ -49,7 +49,7 @@ export default function SoloApp() {
     saveSoloPick(pick)
     const n = createLocalNet(riftNet, {
       players: [],
-      config: { mode: pick.mode, roster: buildSoloRoster(pick) },
+      config: { mode: pick.mode, roster: buildSoloRoster(pick), botLevel: pick.botLevel },
       deviceId: 'solo',
     })
     netRef.current = n
@@ -71,11 +71,28 @@ export default function SoloApp() {
   )
 }
 
+// 봇 난이도 — engine BOT_LEVELS(easy/normal/hard)와 짝
+const BOT_LEVEL_OPTS = [
+  { id: 'easy', label: '😌 쉬움', desc: '봇이 뜸을 들이고 덜 아파요 — 처음이라면 여기부터' },
+  { id: 'normal', label: '⚔️ 보통', desc: '온라인과 같은 봇' },
+  { id: 'hard', label: '🔥 어려움', desc: '칼같이 반응하고 더 아프게' },
+]
+
 function SoloSetup({ onStart }) {
   const saved = loadSoloPick()
   const [zodiacId, setZodiacId] = useState(getZodiac(saved?.zodiacId) ? saved.zodiacId : 'tiger')
   const [cls, setCls] = useState(CLASSES[saved?.cls] ? saved.cls : null)
   const [mode, setMode] = useState(TEAM_SIZES[saved?.mode] ? saved.mode : '3v3')
+  // 처음 온 사람 기본값은 쉬움 — 저장된 선택이 있으면 그걸 따른다
+  const [botLevel, setBotLevel] = useState(
+    BOT_LEVEL_OPTS.some((o) => o.id === saved?.botLevel) ? saved.botLevel : 'easy'
+  )
+  // 첫 진입이면 조작 가이드를 자동으로 띄운다(닫으면 다시 안 뜸, ❓ 버튼으로 언제든)
+  const [helpOpen, setHelpOpen] = useState(() => !loadGuideSeen())
+  function closeHelp() {
+    saveGuideSeen()
+    setHelpOpen(false)
+  }
 
   return (
     <div className="solo">
@@ -96,9 +113,23 @@ function SoloSetup({ onStart }) {
               </button>
             ))}
           </div>
+          <button className="btn btn--ghost" onClick={() => setHelpOpen(true)} aria-label="조작법">❓ 조작법</button>
           <FullscreenButton />
         </div>
       </header>
+
+      <div className="solo__levels" role="radiogroup" aria-label="봇 난이도">
+        {BOT_LEVEL_OPTS.map((o) => (
+          <button
+            key={o.id}
+            className={`solo__level ${botLevel === o.id ? 'is-on' : ''}`}
+            title={o.desc}
+            onClick={() => setBotLevel(o.id)}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
 
       <div className="solo__zodiacs" role="radiogroup" aria-label="조디악 선택">
         {ZODIAC.map((z) => (
@@ -135,11 +166,53 @@ function SoloSetup({ onStart }) {
         <button
           className="btn btn--primary solo__start"
           disabled={!cls}
-          onClick={() => onStart({ zodiacId, cls, mode })}
+          onClick={() => onStart({ zodiacId, cls, mode, botLevel })}
         >
           {cls ? `⚔️ ${CLASSES[cls].icon} ${CLASSES[cls].name}(으)로 전투 시작` : '직업을 골라 주세요'}
         </button>
       </footer>
+
+      {helpOpen && <SoloHelp onClose={closeHelp} />}
+    </div>
+  )
+}
+
+// 조작 가이드 — 첫 실행 온보딩 겸 언제든 여는 도움말. 게임 목표 → 조작 → 성장 순서.
+function SoloHelp({ onClose }) {
+  return (
+    <div className="solo-help" onClick={onClose}>
+      <div className="solo-help__card" onClick={(e) => e.stopPropagation()}>
+        <h2 className="solo-help__title">🎮 처음 오셨나요?</h2>
+
+        <div className="solo-help__sec">
+          <h3>🏆 목표</h3>
+          <p>3갈래 레인의 <b>타워</b>를 부수며 전진해 적 <b>넥서스</b>를 터뜨리면 승리!</p>
+        </div>
+
+        <div className="solo-help__sec">
+          <h3>🕹️ 조작 <small>(게임 중 ⚙️ 설정에서 바꿀 수 있어요)</small></h3>
+          <ul>
+            <li>⌨️ <b>키보드</b> — WASD·화살표 이동 · <b>L</b> 평타 · <b>H/J/K</b> 스킬 · <b>1·2</b> 아이템</li>
+            <li>📱 <b>모바일/터치</b> — 왼쪽 드래그로 이동 · 오른쪽 버튼으로 공격/스킬</li>
+            <li>🎮 <b>Xbox 패드</b> — 스틱 이동 · A 평타 · X/Y/B 스킬 · LB·RB 아이템</li>
+          </ul>
+        </div>
+
+        <div className="solo-help__sec">
+          <h3>📈 성장</h3>
+          <p>
+            미니언·정글몹을 잡아 <b>경험치·골드</b>를 모으고, 우물(시작 지점)에서 🛒 <b>상점</b>으로 장비를 맞춰요.
+            Lv3에 보조 스킬, Lv5에 궁극기가 열려요.
+          </p>
+        </div>
+
+        <div className="solo-help__sec">
+          <h3>💡 꿀팁</h3>
+          <p>🌿 수풀에 숨으면 안 보여요 · 🐉 용/👹 바론은 팀 버프 · 위험하면 🏠 귀환!</p>
+        </div>
+
+        <button className="btn btn--primary solo-help__ok" onClick={onClose}>알겠어요, 시작할게요!</button>
+      </div>
     </div>
   )
 }

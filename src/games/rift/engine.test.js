@@ -3169,3 +3169,35 @@ test('공포술사 단말마: 보이는 적이 없으면 쿨을 환불한다', (
   castUlt(g, f.id)
   assert.equal(f.ultCd, 0, '불발 — 쿨 안 씀')
 })
+
+// ── 봇 난이도 (솔로 모드) ──
+test('봇 난이도: 봇 영웅의 피해만 배율로 조정되고, 사람 피해는 그대로', () => {
+  // 같은 상황(고정 rng)에서 어쌔신이 전사를 평타 — 공격자가 봇/사람일 때를 난이도별 비교
+  const hit = (botLevel, botAttacks) => {
+    const players = humans().map((p) => (p.team === 'red' ? { ...p, isBot: true } : p))
+    const g = createGame(players, { botLevel, rng: () => 0.5 })
+    startPlaying(g)
+    const bot = g.heroes.find((h) => h.isBot && h.cls === 'assassin')
+    const man = g.heroes.find((h) => !h.isBot && h.cls === 'warrior')
+    const [atk, vic] = botAttacks ? [bot, man] : [man, bot]
+    atk.x = 0
+    atk.z = 0
+    vic.x = 2
+    vic.z = 0
+    const before = vic.hp
+    castAttack(g, atk.id)
+    run(g, 0.3)
+    return before - vic.hp
+  }
+  const normal = hit('normal', true)
+  const easy = hit('easy', true)
+  const hard = hit('hard', true)
+  assert.ok(normal > 0)
+  assert.ok(Math.abs(easy / normal - 0.65) < 0.02, `easy 배율 0.65 (실제 ${easy / normal})`)
+  assert.ok(Math.abs(hard / normal - 1.15) < 0.02, `hard 배율 1.15 (실제 ${hard / normal})`)
+  // 사람이 주는 피해는 난이도와 무관
+  assert.equal(hit('easy', false), hit('hard', false))
+  // 지정 없으면(온라인 서버 경로) 항상 normal
+  assert.equal(createGame(humans()).botLevel, 'normal')
+  assert.equal(createGame(humans(), { botLevel: '없는난이도' }).botLevel, 'normal')
+})

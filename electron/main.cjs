@@ -25,9 +25,15 @@ async function shot(win, name) {
   fs.writeFileSync(path.join(smokeDir, name), img.toPNG())
 }
 
-// 스모크: 설정 화면 캡처 → 첫 직업 선택 → 전투 시작 → 전장 렌더 캡처 → 종료
+// 스모크: (첫 실행이면 가이드 캡처 후 닫기) → 설정 화면 캡처 → 직업 선택 → 전투 시작 → 전장 캡처 → 종료
 async function runSmoke(win) {
   await delay(2500)
+  const hasGuide = await win.webContents.executeJavaScript(`!!document.querySelector('.solo-help')`)
+  if (hasGuide) {
+    await shot(win, 'solo-guide.png')
+    await win.webContents.executeJavaScript(`document.querySelector('.solo-help__ok')?.click()`)
+    await delay(300)
+  }
   await shot(win, 'solo-setup.png')
   // 직업 선택 → (리액트 리렌더로 시작 버튼이 풀릴 때까지 한 박자) → 전투 시작
   await win.webContents.executeJavaScript(`document.querySelector('.draft-class')?.click()`)

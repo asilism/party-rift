@@ -2706,3 +2706,32 @@ body {
 .draft-class.is-on { border-color: var(--accent); background: rgba(255, 207, 77, 0.14); }
 .solo__footer { flex-shrink: 0; display: flex; justify-content: center; }
 .solo__start { min-width: 260px; font-size: 15px; }
+
+/* 솔로 — 봇 난이도 선택 */
+.solo__levels { display: flex; gap: 6px; flex-shrink: 0; }
+.solo__level {
+  padding: 6px 14px; border-radius: 10px; border: 2px solid var(--line); cursor: pointer;
+  background: rgba(255, 255, 255, 0.04); color: var(--text); font-weight: 800; font-size: 13px;
+  transition: border-color .12s, background .12s;
+}
+.solo__level:hover { border-color: var(--accent); }
+.solo__level.is-on { border-color: var(--accent); background: rgba(255, 207, 77, 0.14); }
+
+/* 솔로 — 조작 가이드(첫 실행 온보딩) */
+.solo-help {
+  position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+  background: rgba(5, 8, 20, 0.72); backdrop-filter: blur(3px); padding: 16px;
+}
+.solo-help__card {
+  width: min(560px, 94vw); max-height: 90dvh; overflow-y: auto;
+  background: #141b38; border: 2px solid var(--line); border-radius: 16px;
+  padding: clamp(14px, 3vh, 22px) clamp(16px, 3vw, 24px);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.solo-help__title { margin: 0; font-size: clamp(17px, 3vh, 22px); }
+.solo-help__sec h3 { margin: 0 0 3px; font-size: clamp(13px, 2.4vh, 15px); }
+.solo-help__sec h3 small { color: var(--muted); font-weight: 600; font-size: 0.82em; }
+.solo-help__sec p, .solo-help__sec ul { margin: 0; color: var(--muted); font-size: clamp(12px, 2.2vh, 13.5px); line-height: 1.55; }
+.solo-help__sec ul { padding-left: 18px; }
+.solo-help__sec b { color: var(--text); }
+.solo-help__ok { margin-top: 4px; align-self: center; min-width: 220px; }
