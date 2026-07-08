@@ -1,0 +1,28 @@
+# 조디악 러쉬 데스크톱 설치본 패키징 (electron-builder)
+#   npm run app:pack  →  release/ 에 Windows NSIS 설치본 + 포터블 exe
+# 아이콘은 scripts/render-icon.cjs 가 favicon.svg에서 만든 build/icon.png (512px).
+appId: rush.zodiac.desktop
+productName: ZODIAC RUSH
+directories:
+  output: release
+  buildResources: build
+# 앱에 들어가는 건 빌드된 웹(dist)과 Electron 셸뿐 — 웹 의존성은 전부 dist에 번들돼 있다
+files:
+  - dist/**/*
+  - electron/**/*
+  - "!node_modules/**/*"
+asar: true
+# 로컬에 이미 설치된 Electron 배포본을 그대로 사용 — 별도 다운로드·추출을 건너뛴다.
+# (Windows에서 추출 임시폴더 rename이 백신 스캔에 막히는 EPERM 회피 겸 빌드 속도 ↑)
+electronDist: node_modules/electron/dist
+win:
+  icon: build/icon.png
+  target:
+    - nsis
+    - portable
+nsis:
+  oneClick: true
+  shortcutName: ZODIAC RUSH
+  artifactName: ZodiacRush-Setup-${version}.${ext}
+portable:
+  artifactName: ZodiacRush-Portable-${version}.${ext}
