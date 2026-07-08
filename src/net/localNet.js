@@ -13,7 +13,8 @@ const now = () => (typeof performance !== 'undefined' ? performance.now() : Date
 
 // players: 사람 참가자(로컬은 보통 1명). 부족 인원은 adapter.buildParticipants가 봇으로 채우거나,
 // config.roster로 완성된 로스터를 직접 넘길 수 있다(온라인 드래프트와 같은 계약).
-export function createLocalNet(adapter, { players, config, deviceId = 'solo' } = {}) {
+// onFinish(view): 경기가 끝나는 순간(최초 finished 스냅샷) 한 번 호출 — 전적 기록 등에 쓴다.
+export function createLocalNet(adapter, { players, config, deviceId = 'solo', onFinish } = {}) {
   const { players: roster, opts } = adapter.buildParticipants(players, config)
   const sim = new RealtimeSim(adapter, adapter.createGame(roster, opts))
   const myId = racerIdFor(roster, deviceId)
@@ -21,14 +22,19 @@ export function createLocalNet(adapter, { players, config, deviceId = 'solo' } =
   const subs = new Set()
   let lastView = null // 델타 기준 — null이면 다음 방송은 full
   let paused = false
+  let finished = false // onFinish를 한 번만
   let last = now()
 
   const timer = setInterval(() => {
     const t = now()
     if (!paused) sim.advance(t - last)
     last = t
-    if (!subs.size) return
     const view = { ...sim.view(), paused }
+    if (view.status === 'finished' && !finished) {
+      finished = true
+      onFinish?.(view)
+    }
+    if (!subs.size) return
     const bytes = encodeSnapshot(lastView, view)
     lastView = view
     for (const fn of subs) fn(bytes)
@@ -57,6 +63,7 @@ export function createLocalNet(adapter, { players, config, deviceId = 'solo' } =
       paused = !!p
     },
     getRtt: () => 0, // 로컬은 왕복 지연 없음 — HUD 핑 표시는 0이면 숨겨진다
+    _sim: sim, // 테스트/디버그용 로컬 시뮬 핸들 (게임 코드는 쓰지 말 것)
     close() {
       clearInterval(timer)
       subs.clear()
