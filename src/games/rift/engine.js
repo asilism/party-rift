@@ -162,7 +162,8 @@ export const CLASSES = {
   engineer: {
     name: '엔지니어', icon: '🔧', desc: '미니포탑을 설치해 진영을 장악하는 기술자',
     hp: 500, hpLvl: 54, atk: 46, atkLvl: 7, range: 9, atkCd: 0.9, speed: 12.4,
-    skill: { name: '미니포탑 설치', icon: '🔧', cd: 10, desc: '발밑에 자동 사격 포탑을 세운다(최대 2기, 초과 시 오래된 것 회수)' },
+    // cd는 "포탑 재고"가 1개 차오르는 시간 — 재고(최대 3)가 있으면 즉시 설치할 수 있어 길게 잡는다
+    skill: { name: '미니포탑 설치', icon: '🔧', cd: 20, desc: '재고를 써서 자동 사격 포탑을 세운다(재고는 20초마다 +1·최대 3개, 동시 3기 유지 — 초과 설치 시 오래된 것 회수)' },
     skill2: { name: '과부하', icon: '⚙️', cd: 14, desc: '내 포탑들의 공격속도를 잠시 크게 올린다' },
     ult: { name: '거포 설치', icon: '💥', cd: 60, desc: '강력한 장거리 거포를 세운다 — 넓은 사거리·큰 피해' },
   },
@@ -465,7 +466,8 @@ const SUMMON_SPEC = {
   bear: { hp: 760, dmg: 64, coef: 0.3, range: 3.2, aggro: 18, speed: 8.6, mobile: true, cd: 1.1, life: 16 },
   // 미니포탑: 기본 체력은 평타 두어 대 수준이지만 주력 스탯(hpCoef)에 비례해 단단해진다 — 후반에 평타 한 방에 안 터지게.
   //  주인(엔지니어)이 사거리 안에 없으면 잠시 뒤 휴면(zzz).
-  turret: { hp: 110, hpCoef: 1.0, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: 22 },
+  // 미니포탑은 수명이 없다 — 부서지거나(4기째 설치로) 회수되기 전까지 자리를 지킨다
+  turret: { hp: 110, hpCoef: 1.0, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity },
   cannon: { hp: 560, hpCoef: 0.8, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 },
 }
 const BEAST_LEAP_DUR = 0.45 // 사냥 명령 시 야수가 적에게 달려드는(도약) 시간 — 거리 무시
@@ -517,6 +519,7 @@ const GOLD_WOLF = 36 // 정글몹 보상 +50% (정글이 더 매력적이게)
 const GOLD_DRAGON = 68 // 용 — 팀 전원 (+50%)
 const GOLD_BARON = 98 // 바론 — 팀 전원 (+50%)
 const GOLD_TOWER = 48 // 타워 파괴 — 팀 전원
+const GOLD_SUMMON = 3 // 소환물(포탑/펫/분신) 처치 — 잡은 영웅에게 소량 (경험치는 없음)
 const GOLD_KILL = 200 // 적 영웅 처치 — 킬러(막타) 기본값
 const GOLD_ASSIST = 50 // 어시스트 — 사망 직전 7초 내 피해를 준 적(킬러 제외)
 // 연속 데스(킬/어시 없이 죽기만 한) 캐릭터를 잡으면 킬골드가 줄어든다 — 안티 스노우볼.
@@ -730,6 +733,9 @@ export function createGame(players, opts = {}) {
       botStuckT: 0, // 제자리에 박혀 못 움직인 누적 시간 (BOT_STUCK_T 넘으면 귀환)
       botRecall: false, // 끼임 구제용 귀환을 스스로 시전 중인지
       botReact: -1, // 평타 반응 지연 타이머 (쿨이 돌아온 뒤 사람처럼 잠깐 뜸들이고 친다)
+      botBigT: 0, // 이 시각까지 용/바론 평타 허용 (커밋 없이 지나가다 어그로 끄는 사고 방지)
+      botFocus: null, // 공성 집중 표적(타워/넥서스) — botLaneMove가 정하고 다음 틱 평타가 쓴다
+      turretStock: 1, // 엔지니어 포탑 설치 재고 — 1개 들고 시작, skillCd가 돌 때마다 1개 충전(최대 3, stepHero)
     }
   })
   for (const h of heroes) {
@@ -817,6 +823,9 @@ export function makeBot(state, id) {
   h.botStuckT = 0
   h.botRecall = false
   h.botReact = -1
+  h.botBigT = 0
+  h.botFocus = null
+  h.navPath = null // 경로탐색 캐시 (steerToward/navWaypoint)
   return h
 }
 
@@ -1039,6 +1048,37 @@ function nearestFoeHero(state, h, range) {
   return best
 }
 
+// 보이는 적 "영웅 또는 분신" — 환영무희 분신은 겉모습이 본체와 똑같으므로 평타 자동조준·
+// 봇 교전 판단에서 영웅과 같은 우선순위로 잡혀야 진짜 미끼가 된다. (스킬 자동조준은
+// 내부 필드가 다른 분신에 damageHero를 태울 수 없어 기존 nearestFoeHero를 그대로 쓴다)
+function nearestFoeHeroLike(state, h, range) {
+  const r2 = range * range
+  let best = null
+  let bd = r2
+  let clone = false
+  for (const e of state.heroes) {
+    if (e.team === h.team || e.respawnT > 0) continue
+    if (!isHeroVisible(state, e, h.team)) continue
+    const d = dist2(h, e)
+    if (d < bd) {
+      bd = d
+      best = e
+      clone = false
+    }
+  }
+  for (const s of state.summons) {
+    if (s.kind !== 'clone' || s.team === h.team) continue
+    if (!isHeroVisible(state, s, h.team)) continue // 분신도 안개/시야 규칙을 따른다
+    const d = dist2(h, s)
+    if (d < bd) {
+      bd = d
+      best = s
+      clone = true
+    }
+  }
+  return best ? { e: best, clone } : null
+}
+
 // 야수가 달려들 표적 — 인지(aggro) 범위 안에서 가장 가까운 적 영웅 > 적 미니언 > 정글몹.
 //  범위 안이면 거리를 무시하고(아무리 멀어도 범위 안이면) 바로 도약한다. {target, tk} 또는 null.
 function nearestLeapTarget(state, s, range) {
@@ -1076,8 +1116,9 @@ function findLeapEntity(state, s) {
 }
 
 function findAttackTarget(state, h, range) {
-  const hero = nearestFoeHero(state, h, range)
-  if (hero) return { tk: 'hero', id: hero.id }
+  // 영웅과 "분신"은 같은 우선순위 — 분신이 더 가까우면 평타가 분신에게 간다(미끼 성립)
+  const hero = nearestFoeHeroLike(state, h, range)
+  if (hero) return hero.clone ? { tk: 'summon', id: hero.e.id } : { tk: 'hero', id: hero.e.id }
   // 구조물(타워/넥서스)은 몸통 반경이 커서 중심까지 못 붙는다.
   //  → 충돌체 표면까지의 거리(중심거리−반경)로 사거리를 재야 근접도 때릴 수 있다.
   //    (안 그러면 넥서스 반경 4.5 + 영웅 반경 1.3 = 5.8까지밖에 못 붙는데
@@ -1094,6 +1135,9 @@ function findAttackTarget(state, h, range) {
   }
   for (const m of state.monsters) {
     if (!m.alive) continue
+    // 봇은 용/바론을 "잡기로 결심한 동안"(botBigT — stepBots 커밋 분기가 갱신)에만 노린다.
+    // 지나가다 평타로 어그로를 끌어 홀로 두들겨 맞던 자멸 사고 방지 (늑대는 자유롭게 사냥)
+    if (h.isBot && m.kind !== 'wolf' && !((h.botBigT || 0) > state.time)) continue
     const d = dist(h, m)
     if (d < bd) {
       bd = d
@@ -1297,11 +1341,22 @@ export function resetShop(state, id) {
 }
 
 // ── 기본공격: 사거리 안 가장 가까운 적에게 자동 조준 ──
-export function castAttack(state, id) {
+//  forceRef(봇 공성용 집중 표적): 사거리 안이고 칠 수 있으면 자동 표적보다 우선한다 —
+//  미니언 방패 뒤에서 평타가 곁의 미니언으로 새지 않고 타워/넥서스에 꽂히게.
+export function castAttack(state, id, forceRef = null) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
   if (!h || !canAct(h) || h.atkCd > 0 || h.castT > 0) return state
   let ref = findAttackTarget(state, h, heroRange(h))
+  if (forceRef) {
+    const t = targetEntity(state, forceRef)
+    const vuln =
+      forceRef.tk === 'tower' ? t && towerVulnerable(state, t)
+      : forceRef.tk === 'nexus' ? nexusVulnerable(state, forceRef.id)
+      : !!t
+    const surf = forceRef.tk === 'tower' ? TOWER_RADIUS : forceRef.tk === 'nexus' ? NEXUS_RADIUS : 0
+    if (t && vuln && dist(h, t) - surf <= heroRange(h)) ref = forceRef
+  }
   // 도발: 사거리 안이면 무조건 나를 도발한 탱커만 평타친다
   if (h.tauntT > 0) {
     const tk = state.heroes.find((o) => o.id === h.tauntBy && o.team !== h.team && o.respawnT <= 0)
@@ -1329,7 +1384,18 @@ export function castAttack(state, id) {
 export function castSkill(state, id) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
-  if (!h || !canAct(h) || h.skillCd > 0 || h.castT > 0) return state
+  if (!h || !canAct(h) || h.castT > 0) return state
+  // 엔지니어 포탑: 쿨다운제가 아니라 재고제 — 재고가 있으면 쿨다운 중에도 즉시 설치한다.
+  //  (skillCd는 "다음 재고가 차오르는" 시간 — stepHero가 다 돌면 재고를 1개 채우고 타이머를 다시 돌린다)
+  if (h.cls === 'engineer') {
+    if ((h.turretStock || 0) <= 0) return state
+    SKILLS.engineer(state, h)
+    cancelRecall(h)
+    h.turretStock--
+    h.revealT = Math.max(h.revealT, REVEAL_TIME)
+    return state
+  }
+  if (h.skillCd > 0) return state
   const ok = SKILLS[h.cls](state, h)
   if (ok === false) return state // 대상이 없으면 쿨다운을 안 쓴다
   cancelRecall(h) // 스킬을 쓰면 집중이 풀린다
@@ -2249,6 +2315,9 @@ function damageInShape(state, attacker, pred, dmg, stun, freeze = 0, root = 0) {
   for (const m of state.monsters) {
     if (m.alive && pred(m)) damageMonster(state, m, dmg, attacker)
   }
+  for (const s of state.summons) {
+    if (s.team !== attacker.team && pred(s)) damageSummon(state, s, dmg, attacker)
+  }
 }
 
 // (x,z) 주변 동심원 범위 피해
@@ -2477,6 +2546,7 @@ function damageMonster(state, m, amount, attacker) {
 
 function damageTower(state, t, amount, attacker) {
   if (!t.alive || !towerVulnerable(state, t)) return
+  t.lastHurt = state.time // 공성당하는 중 — 봇 수비 콜 판정용
   t.hp -= amount
   if (t.hp > 0) return
   t.hp = 0
@@ -2524,7 +2594,7 @@ function applyDamage(state, ref, amount, attacker) {
   else if (ref.tk === 'monster') damageMonster(state, e, amount, attacker)
   else if (ref.tk === 'tower') damageTower(state, e, amount, attacker)
   else if (ref.tk === 'nexus') damageNexus(state, ref.id, amount, attacker)
-  else if (ref.tk === 'summon') damageSummon(state, e, amount)
+  else if (ref.tk === 'summon') damageSummon(state, e, amount, attacker)
 }
 
 // 처치 경험치는 근처의 같은 팀 영웅이 "나눠" 갖는다(킬러는 어디 있든 포함).
@@ -2645,9 +2715,20 @@ function stepHero(state, h, dt) {
   }
   h.couldShop = cs
   h.atkCd = Math.max(0, h.atkCd - dt)
+  const skillWas = h.skillCd
   h.skillCd = Math.max(0, h.skillCd - dt)
   h.skill2Cd = Math.max(0, h.skill2Cd - dt)
   h.ultCd = Math.max(0, h.ultCd - dt)
+  // 엔지니어 포탑 재고: skillCd는 "다음 재고" 충전 타이머 — 막 다 돌았으면 1개 채우고,
+  // 아직 최대(3개)가 아니면 타이머를 다시 돌린다. 설치(castSkill)는 재고만 소모한다.
+  if (h.cls === 'engineer') {
+    if (skillWas > 0 && h.skillCd <= 0 && (h.turretStock ?? 0) < ENGI_MAX_TURRETS) {
+      h.turretStock = (h.turretStock ?? 0) + 1
+    }
+    if ((h.turretStock ?? 0) < ENGI_MAX_TURRETS && h.skillCd <= 0) {
+      h.skillCd = CLASSES.engineer.skill.cd * (1 - itemBonus(h).cdr)
+    }
+  }
   for (const k in h.itemCd) {
     h.itemCd[k] = Math.max(0, h.itemCd[k] - dt)
     if (h.itemCd[k] === 0) delete h.itemCd[k] // 다 돈 쿨은 지워 스냅샷을 가볍게
@@ -2915,7 +2996,7 @@ function stepMinions(state, dt) {
       m.defending = false
     }
 
-    // 1) 평소 타게팅: 시야 안 미니언 → 영웅 → 타워/넥서스
+    // 1) 평소 타게팅: 시야 안 미니언 → 소환물(포탑/펫/분신) → 영웅 → 타워/넥서스
     if (!tgt) {
       for (const o of state.minions) {
         if (o.team === m.team) continue
@@ -2923,6 +3004,16 @@ function stepMinions(state, dt) {
         if (d < bd) {
           bd = d
           tgt = { ref: { tk: 'minion', id: o.id }, e: o }
+        }
+      }
+    }
+    if (!tgt) {
+      for (const o of state.summons) {
+        if (o.team === m.team) continue
+        const d = dist2(m, o)
+        if (d < bd) {
+          bd = d
+          tgt = { ref: { tk: 'summon', id: o.id }, e: o }
         }
       }
     }
@@ -3147,6 +3238,14 @@ function pickTowerTarget(state, t, r2, used) {
     if (m.team === t.team || used.has('minion:' + m.id)) continue
     const d = dist2(t, m)
     if (d < bd) { bd = d; ref = { tk: 'minion', id: m.id } }
+  }
+  if (ref) return ref
+  // 2.5) 사거리 안 적 소환물(엔지니어 포탑/펫/분신)도 미니언 다음 순위로 걷어낸다
+  bd = r2
+  for (const s of state.summons) {
+    if (s.team === t.team || used.has('summon:' + s.id)) continue
+    const d = dist2(t, s)
+    if (d < bd) { bd = d; ref = { tk: 'summon', id: s.id } }
   }
   if (ref) return ref
   // 3) 미니언도 없으면 그제야 보이는 적 영웅
@@ -3521,8 +3620,11 @@ function spawnSummon(state, owner, kind, x, z) {
   })
 }
 
-function damageSummon(state, s, amount) {
+function damageSummon(state, s, amount, attacker) {
+  const wasAlive = s.hp > 0
   s.hp -= amount // 제거는 stepSummons에서 hp<=0이면 처리
+  // 처치 보상: 잡은 게 영웅이면 소량의 골드 (경험치는 없음 — 소환물 파밍으로 레벨이 새지 않게)
+  if (wasAlive && s.hp <= 0 && attacker?.items) awardGold(state, attacker, GOLD_SUMMON, s.x, s.z)
 }
 
 // 소환물 갱신: 수명 감소, 가까운 적을 향해 이동/공격, 적이 없으면 (이동형은) 주인을 따라간다.
@@ -3693,7 +3795,8 @@ const BOT_REACT_MIN = 0.13
 const BOT_REACT_MAX = 0.3
 
 // 봇 평타: 쿨이 끝나면 곧장 쏘지 않고 짧은 반응 지연을 굴린 뒤 친다.
-function botAttack(state, h, dt) {
+//  ref: 공성 집중 표적(타워/넥서스) — castAttack이 사거리를 검증하고 우선 조준한다.
+function botAttack(state, h, dt, ref = null) {
   if (h.atkCd > 0) {
     h.botReact = -1 // 쿨 도는 중 — 다음에 쿨이 끝나면 반응 지연을 새로 뽑는다
     return
@@ -3701,7 +3804,7 @@ function botAttack(state, h, dt) {
   if (h.botReact < 0) h.botReact = BOT_REACT_MIN + state.rng() * (BOT_REACT_MAX - BOT_REACT_MIN)
   h.botReact -= dt
   if (h.botReact <= 0) {
-    castAttack(state, h.id) // 사거리 안 표적이 없으면 castAttack이 알아서 거른다(쿨 안 씀)
+    castAttack(state, h.id, ref) // 사거리 안 표적이 없으면 castAttack이 알아서 거른다(쿨 안 씀)
     h.botReact = -1
   }
 }
@@ -3718,7 +3821,7 @@ function stepAutoAttack(state) {
       const tk = state.heroes.find((o) => o.id === h.tauntBy && o.team !== h.team && o.respawnT <= 0)
       if (tk && dist(h, tk) <= heroRange(h)) { castAttack(state, h.id); continue }
     }
-    if (nearestFoeHero(state, h, heroRange(h))) castAttack(state, h.id)
+    if (nearestFoeHeroLike(state, h, heroRange(h))) castAttack(state, h.id) // 분신도 영웅처럼 자동평타 대상
   }
 }
 
@@ -3841,11 +3944,17 @@ function teamCanTakeMonster(allies, big) {
   let dps = 0
   for (const a of allies) dps += heroDps(a)
   const killT = big.hp / Math.max(1, dps)
-  if (killT > (big.kind === 'baron' ? 18 : 13)) return false // 너무 오래 걸리면 분노가 폭발한다
+  // 너무 오래 걸리면 분노가 폭발한다 — 화력이 안 나오는(저레벨·소수) 도전은 여기서 걸러진다
+  if (killT > (big.kind === 'baron' ? 15 : 12)) return false
   const spec = big.kind === 'baron' ? BARON : DRAGON
   // 분노는 교전 내내 0→killT로 쌓이므로 평균은 그 절반으로 본다
   const avgRage = 1 + spec.enrage * Math.min(ENRAGE_MAX, killT) * 0.5
   const monsterTotal = ((spec.dmg * avgRage) / spec.cd) * killT
+  // 몬스터는 마지막으로 때린 영웅을 물어 피해가 분산되지만, 물릴 만한 가장 튼튼한
+  // 아군조차 총 피해의 절반을 못 받아내면 하나씩 잘려나간다 — 무른 조합의 자멸 방지.
+  let tank = 0
+  for (const a of allies) tank = Math.max(tank, a.hp / dmgTakenMult(a))
+  if (monsterTotal * 0.5 > tank) return false
   let teamEffHp = 0
   for (const a of allies) teamEffHp += a.hp / dmgTakenMult(a)
   return monsterTotal < teamEffHp * 0.6 // 팀 유효 체력의 60% 안쪽 피해면 감당 가능으로 본다
@@ -3905,12 +4014,17 @@ function computeDefensePlan(state) {
       }
       let mn = 0
       for (const m of state.minions) if (m.team === en && dist(m, t) < TOWER_RANGE + 4) mn++
-      // 평상시 라인전은 수비 콜이 아니다: 내곽부터는 적 영웅 1명, 외곽은 2명부터,
-      // 넥서스는 영웅 없이 웨이브(3마리)만 닿아도 위험으로 본다.
-      const danger = (t.tier >= 2 ? hs >= 1 : hs >= 2) || (t.tier === 4 && mn >= 3)
+      const hurt = t.lastHurt != null && state.time - t.lastHurt < 4 // 실제로 두들겨 맞는 중
+      // 평상시 라인전은 수비 콜이 아니다: 내곽부터는 적 영웅 1명, 외곽은 영웅 2명부터 —
+      // 단, 외곽도 (영웅 1명이 실제로 타워를 치거나 미니언을 끼고 있으면) 위험으로 본다.
+      // 영웅 없이도 큰 웨이브(4마리+)가 타워를 갉아먹으면 수비를 보내고,
+      // 넥서스는 웨이브(3마리)만 닿아도 위험이다.
+      const danger =
+        (t.tier >= 2 ? hs >= 1 : hs >= 2 || (hs >= 1 && (hurt || mn >= 2))) ||
+        (mn >= 4 && hurt) || (t.tier === 4 && mn >= 3)
       if (!danger) continue
       const s =
-        (hs * 2 + (mn >= 4 ? 1 : 0)) *
+        (hs * 2 + (mn >= 4 ? 1 : 0) + (hurt ? 1 : 0)) *
         (t.tier === 4 ? 2.2 : t.tier === 3 ? 1.8 : t.tier === 2 ? 1.3 : 1)
       if (s > score) {
         score = s
@@ -3937,6 +4051,103 @@ function computeDefensePlan(state) {
     }
   }
   return plan
+}
+
+// ── 아군 구조 콜: 근처에서 적 영웅에게 맞고 있는 아군이 있으면 그 교전 지점을 돌려준다 ──
+const BOT_RESCUE_DIST = 45 // 이 안에서 벌어진 아군 교전에는 달려가 돕는다
+function botFindRescue(state, h) {
+  let best = null
+  let bd = BOT_RESCUE_DIST * BOT_RESCUE_DIST
+  for (const e of state.heroes) {
+    if (e.team === h.team || e.respawnT > 0 || !isHeroVisible(state, e, h.team)) continue
+    const d = dist2(h, e)
+    if (d >= bd) continue
+    // 이 적 곁(16)에서 최근에 맞은 아군이 있어야 "교전"이다
+    const victim = state.heroes.some(
+      (a) => a !== h && a.team === h.team && a.respawnT <= 0 &&
+        state.time - a.lastHurt < 2.5 && dist2(a, e) < 16 * 16
+    )
+    if (!victim) continue
+    // 뻔히 지는 싸움엔 몸을 던지지 않는다: 내가 합류해도 수적 열세면 관망 (교전 반경 20 기준)
+    let foes = 0
+    let mates = 1 // 나
+    for (const o of state.heroes) {
+      if (o.respawnT > 0 || dist2(o, e) > 20 * 20) continue
+      if (o.team === h.team) {
+        if (o !== h) mates++
+      } else if (isHeroVisible(state, o, h.team)) foes++
+    }
+    if (mates < foes) continue
+    bd = d
+    best = e
+  }
+  return best
+}
+
+// ── 웨이브 정리 스킬: 교전 상대가 없을 때, 광역기가 닿는 곳에 적 미니언이 뭉쳐 있으면 쓴다 ──
+// 스킬이 미니언에게 닿는 직업만 (단일 대상·영웅 전용·유틸기는 아껴 둔다)
+const FARM_SKILL_RANGE = {
+  warrior: DASH_AIM - 2, // 베며 돌진 (경로+착지 광역)
+  archer: VOLLEY_RANGE * 0.6, // 꿰뚫는 화살 (직선 관통)
+  mage: FIREBALL_RANGE - 8, // 화염구 (폭발)
+  cryomancer: FROST_RANGE - 1, // 서리파동 (부채꼴)
+  gladiator: GLAD_SLASH_RADIUS, // 휘둘러베기 (자기 중심 + 흡혈)
+  terramancer: SLING_RANGE - 2, // 돌팔매 (스플래시 3연투)
+  windcaller: GUST_RANGE * 0.6, // 돌풍 (굴러가는 회오리)
+}
+function botFarmSkills(state, h) {
+  const canMain = h.skillCd <= 0 && FARM_SKILL_RANGE[h.cls] != null
+  const canPlague = h.cls === 'warlock' && h.skill2Cd <= 0 && h.lvl >= SKILL2_LEVEL
+  if (!canMain && !canPlague) return
+  // 주변 적 미니언 무리의 중심과 "뭉친" 마릿수
+  let n = 0
+  let cx = 0
+  let cz = 0
+  for (const m of state.minions) {
+    if (m.team === h.team || dist2(h, m) > 14 * 14) continue
+    n++
+    cx += m.x
+    cz += m.z
+  }
+  if (n < 3) return
+  cx /= n
+  cz /= n
+  let packed = 0
+  for (const m of state.minions) {
+    if (m.team === h.team) continue
+    if ((m.x - cx) ** 2 + (m.z - cz) ** 2 < 5 * 5) packed++
+  }
+  if (packed < 3) return // 광역기 본전(3마리)이 안 나오면 아낀다
+  const d = Math.hypot(cx - h.x, cz - h.z)
+  if (canMain && d < FARM_SKILL_RANGE[h.cls]) {
+    // 전사 돌진은 몸이 쏠린다 — 적 타워 사거리로 뛰어들게 되면 참는다
+    if (h.cls === 'warrior') {
+      const t = nearestEnemyTower(state, h)
+      if (t && (t.x - cx) ** 2 + (t.z - cz) ** 2 < (TOWER_RANGE + 4) ** 2) return
+    }
+    h.dir = Math.atan2(cz - h.z, cx - h.x) // 무리를 바라보고 (스킬 자동조준이 h.dir을 쓴다)
+    castSkill(state, h.id)
+    return
+  }
+  // 주술사: 주력기(저주살)는 영웅 전용이라 보조기(역병안개 장판)로 웨이브를 녹인다
+  if (canPlague && d < PLAGUE_RANGE - 1) {
+    h.dir = Math.atan2(cz - h.z, cx - h.x)
+    castSkill2(state, h.id)
+  }
+}
+
+// ── 용/바론 커밋 중 스킬 화력: 몬스터에게 닿는 스킬만 부어 분노가 쌓이기 전에 잡는다 ──
+function botMonsterSkills(state, h, big) {
+  if (h.skillCd > 0) return
+  const d = dist(h, big)
+  const aim = () => { h.dir = Math.atan2(big.z - h.z, big.x - h.x) }
+  if (h.cls === 'gladiator' && d < GLAD_SLASH_RADIUS) castSkill(state, h.id)
+  else if (h.cls === 'mage' && d < FIREBALL_RANGE - 4) { aim(); castSkill(state, h.id) }
+  else if (h.cls === 'archer' && d < VOLLEY_RANGE - 4) { aim(); castSkill(state, h.id) }
+  else if (h.cls === 'cryomancer' && d < FROST_RANGE - 1) { aim(); castSkill(state, h.id) }
+  else if (h.cls === 'terramancer' && d < SLING_RANGE - 2) { aim(); castSkill(state, h.id) }
+  else if (h.cls === 'windcaller' && d < GUST_RANGE - 2) { aim(); castSkill(state, h.id) }
+  else if (h.cls === 'tank' && big.aggro === h.id && d < 6) castSkill(state, h.id) // 물렸으면 방패막기
 }
 
 // 정글이 비었을 때 라인 지원: 적 압박이 큰(우리 타워가 위협받는) 레인을 우선 방어하고,
@@ -4021,6 +4232,7 @@ function stepBots(state, dt) {
     const moved = Math.hypot(h.x - (h.botPrevX ?? h.x), h.z - (h.botPrevZ ?? h.z))
     if (wantedMove && !attacked && moved < heroSpeed(h) * dt * 0.25) {
       h.botStuckT = (h.botStuckT || 0) + dt
+      if (h.botStuckT > 0.9) h.navUntil = 0 // 헤매기 시작하면 귀환 전에 우선 길부터 다시 찾는다
     } else {
       h.botStuckT = Math.max(0, (h.botStuckT || 0) - dt * 2)
     }
@@ -4110,11 +4322,11 @@ function stepBots(state, dt) {
       if (!state.summons.some((s) => s.owner === h.id && s.mobile)) castSkill(state, h.id)
     }
     // 엔지니어: 포탑이 부족하면 설치한다(전투/푸시용)
-    if (h.cls === 'engineer' && h.skillCd <= 0) {
+    if (h.cls === 'engineer' && (h.turretStock || 0) > 0) {
       const turrets = state.summons.filter((s) => s.owner === h.id && s.kind === 'turret').length
       if (turrets < ENGI_MAX_TURRETS) castSkill(state, h.id)
     }
-    // 가장 가까운 "보이는" 적 영웅
+    // 가장 가까운 "보이는" 적 영웅 — 환영무희 분신도 겉모습이 똑같으니 봇은 구분하지 못한다
     let foe = null
     let bd = BOT_SIGHT * BOT_SIGHT
     let nearCount = 0
@@ -4126,6 +4338,16 @@ function stepBots(state, dt) {
       if (d < bd) {
         bd = d
         foe = e
+      }
+    }
+    for (const s of state.summons) {
+      if (s.kind !== 'clone' || s.team === h.team) continue
+      if (!isHeroVisible(state, s, h.team)) continue
+      const d = dist2(h, s)
+      if (d < 9 * 9) nearCount++
+      if (d < bd) {
+        bd = d
+        foe = s // 분신에게도 교전 판단(추격/카이팅/스킬)이 그대로 돈다 — 미끼에 낚인다
       }
     }
     if (foe) {
@@ -4194,17 +4416,30 @@ function stepBots(state, dt) {
         continue
       }
     }
-    // 교전 상대가 없으면 임무 수행
-    botAttack(state, h, dt) // 미니언/정글/타워 등 사거리 안 아무거나
+    // 교전 상대가 없으면 임무 수행 — 지난 틱에 정한 공성 집중 표적(타워/넥서스)이 있으면 우선 친다
+    botAttack(state, h, dt, h.botFocus) // 미니언/정글/타워 등 사거리 안 아무거나
+    h.botFocus = null // 집중 표적은 botLaneMove가 틱마다 다시 정한다
+    botFarmSkills(state, h) // 뭉친 미니언 웨이브엔 스킬도 아끼지 않는다
     // 수비 콜: 위협받는 우리 구조물로 달려간다 (도착하면 위 교전/평타 로직이 싸움을 잡는다)
+    // 넥서스(tier 4)는 몸통이 커서(반경 4.5 + 영웅 1.3 = 5.8) 문턱을 넉넉히 둬야
+    // 경계에서 몸통에 갈리며 제자리걸음(끼임 오판)하지 않는다.
     const dp = defendPlan.get(h.id)
     if (dp) {
-      if (dist(h, dp) > 6) steerToward(state, h, dp)
+      if (dist(h, dp) > (dp.tier === 4 ? 9 : 6)) steerToward(state, h, dp)
       else {
         h.mx = 0
         h.mz = 0
       }
       continue
+    }
+    // 아군 구조: 시야 밖(BOT_SIGHT 너머) 조금 떨어진 곳에서 아군이 적 영웅에게 맞고 있으면
+    // 먼발치에서 구경하지 않고 달려가 함께 싸운다. (도착하면 위 교전 로직이 이어받는다)
+    if (h.hp > h.maxHp * 0.5) {
+      const rescue = botFindRescue(state, h)
+      if (rescue) {
+        steerToward(state, h, rescue)
+        continue
+      }
     }
     // 오브젝트 콜: 팀이 용/바론을 노린다 — 인원이 모여 확신(canTakeMonster)이 서기 전엔
     // 어그로가 끌리지 않는 거리(RALLY_HOLD)에서 대기하며 팀원을 기다린다.
@@ -4213,11 +4448,16 @@ function stepBots(state, dt) {
       const big = state.monsters.find((m) => m.id === call && m.alive)
       if (big) {
         if (canTakeMonster(state, h, big)) {
+          h.botBigT = state.time + 0.5 // 커밋 — 잠깐 동안 용/바론 평타 허용
+          botMonsterSkills(state, h, big) // 스킬을 부어 분노가 쌓이기 전에 잡는다
           if (dist(h, big) > CLASSES[h.cls].range - 1) steerToward(state, h, big)
           else {
             h.mx = 0
             h.mz = 0
           }
+        } else if (big.aggro && state.heroes.some((a) => a.id === big.aggro && a.team === h.team)) {
+          // 우리 팀이 이미 물렸는데 확신이 안 선다 — 리쉬 밖까지 빠져 어그로가 풀리게 돕는다
+          botHoldOutside(state, h, big, CAMP_LEASH + 4)
         } else {
           botHoldOutside(state, h, big, RALLY_HOLD)
         }
@@ -4359,11 +4599,40 @@ function botCombatSkills(state, h, foe, d, nearCount) {
   // 수호기사 궁극(불굴의 진형)은 stepBots 위쪽 능동 블록에서 챙긴다
 }
 
-// 봇 조향: 직선이 막히면 접선으로 비켜 가는 방향을 입력으로 넣는다
+// 봇 조향: 직선 보행이 정적 지형에 막히지 않으면 국소 회피(avoidDir)로 직진하고,
+// 막히면 A* 경로(캐시)를 따라간다 — 본진 성벽·협곡 같은 오목 지형에 끼어
+// 제자리걸음하다 귀환해 버리던 문제의 근본 해결. (동적 장애물인 타워는 avoidDir 몫)
+const NAV_REPATH = 0.9 // 경로 재탐색 주기(초) — 매 틱 A*를 돌리지 않게 캐시한다
 function steerToward(state, h, to) {
-  const dir = state.map.avoidDir(h, to.x, to.z, colliders(state), 1.3)
+  const node = navWaypoint(state, h, to)
+  const dir = state.map.avoidDir(h, node.x, node.z, colliders(state), 1.3)
   h.mx = dir.x
   h.mz = dir.z
+}
+
+// 지금 향할 경유 좌표 하나를 돌려준다 (직선이 뚫려 있으면 목표 그대로)
+function navWaypoint(state, h, to) {
+  if (state.map.lineFree(h.x, h.z, to.x, to.z)) {
+    h.navPath = null
+    return to
+  }
+  const moved = !h.navGoal || (h.navGoal.x - to.x) ** 2 + (h.navGoal.z - to.z) ** 2 > 5 * 5
+  if (!h.navPath || moved || state.time >= (h.navUntil || 0)) {
+    h.navPath = state.map.findPath(h.x, h.z, to.x, to.z)
+    h.navGoal = { x: to.x, z: to.z }
+    h.navUntil = state.time + NAV_REPATH
+  }
+  const path = h.navPath
+  if (!path || !path.length) return to // 길이 없으면 직진 (국소 회피 + 끼임 구제에 맡긴다)
+  // 도달한 노드는 걷어내고, 다음 노드가 직선으로 보이면 미리 건너뛴다
+  while (
+    path.length > 1 &&
+    ((path[0].x - h.x) ** 2 + (path[0].z - h.z) ** 2 < 2.2 * 2.2 ||
+      state.map.lineFree(h.x, h.z, path[1].x, path[1].z))
+  ) {
+    path.shift()
+  }
+  return path[0]
 }
 
 // 정글 사냥: 지나는 길의 늑대, 아군이 모여 있으면 용/바론 도전
@@ -4374,6 +4643,8 @@ function botJungleMove(state, h) {
   for (const big of state.monsters) {
     if (!big.alive || big.kind === 'wolf') continue
     if (h.hp > h.maxHp * 0.55 && canTakeMonster(state, h, big)) {
+      h.botBigT = state.time + 0.5 // 커밋 — 잠깐 동안 용/바론 평타 허용
+      botMonsterSkills(state, h, big)
       if (dist(h, big) > CLASSES[h.cls].range - 1) steerToward(state, h, big)
       else {
         h.mx = 0
@@ -4523,11 +4794,31 @@ function botLaneMove(state, h, dt) {
   }
   // 적 타워 근처(넉넉한 반경)에서의 행동을 한 자리에서 결정한다 — 사거리 경계 진동 방지
   const dObj = dist(h, objective)
+  // 목표가 넥서스(최후의 포탑이 부서져 열림)면 접근하는 대로 넥서스만 두들긴다 —
+  // 평타가 곁의 미니언으로 새서 게임을 못 끝내던 문제 방지 (사거리 검증은 castAttack이 한다)
+  if (!objective.id && nexusVulnerable(state, en) && dObj < NEXUS_RADIUS + 12) {
+    h.botFocus = { tk: 'nexus', id: en }
+  }
   if (objective.id && dObj < TOWER_RANGE + 8) {
     const shield = state.minions.some((m) => m.team === h.team && dist(m, objective) < TOWER_RANGE)
-    // 미니언 방패가 있으면 타워는 미니언을 때리니 안전하게 들어가 타워를 친다.
+    // 타워 표면까지의 거리로 사거리를 잰다 (중심거리로 재면 근접이 영영 못 닿는다)
+    const inReach = dObj - TOWER_RADIUS <= CLASSES[h.cls].range - 0.5
+    // 미니언 방패가 있으면 타워는 미니언을 때리니 안전하게 들어가 "타워를" 친다.
     if (shield) {
-      if (dObj <= CLASSES[h.cls].range - 0.5) {
+      h.botFocus = { tk: 'tower', id: objective.id } // 평타가 미니언으로 새지 않게 집중
+      if (inReach) {
+        h.mx = 0
+        h.mz = 0
+      } else {
+        steerToward(state, h, objective)
+      }
+      return
+    }
+    // 타워가 빈사(내 평타 세 방 이내)면 방패 없이도 들어가 마무리한다 —
+    // 한두 대는 맞더라도 철거 가치가 크고, 다 잡은 타워 앞에서 얼쩡대던 문제를 없앤다.
+    if (objective.hp <= atkOf(h) * 3 && h.hp > h.maxHp * 0.45) {
+      h.botFocus = { tk: 'tower', id: objective.id }
+      if (inReach) {
         h.mx = 0
         h.mz = 0
       } else {
@@ -4616,6 +4907,8 @@ export function makeView(state) {
       skillCd: r2d(h.skillCd),
       skill2Cd: r2d(h.skill2Cd),
       skill2Locked: h.lvl < SKILL2_LEVEL,
+      // 엔지니어 포탑 재고 (스킬 버튼에 갯수 배지로 표시)
+      ...(h.cls === 'engineer' ? { turretStock: h.turretStock || 0 } : null),
       ultCd: r2d(h.ultCd),
       ultLocked: h.lvl < ULT_LEVEL,
       stunT: r2d(h.stunT),

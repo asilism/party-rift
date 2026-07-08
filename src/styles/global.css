@@ -2155,6 +2155,14 @@ body {
   font-size: 30px; font-weight: 900; color: #fff;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
 }
+/* 재고제 스킬(엔지니어 포탑) 갯수 배지 — 버튼 우상단 */
+.rift-btn__stock {
+  position: absolute; top: -4px; right: -4px; min-width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center; border-radius: 11px;
+  background: rgba(10, 14, 28, 0.95); border: 1px solid #6eaaff;
+  font-size: 13px; font-weight: 900; color: #6eaaff;
+  text-shadow: none; z-index: 2;
+}
 /* 스킬 설명 툴팁 — 데스크톱은 마우스 오버, 모바일은 버튼을 누르고 있는 동안 표시 */
 .rift-btn__tip {
   position: absolute; bottom: calc(100% + 10px); right: 0;
