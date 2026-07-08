@@ -1935,6 +1935,30 @@ function buildRockProj(p) {
   return g
 }
 
+// 검성 무형검 검기 — 긴 초승달 호(칼날)가 진행 방향을 향해 눕혀진 채 날아간다.
+//  가산 블렌딩의 은백색 날 + 후광, 살짝 벼려지는 맥동. 방향은 엔진이 준 p.dir로 고정.
+function buildSwordwaveProj(p) {
+  const g = new THREE.Group()
+  const col = 0xdff2ff
+  const arcGeo = new THREE.TorusGeometry(2.0, 0.2, 6, 22, Math.PI * 0.9)
+  arcGeo.rotateZ(-Math.PI * 0.45) // 호를 +X(진행 방향) 중심으로 정렬
+  const blade = new THREE.Mesh(
+    arcGeo,
+    new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending })
+  )
+  blade.rotation.x = -Math.PI / 2 // 눕혀서 지면과 평행하게
+  const halo = glowSprite(col, 3.4)
+  g.add(blade, halo)
+  g.position.y = 2.0
+  g.rotation.y = -(p.dir || 0) // 월드 (x,z) 각도 → three.js 야우
+  g.userData.spin = (t) => {
+    const k = 1 + Math.sin(t * 26 + p.id) * 0.1 // 칼날이 벼려지듯 맥동
+    blade.scale.set(k, k, 1)
+    halo.scale.set(3.4 * k, 3.4 * k, 1)
+  }
+  return g
+}
+
 // 돌풍술사 회오리 투사체 — 위로 갈수록 넓어지는 고리들을 쌓아 통째로 돌린다(앞으로 굴러가며 적을 띄움).
 function buildTornadoProj() {
   const g = new THREE.Group()
@@ -3495,6 +3519,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     syncPool(scene, projPool, view.projectiles, (p) => {
       if (p.kind === 'tornado') return buildTornadoProj() // 돌풍술사 회오리 — 빙글빙글 도는 입체 회오리
       if (p.kind === 'rock') return buildRockProj(p) // 대지술사 돌덩이 — 발광체가 아니라 진짜 돌
+      if (p.kind === 'swordwave') return buildSwordwaveProj(p) // 검성 무형검 검기 — 날아가는 초승달 칼날
       const look = PROJ_LOOK[p.kind] || PROJ_LOOK.bolt
       const color = look.color ?? TEAM_COLOR[p.team]
       // 단색 구체 대신 "발광체": 밝은 코어 + 가산 후광 스프라이트(맥동) + (스킬은) 혜성 꼬리
