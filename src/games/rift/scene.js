@@ -3230,6 +3230,17 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const bobOff = idleBob + wk.bounce * 0.55
         u.body.position.y = u.bodyBaseY + bobOff
         u.face.position.y = u.faceBaseY + bobOff // 얼굴도 함께 떠올라 몸통이 뚫지 않게
+        // 좌우 방향에 따라 얼굴이 그쪽을 "본다" — 이모지 얼굴은 빌보드(항상 카메라를 봄)라
+        // 몸통 회전만으론 방향감이 없다. 세 가지를 합친다:
+        //  ① 거울 반전(비대칭 이모지용) ② 진행 방향으로 살짝 쏠림 ③ 살짝 기울임.
+        // 위/아래만 볼 땐 마지막 좌우를 유지해 경계에서 파닥거리지 않게 한다(히스테리시스).
+        const fdx = Math.cos(h.dir)
+        if (fdx > 0.15) u.faceDir = 1
+        else if (fdx < -0.15) u.faceDir = -1
+        u.face.scale.x = Math.abs(u.face.scale.x) * (u.faceDir || 1)
+        const fs = u.faceBaseY / 4.4 // 직업 스케일(s) 복원 — 몸집에 비례해 쏠림도 커진다
+        u.face.position.x += (fdx * 0.6 * fs - u.face.position.x) * Math.min(1, dt * 10) // 부드럽게 따라오기
+        u.face.material.rotation = -fdx * 0.1
         if (h.whirlT <= 0 && h.airT <= 0) u.body.rotation.z = Math.sin(u.wphase) * 0.06 * wk.amt
         else u.body.rotation.z = 0
         // 다리 성큼성큼 + 팔 흔들기: 다리는 반대 위상, 팔은 같은 쪽 다리와 반대로(자연스러운 걸음)
