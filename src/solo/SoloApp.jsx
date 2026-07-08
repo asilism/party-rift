@@ -111,96 +111,148 @@ function SoloSetup({ onStart }) {
     setHelpOpen(false)
   }
 
+  const z = getZodiac(zodiacId)
+  const c = cls ? CLASSES[cls] : null
+  const rec = cls ? records[cls] : null
+
   return (
     <div className="solo">
-      <header className="solo__header">
-        <div>
-          <h1 className="solo__title">⚔️ 조디악 러쉬</h1>
-          <p className="solo__sub">
-            {total.games > 0
-              ? `🏆 봇전 전적 ${total.wins}승 ${total.games - total.wins}패 · 승률 ${Math.round((total.wins / total.games) * 100)}%`
-              : '캐릭터를 고르고 봇들과 한 판!'}
-          </p>
-        </div>
-        <div className="solo__header-right">
-          <div className="solo__modes">
-            {Object.keys(TEAM_SIZES).map((m) => (
-              <button
-                key={m}
-                className={`btn ${mode === m ? 'btn--primary' : 'btn--ghost'}`}
-                onClick={() => setMode(m)}
-              >
-                {m}
-              </button>
-            ))}
+      {/* 상단: 브랜드 워드마크 + 통산 전적 + 도움말/전체화면 */}
+      <header className="solo__top">
+        <div className="solo__brand">
+          <span className="solo__logo" aria-hidden="true">⚡</span>
+          <div>
+            <h1 className="solo__wordmark">ZODIAC<span> RUSH</span></h1>
+            <p className="solo__wordmark-sub">조디악 러쉬 · 솔로 봇전</p>
           </div>
+        </div>
+        <div className="solo__top-right">
+          {total.games > 0 && (
+            <span className="solo__total" title="봇전 통산 전적">
+              🏆 {total.wins}승 {total.games - total.wins}패
+              <small>{Math.round((total.wins / total.games) * 100)}%</small>
+            </span>
+          )}
           <button className="btn btn--ghost" onClick={() => setHelpOpen(true)} aria-label="조작법">❓ 조작법</button>
           <FullscreenButton />
         </div>
       </header>
 
-      <div className="solo__levels" role="radiogroup" aria-label="봇 난이도">
-        {BOT_LEVEL_OPTS.map((o) => (
-          <button
-            key={o.id}
-            className={`solo__level ${botLevel === o.id ? 'is-on' : ''}`}
-            title={o.desc}
-            onClick={() => setBotLevel(o.id)}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
+      <div className="solo__main">
+        {/* 좌: 선택한 캐릭터 쇼케이스 — 큰 얼굴 + 직업 스킬 미리보기 + 전적 + 시작 */}
+        <aside className="solo__showcase" style={{ '--z-color': z?.color || '#ffcf4d' }}>
+          <div className="solo__stage">
+            <span className="solo__stage-ring" aria-hidden="true" />
+            <span className="solo__stage-emoji">{z?.emoji}</span>
+            {c && <span className="solo__stage-cls">{c.icon}</span>}
+          </div>
+          <div className="solo__stage-name">
+            {z?.name}
+            {c && <span className="solo__stage-clsname">{c.name}</span>}
+          </div>
 
-      <div className="solo__zodiacs" role="radiogroup" aria-label="조디악 선택">
-        {ZODIAC.map((z) => (
-          <button
-            key={z.id}
-            className={`solo__zodiac ${zodiacId === z.id ? 'is-on' : ''}`}
-            style={{ '--z-color': z.color }}
-            title={z.name}
-            onClick={() => setZodiacId(z.id)}
-          >
-            {z.emoji}
-          </button>
-        ))}
-      </div>
-
-      <div className="draft__classes solo__classes">
-        {CLASS_IDS.map((id) => {
-          const c = CLASSES[id]
-          const rec = records[id]
-          return (
-            <button
-              key={id}
-              className={`draft-class ${cls === id ? 'is-on' : ''}`}
-              onClick={() => setCls(id)}
-            >
-              <span className="draft-class__icon">{c.icon}</span>
-              <span className="draft-class__name">{c.name}</span>
-              <span className="draft-class__desc">{c.desc}</span>
+          {c ? (
+            <>
+              <p className="solo__stage-desc">{c.desc}</p>
+              <ul className="solo__skills">
+                {[
+                  { tag: '스킬', ...c.skill },
+                  { tag: '보조 · Lv3', ...c.skill2 },
+                  { tag: '궁극 · Lv5', ...c.ult },
+                ].map((s) => (
+                  <li key={s.tag}>
+                    <span className="solo__skill-icon">{s.icon}</span>
+                    <span className="solo__skill-main">
+                      <b>{s.name} <small>{s.tag}</small></b>
+                      <span className="solo__skill-desc">{s.desc}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
               {rec?.games > 0 && (
-                <span
-                  className="draft-class__rec"
-                  title={`평균 K/D/A ${(rec.kills / rec.games).toFixed(1)} / ${(rec.deaths / rec.games).toFixed(1)} / ${(rec.assists / rec.games).toFixed(1)}`}
-                >
-                  {rec.wins}승 {rec.games - rec.wins}패
-                </span>
+                <p className="solo__stage-rec">
+                  이 직업 <b>{rec.wins}승 {rec.games - rec.wins}패</b> · 평균 ⚔️{(rec.kills / rec.games).toFixed(1)} 💀{(rec.deaths / rec.games).toFixed(1)} 🤝{(rec.assists / rec.games).toFixed(1)}
+                </p>
               )}
-            </button>
-          )
-        })}
-      </div>
+            </>
+          ) : (
+            <p className="solo__stage-desc solo__stage-desc--hint">
+              오른쪽에서 직업을 고르면<br />스킬을 미리 볼 수 있어요 👉
+            </p>
+          )}
 
-      <footer className="solo__footer">
-        <button
-          className="btn btn--primary solo__start"
-          disabled={!cls}
-          onClick={() => onStart({ zodiacId, cls, mode, botLevel })}
-        >
-          {cls ? `⚔️ ${CLASSES[cls].icon} ${CLASSES[cls].name}(으)로 전투 시작` : '직업을 골라 주세요'}
-        </button>
-      </footer>
+          <button
+            className="btn btn--primary solo__start"
+            disabled={!cls}
+            onClick={() => onStart({ zodiacId, cls, mode, botLevel })}
+          >
+            {cls ? '⚔️ 전투 시작' : '직업을 골라 주세요'}
+          </button>
+        </aside>
+
+        {/* 우: 선택 — 난이도/모드 세그먼트 + 조디악 스트립 + 직업 그리드 */}
+        <section className="solo__pick">
+          <div className="solo__filters">
+            <div className="solo__seg" role="radiogroup" aria-label="봇 난이도">
+              {BOT_LEVEL_OPTS.map((o) => (
+                <button
+                  key={o.id}
+                  className={`solo__seg-btn ${botLevel === o.id ? 'is-on' : ''}`}
+                  title={o.desc}
+                  onClick={() => setBotLevel(o.id)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <div className="solo__seg" role="radiogroup" aria-label="모드">
+              {Object.keys(TEAM_SIZES).map((m) => (
+                <button
+                  key={m}
+                  className={`solo__seg-btn ${mode === m ? 'is-on' : ''}`}
+                  onClick={() => setMode(m)}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="solo__zodiacs" role="radiogroup" aria-label="조디악 선택">
+            {ZODIAC.map((zz) => (
+              <button
+                key={zz.id}
+                className={`solo__zodiac ${zodiacId === zz.id ? 'is-on' : ''}`}
+                style={{ '--z-color': zz.color }}
+                title={zz.name}
+                onClick={() => setZodiacId(zz.id)}
+              >
+                {zz.emoji}
+              </button>
+            ))}
+          </div>
+
+          <div className="draft__classes solo__classes">
+            {CLASS_IDS.map((id) => {
+              const cc = CLASSES[id]
+              const rr = records[id]
+              return (
+                <button
+                  key={id}
+                  className={`draft-class ${cls === id ? 'is-on' : ''}`}
+                  onClick={() => setCls(id)}
+                >
+                  <span className="draft-class__icon">{cc.icon}</span>
+                  <span className="draft-class__name">{cc.name}</span>
+                  {rr?.games > 0 && (
+                    <span className="draft-class__rec">{rr.wins}승 {rr.games - rr.wins}패</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      </div>
 
       {helpOpen && <SoloHelp onClose={closeHelp} />}
     </div>
