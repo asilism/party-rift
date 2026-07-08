@@ -2683,39 +2683,158 @@ body {
   .gate__modes { grid-template-columns: 1fr; }
 }
 
-/* ── 솔로(오프라인 봇전) 설정 화면 — Electron 데스크톱/?solo 진입 ── */
+/* ── 솔로(오프라인 봇전) 타이틀 화면 — Electron 데스크톱/?solo 진입 ──
+   좌: 선택한 캐릭터 쇼케이스(무대 링 + 스킬 미리보기 + 전적 + 시작)
+   우: 난이도/모드 세그먼트 + 조디악 스트립 + 직업 그리드 */
 .solo {
-  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px;
-  width: 100%; max-width: 900px; margin: 0 auto; box-sizing: border-box;
-  padding: clamp(10px, 2.5vh, 20px) clamp(12px, 3vw, 28px);
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: clamp(8px, 1.6vh, 14px);
+  width: 100%; max-width: 1180px; margin: 0 auto; box-sizing: border-box;
+  padding: clamp(10px, 2vh, 18px) clamp(14px, 3vw, 30px);
+  position: relative; overflow: hidden;
 }
-.solo__header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-shrink: 0; }
-.solo__title { margin: 0; font-size: clamp(18px, 3.4vh, 26px); }
-.solo__sub { margin: 2px 0 0; color: var(--muted); font-size: clamp(11px, 2vh, 14px); }
-.solo__header-right { display: flex; align-items: center; gap: 8px; }
-.solo__modes { display: flex; gap: 6px; }
-.solo__zodiacs { display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
-.solo__zodiac {
-  width: 40px; height: 40px; font-size: 22px; line-height: 1; cursor: pointer; color: var(--text);
-  border-radius: 10px; border: 2px solid var(--line); background: rgba(255, 255, 255, 0.04);
-  transition: transform .08s, border-color .12s, background .12s;
+/* 뒤편의 은은한 전장 발광 — 대문(gate)과 같은 분위기 */
+.solo::before {
+  content: ''; position: absolute; inset: -20%; pointer-events: none;
+  background:
+    radial-gradient(42% 52% at 22% 28%, rgba(90, 150, 255, 0.15), transparent 70%),
+    radial-gradient(40% 50% at 80% 74%, rgba(255, 110, 110, 0.13), transparent 70%),
+    radial-gradient(30% 40% at 55% 10%, rgba(255, 207, 77, 0.08), transparent 70%);
+  animation: gate-glow 8s ease-in-out infinite alternate;
 }
-.solo__zodiac:hover { border-color: var(--accent); }
-.solo__zodiac.is-on { border-color: var(--z-color, var(--accent)); background: rgba(255, 255, 255, 0.1); transform: scale(1.08); }
-.solo__classes { flex: 1; }
-.draft-class.is-on { border-color: var(--accent); background: rgba(255, 207, 77, 0.14); }
-.solo__footer { flex-shrink: 0; display: flex; justify-content: center; }
-.solo__start { min-width: 260px; font-size: 15px; }
+.solo > * { position: relative; }
 
-/* 솔로 — 봇 난이도 선택 */
-.solo__levels { display: flex; gap: 6px; flex-shrink: 0; }
-.solo__level {
-  padding: 6px 14px; border-radius: 10px; border: 2px solid var(--line); cursor: pointer;
-  background: rgba(255, 255, 255, 0.04); color: var(--text); font-weight: 800; font-size: 13px;
-  transition: border-color .12s, background .12s;
+/* 상단 바: 워드마크 + 통산 전적 + 유틸 */
+.solo__top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-shrink: 0; }
+.solo__brand { display: flex; align-items: center; gap: 10px; }
+.solo__logo {
+  font-size: clamp(24px, 4.6vh, 34px); line-height: 1;
+  filter: drop-shadow(0 0 10px rgba(255, 207, 77, 0.55));
+  animation: solo-logo-bob 2.6s ease-in-out infinite;
 }
-.solo__level:hover { border-color: var(--accent); }
-.solo__level.is-on { border-color: var(--accent); background: rgba(255, 207, 77, 0.14); }
+@keyframes solo-logo-bob { 0%, 100% { transform: translateY(0) rotate(-6deg); } 50% { transform: translateY(-3px) rotate(6deg); } }
+.solo__wordmark {
+  margin: 0; font-weight: 900; letter-spacing: 2.5px; line-height: 1;
+  font-size: clamp(20px, 4.2vh, 30px);
+  background: linear-gradient(180deg, #fff 0%, #ffe7a0 55%, var(--accent) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 22px rgba(255, 207, 77, 0.3);
+}
+.solo__wordmark span { background: linear-gradient(180deg, #b8f3d8, var(--accent2)); -webkit-background-clip: text; background-clip: text; }
+.solo__wordmark-sub { margin: 2px 0 0; color: var(--muted); font-size: clamp(10px, 1.8vh, 12.5px); font-weight: 700; letter-spacing: 2px; }
+.solo__top-right { display: flex; align-items: center; gap: 8px; }
+.solo__total {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05);
+  font-weight: 800; font-size: clamp(11px, 2vh, 13px); white-space: nowrap;
+}
+.solo__total small { color: var(--accent2); font-weight: 900; }
+
+/* 본문 2단 */
+.solo__main { flex: 1; min-height: 0; display: flex; gap: clamp(10px, 2vw, 18px); }
+
+/* 좌: 쇼케이스 */
+.solo__showcase {
+  width: clamp(230px, 27vw, 300px); flex-shrink: 0; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: clamp(10px, 2vh, 18px) 14px;
+  border: 1px solid var(--line); border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(10, 14, 32, 0.55));
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.25);
+  overflow-y: auto;
+}
+.solo__stage { position: relative; width: clamp(92px, 17vh, 128px); aspect-ratio: 1; flex-shrink: 0; display: grid; place-items: center; }
+.solo__stage-ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--z-color) 75%, transparent);
+  box-shadow: 0 0 26px color-mix(in srgb, var(--z-color) 45%, transparent), inset 0 0 22px color-mix(in srgb, var(--z-color) 22%, transparent);
+  animation: solo-ring 3.2s ease-in-out infinite;
+}
+@keyframes solo-ring { 0%, 100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.05); opacity: 1; } }
+.solo__stage-emoji {
+  font-size: clamp(52px, 10vh, 76px); line-height: 1;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
+  animation: solo-float 3.2s ease-in-out infinite;
+}
+@keyframes solo-float { 0%, 100% { transform: translateY(2px); } 50% { transform: translateY(-4px); } }
+.solo__stage-cls {
+  position: absolute; right: 2px; bottom: 2px; font-size: clamp(20px, 3.6vh, 26px);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
+}
+.solo__stage-name { font-weight: 900; font-size: clamp(15px, 2.8vh, 19px); display: flex; align-items: baseline; gap: 8px; }
+.solo__stage-clsname { color: var(--accent); }
+.solo__stage-desc { margin: 0; color: var(--muted); font-size: clamp(11px, 2vh, 12.5px); line-height: 1.45; text-align: center; }
+.solo__stage-desc--hint { margin: auto 0; font-size: clamp(12px, 2.2vh, 14px); line-height: 1.7; }
+.solo__skills { list-style: none; margin: 4px 0 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.solo__skills li {
+  display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045); border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.solo__skill-icon { font-size: 18px; line-height: 1.2; }
+.solo__skill-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.solo__skill-main b { font-size: 12px; }
+.solo__skill-main b small { color: var(--accent); font-weight: 800; font-size: 9.5px; margin-left: 3px; }
+.solo__skill-desc {
+  color: var(--muted); font-size: 10.5px; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.solo__stage-rec { margin: 2px 0 0; color: var(--muted); font-size: clamp(10px, 1.9vh, 12px); }
+.solo__stage-rec b { color: var(--accent2); }
+.solo__start {
+  margin-top: auto; width: 100%; flex-shrink: 0; font-size: clamp(14px, 2.6vh, 17px); padding: 12px 10px;
+}
+.solo__start:not(:disabled) { animation: solo-start-glow 1.8s ease-in-out infinite; }
+@keyframes solo-start-glow {
+  0%, 100% { box-shadow: 0 4px 0 #b8860b, 0 0 14px rgba(255, 207, 77, 0.35); }
+  50% { box-shadow: 0 4px 0 #b8860b, 0 0 30px rgba(255, 207, 77, 0.65); }
+}
+
+/* 우: 선택 영역 */
+.solo__pick { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: clamp(6px, 1.4vh, 12px); }
+.solo__filters { display: flex; gap: 10px; flex-wrap: wrap; flex-shrink: 0; }
+.solo__seg {
+  display: inline-flex; padding: 3px; gap: 2px; border-radius: 12px;
+  border: 1px solid var(--line); background: rgba(0, 0, 0, 0.25);
+}
+.solo__seg-btn {
+  border: none; background: transparent; color: var(--muted); cursor: pointer;
+  padding: 6px 14px; border-radius: 9px; font-weight: 800; font-size: clamp(11px, 2vh, 13px);
+  transition: background .12s, color .12s;
+}
+.solo__seg-btn:hover { color: var(--text); }
+.solo__seg-btn.is-on { background: rgba(255, 207, 77, 0.16); color: var(--accent); box-shadow: inset 0 0 0 1px rgba(255, 207, 77, 0.4); }
+.solo__zodiacs { display: flex; gap: 5px; flex-wrap: wrap; flex-shrink: 0; }
+.solo__zodiac {
+  width: clamp(34px, 5.4vh, 42px); aspect-ratio: 1; font-size: clamp(18px, 3.2vh, 23px); line-height: 1;
+  cursor: pointer; color: var(--text);
+  border-radius: 12px; border: 2px solid var(--line); background: rgba(255, 255, 255, 0.04);
+  transition: transform .08s, border-color .12s, background .12s, box-shadow .12s;
+}
+.solo__zodiac:hover { border-color: var(--accent); transform: translateY(-2px); }
+.solo__zodiac.is-on {
+  border-color: var(--z-color, var(--accent)); background: rgba(255, 255, 255, 0.1);
+  transform: scale(1.1); box-shadow: 0 0 12px color-mix(in srgb, var(--z-color, #ffcf4d) 55%, transparent);
+}
+.solo__classes { flex: 1; }
+.solo__classes .draft-class { position: relative; }
+.draft-class.is-on {
+  border-color: var(--accent); background: rgba(255, 207, 77, 0.14);
+  box-shadow: 0 0 14px rgba(255, 207, 77, 0.25); transform: translateY(-2px);
+}
+
+/* 좁은 화면(세로 폰 등): 선택 그리드를 위로, 쇼케이스는 하단 요약 바로 압축 */
+@media (max-width: 760px) {
+  .solo__main { flex-direction: column-reverse; }
+  .solo__showcase {
+    width: auto; flex-direction: row; align-items: center; gap: 10px;
+    padding: 8px 10px; overflow: visible;
+  }
+  .solo__stage { width: 52px; }
+  .solo__stage-emoji { font-size: 32px; }
+  .solo__stage-cls { font-size: 16px; }
+  .solo__skills, .solo__stage-desc, .solo__stage-rec { display: none; }
+  .solo__start { margin: 0 0 0 auto; width: auto; min-width: 150px; }
+  .solo__wordmark-sub, .solo__total { display: none; }
+}
 
 /* 솔로 — 조작 가이드(첫 실행 온보딩) */
 .solo-help {
