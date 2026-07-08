@@ -98,6 +98,26 @@ export function addRiftRecord(cls, { win, kills = 0, deaths = 0, assists = 0 } =
   return all
 }
 
+// ── 해금 확인 수 — 마지막으로 본 해금 직업 수. 그보다 새로 열린 카드엔 NEW 배지를 띄운다 ──
+const UNLOCK_SEEN_KEY = 'bgp.rift.unlockseen.v1'
+
+export function loadUnlockSeen() {
+  try {
+    const n = Number(localStorage.getItem(UNLOCK_SEEN_KEY))
+    return Number.isFinite(n) ? n : 0
+  } catch {
+    return 0
+  }
+}
+
+export function saveUnlockSeen(count) {
+  try {
+    localStorage.setItem(UNLOCK_SEEN_KEY, String(count))
+  } catch {
+    /* 무시 */
+  }
+}
+
 // ── 조작 가이드(첫 실행 안내)를 봤는지 보존 — 솔로 모드 첫 진입 시 자동으로 띄운다 ──
 const GUIDE_SEEN_KEY = 'bgp.rift.guide.v1'
 

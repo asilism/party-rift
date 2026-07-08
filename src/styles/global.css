@@ -2805,6 +2805,8 @@ body {
 .solo__zodiacs { display: flex; gap: 5px; flex-wrap: wrap; flex-shrink: 0; }
 .solo__zodiac {
   width: clamp(34px, 5.4vh, 42px); aspect-ratio: 1; font-size: clamp(18px, 3.2vh, 23px); line-height: 1;
+  /* 이모지 글리프는 베이스라인이 제각각이라 버튼 기본 정렬로는 어긋난다 — 그리드 중앙 고정 */
+  display: grid; place-items: center; padding: 0;
   cursor: pointer; color: var(--text);
   border-radius: 12px; border: 2px solid var(--line); background: rgba(255, 255, 255, 0.04);
   transition: transform .08s, border-color .12s, background .12s, box-shadow .12s;
@@ -2820,6 +2822,27 @@ body {
   border-color: var(--accent); background: rgba(255, 207, 77, 0.14);
   box-shadow: 0 0 14px rgba(255, 207, 77, 0.25); transform: translateY(-2px);
 }
+/* 잠긴 캐릭터 — 실루엣만 보여 "다음엔 뭐가 열리지" 티저 역할 */
+.draft-class.is-locked { cursor: default; }
+.draft-class.is-locked .draft-class__icon { filter: grayscale(1) brightness(0.4); }
+.draft-class.is-locked .draft-class__name { color: var(--muted); opacity: 0.6; }
+.draft-class__lock {
+  position: absolute; top: 6px; right: 6px; font-size: 13px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+.draft-class__new {
+  /* 카드 안쪽 좌상단 — 밖으로 내밀면 그리드 스크롤 컨테이너에 잘린다 */
+  position: absolute; top: 4px; left: 5px; font-size: 9px; font-weight: 900; letter-spacing: 0.5px;
+  color: #1a1206; background: linear-gradient(180deg, #ffe28a, var(--accent));
+  border-radius: 7px; padding: 2px 6px; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  animation: solo-new-pop 1.6s ease-in-out infinite;
+}
+@keyframes solo-new-pop { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+.solo__next-unlock {
+  margin-left: auto; align-self: center; color: var(--muted);
+  font-size: clamp(11px, 2vh, 12.5px); font-weight: 700; white-space: nowrap;
+}
+.solo__next-unlock b { color: var(--accent); }
 
 /* 좁은 화면(세로 폰 등): 선택 그리드를 위로, 쇼케이스는 하단 요약 바로 압축 */
 @media (max-width: 760px) {
