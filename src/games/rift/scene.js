@@ -1852,19 +1852,22 @@ function buildSummon(s, barColor) {
       new THREE.MeshLambertMaterial({ color: 0x5b667e })
     )
     base.position.y = 0.35
+    // 머리와 포신을 한 피벗 그룹에 담는다 — 조준 회전 시 포신도 함께 돌게 (머리만 돌던 버그 수정)
+    const top = new THREE.Group()
+    top.position.y = 0.35 + look.r * 0.7
     const head = new THREE.Mesh(
       new THREE.BoxGeometry(look.r * 1.3, look.r * 1.0, look.r * 1.5),
       new THREE.MeshLambertMaterial({ color: look.body })
     )
-    head.position.y = 0.35 + look.r * 0.7
     const barrel = new THREE.Mesh(
       new THREE.CylinderGeometry(0.18, 0.18, look.r * 1.7, 8),
       new THREE.MeshLambertMaterial({ color: col, emissive: col, emissiveIntensity: 0.3 })
     )
     barrel.rotation.z = Math.PI / 2
-    barrel.position.set(look.r * 0.95, 0.35 + look.r * 0.7, 0)
-    body.add(base, head, barrel)
-    body.userData = { head } // 회전은 head/barrel만
+    barrel.position.set(look.r * 0.95, 0, 0)
+    top.add(head, barrel)
+    body.add(base, top)
+    body.userData = { head: top } // 회전은 상단(머리+포신)째로
   } else {
     body = new THREE.Mesh(
       new THREE.SphereGeometry(look.r, 9, 7),
