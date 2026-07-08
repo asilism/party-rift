@@ -2735,3 +2735,9 @@ body {
 .solo-help__sec ul { padding-left: 18px; }
 .solo-help__sec b { color: var(--text); }
 .solo-help__ok { margin-top: 4px; align-self: center; min-width: 220px; }
+
+/* 솔로 — 직업 카드 전적 배지 */
+.draft-class__rec {
+  font-size: 10px; font-weight: 800; color: var(--accent2);
+  background: rgba(77, 208, 160, 0.12); border-radius: 6px; padding: 1px 6px;
+}

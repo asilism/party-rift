@@ -3,7 +3,9 @@ import { CLASSES, CLASS_IDS, TEAM_SIZE, TEAM_SIZES } from '../games/rift/engine.
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
 import { riftNet } from '../games/rift/netgame.js'
 import { createLocalNet } from '../net/localNet.js'
-import { loadSoloPick, saveSoloPick, loadGuideSeen, saveGuideSeen } from '../shared/storage.js'
+import {
+  loadSoloPick, saveSoloPick, loadGuideSeen, saveGuideSeen, loadRiftRecords, addRiftRecord,
+} from '../shared/storage.js'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
 
 const RiftGame = lazy(() => import('../games/rift/RiftGame.jsx'))
@@ -51,6 +53,15 @@ export default function SoloApp() {
       players: [],
       config: { mode: pick.mode, roster: buildSoloRoster(pick), botLevel: pick.botLevel },
       deviceId: 'solo',
+      // 경기가 끝나면 내 직업 전적에 누적 — 중도 이탈(exit)은 기록하지 않는다
+      onFinish(view) {
+        const me = view.heroes?.find((h) => h.id === 'solo')
+        if (!me) return
+        addRiftRecord(me.cls, {
+          win: !!view.winner && view.winner === me.team,
+          kills: me.kills, deaths: me.deaths, assists: me.assists,
+        })
+      },
     })
     netRef.current = n
     setNet(n)
@@ -87,6 +98,12 @@ function SoloSetup({ onStart }) {
   const [botLevel, setBotLevel] = useState(
     BOT_LEVEL_OPTS.some((o) => o.id === saved?.botLevel) ? saved.botLevel : 'easy'
   )
+  // 직업별 봇전 전적 — 판이 끝날 때(onFinish) 누적된 걸 읽어 카드/헤더에 보여 준다
+  const records = loadRiftRecords()
+  const total = Object.values(records).reduce(
+    (a, r) => ({ games: a.games + r.games, wins: a.wins + r.wins }),
+    { games: 0, wins: 0 }
+  )
   // 첫 진입이면 조작 가이드를 자동으로 띄운다(닫으면 다시 안 뜸, ❓ 버튼으로 언제든)
   const [helpOpen, setHelpOpen] = useState(() => !loadGuideSeen())
   function closeHelp() {
@@ -99,7 +116,11 @@ function SoloSetup({ onStart }) {
       <header className="solo__header">
         <div>
           <h1 className="solo__title">⚔️ 조디악 러쉬</h1>
-          <p className="solo__sub">캐릭터를 고르고 봇들과 한 판!</p>
+          <p className="solo__sub">
+            {total.games > 0
+              ? `🏆 봇전 전적 ${total.wins}승 ${total.games - total.wins}패 · 승률 ${Math.round((total.wins / total.games) * 100)}%`
+              : '캐릭터를 고르고 봇들과 한 판!'}
+          </p>
         </div>
         <div className="solo__header-right">
           <div className="solo__modes">
@@ -148,6 +169,7 @@ function SoloSetup({ onStart }) {
       <div className="draft__classes solo__classes">
         {CLASS_IDS.map((id) => {
           const c = CLASSES[id]
+          const rec = records[id]
           return (
             <button
               key={id}
@@ -157,6 +179,14 @@ function SoloSetup({ onStart }) {
               <span className="draft-class__icon">{c.icon}</span>
               <span className="draft-class__name">{c.name}</span>
               <span className="draft-class__desc">{c.desc}</span>
+              {rec?.games > 0 && (
+                <span
+                  className="draft-class__rec"
+                  title={`평균 K/D/A ${(rec.kills / rec.games).toFixed(1)} / ${(rec.deaths / rec.games).toFixed(1)} / ${(rec.assists / rec.games).toFixed(1)}`}
+                >
+                  {rec.wins}승 {rec.games - rec.wins}패
+                </span>
+              )}
             </button>
           )
         })}

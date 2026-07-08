@@ -68,6 +68,36 @@ export function saveSoloPick(pick) {
   }
 }
 
+// ── 솔로(오프라인 봇전) 직업별 전적 — { [cls]: { games, wins, kills, deaths, assists } } ──
+const RIFT_RECORDS_KEY = 'bgp.rift.records.v1'
+
+export function loadRiftRecords() {
+  try {
+    const v = JSON.parse(localStorage.getItem(RIFT_RECORDS_KEY))
+    if (v && typeof v === 'object') return v
+  } catch {
+    /* 무시 */
+  }
+  return {}
+}
+
+// 한 판 결과를 직업 전적에 누적하고 전체 전적을 돌려준다 (무승부는 패로 센다)
+export function addRiftRecord(cls, { win, kills = 0, deaths = 0, assists = 0 } = {}) {
+  const all = loadRiftRecords()
+  const r = all[cls] || (all[cls] = { games: 0, wins: 0, kills: 0, deaths: 0, assists: 0 })
+  r.games += 1
+  if (win) r.wins += 1
+  r.kills += kills
+  r.deaths += deaths
+  r.assists += assists
+  try {
+    localStorage.setItem(RIFT_RECORDS_KEY, JSON.stringify(all))
+  } catch {
+    /* 무시 */
+  }
+  return all
+}
+
 // ── 조작 가이드(첫 실행 안내)를 봤는지 보존 — 솔로 모드 첫 진입 시 자동으로 띄운다 ──
 const GUIDE_SEEN_KEY = 'bgp.rift.guide.v1'
 

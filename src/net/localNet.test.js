@@ -78,3 +78,25 @@ test('로컬 net: close 후엔 방송이 멈춘다', async () => {
   await sleep(120)
   assert.equal(count, at)
 })
+
+test('로컬 net: 경기가 끝나면 onFinish가 최종 스냅샷으로 한 번만 불린다', async () => {
+  const calls = []
+  const net = createLocalNet(riftNet, {
+    players: [{ id: 'solo', name: '나', zodiacId: 'tiger', deviceId: 'solo' }],
+    config: { mode: '3v3', teams: { solo: 'blue' }, classes: { solo: 'warrior' } },
+    deviceId: 'solo',
+    onFinish: (view) => calls.push(view),
+  })
+  try {
+    await sleep(120)
+    // 넥서스 파괴를 기다릴 순 없으니 시뮬 상태를 직접 종료로 (테스트 훅 _sim)
+    net._sim.state.status = 'finished'
+    net._sim.state.winner = 'blue'
+    await sleep(120)
+    assert.equal(calls.length, 1, 'finished 이후 여러 틱이 지나도 한 번만')
+    assert.equal(calls[0].winner, 'blue')
+    assert.ok(calls[0].heroes.some((h) => h.id === 'solo'))
+  } finally {
+    net.close()
+  }
+})
