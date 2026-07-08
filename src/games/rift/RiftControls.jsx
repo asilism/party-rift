@@ -52,9 +52,11 @@ function usePressPulse(pulse, setPressed) {
 
 // 쿨다운 버튼: 남은 시간 비율만큼 어두운 부채꼴 오버레이 + 스킬 이름
 // interactive=false면 터치 입력은 막고 쿨다운/상태 표시만 한다(키보드·패드 모드).
-function CdButton({ className, icon, label, name, desc, lines, cd, cdMax, locked, lockText, onPress, onRelease, interactive = true, pulse = 0 }) {
+// stock != null이면 재고제 스킬(엔지니어 포탑): 갯수 배지를 띄우고, 재고가 있으면
+// 쿨다운(다음 재고 충전 시간)이 돌고 있어도 사용 가능한 상태로 표시한다.
+function CdButton({ className, icon, label, name, desc, lines, cd, cdMax, locked, lockText, onPress, onRelease, interactive = true, pulse = 0, stock = null }) {
   const frac = cdMax > 0 ? Math.max(0, Math.min(1, cd / cdMax)) : 0
-  const ready = !locked && frac <= 0
+  const ready = !locked && (frac <= 0 || (stock ?? 0) > 0)
   const [pressed, setPressed] = useState(false)
   usePressPulse(pulse, setPressed)
   const release = () => {
@@ -82,11 +84,15 @@ function CdButton({ className, icon, label, name, desc, lines, cd, cdMax, locked
       {!locked && frac > 0 && (
         <span
           className="rift-btn__cd"
-          style={{ background: `conic-gradient(rgba(8, 12, 26, 0.78) ${frac * 360}deg, transparent 0deg)` }}
+          // 재고가 남아 있으면 어둡게 덮지 않고 충전 진행선만 보여 준다 (사용 가능하니까)
+          style={{
+            background: `conic-gradient(${(stock ?? 0) > 0 ? 'rgba(8, 12, 26, 0.28)' : 'rgba(8, 12, 26, 0.78)'} ${frac * 360}deg, transparent 0deg)`,
+          }}
         >
-          {Math.ceil(cd)}
+          {(stock ?? 0) > 0 ? '' : Math.ceil(cd)}
         </span>
       )}
+      {stock != null && <span className="rift-btn__stock">{stock}</span>}
       {desc && (
         <span className="rift-btn__tip" role="tooltip">
           <b>{icon} {name}{cdMax > 0 ? ` · 쿨 ${cdMax}초` : ''}{locked ? ` (${lockText})` : ''}</b>
@@ -402,6 +408,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
         lines={abilityLines(me?.cls, 'skill', me)}
         cd={me?.skillCd ?? 0}
         cdMax={cls.skill.cd}
+        stock={me?.cls === 'engineer' ? me?.turretStock ?? 0 : null}
         onPress={onSkill}
         interactive={mobile}
         pulse={pulses.skill || 0}

@@ -236,6 +236,198 @@ function avoidDirFor(geo, e, tx, tz, towers, selfR = 1) {
   return { x: nx / nd, z: nz / nd }
 }
 
+// ── 내비게이션 (봇 경로탐색) ──
+// 국소 회피(avoidDir)는 볼록한 장애물 하나는 잘 비켜 가지만, 본진 성벽·미드 협곡처럼
+// 길게 이어진 오목한 지형에선 좌우 밀치기가 서로 상쇄돼 벽에 직진하며 갇힌다.
+// 정적 지형(성벽/바위/넥서스)만 구운 격자 위에서 A*로 길을 찾아 그 문제를 없앤다.
+// (타워는 부서지는 동적 장애물 + 반경이 작아 경로탐색에서 빼고 국소 회피에 맡긴다)
+const NAV_CELL = 2 // 격자 한 칸(월드 단위)
+const NAV_CLEAR = 1.5 // 영웅 몸통 반경(1.3) + 여유 — 이만큼 지형에서 떨어진 칸만 걷는다
+
+// 경로탐색이 보는 정적 충돌 원 목록 (성벽 + 바위 + 양 팀 넥서스)
+function navCircles(geo) {
+  if (!geo._navCircles) {
+    geo._navCircles = [
+      ...geo.WALLS, ...geo.ROCKS,
+      { x: geo.NEXUS_POS.blue.x, z: geo.NEXUS_POS.blue.z, r: NEXUS_RADIUS },
+      { x: geo.NEXUS_POS.red.x, z: geo.NEXUS_POS.red.z, r: NEXUS_RADIUS },
+    ]
+  }
+  return geo._navCircles
+}
+
+// (x1,z1)→(x2,z2) 직선 보행이 정적 지형에 막히지 않는가 (선분-원 최소거리 검사)
+function lineFreeFor(geo, x1, z1, x2, z2, pad = 1.4) {
+  const dx = x2 - x1
+  const dz = z2 - z1
+  const len2 = dx * dx + dz * dz || 1e-9
+  for (const c of navCircles(geo)) {
+    const r = c.r + pad
+    let t = ((c.x - x1) * dx + (c.z - z1) * dz) / len2
+    t = t < 0 ? 0 : t > 1 ? 1 : t
+    const px = x1 + dx * t - c.x
+    const pz = z1 + dz * t - c.z
+    if (px * px + pz * pz < r * r) return false
+  }
+  return true
+}
+
+// 격자 굽기: 정적 원에서 NAV_CLEAR 안쪽인 칸을 막힘으로 표시 (맵당 1회, 첫 findPath 때)
+function buildNavGrid(geo) {
+  const minX = geo.WORLD.minX
+  const minZ = geo.WORLD.minZ
+  const w = Math.round((geo.WORLD.maxX - minX) / NAV_CELL) + 1
+  const h = Math.round((geo.WORLD.maxZ - minZ) / NAV_CELL) + 1
+  const blocked = new Uint8Array(w * h)
+  for (const c of navCircles(geo)) {
+    const rr = c.r + NAV_CLEAR
+    const rr2 = rr * rr
+    const i0 = Math.max(0, Math.floor((c.x - rr - minX) / NAV_CELL))
+    const i1 = Math.min(w - 1, Math.ceil((c.x + rr - minX) / NAV_CELL))
+    const j0 = Math.max(0, Math.floor((c.z - rr - minZ) / NAV_CELL))
+    const j1 = Math.min(h - 1, Math.ceil((c.z + rr - minZ) / NAV_CELL))
+    for (let j = j0; j <= j1; j++) {
+      const dz = minZ + j * NAV_CELL - c.z
+      for (let i = i0; i <= i1; i++) {
+        const dx = minX + i * NAV_CELL - c.x
+        if (dx * dx + dz * dz <= rr2) blocked[j * w + i] = 1
+      }
+    }
+  }
+  return { w, h, minX, minZ, blocked }
+}
+
+// A* 경로탐색 (8방향, 대각선 모서리 끼임 방지). 반환: 경유 좌표 배열(마지막은 목표) 또는 null.
+// 경로는 직선 시야(lineFree)가 닿는 구간을 건너뛰어(string pulling) 매끈하게 다듬는다.
+function findPathFor(geo, sx, sz, tx, tz) {
+  const grid = geo._nav || (geo._nav = buildNavGrid(geo))
+  const { w, h, minX, minZ, blocked } = grid
+  const clampI = (x) => Math.max(0, Math.min(w - 1, Math.round((x - minX) / NAV_CELL)))
+  const clampJ = (z) => Math.max(0, Math.min(h - 1, Math.round((z - minZ) / NAV_CELL)))
+  // 시작/목표가 막힌 칸(지형에 밀착·넥서스 중심 등)이면 가까운 열린 칸으로 스냅
+  const snap = (i, j) => {
+    if (!blocked[j * w + i]) return j * w + i
+    for (let r = 1; r <= 6; r++) {
+      for (let dj = -r; dj <= r; dj++) {
+        for (let di = -r; di <= r; di++) {
+          if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue
+          const ii = i + di
+          const jj = j + dj
+          if (ii < 0 || jj < 0 || ii >= w || jj >= h) continue
+          if (!blocked[jj * w + ii]) return jj * w + ii
+        }
+      }
+    }
+    return -1
+  }
+  const start = snap(clampI(sx), clampJ(sz))
+  const goal = snap(clampI(tx), clampJ(tz))
+  if (start < 0 || goal < 0) return null
+  if (start === goal) return [{ x: tx, z: tz }]
+  const n = w * h
+  const came = new Int32Array(n).fill(-1)
+  const gCost = new Float32Array(n).fill(Infinity)
+  const fCost = new Float32Array(n).fill(Infinity)
+  const closed = new Uint8Array(n)
+  const gi = goal % w
+  const gj = (goal / w) | 0
+  const hEst = (idx) => {
+    const di = Math.abs((idx % w) - gi)
+    const dj = Math.abs(((idx / w) | 0) - gj)
+    return di + dj + (Math.SQRT2 - 2) * Math.min(di, dj) // octile 거리
+  }
+  // f값 기준 이진 힙
+  const heap = [start]
+  const heapPush = (idx) => {
+    heap.push(idx)
+    let i = heap.length - 1
+    while (i > 0) {
+      const p = (i - 1) >> 1
+      if (fCost[heap[p]] <= fCost[heap[i]]) break
+      ;[heap[p], heap[i]] = [heap[i], heap[p]]
+      i = p
+    }
+  }
+  const heapPop = () => {
+    const top = heap[0]
+    const last = heap.pop()
+    if (heap.length) {
+      heap[0] = last
+      let i = 0
+      for (;;) {
+        const l = i * 2 + 1
+        const r = l + 1
+        let m = i
+        if (l < heap.length && fCost[heap[l]] < fCost[heap[m]]) m = l
+        if (r < heap.length && fCost[heap[r]] < fCost[heap[m]]) m = r
+        if (m === i) break
+        ;[heap[m], heap[i]] = [heap[i], heap[m]]
+        i = m
+      }
+    }
+    return top
+  }
+  gCost[start] = 0
+  fCost[start] = hEst(start)
+  const DIRS = [
+    [1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1],
+    [1, 1, Math.SQRT2], [1, -1, Math.SQRT2], [-1, 1, Math.SQRT2], [-1, -1, Math.SQRT2],
+  ]
+  let found = false
+  while (heap.length) {
+    const cur = heapPop()
+    if (closed[cur]) continue
+    closed[cur] = 1
+    if (cur === goal) {
+      found = true
+      break
+    }
+    const ci = cur % w
+    const cj = (cur / w) | 0
+    for (const [di, dj, cost] of DIRS) {
+      const ii = ci + di
+      const jj = cj + dj
+      if (ii < 0 || jj < 0 || ii >= w || jj >= h) continue
+      const ni = jj * w + ii
+      if (blocked[ni] || closed[ni]) continue
+      if (di && dj && (blocked[cj * w + ii] || blocked[jj * w + ci])) continue // 대각선 모서리 컷 방지
+      const ng = gCost[cur] + cost
+      if (ng >= gCost[ni]) continue
+      gCost[ni] = ng
+      came[ni] = cur
+      fCost[ni] = ng + hEst(ni)
+      heapPush(ni)
+    }
+  }
+  if (!found) return null
+  // 복원(칸 중심 좌표) + 목표 정확 좌표로 마무리
+  const cells = []
+  for (let cur = goal; cur >= 0 && cur !== start; cur = came[cur]) {
+    cells.push({ x: minX + (cur % w) * NAV_CELL, z: minZ + ((cur / w) | 0) * NAV_CELL })
+  }
+  cells.reverse()
+  cells.push({ x: tx, z: tz })
+  // string pulling: 현 위치에서 직선으로 닿는 가장 먼 노드만 남긴다
+  const out = []
+  let cx = sx
+  let cz = sz
+  let i = 0
+  while (i < cells.length) {
+    let k = i
+    for (let j = cells.length - 1; j > i; j--) {
+      if (lineFreeFor(geo, cx, cz, cells[j].x, cells[j].z)) {
+        k = j
+        break
+      }
+    }
+    out.push(cells[k])
+    cx = cells[k].x
+    cz = cells[k].z
+    i = k + 1
+  }
+  return out
+}
+
 // 모드별 맵 객체를 만든다. 지형 데이터 + 그 지형에 묶인 헬퍼 메서드를 함께 담는다.
 export function buildMap(mode = '3v3') {
   const s = MODE_SCALE[mode] || MODE_SCALE['3v3']
@@ -288,6 +480,8 @@ export function buildMap(mode = '3v3') {
   geo.nearestWp = (lane, x, z) => nearestWpFor(geo, lane, x, z)
   geo.resolveTerrain = (p, radius, towers) => resolveTerrainFor(geo, p, radius, towers)
   geo.avoidDir = (e, tx, tz, towers, selfR) => avoidDirFor(geo, e, tx, tz, towers, selfR)
+  geo.lineFree = (x1, z1, x2, z2) => lineFreeFor(geo, x1, z1, x2, z2)
+  geo.findPath = (sx, sz, tx, tz) => findPathFor(geo, sx, sz, tx, tz)
   return geo
 }
 
@@ -310,3 +504,5 @@ export const bushIndexAt = (x, z) => bushIndexAtFor(M3, x, z)
 export const nearestWp = (lane, x, z) => nearestWpFor(M3, lane, x, z)
 export const resolveTerrain = (p, radius, towers) => resolveTerrainFor(M3, p, radius, towers)
 export const avoidDir = (e, tx, tz, towers, selfR) => avoidDirFor(M3, e, tx, tz, towers, selfR)
+export const lineFree = (x1, z1, x2, z2) => lineFreeFor(M3, x1, z1, x2, z2)
+export const findPath = (sx, sz, tx, tz) => findPathFor(M3, sx, sz, tx, tz)
