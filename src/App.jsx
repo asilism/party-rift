@@ -8,6 +8,13 @@ import { MatchProvider, useMatch } from './net/MatchContext.jsx'
 // 조디악 러쉬 — 단독 게임. three.js(3D)를 쓰므로 전장에 들어갈 때만 내려받는다(번들 분리).
 const RiftGame = lazy(() => import('./games/rift/RiftGame.jsx'))
 
+// 솔로(오프라인) 모드 — Electron 데스크톱(preload가 window.zodiacDesktop 주입) 또는 ?solo.
+//  서버 연결 없이 로컬 시뮬 봇전만 돈다. 웹 온라인 플로우는 그대로.
+const SoloApp = lazy(() => import('./solo/SoloApp.jsx'))
+const soloMode =
+  typeof window !== 'undefined' &&
+  (!!window.zodiacDesktop || new URLSearchParams(window.location.search).has('solo'))
+
 // 서버 권위 + 매치메이킹.  화면 흐름은 서버가 주도한다:
 //   대문(SSH) → 대기열 → 드래프트(스네이크 픽) → 전투
 //   진행 중 새로고침/끊김에도 같은 기기(deviceId)면 그 단계로 복구된다.
@@ -21,9 +28,17 @@ export default function App() {
         </div>
       </div>
 
-      <MatchProvider>
-        <Flow />
-      </MatchProvider>
+      {soloMode ? (
+        <ErrorBoundary>
+          <Suspense fallback={<NetScreen icon="⏳" text="게임을 불러오는 중..." />}>
+            <SoloApp />
+          </Suspense>
+        </ErrorBoundary>
+      ) : (
+        <MatchProvider>
+          <Flow />
+        </MatchProvider>
+      )}
     </div>
   )
 }

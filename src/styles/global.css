@@ -2682,3 +2682,27 @@ body {
   .draft-slot__avatar { font-size: 22px; }
   .gate__modes { grid-template-columns: 1fr; }
 }
+
+/* ── 솔로(오프라인 봇전) 설정 화면 — Electron 데스크톱/?solo 진입 ── */
+.solo {
+  flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px;
+  width: 100%; max-width: 900px; margin: 0 auto; box-sizing: border-box;
+  padding: clamp(10px, 2.5vh, 20px) clamp(12px, 3vw, 28px);
+}
+.solo__header { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-shrink: 0; }
+.solo__title { margin: 0; font-size: clamp(18px, 3.4vh, 26px); }
+.solo__sub { margin: 2px 0 0; color: var(--muted); font-size: clamp(11px, 2vh, 14px); }
+.solo__header-right { display: flex; align-items: center; gap: 8px; }
+.solo__modes { display: flex; gap: 6px; }
+.solo__zodiacs { display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
+.solo__zodiac {
+  width: 40px; height: 40px; font-size: 22px; line-height: 1; cursor: pointer; color: var(--text);
+  border-radius: 10px; border: 2px solid var(--line); background: rgba(255, 255, 255, 0.04);
+  transition: transform .08s, border-color .12s, background .12s;
+}
+.solo__zodiac:hover { border-color: var(--accent); }
+.solo__zodiac.is-on { border-color: var(--z-color, var(--accent)); background: rgba(255, 255, 255, 0.1); transform: scale(1.08); }
+.solo__classes { flex: 1; }
+.draft-class.is-on { border-color: var(--accent); background: rgba(255, 207, 77, 0.14); }
+.solo__footer { flex-shrink: 0; display: flex; justify-content: center; }
+.solo__start { min-width: 260px; font-size: 15px; }

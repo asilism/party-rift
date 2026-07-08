@@ -93,7 +93,8 @@ export default function RiftGame({ onExit, net }) {
       onResetShop={resetShopBuys}
       onUseItem={useItemSlot}
       rtt={rtt}
-      onTogglePause={null}
+      onTogglePause={net.rtPause ? () => net.rtPause(!view.paused) : null}
+      exitLabel={net.local ? '🔁 다시 하기' : '🔁 새 매치 찾기'}
       onExit={onExit}
       soundOn={soundOn}
       onToggleSound={toggleSound}
@@ -342,7 +343,7 @@ function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onTog
 
 // 전투 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function RiftPlay({
-  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onUseItem, rtt = 0, onTogglePause, onExit, soundOn, onToggleSound,
+  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onUseItem, rtt = 0, onTogglePause, exitLabel = '🔁 새 매치 찾기', onExit, soundOn, onToggleSound,
 }) {
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
@@ -610,7 +611,7 @@ function RiftPlay({
               <RiftRoster hud={hud} crown={hud.winner} />
             </div>
             <div className="win-modal__btns">
-              <button className="btn btn--primary" onClick={onExit}>🔁 새 매치 찾기</button>
+              <button className="btn btn--primary" onClick={onExit}>{exitLabel}</button>
             </div>
           </div>
         </div>
