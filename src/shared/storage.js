@@ -47,6 +47,27 @@ export function saveRiftHitFx(on) {
   }
 }
 
+// ── 솔로(오프라인 봇전) 마지막 선택(조디악·직업·모드) 보존 ──
+const SOLO_PICK_KEY = 'bgp.rift.solo.v1'
+
+export function loadSoloPick() {
+  try {
+    const v = JSON.parse(localStorage.getItem(SOLO_PICK_KEY))
+    if (v && typeof v === 'object') return v
+  } catch {
+    /* 무시 */
+  }
+  return null
+}
+
+export function saveSoloPick(pick) {
+  try {
+    localStorage.setItem(SOLO_PICK_KEY, JSON.stringify(pick))
+  } catch {
+    /* 무시 */
+  }
+}
+
 // ── 그래픽 품질(상/중/하) 보존 ──
 // high: 현재 화질 그대로 / med: 균형 / low: 저사양·모바일용 (픽셀레이트·장식·AA를 낮춘다)
 const RIFT_GFX_KEY = 'bgp.rift.gfx.v1'
