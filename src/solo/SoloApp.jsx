@@ -1,11 +1,14 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { CLASSES, CLASS_IDS, TEAM_SIZE, TEAM_SIZES } from '../games/rift/engine.js'
+import { CLASSES, CLASS_IDS, TEAM_SIZES } from '../games/rift/engine.js'
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
 import { riftNet } from '../games/rift/netgame.js'
 import { createLocalNet } from '../net/localNet.js'
 import {
   loadSoloPick, saveSoloPick, loadGuideSeen, saveGuideSeen, loadRiftRecords, addRiftRecord,
+  loadUnlockSeen, saveUnlockSeen,
 } from '../shared/storage.js'
+import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT } from './unlocks.js'
+import { buildSoloRoster } from './roster.js'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
 
 const RiftGame = lazy(() => import('../games/rift/RiftGame.jsx'))
@@ -13,34 +16,6 @@ const RiftGame = lazy(() => import('../games/rift/RiftGame.jsx'))
 // 솔로(오프라인) 모드 — 서버 없이 캐릭터를 고르고 봇들과 한 판.
 //  Electron 데스크톱 빌드의 기본 화면이고, 웹에서도 ?solo로 열 수 있다.
 //  전투는 온라인과 완전히 같은 RiftGame — net만 로컬 어댑터(createLocalNet)로 바꿔 낀다.
-
-const shuffle = (arr) => {
-  const a = [...arr]
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[a[i], a[j]] = [a[j], a[i]]
-  }
-  return a
-}
-
-// 온라인 드래프트가 만드는 것과 같은 완성 로스터 — 봇은 매판 랜덤 조디악·직업(팀 내 중복 없음)
-function buildSoloRoster({ zodiacId, cls, mode }) {
-  const size = TEAM_SIZES[mode] || TEAM_SIZE
-  const me = getZodiac(zodiacId)
-  const freeZ = shuffle(ZODIAC.filter((z) => z.id !== zodiacId))
-  const roster = [{ id: 'solo', name: me?.name || '나', zodiacId, color: me?.color, team: 'blue', cls, deviceId: 'solo' }]
-  for (const team of ['blue', 'red']) {
-    const taken = new Set(team === 'blue' ? [cls] : [])
-    for (let i = team === 'blue' ? 1 : 0; i < size; i++) {
-      const botCls = shuffle(CLASS_IDS.filter((c) => !taken.has(c)))[0]
-      taken.add(botCls)
-      const z = freeZ.shift()
-      if (!z) break
-      roster.push({ id: `bot-${z.id}`, name: `${z.name}봇`, zodiacId: z.id, color: z.color, team, cls: botCls, isBot: true })
-    }
-  }
-  return roster
-}
 
 export default function SoloApp() {
   const [net, setNet] = useState(null)
@@ -91,18 +66,28 @@ const BOT_LEVEL_OPTS = [
 
 function SoloSetup({ onStart }) {
   const saved = loadSoloPick()
-  const [zodiacId, setZodiacId] = useState(getZodiac(saved?.zodiacId) ? saved.zodiacId : 'tiger')
-  const [cls, setCls] = useState(CLASSES[saved?.cls] ? saved.cls : null)
-  const [mode, setMode] = useState(TEAM_SIZES[saved?.mode] ? saved.mode : '3v3')
-  // 처음 온 사람 기본값은 쉬움 — 저장된 선택이 있으면 그걸 따른다
-  const [botLevel, setBotLevel] = useState(
-    BOT_LEVEL_OPTS.some((o) => o.id === saved?.botLevel) ? saved.botLevel : 'easy'
-  )
   // 직업별 봇전 전적 — 판이 끝날 때(onFinish) 누적된 걸 읽어 카드/헤더에 보여 준다
   const records = loadRiftRecords()
   const total = Object.values(records).reduce(
     (a, r) => ({ games: a.games + r.games, wins: a.wins + r.wins }),
     { games: 0, wins: 0 }
+  )
+  // 캐릭터 해금 — 통산 승수에서 유도. 새로 열린 카드(마지막 확인 이후)엔 NEW 배지.
+  const unlocked = new Set(unlockedClassIds(total.wins))
+  const next = nextUnlock(total.wins)
+  const [seenCount] = useState(loadUnlockSeen)
+  const seenBase = Math.max(seenCount, STARTER_COUNT)
+  useEffect(() => {
+    saveUnlockSeen(unlockedCount(total.wins))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const [zodiacId, setZodiacId] = useState(getZodiac(saved?.zodiacId) ? saved.zodiacId : 'tiger')
+  const [cls, setCls] = useState(CLASSES[saved?.cls] && unlocked.has(saved.cls) ? saved.cls : null)
+  const [mode, setMode] = useState(TEAM_SIZES[saved?.mode] ? saved.mode : '3v3')
+  // 처음 온 사람 기본값은 쉬움 — 저장된 선택이 있으면 그걸 따른다
+  const [botLevel, setBotLevel] = useState(
+    BOT_LEVEL_OPTS.some((o) => o.id === saved?.botLevel) ? saved.botLevel : 'easy'
   )
   // 첫 진입이면 조작 가이드를 자동으로 띄운다(닫으면 다시 안 뜸, ❓ 버튼으로 언제든)
   const [helpOpen, setHelpOpen] = useState(() => !loadGuideSeen())
@@ -216,6 +201,11 @@ function SoloSetup({ onStart }) {
                 </button>
               ))}
             </div>
+            {next && (
+              <span className="solo__next-unlock" title={CLASSES[next].desc}>
+                🔓 승리하면 <b>{CLASSES[next].icon} {CLASSES[next].name}</b> 해금!
+              </span>
+            )}
           </div>
 
           <div className="solo__zodiacs" role="radiogroup" aria-label="조디악 선택">
@@ -233,18 +223,24 @@ function SoloSetup({ onStart }) {
           </div>
 
           <div className="draft__classes solo__classes">
-            {CLASS_IDS.map((id) => {
+            {CLASS_IDS.map((id, idx) => {
               const cc = CLASSES[id]
               const rr = records[id]
+              const locked = !unlocked.has(id)
+              const isNew = !locked && idx >= seenBase // 마지막 확인 이후 새로 열림
               return (
                 <button
                   key={id}
-                  className={`draft-class ${cls === id ? 'is-on' : ''}`}
+                  className={`draft-class ${cls === id ? 'is-on' : ''} ${locked ? 'is-locked' : ''}`}
+                  disabled={locked}
+                  title={locked ? '승리할 때마다 새 캐릭터가 하나씩 열려요' : cc.desc}
                   onClick={() => setCls(id)}
                 >
                   <span className="draft-class__icon">{cc.icon}</span>
                   <span className="draft-class__name">{cc.name}</span>
-                  {rr?.games > 0 && (
+                  {locked && <span className="draft-class__lock">🔒</span>}
+                  {isNew && <span className="draft-class__new">NEW</span>}
+                  {!locked && rr?.games > 0 && (
                     <span className="draft-class__rec">{rr.wins}승 {rr.games - rr.wins}패</span>
                   )}
                 </button>
