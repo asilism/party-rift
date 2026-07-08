@@ -57,10 +57,17 @@ function dmgTexture(text, kind) {
   return tex
 }
 
-function emojiTexture(emoji, size = 128) {
+function emojiTexture(emoji, size = 128, mirror = false) {
   const c = document.createElement('canvas')
   c.width = c.height = size
   const ctx = c.getContext('2d')
+  // mirror: 좌우가 뒤집힌 텍스처 — 옆모습 이모지(🐴 등)는 원본이 왼쪽을 보므로
+  // 오른쪽으로 달릴 땐 이걸 씌운다. Sprite는 음수 scale.x가 무시돼(셰이더가 행렬에서
+  // length()로 스케일을 뽑는다) 텍스처 차원에서 뒤집는 것이 안전한 방법이다.
+  if (mirror) {
+    ctx.translate(size, 0)
+    ctx.scale(-1, 1)
+  }
   ctx.font = `${size * 0.78}px serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -1360,7 +1367,8 @@ function buildHero(h, mine, barColor) {
   armL.add(armLMesh)
   body.add(armL)
   const shadow = blobShadow(2.0 * s)
-  const face = emojiSprite(getZodiac(h.zodiacId)?.emoji || '🙂', 3.2)
+  const faceEmoji = getZodiac(h.zodiacId)?.emoji || '🙂'
+  const face = emojiSprite(faceEmoji, 3.2)
   face.position.y = 4.4 * s
   const nameColor = mine ? '#ffe066' : '#ffffff'
   const name = nameSprite(heroLabel(h), nameColor)
@@ -1486,6 +1494,7 @@ function buildHero(h, mine, barColor) {
   g.add(shadow, body, face, name, bar, ring, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, deathPts)
   g.userData = {
     body, outline, face, name, nameColor, nameLvl: h.lvl, isMine: mine, shadow,
+    faceEmoji, faceTexOrig: face.material.map, faceTexMirror: null, // 좌우 반전용(미러는 지연 생성)
     bodyBaseY: 2.2 * s, faceBaseY: 4.4 * s, bobPhase: (hashStr(h.id) % 628) / 100,
     bar, ring, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
@@ -3232,12 +3241,18 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         u.face.position.y = u.faceBaseY + bobOff // 얼굴도 함께 떠올라 몸통이 뚫지 않게
         // 좌우 방향에 따라 얼굴이 그쪽을 "본다" — 이모지 얼굴은 빌보드(항상 카메라를 봄)라
         // 몸통 회전만으론 방향감이 없다. 세 가지를 합친다:
-        //  ① 거울 반전(비대칭 이모지용) ② 진행 방향으로 살짝 쏠림 ③ 살짝 기울임.
-        // 위/아래만 볼 땐 마지막 좌우를 유지해 경계에서 파닥거리지 않게 한다(히스테리시스).
+        //  ① 거울 반전(옆모습 이모지: 🐴 등은 원본이 왼쪽을 봄 → 오른쪽 이동 시 미러 텍스처)
+        //  ② 진행 방향으로 살짝 쏠림 ③ 살짝 기울임.
+        // 반전은 텍스처 교체로 한다 — Sprite는 음수 scale.x가 무시된다(셰이더가 length()로
+        // 스케일을 뽑음). 위/아래만 볼 땐 마지막 좌우를 유지해 파닥이지 않게(히스테리시스).
         const fdx = Math.cos(h.dir)
         if (fdx > 0.15) u.faceDir = 1
         else if (fdx < -0.15) u.faceDir = -1
-        u.face.scale.x = Math.abs(u.face.scale.x) * (u.faceDir || 1)
+        if ((u.faceDir || -1) !== (u.faceShown || -1)) {
+          u.faceShown = u.faceDir
+          if (u.faceDir === 1 && !u.faceTexMirror) u.faceTexMirror = emojiTexture(u.faceEmoji, 128, true)
+          u.face.material.map = u.faceDir === 1 ? u.faceTexMirror : u.faceTexOrig
+        }
         const fs = u.faceBaseY / 4.4 // 직업 스케일(s) 복원 — 몸집에 비례해 쏠림도 커진다
         u.face.position.x += (fdx * 0.6 * fs - u.face.position.x) * Math.min(1, dt * 10) // 부드럽게 따라오기
         u.face.material.rotation = -fdx * 0.1
