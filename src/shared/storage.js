@@ -68,6 +68,25 @@ export function saveSoloPick(pick) {
   }
 }
 
+// ── 조작 가이드(첫 실행 안내)를 봤는지 보존 — 솔로 모드 첫 진입 시 자동으로 띄운다 ──
+const GUIDE_SEEN_KEY = 'bgp.rift.guide.v1'
+
+export function loadGuideSeen() {
+  try {
+    return localStorage.getItem(GUIDE_SEEN_KEY) === 'y'
+  } catch {
+    return false
+  }
+}
+
+export function saveGuideSeen() {
+  try {
+    localStorage.setItem(GUIDE_SEEN_KEY, 'y')
+  } catch {
+    /* 무시 */
+  }
+}
+
 // ── 그래픽 품질(상/중/하) 보존 ──
 // high: 현재 화질 그대로 / med: 균형 / low: 저사양·모바일용 (픽셀레이트·장식·AA를 낮춘다)
 const RIFT_GFX_KEY = 'bgp.rift.gfx.v1'
