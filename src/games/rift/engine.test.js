@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   createGame, setInput, castAttack, castSkill, castSkill2, castUlt, castRecall, step, makeView, makeBot,
   towerVulnerable, nexusVulnerable, isHeroVisible, isUnitVisible, buyItem, sellItem, resetShop, canShop, useItem,
-  STEP, COUNTDOWN_TIME, TIME_LIMIT, ULT_LEVEL, SKILL2_LEVEL, TEAM_SIZE, MAX_LEVEL, RECALL_TIME, CLASS_IDS, CLASSES,
+  STEP, COUNTDOWN_TIME, ULT_LEVEL, SKILL2_LEVEL, TEAM_SIZE, MAX_LEVEL, RECALL_TIME, CLASS_IDS, CLASSES,
   ITEM_SLOTS, BOT_STUCK_T, HP_SCALE,
 } from './engine.js'
 import { ITEMS_BY_ID, sumStats, buildQuote } from './items.js'
@@ -1370,14 +1370,14 @@ test('정글몹: 맞으면 반격하고, 캠프를 벗어나면 복귀하며 회
   assert.ok(w.hp >= hurt)
 })
 
-test('시간 초과: 부순 타워 → 킬 순서로 승부 판정', () => {
+test('시간제한 없음: 아무리 오래 지나도 넥서스가 서 있으면 게임이 계속된다', () => {
   const g = createGame(humans())
   startPlaying(g)
-  g.kills.red = 3
-  g.time = COUNTDOWN_TIME + TIME_LIMIT
+  g.kills.red = 3 // 점수가 앞서도 시간으론 승부가 안 난다
+  g.time = COUNTDOWN_TIME + 3600 // 1시간 경과
   step(g, STEP)
-  assert.equal(g.status, 'finished')
-  assert.equal(g.winner, 'red')
+  assert.equal(g.status, 'playing')
+  assert.equal(g.winner, null)
 })
 
 test('setInput으로 이동: 입력 방향으로 움직인다', () => {
@@ -1408,7 +1408,7 @@ test('makeView: JSON 직렬화 가능한 완전한 스냅샷 (직업/수풀 정�
   assert.equal(back.towers.length, 14)
   assert.ok(back.nexus.blue.hp > 0)
   assert.ok(Array.isArray(back.minions))
-  assert.ok(back.timeLeft <= TIME_LIMIT)
+  assert.ok(back.timePlayed >= 4 && back.timePlayed <= 6, '시계는 경과 시간(카운트다운 제외)을 보여준다')
   for (const h of back.heroes) {
     assert.ok(CLASS_IDS.includes(h.cls))
     assert.ok('bushI' in h && 'revealT' in h && 'shieldT' in h)

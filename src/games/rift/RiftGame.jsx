@@ -438,7 +438,7 @@ function RiftPlay({
 
       <div className="rift__hud">
         <div className="ladder__topbar rift__topbar">
-          {/* 우상단(설정 옆): 개인 전적 — 킬/데스/어시 · 골드 · 남은 시간 */}
+          {/* 우상단(설정 옆): 개인 전적 — 킬/데스/어시 · 골드 · 진행 시간 */}
           <div className="topbar__right">
             <div className="rift__stats">
               {me && (
@@ -451,7 +451,7 @@ function RiftPlay({
                   <span className="rift__stats-gold">💰{me.gold}</span>
                 </>
               )}
-              <span className="rift__stats-time">⏱{fmtTime(hud.timeLeft)}</span>
+              <span className="rift__stats-time">⏱{fmtTime(hud.timePlayed || 0)}</span>
               {rtt > 0 && (
                 <span
                   className="rift__stats-ping"

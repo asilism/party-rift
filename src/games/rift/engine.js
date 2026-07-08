@@ -14,7 +14,6 @@ export { ITEM_SLOTS } from './items.js'
 
 export const STEP = 1 / 60
 export const COUNTDOWN_TIME = 3
-export const TIME_LIMIT = 1200 // 20분 — 넥서스가 안 터지면 점수로 판정
 export const MAX_LEVEL = 18
 export const ULT_LEVEL = 5 // 궁극기가 열리는 레벨 (Lv5)
 export const SKILL2_LEVEL = 3 // 보조 스킬이 열리는 레벨 (Lv3)
@@ -2590,17 +2589,7 @@ export function step(state, dt) {
     state.tempWalls = state.tempWalls.filter((w) => (w.t += dt) < w.life)
   }
   state.fx = state.fx.filter((n) => (n.t += dt) < (n.life || 0.8))
-  // 시간 초과: 부순 타워 → 킬 → 넥서스 체력으로 판정
-  if (state.status === 'playing' && state.time >= COUNTDOWN_TIME + TIME_LIMIT) {
-    const d = state.towersDown
-    const k = state.kills
-    const nx = state.nexus
-    let w = null
-    if (d.blue !== d.red) w = d.blue > d.red ? 'blue' : 'red'
-    else if (k.blue !== k.red) w = k.blue > k.red ? 'blue' : 'red'
-    else if (nx.blue.hp !== nx.red.hp) w = nx.blue.hp > nx.red.hp ? 'blue' : 'red'
-    finish(state, w)
-  }
+  // 시간제한 없음 — 승부는 오직 넥서스 파괴로만 갈린다
   return state
 }
 
@@ -4593,7 +4582,7 @@ export function makeView(state) {
     time: r2d(state.time),
     countdown: Math.ceil(state.countdown),
     go: state.status === 'playing' && state.time < COUNTDOWN_TIME + 1.2,
-    timeLeft: Math.max(0, Math.ceil(COUNTDOWN_TIME + TIME_LIMIT - state.time)),
+    timePlayed: Math.max(0, Math.floor(state.time - COUNTDOWN_TIME)), // 경과 시간(초) — 카운트다운 제외
     winner: state.winner,
     kills: { ...state.kills },
     heroes: state.heroes.map((h) => ({
