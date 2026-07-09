@@ -47,6 +47,33 @@ export function saveRiftHitFx(on) {
   }
 }
 
+// ── 프로필(수호 지신) — 첫 실행 때 한 번 정하고, 메인 메뉴에서 변경 ──
+const PROFILE_KEY = 'bgp.rift.profile.v1'
+
+export function loadProfile() {
+  try {
+    const v = localStorage.getItem(PROFILE_KEY)
+    if (v) return v
+    // 구버전 이전: 솔로 픽에 들어 있던 조디악을 프로필로 승격(기존 유저는 선택 화면 생략)
+    const pick = JSON.parse(localStorage.getItem(SOLO_PICK_KEY))
+    if (pick?.zodiacId) {
+      localStorage.setItem(PROFILE_KEY, pick.zodiacId)
+      return pick.zodiacId
+    }
+  } catch {
+    /* 무시 */
+  }
+  return null
+}
+
+export function saveProfile(zodiacId) {
+  try {
+    localStorage.setItem(PROFILE_KEY, zodiacId)
+  } catch {
+    /* 무시 */
+  }
+}
+
 // ── 솔로(오프라인 봇전) 마지막 선택(조디악·직업·모드) 보존 ──
 const SOLO_PICK_KEY = 'bgp.rift.solo.v1'
 

@@ -3,30 +3,73 @@ import { CLASSES, CLASS_IDS, TEAM_SIZES } from '../games/rift/engine.js'
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
 import { riftNet } from '../games/rift/netgame.js'
 import { createLocalNet } from '../net/localNet.js'
+import { sound } from '../shared/sound.js'
 import {
   loadSoloPick, saveSoloPick, loadGuideSeen, saveGuideSeen, loadRiftRecords, addRiftRecord,
-  loadUnlockSeen, saveUnlockSeen,
+  loadUnlockSeen, saveUnlockSeen, loadProfile, saveProfile,
 } from '../shared/storage.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
+import MenuStage from './MenuStage.jsx'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
 
 const RiftGame = lazy(() => import('../games/rift/RiftGame.jsx'))
 
-// 솔로(오프라인) 모드 — 서버 없이 캐릭터를 고르고 봇들과 한 판.
-//  Electron 데스크톱 빌드의 기본 화면이고, 웹에서도 ?solo로 열 수 있다.
-//  전투는 온라인과 완전히 같은 RiftGame — net만 로컬 어댑터(createLocalNet)로 바꿔 낀다.
+// 솔로(오프라인) 모드 — 고전 콘솔식 4뎁스 셸.
+//   타이틀(눌러서 시작) → 메인 메뉴 → 모드·난이도 → 캐릭터 선택 → 전투
+// 모든 메뉴 화면 뒤에는 봇들이 실제로 싸우는 라이브 전장(MenuStage)이 흐른다.
+// 조디악(수호 지신)은 프로필 — 첫 실행에 한 번 정하고 메뉴에서 변경한다.
+
+const BOT_LEVEL_OPTS = [
+  { id: 'easy', label: '😌 쉬움', desc: '봇이 뜸을 들이고 덜 아파요 — 처음이라면 여기부터' },
+  { id: 'normal', label: '⚔️ 보통', desc: '온라인과 같은 봇' },
+  { id: 'hard', label: '🔥 어려움', desc: '칼같이 반응하고 더 아프게' },
+]
+
+const MODE_OPTS = [
+  { id: '3v3', emoji: '⚔️', name: '3 대 3', desc: '작은 맵 · 빠른 한판', tag: '기본' },
+  { id: '5v5', emoji: '🐉', name: '5 대 5', desc: '넓은 맵 · 정글 대격전', tag: '큰판' },
+]
 
 export default function SoloApp() {
+  const [profile, setProfileState] = useState(() => {
+    const p = loadProfile()
+    return getZodiac(p) ? p : null
+  })
+  const [screen, setScreen] = useState('title') // title | profile | menu | mode | char | records | play
+  const saved = loadSoloPick()
+  const [mode, setMode] = useState(TEAM_SIZES[saved?.mode] ? saved.mode : '3v3')
+  const [botLevel, setBotLevel] = useState(
+    BOT_LEVEL_OPTS.some((o) => o.id === saved?.botLevel) ? saved.botLevel : 'easy'
+  )
   const [net, setNet] = useState(null)
   const netRef = useRef(null)
-  useEffect(() => () => netRef.current?.close(), []) // 언마운트 시 로컬 시뮬 정리
+  const [helpOpen, setHelpOpen] = useState(false)
+  useEffect(() => () => netRef.current?.close(), [])
 
-  function start(pick) {
+  function go(next) {
+    sound.step()
+    setScreen(next)
+  }
+
+  function enterFromTitle() {
+    sound.unlock()
+    sound.go()
+    setScreen(profile ? 'menu' : 'profile')
+  }
+
+  function pickProfile(zodiacId) {
+    saveProfile(zodiacId)
+    setProfileState(zodiacId)
+    go('menu')
+  }
+
+  function startBattle(cls) {
+    const pick = { zodiacId: profile, cls, mode, botLevel }
     saveSoloPick(pick)
     const n = createLocalNet(riftNet, {
       players: [],
-      config: { mode: pick.mode, roster: buildSoloRoster(pick), botLevel: pick.botLevel },
+      config: { mode, roster: buildSoloRoster(pick), botLevel },
       deviceId: 'solo',
       // 경기가 끝나면 내 직업 전적에 누적 — 중도 이탈(exit)은 기록하지 않는다
       onFinish(view) {
@@ -40,208 +83,302 @@ export default function SoloApp() {
     })
     netRef.current = n
     setNet(n)
+    setScreen('play')
   }
 
-  function exit() {
+  function exitBattle() {
     netRef.current?.close()
     netRef.current = null
     setNet(null)
+    setScreen('char') // 모드·난이도 유지한 채 "한 판 더" 흐름
   }
 
-  if (!net) return <SoloSetup onStart={start} />
+  // ESC = 뒤로 (전투 중엔 게임 메뉴가 담당)
+  useEffect(() => {
+    if (screen === 'play' || screen === 'title') return undefined
+    const back = { profile: profile ? 'menu' : 'title', menu: 'title', mode: 'menu', char: 'mode', records: 'menu' }
+    const onKey = (e) => {
+      if (e.key === 'Escape' && back[screen]) setScreen(back[screen])
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [screen, profile])
+
+  if (screen === 'play') {
+    return (
+      <Suspense fallback={<div className="net-screen"><div className="net-screen__icon">⏳</div><p>전장을 불러오는 중...</p></div>}>
+        <RiftGame net={net} onExit={exitBattle} />
+      </Suspense>
+    )
+  }
 
   return (
-    <Suspense fallback={<div className="net-screen"><div className="net-screen__icon">⏳</div><p>전장을 불러오는 중...</p></div>}>
-      <RiftGame net={net} onExit={exit} />
-    </Suspense>
+    <div className="shell">
+      <MenuStage />
+      {screen === 'title' && <TitleScreen onEnter={enterFromTitle} />}
+      {screen === 'profile' && (
+        <ProfileScreen current={profile} onPick={pickProfile} onBack={profile ? () => go('menu') : null} />
+      )}
+      {screen === 'menu' && (
+        <MainMenu
+          profile={profile}
+          onPlay={() => go('mode')}
+          onRecords={() => go('records')}
+          onHelp={() => setHelpOpen(true)}
+          onProfile={() => go('profile')}
+        />
+      )}
+      {screen === 'mode' && (
+        <ModeScreen
+          botLevel={botLevel}
+          onBotLevel={setBotLevel}
+          onPick={(m) => { setMode(m); go('char') }}
+          onBack={() => go('menu')}
+        />
+      )}
+      {screen === 'char' && (
+        <CharScreen
+          profile={profile}
+          mode={mode}
+          botLevel={botLevel}
+          onStart={startBattle}
+          onBack={() => go('mode')}
+          onHelp={() => setHelpOpen(true)}
+        />
+      )}
+      {screen === 'records' && <RecordsScreen onBack={() => go('menu')} />}
+      {helpOpen && <SoloHelp onClose={() => { saveGuideSeen(); setHelpOpen(false) }} />}
+    </div>
   )
 }
 
-// 봇 난이도 — engine BOT_LEVELS(easy/normal/hard)와 짝
-const BOT_LEVEL_OPTS = [
-  { id: 'easy', label: '😌 쉬움', desc: '봇이 뜸을 들이고 덜 아파요 — 처음이라면 여기부터' },
-  { id: 'normal', label: '⚔️ 보통', desc: '온라인과 같은 봇' },
-  { id: 'hard', label: '🔥 어려움', desc: '칼같이 반응하고 더 아프게' },
-]
+// ── 1. 타이틀 — 로고 + "눌러서 시작" ──
+function TitleScreen({ onEnter }) {
+  useEffect(() => {
+    const onKey = () => onEnter()
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return (
+    <div className="screen title-screen" onPointerDown={onEnter}>
+      <div className="title-screen__top">
+        <FullscreenButton />
+      </div>
+      <div className="toy-logo">
+        <div className="toy-logo__burst" aria-hidden="true" />
+        <h1 className="toy-logo__en">ZODIAC<span className="toy-logo__bolt">⚡</span>RUSH</h1>
+        <p className="toy-logo__ko">조디악 러쉬</p>
+      </div>
+      <p className="title-screen__press">화면을 눌러 시작!</p>
+      <p className="title-screen__ver">v0.1</p>
+    </div>
+  )
+}
 
-function SoloSetup({ onStart }) {
-  const saved = loadSoloPick()
-  // 직업별 봇전 전적 — 판이 끝날 때(onFinish) 누적된 걸 읽어 카드/헤더에 보여 준다
+// ── 1.5. 프로필 — 수호 지신 선택 (첫 실행 1회, 메뉴에서 변경 가능) ──
+function ProfileScreen({ current, onPick, onBack }) {
+  return (
+    <div className="screen profile-screen">
+      {onBack && <BackButton onBack={onBack} />}
+      <div className="toy-card profile-card">
+        <h2 className="toy-heading">너의 수호 지신은?</h2>
+        <p className="toy-sub">전장에서 네 얼굴이 될 동물이야 — 언제든 메뉴에서 바꿀 수 있어</p>
+        <div className="profile-card__grid">
+          {ZODIAC.map((z) => (
+            <button
+              key={z.id}
+              className={`toy-zodiac ${current === z.id ? 'is-on' : ''}`}
+              style={{ '--z-color': z.color }}
+              onClick={() => onPick(z.id)}
+            >
+              <span className="toy-zodiac__emoji">{z.emoji}</span>
+              <span className="toy-zodiac__name">{z.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── 2. 메인 메뉴 ──
+function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile }) {
+  const z = getZodiac(profile)
   const records = loadRiftRecords()
   const total = Object.values(records).reduce(
     (a, r) => ({ games: a.games + r.games, wins: a.wins + r.wins }),
     { games: 0, wins: 0 }
   )
-  // 캐릭터 해금 — 통산 승수에서 유도. 새로 열린 카드(마지막 확인 이후)엔 NEW 배지.
+  const isDesktop = typeof window !== 'undefined' && !!window.zodiacDesktop
+  function onlineGo() {
+    // 웹에선 기존 온라인 매치메이킹 플로우로(?solo 제거), 데스크톱은 준비 중
+    if (!isDesktop) window.location.search = ''
+  }
+  return (
+    <div className="screen menu-screen">
+      <div className="menu-screen__logo">
+        <h1 className="toy-logo__en toy-logo__en--small">ZODIAC<span className="toy-logo__bolt">⚡</span>RUSH</h1>
+      </div>
+      <button className="profile-chip" onClick={onProfile} title="수호 지신 바꾸기">
+        <span className="profile-chip__emoji">{z?.emoji}</span>
+        <span className="profile-chip__info">
+          <b>{z?.name}</b>
+          <small>{total.games > 0 ? `${total.wins}승 ${total.games - total.wins}패` : '첫 출전 대기'}</small>
+        </span>
+      </button>
+      <nav className="menu-screen__list">
+        <button className="toy-btn toy-btn--yellow toy-btn--big" onClick={onPlay}>⚔️ 게임 시작</button>
+        <button
+          className={`toy-btn toy-btn--blue ${isDesktop ? 'is-soon' : ''}`}
+          onClick={onlineGo}
+          disabled={isDesktop}
+        >
+          🌐 온라인 {isDesktop && <span className="toy-btn__badge">준비 중</span>}
+        </button>
+        <button className="toy-btn toy-btn--green" onClick={onRecords}>📊 전적</button>
+        <button className="toy-btn toy-btn--orange" onClick={onHelp}>❓ 조작법</button>
+      </nav>
+      <div className="menu-screen__corner">
+        <FullscreenButton />
+      </div>
+    </div>
+  )
+}
+
+// ── 3. 모드·난이도 ──
+function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
+  return (
+    <div className="screen mode-screen">
+      <BackButton onBack={onBack} />
+      <h2 className="toy-heading toy-heading--screen">어디서 싸울까?</h2>
+      <div className="mode-screen__levels">
+        {BOT_LEVEL_OPTS.map((o) => (
+          <button
+            key={o.id}
+            className={`toy-pill ${botLevel === o.id ? 'is-on' : ''}`}
+            title={o.desc}
+            onClick={() => { sound.step(); onBotLevel(o.id) }}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      <div className="mode-screen__cards">
+        {MODE_OPTS.map((m, i) => (
+          <button key={m.id} className={`toy-card mode-card mode-card--${i}`} onClick={() => onPick(m.id)}>
+            <span className="mode-card__tag">{m.tag}</span>
+            <span className="mode-card__emoji">{m.emoji}</span>
+            <span className="mode-card__name">{m.name}</span>
+            <span className="mode-card__desc">{m.desc}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── 4. 캐릭터 선택 ──
+function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
+  const saved = loadSoloPick()
+  const records = loadRiftRecords()
+  const total = Object.values(records).reduce(
+    (a, r) => ({ games: a.games + r.games, wins: a.wins + r.wins }),
+    { games: 0, wins: 0 }
+  )
   const unlocked = new Set(unlockedClassIds(total.wins))
   const next = nextUnlock(total.wins)
   const [seenCount] = useState(loadUnlockSeen)
   const seenBase = Math.max(seenCount, STARTER_COUNT)
   useEffect(() => {
     saveUnlockSeen(unlockedCount(total.wins))
+    // 첫 캐릭터 선택 진입이면 조작 가이드를 한 번 띄운다
+    if (!loadGuideSeen()) onHelp()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const [zodiacId, setZodiacId] = useState(getZodiac(saved?.zodiacId) ? saved.zodiacId : 'tiger')
   const [cls, setCls] = useState(CLASSES[saved?.cls] && unlocked.has(saved.cls) ? saved.cls : null)
-  const [mode, setMode] = useState(TEAM_SIZES[saved?.mode] ? saved.mode : '3v3')
-  // 처음 온 사람 기본값은 쉬움 — 저장된 선택이 있으면 그걸 따른다
-  const [botLevel, setBotLevel] = useState(
-    BOT_LEVEL_OPTS.some((o) => o.id === saved?.botLevel) ? saved.botLevel : 'easy'
-  )
-  // 첫 진입이면 조작 가이드를 자동으로 띄운다(닫으면 다시 안 뜸, ❓ 버튼으로 언제든)
-  const [helpOpen, setHelpOpen] = useState(() => !loadGuideSeen())
-  function closeHelp() {
-    saveGuideSeen()
-    setHelpOpen(false)
-  }
 
-  const z = getZodiac(zodiacId)
+  const z = getZodiac(profile)
   const c = cls ? CLASSES[cls] : null
   const rec = cls ? records[cls] : null
+  const levelLabel = BOT_LEVEL_OPTS.find((o) => o.id === botLevel)?.label
 
   return (
-    <div className="solo">
-      {/* 상단: 브랜드 워드마크 + 통산 전적 + 도움말/전체화면 */}
-      <header className="solo__top">
-        <div className="solo__brand">
-          <span className="solo__logo" aria-hidden="true">⚡</span>
-          <div>
-            <h1 className="solo__wordmark">ZODIAC<span> RUSH</span></h1>
-            <p className="solo__wordmark-sub">조디악 러쉬 · 솔로 봇전</p>
-          </div>
-        </div>
-        <div className="solo__top-right">
-          {total.games > 0 && (
-            <span className="solo__total" title="봇전 통산 전적">
-              🏆 {total.wins}승 {total.games - total.wins}패
-              <small>{Math.round((total.wins / total.games) * 100)}%</small>
-            </span>
-          )}
-          <button className="btn btn--ghost" onClick={() => setHelpOpen(true)} aria-label="조작법">❓ 조작법</button>
-          <FullscreenButton />
-        </div>
-      </header>
+    <div className="screen char-screen">
+      <BackButton onBack={onBack} />
+      <h2 className="toy-heading toy-heading--screen">누구로 싸울까?</h2>
+      <button className="char-screen__setup" onClick={onBack} title="모드·난이도 바꾸기">
+        {MODE_OPTS.find((m) => m.id === mode)?.emoji} {mode} · {levelLabel} ✏️
+      </button>
 
-      <div className="solo__main">
-        {/* 좌: 선택한 캐릭터 쇼케이스 — 큰 얼굴 + 직업 스킬 미리보기 + 전적 + 시작 */}
-        <aside className="solo__showcase" style={{ '--z-color': z?.color || '#ffcf4d' }}>
-          <div className="solo__stage">
-            <span className="solo__stage-ring" aria-hidden="true" />
-            <span className="solo__stage-emoji">{z?.emoji}</span>
-            {c && <span className="solo__stage-cls">{c.icon}</span>}
+      <div className="char-screen__body">
+        <aside className="toy-card char-show" style={{ '--z-color': z?.color || '#ffc93c' }}>
+          <div className="char-show__stage">
+            <span className="char-show__ring" aria-hidden="true" />
+            <span className="char-show__emoji">{z?.emoji}</span>
+            {c && <span className="char-show__cls">{c.icon}</span>}
           </div>
-          <div className="solo__stage-name">
-            {z?.name}
-            {c && <span className="solo__stage-clsname">{c.name}</span>}
+          <div className="char-show__name">
+            {z?.name}{c && <span className="char-show__clsname"> · {c.name}</span>}
           </div>
-
           {c ? (
             <>
-              <p className="solo__stage-desc">{c.desc}</p>
-              <ul className="solo__skills">
+              <p className="char-show__desc">{c.desc}</p>
+              <ul className="char-show__skills">
                 {[
                   { tag: '스킬', ...c.skill },
-                  { tag: '보조 · Lv3', ...c.skill2 },
-                  { tag: '궁극 · Lv5', ...c.ult },
+                  { tag: '보조 Lv3', ...c.skill2 },
+                  { tag: '궁극 Lv5', ...c.ult },
                 ].map((s) => (
                   <li key={s.tag}>
-                    <span className="solo__skill-icon">{s.icon}</span>
-                    <span className="solo__skill-main">
+                    <span className="char-show__skill-icon">{s.icon}</span>
+                    <span className="char-show__skill-main">
                       <b>{s.name} <small>{s.tag}</small></b>
-                      <span className="solo__skill-desc">{s.desc}</span>
+                      <span className="char-show__skill-desc">{s.desc}</span>
                     </span>
                   </li>
                 ))}
               </ul>
               {rec?.games > 0 && (
-                <p className="solo__stage-rec">
-                  이 직업 <b>{rec.wins}승 {rec.games - rec.wins}패</b> · 평균 ⚔️{(rec.kills / rec.games).toFixed(1)} 💀{(rec.deaths / rec.games).toFixed(1)} 🤝{(rec.assists / rec.games).toFixed(1)}
+                <p className="char-show__rec">
+                  <b>{rec.wins}승 {rec.games - rec.wins}패</b> · 평균 ⚔️{(rec.kills / rec.games).toFixed(1)} 💀{(rec.deaths / rec.games).toFixed(1)} 🤝{(rec.assists / rec.games).toFixed(1)}
                 </p>
               )}
             </>
           ) : (
-            <p className="solo__stage-desc solo__stage-desc--hint">
-              오른쪽에서 직업을 고르면<br />스킬을 미리 볼 수 있어요 👉
-            </p>
+            <p className="char-show__desc char-show__desc--hint">직업을 고르면 스킬을 미리 볼 수 있어 👉</p>
           )}
-
-          <button
-            className="btn btn--primary solo__start"
-            disabled={!cls}
-            onClick={() => onStart({ zodiacId, cls, mode, botLevel })}
-          >
-            {cls ? '⚔️ 전투 시작' : '직업을 골라 주세요'}
+          <button className="toy-btn toy-btn--yellow toy-btn--big char-show__start" disabled={!cls} onClick={() => cls && onStart(cls)}>
+            {cls ? '⚔️ 출전!' : '직업을 골라줘'}
           </button>
         </aside>
 
-        {/* 우: 선택 — 난이도/모드 세그먼트 + 조디악 스트립 + 직업 그리드 */}
-        <section className="solo__pick">
-          <div className="solo__filters">
-            <div className="solo__seg" role="radiogroup" aria-label="봇 난이도">
-              {BOT_LEVEL_OPTS.map((o) => (
-                <button
-                  key={o.id}
-                  className={`solo__seg-btn ${botLevel === o.id ? 'is-on' : ''}`}
-                  title={o.desc}
-                  onClick={() => setBotLevel(o.id)}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-            <div className="solo__seg" role="radiogroup" aria-label="모드">
-              {Object.keys(TEAM_SIZES).map((m) => (
-                <button
-                  key={m}
-                  className={`solo__seg-btn ${mode === m ? 'is-on' : ''}`}
-                  onClick={() => setMode(m)}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-            {next && (
-              <span className="solo__next-unlock" title={CLASSES[next].desc}>
-                🔓 승리하면 <b>{CLASSES[next].icon} {CLASSES[next].name}</b> 해금!
-              </span>
-            )}
-          </div>
-
-          <div className="solo__zodiacs" role="radiogroup" aria-label="조디악 선택">
-            {ZODIAC.map((zz) => (
-              <button
-                key={zz.id}
-                className={`solo__zodiac ${zodiacId === zz.id ? 'is-on' : ''}`}
-                style={{ '--z-color': zz.color }}
-                title={zz.name}
-                onClick={() => setZodiacId(zz.id)}
-              >
-                {zz.emoji}
-              </button>
-            ))}
-          </div>
-
-          <div className="draft__classes solo__classes">
+        <section className="char-screen__pick">
+          {next && (
+            <p className="char-screen__unlock">
+              🔓 승리하면 <b>{CLASSES[next].icon} {CLASSES[next].name}</b> 해금!
+            </p>
+          )}
+          <div className="char-grid">
             {CLASS_IDS.map((id, idx) => {
               const cc = CLASSES[id]
               const rr = records[id]
               const locked = !unlocked.has(id)
-              const isNew = !locked && idx >= seenBase // 마지막 확인 이후 새로 열림
+              const isNew = !locked && idx >= seenBase
               return (
                 <button
                   key={id}
-                  className={`draft-class ${cls === id ? 'is-on' : ''} ${locked ? 'is-locked' : ''}`}
+                  className={`char-card ${cls === id ? 'is-on' : ''} ${locked ? 'is-locked' : ''}`}
                   disabled={locked}
                   title={locked ? '승리할 때마다 새 캐릭터가 하나씩 열려요' : cc.desc}
-                  onClick={() => setCls(id)}
+                  onClick={() => { sound.step(); setCls(id) }}
                 >
-                  <span className="draft-class__icon">{cc.icon}</span>
-                  <span className="draft-class__name">{cc.name}</span>
-                  {locked && <span className="draft-class__lock">🔒</span>}
-                  {isNew && <span className="draft-class__new">NEW</span>}
+                  <span className="char-card__icon">{cc.icon}</span>
+                  <span className="char-card__name">{cc.name}</span>
+                  {locked && <span className="char-card__lock">🔒</span>}
+                  {isNew && <span className="char-card__new">NEW</span>}
                   {!locked && rr?.games > 0 && (
-                    <span className="draft-class__rec">{rr.wins}승 {rr.games - rr.wins}패</span>
+                    <span className="char-card__rec">{rr.wins}승 {rr.games - rr.wins}패</span>
                   )}
                 </button>
               )
@@ -249,18 +386,68 @@ function SoloSetup({ onStart }) {
           </div>
         </section>
       </div>
-
-      {helpOpen && <SoloHelp onClose={closeHelp} />}
     </div>
   )
 }
 
-// 조작 가이드 — 첫 실행 온보딩 겸 언제든 여는 도움말. 게임 목표 → 조작 → 성장 순서.
+// ── 전적 ──
+function RecordsScreen({ onBack }) {
+  const records = loadRiftRecords()
+  const rows = CLASS_IDS.filter((id) => records[id]?.games > 0)
+  const total = rows.reduce(
+    (a, id) => ({ games: a.games + records[id].games, wins: a.wins + records[id].wins }),
+    { games: 0, wins: 0 }
+  )
+  return (
+    <div className="screen records-screen">
+      <BackButton onBack={onBack} />
+      <h2 className="toy-heading toy-heading--screen">전적</h2>
+      <div className="toy-card records-card">
+        {rows.length === 0 ? (
+          <p className="records-card__empty">아직 기록이 없어 — 첫 판을 치르고 오자! ⚔️</p>
+        ) : (
+          <>
+            <p className="records-card__total">
+              🏆 통산 <b>{total.wins}승 {total.games - total.wins}패</b> · 승률 {Math.round((total.wins / total.games) * 100)}%
+            </p>
+            <div className="records-card__rows">
+              {rows.map((id) => {
+                const r = records[id]
+                const rate = Math.round((r.wins / r.games) * 100)
+                return (
+                  <div key={id} className="records-row">
+                    <span className="records-row__cls">{CLASSES[id].icon} {CLASSES[id].name}</span>
+                    <span className="records-row__wl">{r.wins}승 {r.games - r.wins}패</span>
+                    <span className="records-row__bar"><span style={{ width: `${rate}%` }} /></span>
+                    <span className="records-row__rate">{rate}%</span>
+                    <span className="records-row__kda">
+                      ⚔️{(r.kills / r.games).toFixed(1)} 💀{(r.deaths / r.games).toFixed(1)} 🤝{(r.assists / r.games).toFixed(1)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BackButton({ onBack }) {
+  return (
+    <button className="toy-back" onClick={onBack} aria-label="뒤로">
+      ← 뒤로
+    </button>
+  )
+}
+
+// 조작 가이드 — 첫 캐릭터 선택 진입 때 자동 1회 + 메뉴의 ❓ 버튼
 function SoloHelp({ onClose }) {
   return (
     <div className="solo-help" onClick={onClose}>
-      <div className="solo-help__card" onClick={(e) => e.stopPropagation()}>
-        <h2 className="solo-help__title">🎮 처음 오셨나요?</h2>
+      <div className="toy-card solo-help__card" onClick={(e) => e.stopPropagation()}>
+        <h2 className="toy-heading">🎮 처음 오셨나요?</h2>
 
         <div className="solo-help__sec">
           <h3>🏆 목표</h3>
@@ -289,7 +476,7 @@ function SoloHelp({ onClose }) {
           <p>🌿 수풀에 숨으면 안 보여요 · 🐉 용/👹 바론은 팀 버프 · 위험하면 🏠 귀환!</p>
         </div>
 
-        <button className="btn btn--primary solo-help__ok" onClick={onClose}>알겠어요, 시작할게요!</button>
+        <button className="toy-btn toy-btn--yellow solo-help__ok" onClick={onClose}>알겠어, 가보자!</button>
       </div>
     </div>
   )
