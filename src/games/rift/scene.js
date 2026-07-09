@@ -78,6 +78,81 @@ function zodiacFaceImage(emoji, cb) {
   else e.cbs.push(cb)
 }
 
+// 스펙 기반 얼굴 드로우(크롭 + 보조 레이어) — emojiTexture와 튜너(?faces)가 공용.
+// 호출 전 캔버스는 비어 있고 변환은 초기 상태여야 한다.
+//
+// 크롭한 얼굴은 알파 질량중심을 정중앙에 자동 정렬한다 — 스프라이트 쿼드는 캐릭터
+// 중심에 고정인데 콘텐츠가 캔버스 안에서 치우쳐 있으면 미러(좌우 반전) 때
+// 그 치우침이 반대편으로 점프해 얼굴 축이 흔들린다(양에서 특히 두드러졌던 문제).
+function drawZodiacFace(ctx, img, spec, size, mirror) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+  ctx.clearRect(0, 0, size, size)
+  // 1) 임시 캔버스에 미러 없이 조립(보조 레이어 + 머리 크롭)
+  const tmp = document.createElement('canvas')
+  tmp.width = tmp.height = size
+  const tc = tmp.getContext('2d')
+  if (spec.tail) {
+    // 보조 레이어(뱀 또아리 등) — 머리 뒤에 몸통 조각을 먼저 깔아 전신형의 어색함을 줄인다
+    const t = spec.tail
+    const tw = img.width / t.zoom
+    const th = img.height / t.zoom
+    const tx = Math.max(0, Math.min(img.width - tw, t.ox * img.width - tw / 2))
+    const ty = Math.max(0, Math.min(img.height - th, t.oy * img.height - th / 2))
+    tc.drawImage(img, tx, ty, tw, th, t.dx * size, t.dy * size, t.size * size, t.size * size)
+  }
+  const zoom = spec.zoom || 1
+  const sw = img.width / zoom
+  const sh = img.height / zoom
+  const sx = Math.max(0, Math.min(img.width - sw, (spec.ox ?? 0.5) * img.width - sw / 2))
+  const sy = Math.max(0, Math.min(img.height - sh, (spec.oy ?? 0.5) * img.height - sh / 2))
+  tc.drawImage(img, sx, sy, sw, sh, 0, 0, size, size)
+  // 2) 크롭했을 때만 알파 질량중심을 계산해 중앙 정렬 오프셋을 구한다
+  //    (무크롭 원본은 여백이 이미 대칭이라 그대로 둔다)
+  let offX = 0
+  let offY = 0
+  if (zoom > 1.001) {
+    const d = tc.getImageData(0, 0, size, size).data
+    let mass = 0
+    let mx = 0
+    let my = 0
+    for (let y = 0; y < size; y += 2) {
+      for (let x = 0; x < size; x += 2) {
+        const a = d[(y * size + x) * 4 + 3]
+        if (!a) continue
+        mass += a
+        mx += a * x
+        my += a * y
+      }
+    }
+    if (mass > 0) {
+      const clamp = size * 0.25 // 가장자리 잘림 방지 상한
+      offX = Math.max(-clamp, Math.min(clamp, size / 2 - mx / mass))
+      offY = Math.max(-clamp, Math.min(clamp, size / 2 - my / mass))
+    }
+  }
+  // 3) 본 캔버스에 (미러 포함) 블릿 — 미러는 중앙 정렬된 콘텐츠를 뒤집으므로 축이 안 흔들린다
+  if (mirror) {
+    ctx.translate(size, 0)
+    ctx.scale(-1, 1)
+  }
+  ctx.drawImage(tmp, offX, offY)
+}
+
+// 튜너(?faces)용 — 임의 스펙으로 즉석 얼굴 텍스처(이미지 로드 후 그려짐)
+export function makeZodiacFaceTexture(emoji, spec, mirror = false) {
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  if (ZODIAC_FACES[emoji]) {
+    zodiacFaceImage(emoji, (img) => {
+      drawZodiacFace(c.getContext('2d'), img, spec, 128, mirror)
+      tex.needsUpdate = true
+    })
+  }
+  return tex
+}
+
 function emojiTexture(emoji, size = 128, mirror = false) {
   const c = document.createElement('canvas')
   c.width = c.height = size
@@ -101,27 +176,7 @@ function emojiTexture(emoji, size = 128, mirror = false) {
   const spec = ZODIAC_FACES[emoji]
   if (spec && typeof Image !== 'undefined') {
     zodiacFaceImage(emoji, (img) => {
-      ctx.setTransform(1, 0, 0, 1, 0, 0)
-      ctx.clearRect(0, 0, size, size)
-      if (mirror) {
-        ctx.translate(size, 0)
-        ctx.scale(-1, 1)
-      }
-      // 보조 레이어(뱀 또아리 등) — 머리 뒤에 몸통 조각을 먼저 깔아 전신형의 어색함을 줄인다
-      if (spec.tail) {
-        const t = spec.tail
-        const tw = img.width / t.zoom
-        const th = img.height / t.zoom
-        const tx = Math.max(0, Math.min(img.width - tw, t.ox * img.width - tw / 2))
-        const ty = Math.max(0, Math.min(img.height - th, t.oy * img.height - th / 2))
-        ctx.drawImage(img, tx, ty, tw, th, t.dx * size, t.dy * size, t.size * size, t.size * size)
-      }
-      const zoom = spec.zoom || 1
-      const sw = img.width / zoom
-      const sh = img.height / zoom
-      const sx = Math.max(0, Math.min(img.width - sw, (spec.ox ?? 0.5) * img.width - sw / 2))
-      const sy = Math.max(0, Math.min(img.height - sh, (spec.oy ?? 0.5) * img.height - sh / 2))
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, size, size)
+      drawZodiacFace(ctx, img, spec, size, mirror)
       tex.needsUpdate = true
     })
   }
@@ -1419,8 +1474,10 @@ function buildHero(h, mine, barColor) {
   body.add(armL)
   const shadow = blobShadow(2.0 * s)
   const faceEmoji = getZodiac(h.zodiacId)?.emoji || '🙂'
-  const face = emojiSprite(faceEmoji, 3.2)
-  face.position.y = 4.4 * s
+  // 얼굴 스펙(zodiacFaces.js): scale=스프라이트 배율, dx/dy=위치 보정(몸집 s·바라보는 방향 비례)
+  const zspec = ZODIAC_FACES[faceEmoji] || {}
+  const face = emojiSprite(faceEmoji, 3.2 * (zspec.scale || 1))
+  face.position.y = (4.4 + (zspec.dy || 0)) * s
   const nameColor = mine ? '#ffe066' : '#ffffff'
   const name = nameSprite(heroLabel(h), nameColor)
   name.position.y = 6.6
@@ -1546,7 +1603,8 @@ function buildHero(h, mine, barColor) {
   g.userData = {
     body, outline, face, name, nameColor, nameLvl: h.lvl, isMine: mine, shadow,
     faceEmoji, faceTexOrig: face.material.map, faceTexMirror: null, // 좌우 반전용(미러는 지연 생성)
-    bodyBaseY: 2.2 * s, faceBaseY: 4.4 * s, bobPhase: (hashStr(h.id) % 628) / 100,
+    faceDX: zspec.dx || 0, clsScale: s, // 얼굴 위치 보정·몸집(쏠림/보정 계산용)
+    bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
     bar, ring, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
@@ -3304,8 +3362,9 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           if (u.faceDir === 1 && !u.faceTexMirror) u.faceTexMirror = emojiTexture(u.faceEmoji, 128, true)
           u.face.material.map = u.faceDir === 1 ? u.faceTexMirror : u.faceTexOrig
         }
-        const fs = u.faceBaseY / 4.4 // 직업 스케일(s) 복원 — 몸집에 비례해 쏠림도 커진다
-        u.face.position.x += (fdx * 0.6 * fs - u.face.position.x) * Math.min(1, dt * 10) // 부드럽게 따라오기
+        const fs = u.clsScale || 1 // 몸집에 비례해 쏠림·보정도 커진다
+        const leanX = (fdx * 0.6 + (u.faceDir || 1) * (u.faceDX || 0)) * fs // 쏠림 + 스펙 위치 보정(dx)
+        u.face.position.x += (leanX - u.face.position.x) * Math.min(1, dt * 10) // 부드럽게 따라오기
         u.face.material.rotation = -fdx * 0.1
         if (h.whirlT <= 0 && h.airT <= 0) u.body.rotation.z = Math.sin(u.wphase) * 0.06 * wk.amt
         else u.body.rotation.z = 0
@@ -3901,9 +3960,11 @@ export function createHeroShowcase(canvas, { cls, zodiacId }) {
   }
 }
 
-// ── 12지신 얼굴 갤러리(개발용, ?faces) — 인게임 실물 모델 12종을 한 무대에 ──
-// 얼굴 크기·크롭을 눈으로 비교·검수하기 위한 진열장. 쇼케이스와 같은 정적 3/4 앵글
-// + 미러 얼굴 + 숨쉬기만 있다. 조정할 것을 정하면 zodiacFaces.js의 스펙만 고치면 된다.
+// ── 12지신 얼굴 튜너(개발용, ?faces) — 인게임 실물 12종을 진열하고 라이브 조정 ──
+// 얼굴 크기·크롭·위치를 눈으로 보며 스펙(zodiacFaces.js 형식)을 만든다.
+//  api.setSpec(emoji, spec)  크롭(zoom/ox/oy)·배율(scale)·위치(dx/dy) 즉시 반영
+//  api.setDir(rad|null)      인게임처럼 바라보는 방향 전환(null=대기 자세) — 제자리 걸음 포함
+//  api.select(emoji)         선택 캐릭터 발밑 링 표시
 export function createFaceGallery(canvas, cls = 'warrior') {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setClearColor(0x000000, 0)
@@ -3925,19 +3986,28 @@ export function createFaceGallery(canvas, cls = 'warrior') {
     const u = g.userData
     u.bar.visible = false
     setNameText(u.name, z.name, '#ffffff')
-    // 쇼케이스와 같은 얼굴 규칙(오른쪽 보기 미러 + 쏠림 + 기울임 + 몸통 앞으로)
-    u.face.material.map = emojiTexture(z.emoji, 128, true)
-    u.face.position.x = 0.6 * s
-    u.face.position.z = 1.3 * s
-    u.face.material.rotation = -0.1
-    g.rotation.y = -0.35
+    u.face.position.z = 1.3 * s // 근접 카메라에서 몸통에 깔리지 않게
     g.position.set(col * 9 - (COLS - 1) * 4.5, 0, row * 13 - 6.5)
     scene.add(g)
-    units.push(u)
+    const spec = { ...(ZODIAC_FACES[z.emoji] || {}) }
+    delete spec.url
+    units.push({ emoji: z.emoji, g, u, spec, texN: null, texM: null, faceDir: 1, wphase: Math.random() * 6 })
   })
   camera.position.set(0, 19, 50)
   camera.lookAt(0, 1.2, 0)
 
+  // 스펙 적용: 배율·기준 높이는 즉시, 텍스처(정/미러)는 다시 만든다
+  function applySpec(unit) {
+    const k = unit.spec.scale || 1
+    unit.u.face.scale.set(3.2 * k, 3.2 * k, 1)
+    unit.baseY = (4.4 + (unit.spec.dy || 0)) * s
+    unit.texN = makeZodiacFaceTexture(unit.emoji, unit.spec, false)
+    unit.texM = makeZodiacFaceTexture(unit.emoji, unit.spec, true)
+    unit.u.face.material.map = unit.faceDir === 1 ? unit.texM : unit.texN
+  }
+  units.forEach(applySpec)
+
+  let dir = null // null = 대기(관객 쪽 3/4 앵글)
   let raf
   let last = performance.now()
   let time = 0
@@ -3947,16 +4017,60 @@ export function createFaceGallery(canvas, cls = 'warrior') {
     const dt = Math.min(0.1, (now - last) / 1000)
     last = now
     time += dt
-    units.forEach((u, i) => {
+
+    const useDir = dir == null ? -0.35 : dir
+    const walking = dir != null
+    const fdx = Math.cos(useDir)
+    for (let i = 0; i < units.length; i++) {
+      const unit = units[i]
+      const u = unit.u
+      // 몸 회전(인게임과 같은 방향 규약) + 제자리 걸음
+      const targetRot = -useDir
+      let d = targetRot - u.body.rotation.y
+      while (d > Math.PI) d -= Math.PI * 2
+      while (d < -Math.PI) d += Math.PI * 2
+      u.body.rotation.y += d * Math.min(1, dt * 12)
+      let stride = 0
+      let lift = 0
+      if (walking) {
+        unit.wphase += dt * 10
+        stride = Math.sin(unit.wphase) * 0.6
+        lift = Math.abs(Math.sin(unit.wphase)) * 0.22 * s
+      }
+      if (u.legs) {
+        u.legs[0].rotation.z = stride
+        u.legs[1].rotation.z = -stride
+        if (u.arms) {
+          u.arms[0].rotation.z = -stride * 0.65
+          u.arms[1].rotation.z = stride * 0.65
+        }
+      }
+      // 얼굴: 인게임과 같은 미러 히스테리시스 + 쏠림 + 위치 보정
+      if (fdx > 0.15) unit.faceDir = 1
+      else if (fdx < -0.15) unit.faceDir = -1
+      const wantTex = unit.faceDir === 1 ? unit.texM : unit.texN
+      if (u.face.material.map !== wantTex) u.face.material.map = wantTex
       const bob = Math.sin(time * 2.2 + i) * 0.08 * s
-      u.body.position.y = u.bodyBaseY + bob
-      u.face.position.y = u.faceBaseY + bob
-    })
+      u.face.position.x = (fdx * 0.6 + unit.faceDir * (unit.spec.dx || 0)) * s
+      u.face.material.rotation = -fdx * 0.1
+      u.body.position.y = u.bodyBaseY + bob + lift
+      u.face.position.y = (unit.baseY || u.faceBaseY) + bob + lift
+    }
     renderer.render(scene, camera)
   }
   raf = requestAnimationFrame(frame)
 
   return {
+    setDir(d) { dir = d },
+    setSpec(emoji, spec) {
+      const unit = units.find((x) => x.emoji === emoji)
+      if (!unit) return
+      unit.spec = { ...spec }
+      applySpec(unit)
+    },
+    select(emoji) {
+      for (const unit of units) unit.u.ring.visible = unit.emoji === emoji
+    },
     resize(w, h) {
       renderer.setSize(w, h, false)
       camera.aspect = w / Math.max(1, h)
