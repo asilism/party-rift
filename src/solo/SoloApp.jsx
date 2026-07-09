@@ -167,11 +167,10 @@ function TitleScreen({ onEnter }) {
         <FullscreenButton />
       </div>
       <div className="toy-logo">
-        <div className="toy-logo__burst" aria-hidden="true" />
         <h1 className="toy-logo__en">ZODIAC<span className="toy-logo__bolt">⚡</span>RUSH</h1>
         <p className="toy-logo__ko">조디악 러쉬</p>
       </div>
-      <p className="title-screen__press">화면을 눌러 시작!</p>
+      <p className="title-screen__press">TOUCH TO START</p>
       <p className="title-screen__ver">v0.1</p>
     </div>
   )
