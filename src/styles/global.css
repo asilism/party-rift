@@ -2873,9 +2873,18 @@ body {
 .mode-card__name { font-family: var(--toy-display); font-size: clamp(20px, 4.2vh, 30px); color: var(--ink); }
 .mode-card__desc { font-size: clamp(12px, 2.2vh, 14px); color: #7a7198; }
 
-/* ── 캐릭터 선택 ── */
+/* ── 캐릭터 선택 ──
+   모바일 가로(높이 360~430px)가 1차 타깃 — 상단은 한 줄로 합치고, 쇼케이스는
+   머리(무대+이름·설명 가로) + 스크롤 영역(스킬) + 고정 출전 버튼으로 세로 예산을 아낀다. */
+.char-screen__top {
+  width: 100%; max-width: 1150px; box-sizing: border-box; flex-shrink: 0;
+  display: flex; align-items: center; gap: 12px;
+  padding: clamp(8px, 1.8vh, 14px) clamp(12px, 2.5vw, 26px) 0;
+}
+.char-screen__top .toy-back { position: static; flex-shrink: 0; }
+.char-screen__heading { flex: 1; text-align: center; margin: 0; font-size: clamp(18px, 4.4vh, 30px); }
 .char-screen__setup {
-  position: absolute; top: 14px; right: 14px; cursor: pointer;
+  cursor: pointer; flex-shrink: 0;
   font-family: var(--toy-font); font-size: clamp(12px, 2.2vh, 14px); color: var(--ink);
   padding: 7px 14px; border-radius: 999px; border: 3px solid var(--ink);
   background: var(--paper); box-shadow: 0 4px 0 rgba(43, 35, 80, 0.4);
@@ -2883,43 +2892,48 @@ body {
 .char-screen__setup:hover { transform: translateY(-2px); }
 .char-screen__body {
   flex: 1; min-height: 0; width: 100%; max-width: 1150px; box-sizing: border-box;
-  display: flex; gap: clamp(12px, 2vw, 20px); padding: clamp(8px, 2vh, 16px) clamp(12px, 2.5vw, 26px) clamp(10px, 2.4vh, 20px);
+  display: flex; gap: clamp(12px, 2vw, 20px); padding: clamp(6px, 1.6vh, 14px) clamp(12px, 2.5vw, 26px) clamp(8px, 2vh, 18px);
 }
 .char-show {
-  width: clamp(220px, 26vw, 290px); flex-shrink: 0; min-height: 0; overflow-y: auto;
-  display: flex; flex-direction: column; align-items: center; gap: 5px;
-  padding: clamp(10px, 2.2vh, 18px) 14px; transform: rotate(-0.8deg);
+  width: clamp(230px, 30vw, 320px); flex-shrink: 0; min-height: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: clamp(8px, 1.8vh, 14px) 12px; transform: rotate(-0.8deg);
 }
-.char-show__stage { position: relative; width: clamp(84px, 15vh, 116px); aspect-ratio: 1; display: grid; place-items: center; flex-shrink: 0; }
+.char-show__head { display: flex; align-items: center; gap: 10px; width: 100%; flex-shrink: 0; }
+.char-show__id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.char-show__mid { flex: 1; min-height: 0; overflow-y: auto; width: 100%; display: flex; flex-direction: column; gap: 5px; }
+.char-show__stage { position: relative; width: clamp(56px, 11vh, 84px); aspect-ratio: 1; display: grid; place-items: center; flex-shrink: 0; }
 .char-show__ring {
   position: absolute; inset: 0; border-radius: 50%;
   background: color-mix(in srgb, var(--z-color) 30%, #fff);
   border: 3px solid var(--ink);
   box-shadow: inset 0 -8px 0 rgba(43, 35, 80, 0.15);
 }
-.char-show__emoji { font-size: clamp(46px, 9vh, 66px); position: relative; animation: solo-float 3.2s ease-in-out infinite; filter: drop-shadow(0 5px 6px rgba(43, 35, 80, 0.35)); }
-@keyframes solo-float { 0%, 100% { transform: translateY(2px); } 50% { transform: translateY(-4px); } }
-.char-show__cls { position: absolute; right: 0; bottom: 2px; font-size: clamp(19px, 3.4vh, 25px); filter: drop-shadow(0 2px 2px rgba(43, 35, 80, 0.5)); }
-.char-show__name { font-family: var(--toy-display); font-size: clamp(16px, 3vh, 21px); color: var(--ink); }
+.char-show__emoji { font-size: clamp(30px, 6.4vh, 48px); position: relative; animation: solo-float 3.2s ease-in-out infinite; filter: drop-shadow(0 4px 5px rgba(43, 35, 80, 0.35)); }
+@keyframes solo-float { 0%, 100% { transform: translateY(2px); } 50% { transform: translateY(-3px); } }
+.char-show__cls { position: absolute; right: -2px; bottom: 0; font-size: clamp(15px, 3vh, 21px); filter: drop-shadow(0 2px 2px rgba(43, 35, 80, 0.5)); }
+.char-show__name { font-family: var(--toy-display); font-size: clamp(14px, 2.8vh, 19px); color: var(--ink); }
 .char-show__clsname { color: #b06e00; }
-.char-show__desc { margin: 0; font-size: clamp(11px, 2vh, 12.5px); color: #6b6390; line-height: 1.45; text-align: center; }
-.char-show__desc--hint { margin: auto 0; font-size: clamp(12.5px, 2.3vh, 15px); line-height: 1.7; }
-.char-show__skills { list-style: none; margin: 4px 0 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 5px; }
+.char-show__desc {
+  margin: 0; font-size: clamp(10.5px, 1.9vh, 12px); color: #6b6390; line-height: 1.4; text-align: left;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.char-show__skills { list-style: none; margin: 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 4px; }
 .char-show__skills li {
-  display: flex; gap: 8px; align-items: flex-start; padding: 6px 8px; border-radius: 12px;
+  display: flex; gap: 8px; align-items: flex-start; padding: 5px 8px; border-radius: 12px;
   background: rgba(43, 35, 80, 0.06); border: 2px solid rgba(43, 35, 80, 0.14);
 }
-.char-show__skill-icon { font-size: 17px; line-height: 1.2; }
+.char-show__skill-icon { font-size: 16px; line-height: 1.2; }
 .char-show__skill-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.char-show__skill-main b { font-size: 12.5px; color: var(--ink); font-weight: 400; }
+.char-show__skill-main b { font-size: 12px; color: var(--ink); font-weight: 400; }
 .char-show__skill-main b small { color: #c47c00; font-size: 9.5px; margin-left: 3px; }
 .char-show__skill-desc {
-  color: #6b6390; font-size: 10.5px; line-height: 1.35;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  color: #6b6390; font-size: 10px; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
 }
-.char-show__rec { margin: 2px 0 0; font-size: clamp(10px, 1.9vh, 12px); color: #6b6390; }
+.char-show__rec { margin: 0; font-size: clamp(10px, 1.9vh, 12px); color: #6b6390; }
 .char-show__rec b { color: var(--toy-green-d); }
-.char-show__start { margin-top: auto; width: 100%; flex-shrink: 0; }
+.char-show__start { width: 100%; flex-shrink: 0; padding: 9px 18px; }
 .char-show__start:not(:disabled) { animation: toy-start-glow 1.8s ease-in-out infinite; }
 @keyframes toy-start-glow {
   0%, 100% { box-shadow: 0 5px 0 var(--toy-yellow-d), 0 0 12px rgba(255, 201, 60, 0.4); }
@@ -2933,7 +2947,7 @@ body {
 .char-screen__unlock b { color: var(--toy-yellow); }
 .char-grid {
   flex: 1; min-height: 0; overflow-y: auto; display: grid; align-content: start;
-  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 9px; padding: 4px 2px 8px;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: 8px; padding: 4px 2px 8px;
 }
 .char-card {
   position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer;
@@ -3003,13 +3017,30 @@ body {
 .solo-help__sec b { color: var(--ink); }
 .solo-help__ok { margin-top: 4px; align-self: center; min-width: 220px; }
 
-/* 좁은 화면: 캐릭터 화면은 세로 스택, 모드 카드는 세로로 */
+/* 낮은 화면(모바일 가로 등): 세로 예산 추가 절약 — 설명은 줄이고 스킬 설명은 숨긴다 */
+@media (max-height: 470px) {
+  .toy-heading--screen { margin-top: 6px; }
+  .char-screen__heading { font-size: 17px; }
+  .char-show__desc { -webkit-line-clamp: 2; }
+  .char-show__skill-desc { display: none; }
+  .char-show__skills li { padding: 4px 8px; }
+  .char-card { padding: 6px 3px 5px; }
+  .char-card__icon { font-size: 21px; }
+  .mode-card { padding: 10px 10px 12px; }
+  .mode-card__emoji { font-size: 38px; }
+  .profile-card__grid { gap: 6px; }
+  .toy-zodiac__emoji { font-size: 24px; }
+  .toy-zodiac__name { display: none; }
+}
+
+/* 좁은 화면(세로 폰): 캐릭터 화면은 세로 스택, 모드 카드는 세로로 */
 @media (max-width: 760px) {
   .char-screen__body { flex-direction: column-reverse; }
   .char-show { width: auto; flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px; padding: 8px 10px; }
-  .char-show__stage { width: 52px; }
-  .char-show__emoji { font-size: 30px; }
-  .char-show__skills, .char-show__desc, .char-show__rec { display: none; }
+  .char-show__head { width: auto; flex: 1; }
+  .char-show__stage { width: 48px; }
+  .char-show__emoji { font-size: 28px; }
+  .char-show__mid, .char-show__desc { display: none; }
   .char-show__start { margin: 0 0 0 auto; width: auto; min-width: 150px; }
   .mode-screen__cards { flex-direction: column; gap: 12px; overflow-y: auto; }
   .profile-card__grid { grid-template-columns: repeat(4, 1fr); }
