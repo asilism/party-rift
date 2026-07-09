@@ -58,8 +58,8 @@ function dmgTexture(text, kind) {
   return tex
 }
 
-// 번들 조디악 얼굴 이미지 로더 — svg 텍스트를 Blob URL(동일 출처, file://에서도 캔버스
-// 미오염)로 만들어 Image 로 읽는다. 이모지별 1회 로드 후 캐시.
+// 번들 조디악 얼굴 이미지 로더 — data URL이라 file://에서도 캔버스 오염(taint) 없이
+// WebGL 텍스처로 쓸 수 있다. 이모지별 1회 로드 후 캐시.
 const _zfaceCache = new Map()
 function zodiacFaceImage(emoji, cb) {
   let e = _zfaceCache.get(emoji)
@@ -72,7 +72,7 @@ function zodiacFaceImage(emoji, cb) {
       for (const f of e.cbs) f(img)
       e.cbs.length = 0
     }
-    img.src = URL.createObjectURL(new Blob([ZODIAC_FACES[emoji].svg], { type: 'image/svg+xml' }))
+    img.src = ZODIAC_FACES[emoji].url
   }
   if (e.ready) cb(e.img)
   else e.cbs.push(cb)
@@ -95,7 +95,7 @@ function emojiTexture(emoji, size = 128, mirror = false) {
   ctx.fillText(emoji, size / 2, size / 2 + size * 0.04)
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
-  // 12지신 얼굴은 번들 이미지(Twemoji)로 다시 그린다 — 기기(OS 폰트)별로 그림이 달라지지
+  // 12지신 얼굴은 번들 이미지(Fluent Emoji 3D)로 다시 그린다 — 기기(OS 폰트)별로 그림이 달라지지
   // 않고, 전신형 이모지(뱀·양·닭)는 crop(zoom/ox/oy)으로 머리만 잘라 "얼굴"이 된다.
   // 이미지는 비동기라 우선 시스템 글리프로 그려두고 로드되면 교체(needsUpdate).
   const spec = ZODIAC_FACES[emoji]
