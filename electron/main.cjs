@@ -17,6 +17,8 @@ const getArg = (name) => {
 }
 const devUrl = getArg('dev-url')
 const smokeDir = getArg('smoke')
+// --win-size=800x360 — 모바일 가로 등 다른 해상도로 띄워 레이아웃 확인용
+const winSize = (getArg('win-size') || '1280x720').split('x').map(Number)
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -72,8 +74,9 @@ async function runSmoke(win) {
 
 function createWindow() {
   const win = new BrowserWindow({
-    width: 1280,
-    height: 720,
+    width: winSize[0] || 1280,
+    height: winSize[1] || 720,
+    useContentSize: true, // 캡처/레이아웃 확인 시 내용 크기가 지정값과 일치하게
     autoHideMenuBar: true,
     backgroundColor: '#0b1020',
     webPreferences: {

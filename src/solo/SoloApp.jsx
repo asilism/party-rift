@@ -210,11 +210,6 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile }) {
     (a, r) => ({ games: a.games + r.games, wins: a.wins + r.wins }),
     { games: 0, wins: 0 }
   )
-  const isDesktop = typeof window !== 'undefined' && !!window.zodiacDesktop
-  function onlineGo() {
-    // 웹에선 기존 온라인 매치메이킹 플로우로(?solo 제거), 데스크톱은 준비 중
-    if (!isDesktop) window.location.search = ''
-  }
   return (
     <div className="screen menu-screen">
       <div className="menu-screen__logo">
@@ -229,12 +224,9 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile }) {
       </button>
       <nav className="menu-screen__list">
         <button className="toy-btn toy-btn--yellow toy-btn--big" onClick={onPlay}>⚔️ 게임 시작</button>
-        <button
-          className={`toy-btn toy-btn--blue ${isDesktop ? 'is-soon' : ''}`}
-          onClick={onlineGo}
-          disabled={isDesktop}
-        >
-          🌐 온라인 {isDesktop && <span className="toy-btn__badge">준비 중</span>}
+        {/* 온라인은 멀티 재개방 때까지 비활성 (웹 온라인 플로우는 ?solo 없는 주소로 여전히 접근 가능) */}
+        <button className="toy-btn toy-btn--blue is-soon" disabled>
+          🌐 온라인 <span className="toy-btn__badge">준비 중</span>
         </button>
         <button className="toy-btn toy-btn--green" onClick={onRecords}>📊 전적</button>
         <button className="toy-btn toy-btn--orange" onClick={onHelp}>❓ 조작법</button>
@@ -305,50 +297,61 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
 
   return (
     <div className="screen char-screen">
-      <BackButton onBack={onBack} />
-      <h2 className="toy-heading toy-heading--screen">누구로 싸울까?</h2>
-      <button className="char-screen__setup" onClick={onBack} title="모드·난이도 바꾸기">
-        {MODE_OPTS.find((m) => m.id === mode)?.emoji} {mode} · {levelLabel} ✏️
-      </button>
+      {/* 상단 한 줄: 뒤로 · 제목 · 모드요약 — 세로 공간 절약(모바일 가로 화면) */}
+      <div className="char-screen__top">
+        <BackButton onBack={onBack} />
+        <h2 className="toy-heading toy-heading--screen char-screen__heading">누구로 싸울까?</h2>
+        <button className="char-screen__setup" onClick={onBack} title="모드·난이도 바꾸기">
+          {MODE_OPTS.find((m) => m.id === mode)?.emoji} {mode} · {levelLabel} ✏️
+        </button>
+      </div>
 
       <div className="char-screen__body">
         <aside className="toy-card char-show" style={{ '--z-color': z?.color || '#ffc93c' }}>
-          <div className="char-show__stage">
-            <span className="char-show__ring" aria-hidden="true" />
-            <span className="char-show__emoji">{z?.emoji}</span>
-            {c && <span className="char-show__cls">{c.icon}</span>}
+          {/* 머리: 무대 + 이름·설명을 가로로 — 세로 예산 절약 */}
+          <div className="char-show__head">
+            <div className="char-show__stage">
+              <span className="char-show__ring" aria-hidden="true" />
+              <span className="char-show__emoji">{z?.emoji}</span>
+              {c && <span className="char-show__cls">{c.icon}</span>}
+            </div>
+            <div className="char-show__id">
+              <div className="char-show__name">
+                {z?.name}{c && <span className="char-show__clsname"> · {c.name}</span>}
+              </div>
+              {c
+                ? <p className="char-show__desc">{c.desc}</p>
+                : <p className="char-show__desc">직업을 고르면 스킬을 미리 볼 수 있어 👉</p>}
+            </div>
           </div>
-          <div className="char-show__name">
-            {z?.name}{c && <span className="char-show__clsname"> · {c.name}</span>}
+          {/* 가운데(스킬·전적)만 스크롤 — 출전 버튼은 항상 보인다 */}
+          <div className="char-show__mid">
+            {c && (
+              <>
+                <ul className="char-show__skills">
+                  {[
+                    { tag: '스킬', ...c.skill },
+                    { tag: '보조 Lv3', ...c.skill2 },
+                    { tag: '궁극 Lv5', ...c.ult },
+                  ].map((s) => (
+                    <li key={s.tag} title={s.desc}>
+                      <span className="char-show__skill-icon">{s.icon}</span>
+                      <span className="char-show__skill-main">
+                        <b>{s.name} <small>{s.tag}</small></b>
+                        <span className="char-show__skill-desc">{s.desc}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {rec?.games > 0 && (
+                  <p className="char-show__rec">
+                    <b>{rec.wins}승 {rec.games - rec.wins}패</b> · 평균 ⚔️{(rec.kills / rec.games).toFixed(1)} 💀{(rec.deaths / rec.games).toFixed(1)} 🤝{(rec.assists / rec.games).toFixed(1)}
+                  </p>
+                )}
+              </>
+            )}
           </div>
-          {c ? (
-            <>
-              <p className="char-show__desc">{c.desc}</p>
-              <ul className="char-show__skills">
-                {[
-                  { tag: '스킬', ...c.skill },
-                  { tag: '보조 Lv3', ...c.skill2 },
-                  { tag: '궁극 Lv5', ...c.ult },
-                ].map((s) => (
-                  <li key={s.tag}>
-                    <span className="char-show__skill-icon">{s.icon}</span>
-                    <span className="char-show__skill-main">
-                      <b>{s.name} <small>{s.tag}</small></b>
-                      <span className="char-show__skill-desc">{s.desc}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              {rec?.games > 0 && (
-                <p className="char-show__rec">
-                  <b>{rec.wins}승 {rec.games - rec.wins}패</b> · 평균 ⚔️{(rec.kills / rec.games).toFixed(1)} 💀{(rec.deaths / rec.games).toFixed(1)} 🤝{(rec.assists / rec.games).toFixed(1)}
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="char-show__desc char-show__desc--hint">직업을 고르면 스킬을 미리 볼 수 있어 👉</p>
-          )}
-          <button className="toy-btn toy-btn--yellow toy-btn--big char-show__start" disabled={!cls} onClick={() => cls && onStart(cls)}>
+          <button className="toy-btn toy-btn--yellow char-show__start" disabled={!cls} onClick={() => cls && onStart(cls)}>
             {cls ? '⚔️ 출전!' : '직업을 골라줘'}
           </button>
         </aside>
