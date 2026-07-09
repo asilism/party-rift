@@ -21,26 +21,52 @@ const smokeDir = getArg('smoke')
 const delay = (ms) => new Promise((r) => setTimeout(r, ms))
 
 async function shot(win, name) {
-  const img = await win.webContents.capturePage()
-  fs.writeFileSync(path.join(smokeDir, name), img.toPNG())
+  // WebGL 합성 타이밍에 따라 capturePage가 간헐적으로 실패(UnknownVizError) — 짧게 재시도
+  for (let i = 0; ; i++) {
+    try {
+      const img = await win.webContents.capturePage()
+      fs.writeFileSync(path.join(smokeDir, name), img.toPNG())
+      return
+    } catch (e) {
+      if (i >= 2) throw e
+      await delay(800)
+    }
+  }
 }
 
-// 스모크: (첫 실행이면 가이드 캡처 후 닫기) → 설정 화면 캡처 → 직업 선택 → 전투 시작 → 전장 캡처 → 종료
+// 스모크: 첫 실행 플로우 전체를 걷는다 —
+//   타이틀 → 프로필(수호 지신) → 메인 메뉴 → 모드·난이도 → 캐릭터 선택(+가이드) → 전투
+// 각 화면을 캡처해 새 셸이 전부 렌더되는지 확인한다.
 async function runSmoke(win) {
-  await delay(2500)
-  const hasGuide = await win.webContents.executeJavaScript(`!!document.querySelector('.solo-help')`)
-  if (hasGuide) {
-    await shot(win, 'solo-guide.png')
-    await win.webContents.executeJavaScript(`document.querySelector('.solo-help__ok')?.click()`)
-    await delay(300)
+  const js = (code) => win.webContents.executeJavaScript(code)
+  await delay(1500)
+  await js(`localStorage.clear(); location.reload()`) // 항상 "처음 온 사람" 경험으로
+  await delay(3500) // 리로드 + 배경 전장(디오라마) 카운트다운까지
+  await shot(win, 'shot-1-title.png')
+  await js(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }))`)
+  await delay(600)
+  if (await js(`!!document.querySelector('.profile-screen')`)) {
+    await shot(win, 'shot-2-profile.png')
+    await js(`document.querySelectorAll('.toy-zodiac')[2]?.click()`) // 🐯
+    await delay(600)
   }
-  await shot(win, 'solo-setup.png')
-  // 직업 선택 → (리액트 리렌더로 시작 버튼이 풀릴 때까지 한 박자) → 전투 시작
-  await win.webContents.executeJavaScript(`document.querySelector('.draft-class')?.click()`)
+  await shot(win, 'shot-3-menu.png')
+  await js(`document.querySelector('.menu-screen__list .toy-btn--yellow')?.click()`)
+  await delay(600)
+  await shot(win, 'shot-4-mode.png')
+  await js(`document.querySelector('.mode-card')?.click()`)
+  await delay(700)
+  if (await js(`!!document.querySelector('.solo-help')`)) {
+    await shot(win, 'shot-5-guide.png')
+    await js(`document.querySelector('.solo-help__ok')?.click()`)
+    await delay(400)
+  }
+  await shot(win, 'shot-6-char.png')
+  await js(`document.querySelector('.char-card:not(:disabled)')?.click()`)
   await delay(400)
-  await win.webContents.executeJavaScript(`document.querySelector('.solo__start')?.click()`)
+  await js(`document.querySelector('.char-show__start')?.click()`)
   await delay(9000) // three.js 청크 로드 + 카운트다운 지나 실제 전투 프레임까지
-  await shot(win, 'solo-play.png')
+  await shot(win, 'shot-7-play.png')
   app.quit()
 }
 
