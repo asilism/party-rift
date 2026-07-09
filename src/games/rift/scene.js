@@ -107,6 +107,15 @@ function emojiTexture(emoji, size = 128, mirror = false) {
         ctx.translate(size, 0)
         ctx.scale(-1, 1)
       }
+      // 보조 레이어(뱀 또아리 등) — 머리 뒤에 몸통 조각을 먼저 깔아 전신형의 어색함을 줄인다
+      if (spec.tail) {
+        const t = spec.tail
+        const tw = img.width / t.zoom
+        const th = img.height / t.zoom
+        const tx = Math.max(0, Math.min(img.width - tw, t.ox * img.width - tw / 2))
+        const ty = Math.max(0, Math.min(img.height - th, t.oy * img.height - th / 2))
+        ctx.drawImage(img, tx, ty, tw, th, t.dx * size, t.dy * size, t.size * size, t.size * size)
+      }
       const zoom = spec.zoom || 1
       const sw = img.width / zoom
       const sh = img.height / zoom
@@ -3753,6 +3762,7 @@ export function createHeroShowcase(canvas, { cls, zodiacId }) {
   // 미러 텍스처(옆모습 이모지 원본은 왼쪽 보기) + 진행 방향 쏠림 + 살짝 기울임.
   u.face.material.map = emojiTexture(u.faceEmoji, 128, true)
   u.face.position.x = 0.6 * s
+  u.face.position.z = 1.3 * s // 근접 카메라에선 몸통에 얼굴이 깔려 보인다 — 카메라 쪽으로 당겨 항상 앞에
   u.face.material.rotation = -0.1
   scene.add(g)
 
