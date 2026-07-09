@@ -3206,6 +3206,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   scene.add(endFlash)
 
   const camTarget = new THREE.Vector3(0, 0, 0)
+  const _faceCamV = new THREE.Vector3() // 얼굴 깊이 보정용 임시 벡터(매 프레임 재사용)
   const _want = new THREE.Vector3() // 카메라 목표점 — 매 프레임 재사용(할당 방지)
   let camInit = false
   let frameN = 0 // 안개 갱신 스로틀용 프레임 카운터
@@ -3383,7 +3384,6 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const idleBob = Math.sin(view.time * 2.2 + u.bobPhase) * 0.12 * (1 - wk.amt)
         const bobOff = idleBob + wk.bounce * 0.55
         u.body.position.y = u.bodyBaseY + bobOff
-        u.face.position.y = u.faceBaseY + bobOff // 얼굴도 함께 떠올라 몸통이 뚫지 않게
         // 좌우 방향에 따라 얼굴이 그쪽을 "본다" — 이모지 얼굴은 빌보드(항상 카메라를 봄)라
         // 몸통 회전만으론 방향감이 없다. 세 가지를 합친다:
         //  ① 거울 반전(옆모습 이모지: 🐴 등은 원본이 왼쪽을 봄 → 오른쪽 이동 시 미러 텍스처)
@@ -3400,7 +3400,14 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
         const fs = u.clsScale || 1 // 몸집에 비례해 쏠림·보정도 커진다
         const leanX = (fdx * 0.6 + (u.faceDir || 1) * (u.faceDX || 0)) * fs // 쏠림 + 스펙 위치 보정(dx)
-        u.face.position.x += (leanX - u.face.position.x) * Math.min(1, dt * 10) // 부드럽게 따라오기
+        if (u.faceLeanX === undefined) u.faceLeanX = leanX
+        u.faceLeanX += (leanX - u.faceLeanX) * Math.min(1, dt * 10) // 부드럽게 따라오기
+        // 얼굴 깊이: 몸통보다 앞·어깨 파츠보다 뒤(쇼케이스와 같은 레이어링).
+        // 톱다운 카메라에선 월드 z를 밀면 화면상 아래로 흘러내리므로, "얼굴→카메라"
+        // 시선 방향으로만 밀어 화면 위치는 그대로 두고 깊이만 앞당긴다.
+        _faceCamV.set(obj.position.x + u.faceLeanX, obj.position.y + u.faceBaseY + bobOff, obj.position.z)
+        _faceCamV.subVectors(camera.position, _faceCamV).normalize().multiplyScalar(0.8 * fs)
+        u.face.position.set(u.faceLeanX + _faceCamV.x, u.faceBaseY + bobOff + _faceCamV.y, _faceCamV.z)
         u.face.material.rotation = -fdx * 0.1
         if (h.whirlT <= 0 && h.airT <= 0) u.body.rotation.z = Math.sin(u.wphase) * 0.06 * wk.amt
         else u.body.rotation.z = 0
