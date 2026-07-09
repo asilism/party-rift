@@ -17,15 +17,20 @@
     "app": "vite build && electron .",
     "app:dev": "electron . --dev-url=http://localhost:5173",
     "app:icon": "electron scripts/render-icon.cjs",
-    "app:pack": "vite build && electron-builder --win"
+    "app:pack": "vite build && electron-builder --win",
+    "apk": "vite build && cap sync android && cd android && gradlew assembleDebug"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "three": "^0.184.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.4.1",
     "@vitejs/plugin-react": "^4.3.4",
     "electron": "^43.1.0",
     "electron-builder": "^26.15.3",
