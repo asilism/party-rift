@@ -61,6 +61,21 @@ npm run app:dev   # vite dev 서버(npm run dev:web 선행)에 붙어 개발
 웹 브라우저에서도 주소에 `?solo` 를 붙이면 같은 솔로 모드로 들어갑니다(온라인 서버 불필요).
 스토어(Steam 등) 패키징은 후속 작업 — 현재는 래핑 스파이크 단계입니다.
 
+### 안드로이드 앱 (APK, 솔로 봇전)
+
+같은 솔로 모드를 Capacitor로 감싼 안드로이드 앱입니다(가로 고정 + 전체화면 몰입 모드).
+앱 안에서는 네이티브 브리지(`window.Capacitor`)를 감지해 자동으로 솔로 플로우로 들어갑니다.
+
+```bash
+npm run apk       # 웹 빌드 → cap sync → android/에서 gradlew assembleDebug
+# 출력: android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+빌드 요구사항(경로는 이 저장소 기준 예시):
+- JDK 21 (Capacitor 8이 요구) — `JAVA_HOME` 환경변수로 지정 (예: `D:/DEV/android-tools/jdk-21.0.11+10`)
+- Android SDK — `android/local.properties`의 `sdk.dir` (예: `sdk.dir=D:/DEV/android-tools/sdk`, 슬래시 표기)
+- 런처 아이콘·스플래시 재생성: `npx electron scripts/render-icon.cjs --size=1024 --out=assets/icon.png` 후 `npx capacitor-assets generate --android`
+
 ### 같은 네트워크/외부 기기에서 접속
 
 `npm run dev` 실행 시 콘솔의 `Network: http://<내IP>:5173/` 로 같은 와이파이의 폰/태블릿에서 접속할 수 있습니다.
