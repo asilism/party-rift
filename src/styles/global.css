@@ -3074,8 +3074,27 @@ body {
 /* ── 얼굴 갤러리(개발 검수, ?faces) ── */
 .face-gallery { flex: 1; min-height: 0; position: relative; background: #2e2a4a; }
 .face-gallery canvas { width: 100%; height: 100%; display: block; }
-.face-gallery__hint {
-  position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); margin: 0;
-  color: rgba(255, 255, 255, 0.75); font-size: 12px; white-space: nowrap;
-  background: rgba(20, 14, 40, 0.6); border-radius: 999px; padding: 4px 14px;
+/* 우측 튜너 패널 */
+.face-tuner {
+  position: absolute; top: 12px; right: 12px; width: 280px; box-sizing: border-box;
+  background: rgba(20, 14, 40, 0.88); border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px; padding: 12px 14px; color: #e8e4ff; font-size: 12px;
+  display: flex; flex-direction: column; gap: 8px;
 }
+.face-tuner__head select {
+  width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.25);
+  background: #241c48; color: #fff; font-size: 14px;
+}
+.face-tuner__row { display: grid; grid-template-columns: 76px 1fr 38px; gap: 6px; align-items: center; }
+.face-tuner__row.is-off { opacity: 0.35; }
+.face-tuner__row span { white-space: nowrap; }
+.face-tuner__row b { text-align: right; font-weight: 400; color: #ffd34d; }
+.face-tuner__row small { grid-column: 2 / 4; color: rgba(255, 255, 255, 0.45); font-size: 10px; margin-top: -4px; }
+.face-tuner__row input[type='range'] { width: 100%; accent-color: #ffd34d; }
+.face-tuner__btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.face-tuner__btns button {
+  flex: 1; white-space: nowrap; cursor: pointer; padding: 6px 8px; border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25); background: #33285f; color: #fff; font-size: 11.5px;
+}
+.face-tuner__btns button:hover { background: #453a75; }
+.face-tuner__hint { margin: 0; color: rgba(255, 255, 255, 0.55); font-size: 10.5px; line-height: 1.5; }
