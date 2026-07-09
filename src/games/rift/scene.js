@@ -3857,7 +3857,9 @@ export function createHeroShowcase(canvas, { cls, zodiacId }) {
   // 미러 텍스처(옆모습 이모지 원본은 왼쪽 보기) + 진행 방향 쏠림 + 살짝 기울임.
   u.face.material.map = emojiTexture(u.faceEmoji, 128, true)
   u.face.position.x = 0.6 * s
-  u.face.position.z = 1.3 * s // 근접 카메라에선 몸통에 얼굴이 깔려 보인다 — 카메라 쪽으로 당겨 항상 앞에
+  // 얼굴 깊이: 몸통 표면(반경 1.1s)보다는 앞, 어깨 파츠 끝보다는 뒤 —
+  // 카메라 쪽 어깨가 얼굴 가장자리를 자연스럽게 가려 파츠 사이에 "끼운" 느낌을 준다
+  u.face.position.z = 1.0 * s
   u.face.material.rotation = -0.1
   scene.add(g)
 
@@ -4022,7 +4024,7 @@ export function createFaceGallery(canvas, cls = 'warrior') {
     const u = g.userData
     u.bar.visible = false
     setNameText(u.name, z.name, '#ffffff')
-    u.face.position.z = 1.3 * s // 근접 카메라에서 몸통에 깔리지 않게
+    u.face.position.z = 1.0 * s // 몸통보단 앞, 어깨 파츠보단 뒤(쇼케이스와 동일 규칙)
     g.position.set(col * 9 - (COLS - 1) * 4.5, 0, row * 13 - 6.5)
     scene.add(g)
     const spec = { ...(ZODIAC_FACES[z.emoji] || {}) }
