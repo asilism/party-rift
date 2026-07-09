@@ -15,6 +15,11 @@ const soloMode =
   typeof window !== 'undefined' &&
   (!!window.zodiacDesktop || new URLSearchParams(window.location.search).has('solo'))
 
+// 개발 검수용 — ?faces: 12지신 인게임 실물을 한 화면에 진열(얼굴 크기·크롭 비교)
+const FaceGallery = lazy(() => import('./dev/FaceGallery.jsx'))
+const facesMode =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('faces')
+
 // 서버 권위 + 매치메이킹.  화면 흐름은 서버가 주도한다:
 //   대문(SSH) → 대기열 → 드래프트(스네이크 픽) → 전투
 //   진행 중 새로고침/끊김에도 같은 기기(deviceId)면 그 단계로 복구된다.
@@ -28,7 +33,11 @@ export default function App() {
         </div>
       </div>
 
-      {soloMode ? (
+      {facesMode ? (
+        <Suspense fallback={<NetScreen icon="⏳" text="갤러리를 불러오는 중..." />}>
+          <FaceGallery />
+        </Suspense>
+      ) : soloMode ? (
         <ErrorBoundary>
           <Suspense fallback={<NetScreen icon="⏳" text="게임을 불러오는 중..." />}>
             <SoloApp />
