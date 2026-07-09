@@ -11,6 +11,7 @@ import {
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
 import MenuStage from './MenuStage.jsx'
+import HeroShowcase from './HeroShowcase.jsx'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
 
 const RiftGame = lazy(() => import('../games/rift/RiftGame.jsx'))
@@ -114,7 +115,8 @@ export default function SoloApp() {
 
   return (
     <div className="shell">
-      <MenuStage />
+      {/* 캐릭터 선택에선 쇼케이스(훈련장)가 3D를 쓰므로 배경 전장은 쉬게 한다(모바일 성능) */}
+      {screen !== 'char' && <MenuStage />}
       {screen === 'title' && <TitleScreen onEnter={enterFromTitle} />}
       {screen === 'profile' && (
         <ProfileScreen current={profile} onPick={pickProfile} onBack={profile ? () => go('menu') : null} />
@@ -326,6 +328,8 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
                 : <p className="char-show__desc">직업을 고르면 스킬을 미리 볼 수 있어 👉</p>}
             </div>
           </div>
+          {/* 훈련장: 선택한 직업의 전신 모델이 평타·스킬을 실제로 시전한다 */}
+          {c && <HeroShowcase cls={cls} zodiacId={profile} />}
           {/* 가운데(스킬·전적)만 스크롤 — 출전 버튼은 항상 보인다 */}
           <div className="char-show__mid">
             {c && (
