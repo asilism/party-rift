@@ -115,8 +115,7 @@ export default function SoloApp() {
 
   return (
     <div className="shell">
-      {/* 캐릭터 선택에선 쇼케이스(훈련장)가 3D를 쓰므로 배경 전장은 쉬게 한다(모바일 성능) */}
-      {screen !== 'char' && <MenuStage />}
+      <MenuStage />
       {screen === 'title' && <TitleScreen onEnter={enterFromTitle} />}
       {screen === 'profile' && (
         <ProfileScreen current={profile} onPick={pickProfile} onBack={profile ? () => go('menu') : null} />

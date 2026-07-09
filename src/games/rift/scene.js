@@ -3063,7 +3063,6 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const camTarget = new THREE.Vector3(0, 0, 0)
   const _want = new THREE.Vector3() // 카메라 목표점 — 매 프레임 재사용(할당 방지)
   let camInit = false
-  let camZoom = 1 // 1=기본 시야, 작을수록 근접(캐릭터 쇼케이스 등)
   let frameN = 0 // 안개 갱신 스로틀용 프레임 카운터
   let lastT = null // 공격 모션 진행용 프레임 시간
   let hitFxOn = true // 피격 테두리 on/off (데미지 숫자는 항상 표시)
@@ -3640,8 +3639,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
 
     // 카메라: 평소엔 내 영웅을, 경기가 끝나면 터진 넥서스로 모아 폭발을 보여 준다(관전은 위에서 전체)
     const want = _want
-    let offY = 42 * camZoom
-    let offZ = 30 * camZoom
+    let offY = 42
+    let offZ = 30
     const endNexus = view.status === 'finished' && loser ? NEXUS_POS[loser] : null
     if (endNexus) {
       want.set(endNexus.x, 0, endNexus.z) // 터진 최종 건물로 시선 집중
@@ -3661,7 +3660,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       camTarget.lerp(want, endNexus ? 0.08 : 0.12)
     }
     camera.position.set(camTarget.x, camTarget.y + offY, camTarget.z + offZ)
-    camera.lookAt(camTarget.x, 0, camTarget.z - 6 * camZoom)
+    camera.lookAt(camTarget.x, 0, camTarget.z - 6)
     renderer.render(scene, camera)
   }
 
@@ -3673,7 +3672,6 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     },
     render,
     setHitFx(on) { hitFxOn = !!on }, // 피격 테두리·화면 흔들림 켜고 끄기(데미지 숫자는 유지)
-    setCamZoom(f) { camZoom = f > 0 ? f : 1 }, // 카메라 근접 배율(캐릭터 쇼케이스 등)
     dispose() {
       renderer.dispose()
       scene.traverse((o) => {
@@ -3685,6 +3683,157 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           }
         }
       })
+    },
+  }
+}
+
+// ── 캐릭터 쇼케이스 무대 — 배경 없이(투명 캔버스) 영웅 하나가 모션을 강제 재생 ──
+// 엔진·맵 없이 순수 연출: 제자리 걸음, 평타 스윙(실제 무기 pose), 스킬/보조/궁극은
+// 몸동작+발광 버스트로 재생한다. "대상이 있어야 나가는 기술"도 항상 보인다.
+//  반환: { play(kind), resize(w, h), dispose() } — kind: walk|atk|skill|skill2|ult
+export function createHeroShowcase(canvas, { cls, zodiacId }) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+  renderer.setClearColor(0x000000, 0)
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
+  const scene = new THREE.Scene()
+  const camera = new THREE.PerspectiveCamera(36, 4 / 3, 0.5, 60)
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8))
+  const sun = new THREE.DirectionalLight(0xffffff, 1.05)
+  sun.position.set(6, 12, 8)
+  scene.add(sun)
+
+  const s = CLS_SCALE[cls] || 1
+  const g = buildHero({ id: 'show', cls, zodiacId, team: 'blue', lvl: 1, atkSeq: 0 }, false, '#fff')
+  const u = g.userData
+  u.name.visible = false // 무대 위엔 모델만 — 명패/체력바는 숨긴다
+  u.bar.visible = false
+  scene.add(g)
+
+  // 전신 + 머리 위 약간의 여유. 몸집(직업 스케일)에 비례해 물러난다
+  camera.position.set(0, 4.6 * s + 1.2, 8.8 * s + 2.4)
+  camera.lookAt(0, 2.3 * s, 0)
+
+  // 발광 버스트(스킬 손맛) — 글로우 스프라이트가 퍼지며 사라진다
+  const sparks = []
+  function burst(color, n, power, y) {
+    for (let i = 0; i < n; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTexture(), color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      }))
+      const a = Math.random() * Math.PI * 2
+      const v = (0.5 + Math.random() * 0.8) * power
+      sp.position.set(0, y, 0)
+      sp.scale.setScalar((0.8 + Math.random() * 0.9) * s)
+      sparks.push({ sp, vx: Math.cos(a) * v, vy: (1.2 + Math.random() * 1.6) * power * 0.7, vz: Math.sin(a) * v, life: 0.45 + Math.random() * 0.3, t: 0 })
+      scene.add(sp)
+    }
+  }
+
+  const DUR = { walk: 1.3, atk: 0.5, skill: 0.9, skill2: 0.9, ult: 1.5 }
+  let action = null // { kind, t }
+  function play(kind) {
+    action = { kind, t: 0 }
+    if (kind === 'atk' || kind === 'skill') u.animT = 0
+    if (kind === 'skill') burst(0x7fd6ff, 8, 2.0, 2.2 * s)
+    if (kind === 'skill2') burst(0x8dfab4, 10, 1.3, 1.6 * s)
+    if (kind === 'ult') burst(0xffd34d, 16, 3.0, 2.4 * s)
+  }
+
+  let raf
+  let last = performance.now()
+  let time = 0
+  let wphase = 0
+  function frame() {
+    raf = requestAnimationFrame(frame)
+    const now = performance.now()
+    let dt = (now - last) / 1000
+    last = now
+    if (!(dt > 0) || dt > 0.1) dt = 1 / 60
+    time += dt
+
+    // 무대 기본기: 좌우로 천천히 몸을 트는 턴테이블 + 숨쉬기 둥실
+    g.rotation.y = Math.sin(time * 0.45) * 0.55 + 0.25
+    const bob = Math.sin(time * 2.2) * 0.1 * s
+    let lift = 0
+    let stride = 0
+
+    if (action) {
+      action.t += dt
+      const t = action.t
+      if (action.kind === 'walk') {
+        // 제자리 걸음 — 씩씩하게
+        wphase += dt * 10
+        stride = Math.sin(wphase) * 0.6
+        lift = Math.abs(Math.sin(wphase)) * 0.28 * s
+      } else if (action.kind === 'atk') {
+        // 실제 게임과 같은 무기 스윙
+        u.animT = Math.min(1, u.animT + dt / ATK_ANIM_T)
+        u.weapon.userData.pose(u.animT)
+      } else if (action.kind === 'skill') {
+        // 앞으로 힘차게 내지르며 스윙
+        const p = Math.sin(Math.min(1, t / 0.5) * Math.PI)
+        u.body.rotation.x = p * 0.35
+        lift = p * 0.5 * s
+        u.weapon.userData.pose(Math.min(1, t / 0.4))
+      } else if (action.kind === 'skill2') {
+        // 자기 강화 — 부풀었다 돌아오는 펄스
+        const p = Math.sin(Math.min(1, t / 0.7) * Math.PI)
+        g.scale.setScalar(1 + p * 0.1)
+      } else if (action.kind === 'ult') {
+        // 도약 + 팽이 회전
+        if (t < 1.15) {
+          u.body.rotation.y -= dt * 13
+          lift = Math.sin(Math.min(1, t / 1.15) * Math.PI) * 1.6 * s
+        }
+      }
+      if (t > (DUR[action.kind] || 1)) {
+        action = null
+        u.body.rotation.x = 0
+        u.body.rotation.y = 0
+        g.scale.setScalar(1)
+        u.weapon.userData.pose(1)
+      }
+    }
+
+    u.body.position.y = u.bodyBaseY + bob + lift
+    u.face.position.y = u.faceBaseY + bob + lift
+    if (u.legs) {
+      u.legs[0].rotation.z = stride
+      u.legs[1].rotation.z = -stride
+      if (u.arms) {
+        u.arms[0].rotation.z = -stride * 0.65
+        u.arms[1].rotation.z = stride * 0.65
+      }
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const k = sparks[i]
+      k.t += dt
+      if (k.t >= k.life) {
+        scene.remove(k.sp)
+        k.sp.material.dispose()
+        sparks.splice(i, 1)
+        continue
+      }
+      k.vy -= dt * 6
+      k.sp.position.x += k.vx * dt
+      k.sp.position.y += k.vy * dt
+      k.sp.position.z += k.vz * dt
+      k.sp.material.opacity = 1 - k.t / k.life
+    }
+    renderer.render(scene, camera)
+  }
+  raf = requestAnimationFrame(frame)
+
+  return {
+    play,
+    resize(w, h) {
+      renderer.setSize(w, h, false)
+      camera.aspect = w / Math.max(1, h)
+      camera.updateProjectionMatrix()
+    },
+    dispose() {
+      cancelAnimationFrame(raf)
+      renderer.dispose()
     },
   }
 }
