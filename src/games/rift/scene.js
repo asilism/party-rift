@@ -3707,6 +3707,11 @@ export function createHeroShowcase(canvas, { cls, zodiacId }) {
   const u = g.userData
   u.name.visible = false // 무대 위엔 모델만 — 명패/체력바는 숨긴다
   u.bar.visible = false
+  // 얼굴 방향: 무대 모델은 늘 화면 오른쪽을 보므로 인게임과 같은 규칙을 정적으로 적용 —
+  // 미러 텍스처(옆모습 이모지 원본은 왼쪽 보기) + 진행 방향 쏠림 + 살짝 기울임.
+  u.face.material.map = emojiTexture(u.faceEmoji, 128, true)
+  u.face.position.x = 0.6 * s
+  u.face.material.rotation = -0.1
   scene.add(g)
 
   // 전신 + 머리 위 약간의 여유. 몸집(직업 스케일)에 비례해 물러난다
