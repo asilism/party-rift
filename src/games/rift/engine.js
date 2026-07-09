@@ -783,6 +783,7 @@ export function createGame(players, opts = {}) {
     mode,
     teamSize,
     botLevel: BOT_LEVELS[o.botLevel] ? o.botLevel : 'normal', // 봇 난이도(솔로 모드) — 온라인은 항상 normal
+    sandbox: !!o.sandbox, // 훈련장(캐릭터 쇼케이스) — 웨이브·정글몹·타워 정지
     map,
     time: 0,
     countdown: COUNTDOWN_TIME,
@@ -2698,13 +2699,16 @@ export function step(state, dt) {
   }
   if (state.status === 'finished') return state
 
-  stepWaves(state, dt)
+  // 훈련장(sandbox): 캐릭터 쇼케이스용 조용한 맵 — 웨이브·정글몹·타워가 움직이지 않는다
+  if (!state.sandbox) stepWaves(state, dt)
   stepBots(state, dt)
   for (const h of state.heroes) stepHero(state, h, dt)
   stepAutoAttack(state) // 사람 영웅: 갱신된 위치/수풀/쿨다운 기준으로 사거리 안 적 영웅에게 평타 이어치기
   stepMinions(state, dt)
-  stepMonsters(state, dt)
-  stepTowers(state, dt)
+  if (!state.sandbox) {
+    stepMonsters(state, dt)
+    stepTowers(state, dt)
+  }
   stepProjectiles(state, dt)
   stepHawks(state, dt)
   stepZones(state, dt)

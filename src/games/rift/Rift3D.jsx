@@ -5,7 +5,7 @@ import { buildMap } from './map.js'
 // 3D 캔버스. 매 프레임 sample()로 최신 뷰(호스트: 실시간 상태,
 // 게스트: 스냅샷 보간)를 받아 그린다. React 리렌더와 무관하게 60fps.
 // mode(3v3/5v5)가 바뀌면 맞는 크기의 맵으로 장면을 다시 만든다.
-export default function Rift3D({ sample, myId, mode = '3v3', hitFx = true, gfx = 'med' }) {
+export default function Rift3D({ sample, myId, mode = '3v3', hitFx = true, gfx = 'med', camZoom = 1 }) {
   const canvasRef = useRef(null)
   const sampleRef = useRef(sample)
   sampleRef.current = sample
@@ -13,6 +13,8 @@ export default function Rift3D({ sample, myId, mode = '3v3', hitFx = true, gfx =
   myIdRef.current = myId
   const hitFxRef = useRef(hitFx)
   hitFxRef.current = hitFx
+  const camZoomRef = useRef(camZoom)
+  camZoomRef.current = camZoom
   const sceneRef = useRef(null)
 
   useEffect(() => {
@@ -20,6 +22,7 @@ export default function Rift3D({ sample, myId, mode = '3v3', hitFx = true, gfx =
     const scene = createRiftScene(canvas, buildMap(mode), gfx)
     sceneRef.current = scene
     scene.setHitFx?.(hitFxRef.current) // 생성 직후 현재 설정 반영
+    scene.setCamZoom?.(camZoomRef.current)
     const holder = canvas.parentElement
     const fit = () => scene.resize(holder.clientWidth, holder.clientHeight)
     const ro = new ResizeObserver(fit)
@@ -46,6 +49,9 @@ export default function Rift3D({ sample, myId, mode = '3v3', hitFx = true, gfx =
   useEffect(() => {
     sceneRef.current?.setHitFx?.(hitFx)
   }, [hitFx])
+  useEffect(() => {
+    sceneRef.current?.setCamZoom?.(camZoom)
+  }, [camZoom])
 
   return <canvas ref={canvasRef} className="rift__canvas" />
 }

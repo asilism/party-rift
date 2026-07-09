@@ -3063,6 +3063,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const camTarget = new THREE.Vector3(0, 0, 0)
   const _want = new THREE.Vector3() // 카메라 목표점 — 매 프레임 재사용(할당 방지)
   let camInit = false
+  let camZoom = 1 // 1=기본 시야, 작을수록 근접(캐릭터 쇼케이스 등)
   let frameN = 0 // 안개 갱신 스로틀용 프레임 카운터
   let lastT = null // 공격 모션 진행용 프레임 시간
   let hitFxOn = true // 피격 테두리 on/off (데미지 숫자는 항상 표시)
@@ -3639,8 +3640,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
 
     // 카메라: 평소엔 내 영웅을, 경기가 끝나면 터진 넥서스로 모아 폭발을 보여 준다(관전은 위에서 전체)
     const want = _want
-    let offY = 42
-    let offZ = 30
+    let offY = 42 * camZoom
+    let offZ = 30 * camZoom
     const endNexus = view.status === 'finished' && loser ? NEXUS_POS[loser] : null
     if (endNexus) {
       want.set(endNexus.x, 0, endNexus.z) // 터진 최종 건물로 시선 집중
@@ -3660,7 +3661,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       camTarget.lerp(want, endNexus ? 0.08 : 0.12)
     }
     camera.position.set(camTarget.x, camTarget.y + offY, camTarget.z + offZ)
-    camera.lookAt(camTarget.x, 0, camTarget.z - 6)
+    camera.lookAt(camTarget.x, 0, camTarget.z - 6 * camZoom)
     renderer.render(scene, camera)
   }
 
@@ -3672,6 +3673,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     },
     render,
     setHitFx(on) { hitFxOn = !!on }, // 피격 테두리·화면 흔들림 켜고 끄기(데미지 숫자는 유지)
+    setCamZoom(f) { camZoom = f > 0 ? f : 1 }, // 카메라 근접 배율(캐릭터 쇼케이스 등)
     dispose() {
       renderer.dispose()
       scene.traverse((o) => {
