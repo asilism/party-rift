@@ -4,7 +4,7 @@
 // 내 팀 시야 기준으로 전장의 안개(어둠)와 수풀 은신을 그린다.
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { getZodiac } from '../../shared/zodiac.js'
+import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import {
   NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, RESPAWN_ARC_HALF, buildMap,
 } from './map.js'
@@ -3889,6 +3889,74 @@ export function createHeroShowcase(canvas, { cls, zodiacId }) {
 
   return {
     play,
+    resize(w, h) {
+      renderer.setSize(w, h, false)
+      camera.aspect = w / Math.max(1, h)
+      camera.updateProjectionMatrix()
+    },
+    dispose() {
+      cancelAnimationFrame(raf)
+      renderer.dispose()
+    },
+  }
+}
+
+// ── 12지신 얼굴 갤러리(개발용, ?faces) — 인게임 실물 모델 12종을 한 무대에 ──
+// 얼굴 크기·크롭을 눈으로 비교·검수하기 위한 진열장. 쇼케이스와 같은 정적 3/4 앵글
+// + 미러 얼굴 + 숨쉬기만 있다. 조정할 것을 정하면 zodiacFaces.js의 스펙만 고치면 된다.
+export function createFaceGallery(canvas, cls = 'warrior') {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+  renderer.setClearColor(0x000000, 0)
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
+  const scene = new THREE.Scene()
+  const camera = new THREE.PerspectiveCamera(34, 16 / 9, 0.5, 140)
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8))
+  const sun = new THREE.DirectionalLight(0xffffff, 1.05)
+  sun.position.set(10, 18, 12)
+  scene.add(sun)
+
+  const s = CLS_SCALE[cls] || 1
+  const units = []
+  const COLS = 6
+  ZODIAC.forEach((z, i) => {
+    const col = i % COLS
+    const row = (i - col) / COLS
+    const g = buildHero({ id: z.id, cls, zodiacId: z.id, team: 'blue', lvl: 1, atkSeq: 0, name: z.name }, false, '#fff')
+    const u = g.userData
+    u.bar.visible = false
+    setNameText(u.name, z.name, '#ffffff')
+    // 쇼케이스와 같은 얼굴 규칙(오른쪽 보기 미러 + 쏠림 + 기울임 + 몸통 앞으로)
+    u.face.material.map = emojiTexture(z.emoji, 128, true)
+    u.face.position.x = 0.6 * s
+    u.face.position.z = 1.3 * s
+    u.face.material.rotation = -0.1
+    g.rotation.y = -0.35
+    g.position.set(col * 9 - (COLS - 1) * 4.5, 0, row * 13 - 6.5)
+    scene.add(g)
+    units.push(u)
+  })
+  camera.position.set(0, 19, 50)
+  camera.lookAt(0, 1.2, 0)
+
+  let raf
+  let last = performance.now()
+  let time = 0
+  function frame() {
+    raf = requestAnimationFrame(frame)
+    const now = performance.now()
+    const dt = Math.min(0.1, (now - last) / 1000)
+    last = now
+    time += dt
+    units.forEach((u, i) => {
+      const bob = Math.sin(time * 2.2 + i) * 0.08 * s
+      u.body.position.y = u.bodyBaseY + bob
+      u.face.position.y = u.faceBaseY + bob
+    })
+    renderer.render(scene, camera)
+  }
+  raf = requestAnimationFrame(frame)
+
+  return {
     resize(w, h) {
       renderer.setSize(w, h, false)
       camera.aspect = w / Math.max(1, h)
