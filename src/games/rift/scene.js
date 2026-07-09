@@ -3741,7 +3741,7 @@ export function createHeroShowcase(canvas, { cls, zodiacId }) {
     if (kind === 'atk' || kind === 'skill') u.animT = 0
     if (kind === 'skill') burst(0x7fd6ff, 8, 2.0, 2.2 * s)
     if (kind === 'skill2') burst(0x8dfab4, 10, 1.3, 1.6 * s)
-    if (kind === 'ult') burst(0xffd34d, 16, 3.0, 2.4 * s)
+    if (kind === 'ult') burst(0xffd34d, 6, 1.5, 2.0 * s) // 도약 예고 — 큰 버스트는 착지 때
   }
 
   let raf
@@ -3756,8 +3756,9 @@ export function createHeroShowcase(canvas, { cls, zodiacId }) {
     if (!(dt > 0) || dt > 0.1) dt = 1 / 60
     time += dt
 
-    // 무대 기본기: 좌우로 천천히 몸을 트는 턴테이블 + 숨쉬기 둥실
-    g.rotation.y = Math.sin(time * 0.45) * 0.55 + 0.25
+    // 무대 기본기: 좌우로 천천히 몸을 트는 턴테이블 + 숨쉬기 둥실.
+    // 음수 오프셋 = 관객(카메라) 쪽으로 살짝 돌아선 3/4 앵글 — 뒤통수를 보이지 않는다.
+    g.rotation.y = Math.sin(time * 0.45) * 0.4 - 0.35
     const bob = Math.sin(time * 2.2) * 0.1 * s
     let lift = 0
     let stride = 0
@@ -3785,10 +3786,15 @@ export function createHeroShowcase(canvas, { cls, zodiacId }) {
         const p = Math.sin(Math.min(1, t / 0.7) * Math.PI)
         g.scale.setScalar(1 + p * 0.1)
       } else if (action.kind === 'ult') {
-        // 도약 + 팽이 회전
-        if (t < 1.15) {
-          u.body.rotation.y -= dt * 13
-          lift = Math.sin(Math.min(1, t / 1.15) * Math.PI) * 1.6 * s
+        // 힘을 모았다가 크게 도약 — 회전은 안 한다(얼굴은 빌보드라 몸만 돌면 이질적)
+        if (t < 0.35) {
+          g.scale.setScalar(1 - (t / 0.35) * 0.12) // 움츠리기
+        } else if (t < 1.25) {
+          g.scale.setScalar(1)
+          lift = Math.sin(((t - 0.35) / 0.9) * Math.PI) * 2.0 * s
+        } else if (!action.landed) {
+          action.landed = true // 착지 순간 — 큰 버스트로 마무리
+          burst(0xffd34d, 14, 3.0, 1.2 * s)
         }
       }
       if (t > (DUR[action.kind] || 1)) {
