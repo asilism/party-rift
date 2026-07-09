@@ -106,6 +106,21 @@ function drawZodiacFace(ctx, img, spec, size, mirror) {
   const sx = Math.max(0, Math.min(img.width - sw, (spec.ox ?? 0.5) * img.width - sw / 2))
   const sy = Math.max(0, Math.min(img.height - sh, (spec.oy ?? 0.5) * img.height - sh / 2))
   tc.drawImage(img, sx, sy, sw, sh, 0, 0, size, size)
+  // 1.5) 타원 알파 마스크 — 크롭에 딸려 들어오는 몸통(뱀 목 등)을 부드럽게 지워
+  //      "딱 얼굴만" 남긴다. cx/cy/rx/ry는 크롭된 캔버스 기준 0..1, feather는 가장자리 페이드.
+  if (spec.mask) {
+    const m = spec.mask
+    tc.save()
+    tc.globalCompositeOperation = 'destination-in'
+    tc.translate(m.cx * size, m.cy * size)
+    tc.scale(m.rx * size, m.ry * size) // 이 공간에선 반지름 1이 타원 경계
+    const grad = tc.createRadialGradient(0, 0, 0, 0, 0, 1)
+    grad.addColorStop(Math.max(0, 1 - (m.feather ?? 0.15)), 'rgba(0,0,0,1)')
+    grad.addColorStop(1, 'rgba(0,0,0,0)')
+    tc.fillStyle = grad
+    tc.fillRect(-12, -12, 24, 24) // 정규화 공간에서 캔버스 전체를 덮는다
+    tc.restore()
+  }
   // 2) 크롭했을 때만 알파 질량중심을 계산해 중앙 정렬 오프셋을 구한다
   //    (무크롭 원본은 여백이 이미 대칭이라 그대로 둔다)
   let offX = 0
@@ -888,6 +903,25 @@ const ATK_ANIM_T = 0.35 // 공격 모션 길이 (초)
 // 전부 몸통(body)의 "정적" 자식: 프레임별 갱신이 없고 바라보는 방향/까딱임과 함께 움직인다.
 // 팀 식별색은 몸통 캡슐이 유지하고, 파츠는 직업 고유색 포인트만 얹는다. 로컬 +x = 정면, -x = 등.
 // 주의: 얼굴 이모지 스프라이트(y≈4.4s)와 겹치지 않게 파츠 상단은 로컬 y 2.0s 아래로 유지한다.
+// 뱀 전용 몸 파츠 — 엉덩이에서 뒤로 나와 말려 올라가는 꼬리(마디 구슬 + 끝 원뿔).
+// 얼굴 텍스처에서 몸통을 지운 대신 실루엣으로 "뱀"을 말해 준다. Fluent 뱀 색.
+function buildSnakeTail(s) {
+  const g = new THREE.Group()
+  const mat = new THREE.MeshLambertMaterial({ color: 0x2ec48e })
+  for (const [x, y, r] of [
+    [-1.15, -1.35, 0.3], [-1.6, -1.2, 0.25], [-1.95, -0.9, 0.2], [-2.18, -0.5, 0.15],
+  ]) {
+    const seg = new THREE.Mesh(new THREE.SphereGeometry(r * s, 8, 6), mat)
+    seg.position.set(x * s, y * s, 0)
+    g.add(seg)
+  }
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.13 * s, 0.5 * s, 6), mat)
+  tip.position.set(-2.3 * s, -0.08 * s, 0)
+  tip.rotation.z = 0.45 // 끝은 살짝 뒤로 젖혀 올라간다
+  g.add(tip)
+  return g
+}
+
 export function buildClassParts(cls, s, body) {
   const metal = new THREE.MeshLambertMaterial({ color: 0xc9d2e0 })
   const dark = new THREE.MeshLambertMaterial({ color: 0x3c4358 })
@@ -1451,6 +1485,8 @@ function buildHero(h, mine, barColor) {
   cape.position.set(-0.85 * s, 0.2 * s, 0)
   body.add(cape)
   buildClassParts(h.cls, s, body) // 직업별 어깨·등 파츠 — 실루엣 구분
+  // 조디악 전용 파츠: 뱀은 얼굴(머리)만 쓰는 대신 엉덩이에 말린 꼬리를 단다
+  if (h.zodiacId === 'snake') body.add(buildSnakeTail(s))
   // 팔·다리 — 짧고 길쭉한 원통(살짝 테이퍼). 몸통 자식이라 바라보는 방향/걷기와 함께 움직인다.
   const limbMat = new THREE.MeshLambertMaterial({ color: darken(col, 0.7) })
   // 다리: 고관절 피벗 그룹으로 감싸 걸을 때 앞뒤로 엇갈려 흔든다(legs[0]=오른쪽 +z, [1]=왼쪽 -z)
