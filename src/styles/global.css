@@ -2803,7 +2803,7 @@ body {
 }
 /* 고전 게임식 "PRESS START" — 버튼 장식 없이 깜빡이는 텍스트만 */
 .title-screen__press {
-  margin: clamp(24px, 7vh, 54px) 0 0;
+  margin: clamp(44px, 13vh, 100px) 0 0;
   font-family: var(--toy-display); font-weight: 400;
   font-size: clamp(16px, 3.4vh, 24px); color: #fff;
   letter-spacing: 6px; text-indent: 6px;
