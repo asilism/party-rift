@@ -9,6 +9,7 @@ import {
   NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, RESPAWN_ARC_HALF, buildMap,
 } from './map.js'
 import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE } from './engine.js'
+import { ZODIAC_FACES } from './zodiacFaces.js'
 
 // ── 그래픽 품질 프리셋 ──
 // 티어는 선명도(픽셀레이트·AA)와 안개 갱신율만 조절한다. 월드의 장식 개수·배치는 전 티어 동일 —
@@ -57,6 +58,26 @@ function dmgTexture(text, kind) {
   return tex
 }
 
+// 번들 조디악 얼굴 이미지 로더 — svg 텍스트를 Blob URL(동일 출처, file://에서도 캔버스
+// 미오염)로 만들어 Image 로 읽는다. 이모지별 1회 로드 후 캐시.
+const _zfaceCache = new Map()
+function zodiacFaceImage(emoji, cb) {
+  let e = _zfaceCache.get(emoji)
+  if (!e) {
+    const img = new Image()
+    e = { img, ready: false, cbs: [] }
+    _zfaceCache.set(emoji, e)
+    img.onload = () => {
+      e.ready = true
+      for (const f of e.cbs) f(img)
+      e.cbs.length = 0
+    }
+    img.src = URL.createObjectURL(new Blob([ZODIAC_FACES[emoji].svg], { type: 'image/svg+xml' }))
+  }
+  if (e.ready) cb(e.img)
+  else e.cbs.push(cb)
+}
+
 function emojiTexture(emoji, size = 128, mirror = false) {
   const c = document.createElement('canvas')
   c.width = c.height = size
@@ -74,6 +95,27 @@ function emojiTexture(emoji, size = 128, mirror = false) {
   ctx.fillText(emoji, size / 2, size / 2 + size * 0.04)
   const tex = new THREE.CanvasTexture(c)
   tex.colorSpace = THREE.SRGBColorSpace
+  // 12지신 얼굴은 번들 이미지(Twemoji)로 다시 그린다 — 기기(OS 폰트)별로 그림이 달라지지
+  // 않고, 전신형 이모지(뱀·양·닭)는 crop(zoom/ox/oy)으로 머리만 잘라 "얼굴"이 된다.
+  // 이미지는 비동기라 우선 시스템 글리프로 그려두고 로드되면 교체(needsUpdate).
+  const spec = ZODIAC_FACES[emoji]
+  if (spec && typeof Image !== 'undefined') {
+    zodiacFaceImage(emoji, (img) => {
+      ctx.setTransform(1, 0, 0, 1, 0, 0)
+      ctx.clearRect(0, 0, size, size)
+      if (mirror) {
+        ctx.translate(size, 0)
+        ctx.scale(-1, 1)
+      }
+      const zoom = spec.zoom || 1
+      const sw = img.width / zoom
+      const sh = img.height / zoom
+      const sx = Math.max(0, Math.min(img.width - sw, (spec.ox ?? 0.5) * img.width - sw / 2))
+      const sy = Math.max(0, Math.min(img.height - sh, (spec.oy ?? 0.5) * img.height - sh / 2))
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, size, size)
+      tex.needsUpdate = true
+    })
+  }
   return tex
 }
 

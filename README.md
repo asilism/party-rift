@@ -98,3 +98,8 @@ src/
 ```
 
 순수 로직(`engine.js`, `server/matchmaking.js`, `server/match.js`)과 테스트는 화면과 분리돼 있습니다.
+
+## 크레딧
+
+- 12지신 얼굴 이미지: [Twemoji](https://github.com/jdecked/twemoji) (CC-BY 4.0) — 기기(OS 이모지 폰트)마다 그림이 달라지지 않도록 SVG를 번들하고, 전신형 이모지(뱀·양·닭)는 머리 부분만 잘라 얼굴로 사용합니다 (`src/games/rift/zodiacFaces.js`).
+- 폰트: [Black Han Sans](https://fonts.google.com/specimen/Black+Han+Sans), [Jua](https://fonts.google.com/specimen/Jua) (SIL OFL)
