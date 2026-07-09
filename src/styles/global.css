@@ -2787,13 +2787,6 @@ body {
 .title-screen { justify-content: center; cursor: pointer; }
 .title-screen__top { position: absolute; top: 12px; right: 12px; }
 .toy-logo { position: relative; text-align: center; transform: rotate(-2deg); }
-.toy-logo__burst {
-  position: absolute; inset: -46% -24%; z-index: -1; opacity: 0.9;
-  background: repeating-conic-gradient(from 0deg, rgba(255, 220, 90, 0.35) 0 10deg, transparent 10deg 30deg);
-  border-radius: 50%; filter: blur(1px);
-  animation: toy-burst-spin 24s linear infinite;
-}
-@keyframes toy-burst-spin { to { transform: rotate(360deg); } }
 .toy-logo__en {
   margin: 0; font-family: var(--toy-display); font-weight: 400; line-height: 0.95;
   font-size: clamp(46px, 15vh, 96px); letter-spacing: 2px; color: var(--toy-yellow);
@@ -2808,13 +2801,16 @@ body {
   display: inline-block; padding: 4px 18px; border-radius: 999px;
   background: rgba(43, 35, 80, 0.82); border: 2px solid rgba(255, 255, 255, 0.25);
 }
+/* 고전 게임식 "PRESS START" — 버튼 장식 없이 깜빡이는 텍스트만 */
 .title-screen__press {
-  margin: clamp(24px, 7vh, 54px) 0 0; font-size: clamp(15px, 3vh, 20px); color: #ffe9ad;
-  padding: 8px 24px; border-radius: 999px; background: rgba(43, 35, 80, 0.82);
-  border: 2px solid rgba(255, 233, 173, 0.4);
-  animation: toy-press 1.5s ease-in-out infinite;
+  margin: clamp(24px, 7vh, 54px) 0 0;
+  font-family: var(--toy-display); font-weight: 400;
+  font-size: clamp(16px, 3.4vh, 24px); color: #fff;
+  letter-spacing: 6px; text-indent: 6px;
+  text-shadow: 0 3px 0 var(--ink), 0 8px 16px rgba(0, 0, 0, 0.5);
+  animation: toy-press 1.6s ease-in-out infinite;
 }
-@keyframes toy-press { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.96); } }
+@keyframes toy-press { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 .title-screen__ver { position: absolute; bottom: 10px; right: 14px; margin: 0; color: rgba(255, 255, 255, 0.65); font-size: 11px; text-shadow: 0 1px 2px #000; }
 
 /* ── 프로필(수호 지신) ── */
