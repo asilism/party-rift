@@ -289,6 +289,8 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const [cls, setCls] = useState(CLASSES[saved?.cls] && unlocked.has(saved.cls) ? saved.cls : null)
+  // 낮은 화면에선 스킬 설명이 접혀 있다 — 누른 스킬만 펼친다(넉넉한 화면은 CSS가 전부 펼침)
+  const [openSkill, setOpenSkill] = useState(null)
 
   const z = getZodiac(profile)
   const c = cls ? CLASSES[cls] : null
@@ -334,10 +336,17 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
                     { tag: '보조 Lv3', ...c.skill2 },
                     { tag: '궁극 Lv5', ...c.ult },
                   ].map((s) => (
-                    <li key={s.tag} title={s.desc}>
+                    <li
+                      key={s.tag}
+                      className={openSkill === s.tag ? 'is-open' : ''}
+                      onClick={() => setOpenSkill((o) => (o === s.tag ? null : s.tag))}
+                    >
                       <span className="char-show__skill-icon">{s.icon}</span>
                       <span className="char-show__skill-main">
-                        <b>{s.name} <small>{s.tag}</small></b>
+                        <b>
+                          {s.name} <small>{s.tag}</small>
+                          <span className="char-show__skill-caret" aria-hidden="true">▾</span>
+                        </b>
                         <span className="char-show__skill-desc">{s.desc}</span>
                       </span>
                     </li>
@@ -374,7 +383,7 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
                   className={`char-card ${cls === id ? 'is-on' : ''} ${locked ? 'is-locked' : ''}`}
                   disabled={locked}
                   title={locked ? '승리할 때마다 새 캐릭터가 하나씩 열려요' : cc.desc}
-                  onClick={() => { sound.step(); setCls(id) }}
+                  onClick={() => { sound.step(); setCls(id); setOpenSkill(null) }}
                 >
                   <span className="char-card__icon">{cc.icon}</span>
                   <span className="char-card__name">{cc.name}</span>
