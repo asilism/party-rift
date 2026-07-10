@@ -1,10 +1,10 @@
-# 조디악 러쉬 (ZODIAC RUSH) 개인정보처리방침 / Privacy Policy
+# 조디악 럼블 (ZODIAC RUMBLE) 개인정보처리방침 / Privacy Policy
 
 최종 수정일 / Last updated: 2026-07-10
 
 ## 한국어
 
-**조디악 러쉬는 어떠한 개인정보도 수집하지 않습니다.**
+**조디악 럼블는 어떠한 개인정보도 수집하지 않습니다.**
 
 - 본 게임은 완전한 오프라인 게임입니다. 계정 생성이나 로그인이 없으며, 게임 진행 중 어떤 데이터도 외부 서버로 전송하지 않습니다.
 - 게임 설정(조작 방식, 버튼 크기 등)과 전적(승패·KDA), 캐릭터 해금 상태는 **사용자의 기기 안에만** 저장되며(브라우저/앱 로컬 저장소), 개발자를 포함한 누구에게도 전송되지 않습니다. 앱을 삭제하면 함께 삭제됩니다.
@@ -18,7 +18,7 @@
 
 ## English
 
-**ZODIAC RUSH does not collect any personal data.**
+**ZODIAC RUMBLE does not collect any personal data.**
 
 - This is a fully offline game. There is no account or sign-in, and no data is transmitted to any external server during play.
 - Game settings (control scheme, button size, etc.), match records (win/loss, KDA), and character unlock progress are stored **only on your device** (local storage). They are never transmitted to anyone, including the developer, and are removed when you uninstall the app.

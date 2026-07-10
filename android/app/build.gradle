@@ -9,10 +9,10 @@ if (keystorePropsFile.exists()) {
 }
 
 android {
-    namespace = "com.asilism.zodiacrush"
+    namespace = "com.asilism.zodiacrumble"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.asilism.zodiacrush"
+        applicationId "com.asilism.zodiacrumble"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

@@ -1,8 +1,8 @@
 {
-  "name": "zodiac-rush",
+  "name": "zodiac-rumble",
   "private": true,
   "version": "0.1.0",
-  "description": "조디악 러쉬 (ZODIAC RUSH) — 12지신이 달리는 3D MOBA",
+  "description": "조디악 럼블 (ZODIAC RUMBLE) — 12지신이 달리는 3D MOBA",
   "author": "asilism",
   "type": "module",
   "main": "electron/main.cjs",

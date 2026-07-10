@@ -1939,7 +1939,7 @@ body {
 }
 .kart-map__desc { font-size: 12px; opacity: 0.8; line-height: 1.35; }
 
-/* ── 조디악 러쉬 (3:3 AOS) ── */
+/* ── 조디악 럼블 (3:3 AOS) ── */
 .rift {
   flex: 1; position: relative; min-height: 0; overflow: hidden;
   background: #9fd4f0; touch-action: none;

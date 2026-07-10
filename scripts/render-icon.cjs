@@ -1,4 +1,4 @@
-// 조디악 러쉬 앱 아이콘 생성 — public/favicon.svg(브랜드 원본)를 PNG로 래스터한다.
+// 조디악 럼블 앱 아이콘 생성 — public/favicon.svg(브랜드 원본)를 PNG로 래스터한다.
 // 기본: 512px → build/icon.png (electron-builder용).
 // 인자: --size=1024 --out=assets/icon.png (@capacitor/assets 안드로이드 아이콘 원본용)
 // 실행: npx electron scripts/render-icon.cjs  (이 CLI 환경에선 env -u ELECTRON_RUN_AS_NODE 필요)
