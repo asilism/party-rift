@@ -83,6 +83,7 @@ export default function SoloApp() {
       },
     })
     netRef.current = n
+    if (typeof window !== 'undefined') window.__soloNet = n // E2E 캡처/디버그용 핸들 — 게임 코드는 참조 금지
     setNet(n)
     setScreen('play')
   }
