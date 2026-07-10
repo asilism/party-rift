@@ -114,6 +114,13 @@ src/
 
 순수 로직(`engine.js`, `server/matchmaking.js`, `server/match.js`)과 테스트는 화면과 분리돼 있습니다.
 
+## 라이선스·출시 문서
+
+- 오픈소스 고지: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) — 게임 메뉴의 "ⓘ 오픈소스 라이선스"에서도 열람 가능
+- 개인정보처리방침: [PRIVACY.md](PRIVACY.md)
+- 스토어 출시 체크리스트·등록 정보 초안: [docs/store-listing.md](docs/store-listing.md)
+- 안드로이드 릴리즈 서명: `android/keystore.properties.example` 참고 (`npm run apk:release` / `npm run aab`)
+
 ## 크레딧
 
 - 12지신 얼굴 이미지: [Microsoft Fluent Emoji 3D](https://github.com/microsoft/fluentui-emoji) (MIT) — 기기(OS 이모지 폰트)마다 그림이 달라지지 않도록 번들하고, 전신형 이모지(뱀·양·닭)는 머리 부분만 잘라 얼굴로 사용합니다 (`src/games/rift/zodiacFaces.js`).

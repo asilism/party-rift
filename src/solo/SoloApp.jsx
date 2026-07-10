@@ -13,6 +13,8 @@ import { buildSoloRoster } from './roster.js'
 import MenuStage from './MenuStage.jsx'
 import HeroShowcase from './HeroShowcase.jsx'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
+// 오픈소스 고지 전문 — 빌드에 원문 그대로 번들되어 웹/데스크톱/안드로이드 배포물 모두에 포함된다
+import NOTICES from '../../THIRD_PARTY_NOTICES.md?raw'
 
 const RiftGame = lazy(() => import('../games/rift/RiftGame.jsx'))
 
@@ -98,7 +100,7 @@ export default function SoloApp() {
   // ESC = 뒤로 (전투 중엔 게임 메뉴가 담당)
   useEffect(() => {
     if (screen === 'play' || screen === 'title') return undefined
-    const back = { profile: profile ? 'menu' : 'title', menu: 'title', mode: 'menu', char: 'mode', records: 'menu' }
+    const back = { profile: profile ? 'menu' : 'title', menu: 'title', mode: 'menu', char: 'mode', records: 'menu', licenses: 'menu' }
     const onKey = (e) => {
       if (e.key === 'Escape' && back[screen]) setScreen(back[screen])
     }
@@ -128,6 +130,7 @@ export default function SoloApp() {
           onRecords={() => go('records')}
           onHelp={() => setHelpOpen(true)}
           onProfile={() => go('profile')}
+          onLicenses={() => go('licenses')}
         />
       )}
       {screen === 'mode' && (
@@ -149,6 +152,7 @@ export default function SoloApp() {
         />
       )}
       {screen === 'records' && <RecordsScreen onBack={() => go('menu')} />}
+      {screen === 'licenses' && <LicensesScreen onBack={() => go('menu')} />}
       {helpOpen && <SoloHelp onClose={() => { saveGuideSeen(); setHelpOpen(false) }} />}
     </div>
   )
@@ -204,7 +208,7 @@ function ProfileScreen({ current, onPick, onBack }) {
 }
 
 // ── 2. 메인 메뉴 ──
-function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile }) {
+function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onLicenses }) {
   const z = getZodiac(profile)
   const records = loadRiftRecords()
   const total = Object.values(records).reduce(
@@ -232,6 +236,7 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile }) {
         <button className="toy-btn toy-btn--green" onClick={onRecords}>📊 전적</button>
         <button className="toy-btn toy-btn--orange" onClick={onHelp}>❓ 조작법</button>
       </nav>
+      <button className="menu-screen__licenses" onClick={onLicenses}>ⓘ 오픈소스 라이선스</button>
       <div className="menu-screen__corner">
         <FullscreenButton />
       </div>
@@ -444,6 +449,26 @@ function RecordsScreen({ onBack }) {
             </div>
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ── 4.5. 오픈소스 라이선스 — 배포물에 포함된 고지 전문(THIRD_PARTY_NOTICES.md)을 보여준다 ──
+// 원문은 마크다운이라 화면용으로 기호만 걷어낸다(내용 무수정 — 고지 문구는 그대로).
+const NOTICES_TEXT = NOTICES
+  .replace(/^```$/gm, '')
+  .replace(/^#{1,3} /gm, '')
+  .replace(/\*\*(.+?)\*\*/g, '$1')
+  .replace(/^---$/gm, '━━━━━━━━━━━━')
+
+function LicensesScreen({ onBack }) {
+  return (
+    <div className="screen licenses-screen">
+      <BackButton onBack={onBack} />
+      <h2 className="toy-heading toy-heading--screen">오픈소스 라이선스</h2>
+      <div className="toy-card licenses-card">
+        <pre>{NOTICES_TEXT}</pre>
       </div>
     </div>
   )

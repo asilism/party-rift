@@ -18,7 +18,9 @@
     "app:dev": "electron . --dev-url=http://localhost:5173",
     "app:icon": "electron scripts/render-icon.cjs",
     "app:pack": "vite build && electron-builder --win",
-    "apk": "vite build && cap sync android && cd android && gradlew assembleDebug"
+    "apk": "vite build && cap sync android && cd android && gradlew assembleDebug",
+    "apk:release": "vite build && cap sync android && cd android && gradlew assembleRelease",
+    "aab": "vite build && cap sync android && cd android && gradlew bundleRelease"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
