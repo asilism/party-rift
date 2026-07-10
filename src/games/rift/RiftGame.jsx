@@ -5,6 +5,7 @@ import RiftControls from './RiftControls.jsx'
 import RiftShop from './RiftShop.jsx'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
+import { IS_APP_SHELL } from '../../shared/appShell.js'
 import { canShop, CLASSES, bountyGold } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { getItem, ITEM_SLOTS } from './items.js'
@@ -309,9 +310,11 @@ function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onTog
           <button className="rift-settings__item" onClick={onCycleGfx}>
             <span>🎨</span> 그래픽 {GFX_LABEL[gfx] || GFX_LABEL.med}
           </button>
-          <div className="rift-settings__item rift-settings__item--full">
-            <FullscreenButton />
-          </div>
+          {!IS_APP_SHELL && (
+            <div className="rift-settings__item rift-settings__item--full">
+              <FullscreenButton />
+            </div>
+          )}
 
           <div className="rift-settings__sep" />
           <div className="rift-settings__label">🎮 조작 방식</div>
