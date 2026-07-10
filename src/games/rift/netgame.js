@@ -1,4 +1,4 @@
-// 조디악 러쉬 — 실시간 네트코드 어댑터(서버 권위 + 클라 예측/보간 공용).
+// 조디악 럼블 — 실시간 네트코드 어댑터(서버 권위 + 클라 예측/보간 공용).
 import {
   createGame, setInput, castAttack, castSkill, castSkill2, castUlt, castRecall, buyItem, sellItem, resetShop, useItem,
   step, makeView, makeBot, STEP, TEAM_SIZE, TEAM_SIZES, CLASS_IDS,

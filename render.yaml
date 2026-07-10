@@ -1,4 +1,4 @@
-# Render Blueprint — 조디악 러쉬(영속 Node + WebSocket) 무료 배포.
+# Render Blueprint — 조디악 럼블(영속 Node + WebSocket) 무료 배포.
 # Render 대시보드에서 New → Blueprint 로 이 리포를 연결하면 자동으로 읽힌다.
 # Dockerfile을 그대로 빌드하므로 별도 빌드/시작 명령이 필요 없다.
 services:
