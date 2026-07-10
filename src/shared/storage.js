@@ -47,6 +47,27 @@ export function saveRiftHitFx(on) {
   }
 }
 
+// ── 전투 버튼 크기 배율(0.7~1.3) — 설정 메뉴 슬라이더로 조절 ──
+const RIFT_BTNSCALE_KEY = 'bgp.rift.btnscale.v1'
+
+export function loadRiftBtnScale() {
+  try {
+    const v = Number(localStorage.getItem(RIFT_BTNSCALE_KEY))
+    if (v >= 0.7 && v <= 1.3) return v
+  } catch {
+    /* 무시 */
+  }
+  return 1
+}
+
+export function saveRiftBtnScale(scale) {
+  try {
+    localStorage.setItem(RIFT_BTNSCALE_KEY, String(scale))
+  } catch {
+    /* 무시 */
+  }
+}
+
 // ── 프로필(수호 지신) — 첫 실행 때 한 번 정하고, 메인 메뉴에서 변경 ──
 const PROFILE_KEY = 'bgp.rift.profile.v1'
 

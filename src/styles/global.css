@@ -1,4 +1,5 @@
 :root {
+  --btn-scale: 1; /* 전투 버튼 배율 폴백 — 실제 값은 .rift에서 자동×유저 배율로 재계산 */
   --bg: #141c33;
   --bg2: #1b2440;
   --panel: #232f52;
@@ -2076,6 +2077,16 @@ body {
 .rift__bar--xp > div { background: linear-gradient(90deg, #9b6bd6, #c79cf5); }
 
 /* 드래그 조이스틱 + 공격/스킬/궁극기 버튼 */
+/* 버튼 스케일: 최종 = 자동(--btn-auto, 화면 높이 기준) × 유저 설정(--btn-user, 설정 메뉴 슬라이더).
+   크기·배치가 전부 이 배율을 곱해 폰 가로처럼 낮은 화면에서 화면을 덜 가린다. */
+.rift {
+  --btn-auto: 1;
+  --btn-user: 1;
+  --btn-scale: calc(var(--btn-auto) * var(--btn-user));
+}
+@media (max-height: 470px) {
+  .rift { --btn-auto: 0.72; }
+}
 .rift-touch { position: absolute; inset: 0; z-index: 3; touch-action: none; }
 .rift-joy {
   position: fixed; width: 124px; height: 124px; margin: -62px 0 0 -62px;
@@ -2089,13 +2100,13 @@ body {
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
 }
 .rift-btn {
-  position: absolute; bottom: 20px; border-radius: 50%;
+  position: absolute; bottom: calc(20px * var(--btn-scale)); border-radius: 50%;
   border: 4px solid rgba(255, 255, 255, 0.55); color: #fff; font-weight: 800;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 2px; z-index: 6; cursor: pointer; touch-action: none; user-select: none;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3); overflow: visible;
 }
-.rift-btn small { font-size: 12px; font-weight: 800; }
+.rift-btn small { font-size: calc(12px * var(--btn-scale)); font-weight: 800; }
 .rift-btn__icon { display: block; line-height: 1; }
 .rift-btn:active { transform: scale(0.93); filter: brightness(1.15); }
 /* 누름 피드백: 살짝 들어가며(scale) 안쪽에서 하얀 섬광이 번진다 → 무엇이 눌렸는지 직관적으로 */
@@ -2109,39 +2120,39 @@ body {
 /* 평타(발바닥 패드)는 우하단 고정. 스킬들은 이 버튼을 중심으로 한 호 위에
    왼쪽(약함) → 오른쪽/위(강함) 순서로 배치한다 — 강아지 발바닥 모양 🐾 */
 .rift-btn--atk {
-  right: 22px; width: 118px; height: 118px; font-size: 44px;
+  right: calc(22px * var(--btn-scale)); width: calc(118px * var(--btn-scale)); height: calc(118px * var(--btn-scale)); font-size: calc(44px * var(--btn-scale));
   background: rgba(214, 96, 49, 0.92);
 }
 .rift-btn--skill {
-  right: 174px; bottom: 52px; width: 92px; height: 92px; font-size: 32px;
+  right: calc(174px * var(--btn-scale)); bottom: calc(52px * var(--btn-scale)); width: calc(92px * var(--btn-scale)); height: calc(92px * var(--btn-scale)); font-size: calc(32px * var(--btn-scale));
   background: rgba(54, 130, 230, 0.9);
 }
 .rift-btn--skill2 {
-  right: 145px; bottom: 143px; width: 84px; height: 84px; font-size: 28px;
+  right: calc(145px * var(--btn-scale)); bottom: calc(143px * var(--btn-scale)); width: calc(84px * var(--btn-scale)); height: calc(84px * var(--btn-scale)); font-size: calc(28px * var(--btn-scale));
   background: rgba(46, 196, 150, 0.92);
 }
 .rift-btn--ult {
-  right: 54px; bottom: 172px; width: 92px; height: 92px; font-size: 32px;
+  right: calc(54px * var(--btn-scale)); bottom: calc(172px * var(--btn-scale)); width: calc(92px * var(--btn-scale)); height: calc(92px * var(--btn-scale)); font-size: calc(32px * var(--btn-scale));
   background: rgba(155, 107, 214, 0.92);
 }
 /* 귀환: 직업 스킬(skill1) 왼쪽 옆에 둔다 — 크기는 그대로(80) */
 .rift-btn--recall {
-  right: 268px; bottom: 52px; width: 80px; height: 80px; font-size: 28px;
+  right: calc(268px * var(--btn-scale)); bottom: calc(52px * var(--btn-scale)); width: calc(80px * var(--btn-scale)); height: calc(80px * var(--btn-scale)); font-size: calc(28px * var(--btn-scale));
   background: rgba(40, 180, 196, 0.9);
 }
-.rift-btn--recall small { font-size: 11px; }
+.rift-btn--recall small { font-size: calc(11px * var(--btn-scale)); }
 /* 액티브 아이템(물병/종): 공격 버튼을 중심으로 귀환과 같은 반지름의 바깥 고리를
    귀환 → 아이템1 → 아이템2 순으로 오른쪽 위로(스킬 무리를 감싸며) 감아 올라간다.
    스킬 버튼보다 작게(60), 사면 나타난다 */
 .rift-btn--item0 {
-  right: 258px; bottom: 148px; width: 60px; height: 60px; font-size: 20px;
+  right: calc(258px * var(--btn-scale)); bottom: calc(148px * var(--btn-scale)); width: calc(60px * var(--btn-scale)); height: calc(60px * var(--btn-scale)); font-size: calc(20px * var(--btn-scale));
   background: rgba(212, 164, 50, 0.92);
 }
 .rift-btn--item1 {
-  right: 198px; bottom: 232px; width: 60px; height: 60px; font-size: 20px;
+  right: calc(198px * var(--btn-scale)); bottom: calc(232px * var(--btn-scale)); width: calc(60px * var(--btn-scale)); height: calc(60px * var(--btn-scale)); font-size: calc(20px * var(--btn-scale));
   background: rgba(212, 164, 50, 0.92);
 }
-.rift-btn--item0 small, .rift-btn--item1 small { font-size: 10px; }
+.rift-btn--item0 small, .rift-btn--item1 small { font-size: calc(10px * var(--btn-scale)); }
 .rift-btn--channel-on { border-color: #8af0f7; box-shadow: 0 0 22px rgba(74, 214, 224, 0.9); }
 .rift-btn--ready { border-color: #fff; }
 .rift-btn--atk.rift-btn--ready { box-shadow: 0 0 22px rgba(255, 160, 80, 0.8); }
@@ -2152,7 +2163,7 @@ body {
 .rift-btn__cd {
   position: absolute; inset: 0; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 30px; font-weight: 900; color: #fff;
+  font-size: calc(30px * var(--btn-scale)); font-weight: 900; color: #fff;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
 }
 /* 재고제 스킬(엔지니어 포탑) 갯수 배지 — 버튼 우상단 */
@@ -2211,6 +2222,14 @@ body {
 .rift-settings__item:hover { background: rgba(255, 255, 255, 0.08); }
 .rift-settings__item span { font-size: 18px; }
 .rift-settings__item--full { padding: 4px; }
+/* 버튼 크기 슬라이더 줄 — 라벨 · 슬라이더 · 현재 % */
+.rift-settings__slider {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 9px 12px;
+  color: var(--text); font-weight: 700; font-size: 14px;
+}
+.rift-settings__slider input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.rift-settings__slider b { min-width: 42px; text-align: right; font-size: 13px; color: var(--accent); }
 .rift-settings__item--full .btn { width: 100%; justify-content: flex-start; }
 .rift-settings__item--exit { color: #ff9a9a; }
 .rift-settings__sep { height: 1px; background: var(--line); margin: 6px 4px; }
