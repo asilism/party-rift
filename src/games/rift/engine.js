@@ -100,9 +100,9 @@ export const CLASSES = {
   assassin: {
     name: '암살자', icon: '🥷', desc: '제일 빠른 발·제일 높은 공격력이지만 몸이 약한 기습 딜러 — 한 방이 제일 세다',
     hp: 430, hpLvl: 44, atk: 60, atkLvl: 8, range: 4.2, atkCd: 0.55, speed: 15, def: 0.9,
-    skill: { name: '점멸습격', icon: '🌀', cd: 8, desc: '적 등 뒤로 순간이동해 벤다 — 이 일격으로 처치하면 쿨 초기화' },
+    skill: { name: '점멸습격', icon: '🌀', cd: 8, desc: '적 등 뒤로 순간이동해 벤다' },
     skill2: { name: '은신', icon: '🌫️', cd: 13, desc: '1.5초간 모습을 감춘다 — 적에겐 안 보이고 아군에겐 반투명' },
-    ult: { name: '그림자처형', icon: '☠️', cd: 60, desc: '빈사 상태 적에게 2배 일격, 처치 시 점멸 초기화' },
+    ult: { name: '그림자처형', icon: '☠️', cd: 60, desc: '빈사 상태 적에게 2배 일격 — 이 처형으로 처치하면 처형 쿨 초기화' },
   },
   tank: {
     name: '탱커', icon: '🛡️', desc: '앞장서서 버티는 방패 — 느리지만 단단하다',
@@ -705,7 +705,7 @@ export function createGame(players, opts = {}) {
       tauntBy: null, // 나를 도발한 탱커 id
       castT: 0, // 정신집중(궁수 빛의 화살) 남은 시간 — 그동안 제자리에 멈춘다
       castDir: 0, // 정신집중 후 발사 방향(시전 시점에 고정)
-      resetSkillCd: false, // 이번 스킬로 처치 → 스킬 쿨 초기화 플래그 (암살자 점멸습격)
+      resetUltCd: false, // 이번 궁으로 처치 → 궁 쿨 초기화 플래그 (암살자 그림자처형)
       freezeT: 0, // 빙결(마법사 화염구) 남은 시간 — 이동/공격이 느려진다
       whirlT: 0, // 회전베기(전사 궁극기) 남은 시간 — 팽이처럼 돌며 주변 피해
       whirlTickT: 0, // 회전베기 다음 피해 판정까지 남은 시간
@@ -1423,7 +1423,6 @@ export function castSkill(state, id) {
   if (ok === false) return state // 대상이 없으면 쿨다운을 안 쓴다
   cancelRecall(h) // 스킬을 쓰면 집중이 풀린다
   h.skillCd = CLASSES[h.cls].skill.cd * (1 - itemBonus(h).cdr)
-  if (h.resetSkillCd) { h.skillCd = 0; h.resetSkillCd = false } // 점멸습격 처치 → 쿨 초기화
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
   return state
 }
@@ -1508,7 +1507,6 @@ const SKILLS = {
     state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
     h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
     damageHero(state, foe, skillDmg(h, 30, 0.95), h) // 공격력 계수 (암살자)
-    if (foe.respawnT > 0) h.resetSkillCd = true // 이 일격으로 처치 → 점멸 쿨 초기화 (castSkill에서 적용)
     pushFx(state, 'blink', h.x, h.z, 3, h.team)
   },
   // 탱커 방패막기: 잠시 받는 피해 크게 감소
@@ -1719,6 +1717,7 @@ export function castUlt(state, id) {
   if (ok === false) return state
   cancelRecall(h) // 궁극기를 쓰면 집중이 풀린다
   h.ultCd = CLASSES[h.cls].ult.cd * (1 - itemBonus(h).cdr)
+  if (h.resetUltCd) { h.ultCd = 0; h.resetUltCd = false } // 그림자처형 처치 → 처형 쿨 초기화
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
   return state
 }
@@ -1777,15 +1776,15 @@ const ULTS = {
       pushFx(state, 'holylight', a.x, a.z, 4, h.team) // 각자 머리 위로 내리쬐는 성광
     }
   },
-  // 그림자처형: 가까운 적 영웅 일격 — 빈사(35% 미만)면 2배, 처치하면 점멸 초기화
+  // 그림자처형: 가까운 적 영웅 일격 — 빈사(35% 미만)면 2배, 이 처형으로 처치하면 처형 쿨 초기화
   assassin(state, h) {
     const foe = nearestFoeHero(state, h, EXECUTE_RANGE)
     if (!foe) return false
     let dmg = skillDmg(h, 60, 1.7) // 공격력 계수 (암살자)
     if (foe.hp < foe.maxHp * 0.35) dmg *= 2
-    pushFx(state, 'execute', foe.x, foe.z, 3, h.team)
+    pushFx(state, 'shadowexec', foe.x, foe.z, 3, h.team, 1.0) // 붉은 참격 + 해골 팍!
     damageHero(state, foe, dmg, h)
-    if (foe.respawnT > 0) h.skillCd = 0 // 처형 성공 → 점멸로 빠져나가라!
+    if (foe.respawnT > 0) h.resetUltCd = true // 처형 성공 → 처형 쿨 초기화 (castUlt에서 적용)
   },
   // 대지균열: 앞으로 땅을 3파(파파팍)로 끊어 갈라 나가며, 닿는 적을 길게 기절.
   //  각 파는 앞쪽 구간을 차례로 덮어 균열이 적진을 향해 달려간다(한 적은 한 파에 맞는다).

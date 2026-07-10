@@ -2144,6 +2144,7 @@ function buildTornadoProj() {
 //   slash: true  — 무기 높이에서 빠르게 한 바퀴 도는 베기 궤적(호)
 //   spikes: 색   — 지면에서 원형으로 솟았다 가라앉는 가시들(얼음/넝쿨)
 //   pillar: true — 땅에서 하늘로 솟는 빛기둥
+//   emoji: '☠️'  — 대상 위로 이모지가 팍! 튀어나왔다 떠오르며 사라진다(처형 해골 등)
 const FX_LOOK = {
   whirl: { color: 0xffa94d, ring: true, mode: 'out', pcolor: 0xffe0b0, slash: true, ring2: true }, // 전사 회전베기 — 도는 칼날 궤적
   storm: { color: 0x9b6bd6, ring: true, mode: 'out', pcolor: 0xd0a0ff, ring2: true },
@@ -2154,7 +2155,8 @@ const FX_LOOK = {
   meteorhit: { color: 0xff7a2e, ring: true, mode: 'out', pcolor: 0xffd28a, ring2: true }, // 운석 낙하 충격 — 이중 충격파
   boom: { color: 0xff8c2e, ring: true, mode: 'out', pcolor: 0xffd28a, ring2: true },
   blink: { color: 0x9a7bff, ring: true, mode: 'out', pcolor: 0xc9b8ff },
-  execute: { color: 0xff3b3b, ring: true, mode: 'out', pcolor: 0xff9a9a, slash: true }, // 암살자 처형 — 붉은 참격
+  execute: { color: 0xff3b3b, ring: true, mode: 'out', pcolor: 0xff9a9a, slash: true }, // 반격 등 붉은 참격
+  shadowexec: { color: 0xff3b3b, ring: true, mode: 'out', pcolor: 0xff9a9a, slash: true, emoji: '☠️' }, // 암살자 그림자처형 — 붉은 참격 + 해골 팍!
   level: { color: 0xffe066, ring: true, mode: 'rise', pcolor: 0xfff0a0, pillar: true }, // 레벨 업 — 금빛 기둥
   towerfall: { color: 0xff8c2e, ring: true, mode: 'out', pcolor: 0xffcaa0, ring2: true, debris: { count: 16, rock: 0x8c8c98, dur: 1.7 } }, // 포탑 붕괴 — 돌무더기 와르르
   nexusfall: { color: 0xffe066, ring: true, mode: 'out', pcolor: 0xfff3b0, ring2: true, debris: { count: 24, rock: 0xb0b6c4, burst: true, dur: 2.0 } }, // 넥서스 폭발 — 펑! 파편이 터져나간다
@@ -2416,6 +2418,25 @@ function buildFxObject(n) {
       const f = Math.min(1, tt / 0.55)
       ring2.scale.setScalar(1 + f * (n.r || 4) * 1.15)
       ring2.material.opacity = tt <= 0 ? 0 : (1 - f) * 0.8
+    })
+  }
+  if (look.emoji) {
+    // 이모지 팝 — 대상 머리 위에서 팍! 커졌다 떠오르며 사라진다 (그림자처형 해골 등)
+    const spr = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: emojiTexture(look.emoji, 128), transparent: true, depthWrite: false })
+    )
+    spr.position.y = 3.4
+    spr.scale.setScalar(0.001)
+    g.add(spr)
+    const size = Math.max(3, (n.r || 4) * 1.1)
+    ups.push((t) => {
+      const life = n.life || 0.8
+      const tn = Math.min(1, t / life)
+      // 등장 0.14초 동안 1.35배까지 튀어나왔다가 제 크기로 살짝 줄어든다 — "팍!"
+      const pop = t < 0.14 ? (t / 0.14) * 1.35 : 1.35 - Math.min(1, (t - 0.14) / 0.2) * 0.35
+      spr.scale.setScalar(Math.max(0.001, pop * size))
+      spr.position.y = 3.4 + tn * 1.8 // 떠오르며
+      spr.material.opacity = 1 - Math.max(0, tn - 0.55) / 0.45 // 마지막 45% 구간에서 사라진다
     })
   }
   if (look.slash) {
