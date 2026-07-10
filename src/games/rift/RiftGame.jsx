@@ -10,7 +10,7 @@ import { canShop, CLASSES, bountyGold } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { getItem, ITEM_SLOTS } from './items.js'
 import { sound } from '../../shared/sound.js'
-import { loadRiftControl, saveRiftControl, loadRiftHitFx, saveRiftHitFx, loadRiftGfx, saveRiftGfx } from '../../shared/storage.js'
+import { loadRiftControl, saveRiftControl, loadRiftHitFx, saveRiftHitFx, loadRiftGfx, saveRiftGfx, loadRiftBtnScale, saveRiftBtnScale } from '../../shared/storage.js'
 import { useRealtimeGame } from '../../net/useRealtimeGame.js'
 import { riftNet } from './netgame.js'
 import { NetWaiting } from '../../net/NetParts.jsx'
@@ -260,7 +260,7 @@ function RiftRoster({ hud, crown = null }) {
 // 우상단 설정 버튼 하나로 통합한 메뉴: 팀 현황·일시정지·소리·전체화면·조작 방식·나가기를 분기 메뉴로 띄운다.
 const GFX_LABEL = { high: '상 (최고화질)', med: '중 (균형)', low: '하 (성능)' }
 
-function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onToggleSound, scheme, onSchemeChange, hitFx, onToggleHitFx, gfx, onCycleGfx, onExit }) {
+function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onToggleSound, scheme, onSchemeChange, hitFx, onToggleHitFx, gfx, onCycleGfx, btnScale, onBtnScaleChange, onExit }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   useEffect(() => {
@@ -315,6 +315,16 @@ function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onTog
               <FullscreenButton />
             </div>
           )}
+          {/* 전투 버튼 크기 — 자동(화면 높이) 배율 위에 유저 배율을 곱한다 */}
+          <div className="rift-settings__slider">
+            <span>🔘 버튼 크기</span>
+            <input
+              type="range" min="0.7" max="1.3" step="0.05" value={btnScale}
+              onChange={(e) => onBtnScaleChange(Number(e.target.value))}
+              aria-label="버튼 크기"
+            />
+            <b>{Math.round(btnScale * 100)}%</b>
+          </div>
 
           <div className="rift-settings__sep" />
           <div className="rift-settings__label">🎮 조작 방식</div>
@@ -372,6 +382,11 @@ function RiftPlay({
       return n
     })
   }
+  const [btnScale, setBtnScale] = useState(loadRiftBtnScale) // 전투 버튼 크기 배율(유저 설정)
+  function changeBtnScale(v) {
+    setBtnScale(v)
+    saveRiftBtnScale(v)
+  }
   // 배경음악(칩튠 루프): 경기 중에만 흐르고, 어느 한쪽 넥서스가 위태로우면 템포 업
   const bgmStatus = hud?.status
   const paused = !!hud?.paused
@@ -419,7 +434,7 @@ function RiftPlay({
   ))
 
   return (
-    <div className="rift" onContextMenu={(e) => e.preventDefault()}>
+    <div className="rift" style={{ '--btn-user': btnScale }} onContextMenu={(e) => e.preventDefault()}>
       <Rift3D sample={sample} myId={myId} mode={hud.mode || '3v3'} hitFx={hitFx} gfx={gfx} />
 
       {me && !finished && (
@@ -479,6 +494,8 @@ function RiftPlay({
               onToggleHitFx={toggleHitFx}
               gfx={gfx}
               onCycleGfx={cycleGfx}
+              btnScale={btnScale}
+              onBtnScaleChange={changeBtnScale}
               onExit={onExit}
             />
           </div>
