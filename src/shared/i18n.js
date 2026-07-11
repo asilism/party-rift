@@ -1,0 +1,277 @@
+// 조디악 블리츠 — 아주 가벼운 i18n.
+// 원문(한국어)이 곧 키다: t('전사') → 현재 언어가 en이면 사전에서 찾고, 없으면 원문 그대로.
+//  - 게임 데이터(engine.js CLASSES 등)는 한국어 원문을 유지하고, "표시하는 곳"에서 t()로 감싼다.
+//  - 언어 변경은 저장 후 새로고침(모든 화면이 다시 읽는 가장 확실한 방법) — SoloApp이
+//    sessionStorage의 복귀 화면 힌트를 읽어 설정 화면으로 돌아온다.
+//  - 아직 영어 미지원(한국어 유지): 상점 아이템 이름/설명, 킬 피드, 스킬 수치 툴팁(note), 가이드 상세.
+
+const LANG_KEY = 'bgp.rift.lang.v1'
+
+export function loadLang() {
+  try {
+    const v = localStorage.getItem(LANG_KEY)
+    if (v === 'ko' || v === 'en') return v
+  } catch { /* 무시 */ }
+  // 첫 실행: 기기 언어가 한국어가 아니면 영어로
+  try {
+    if (typeof navigator !== 'undefined' && !String(navigator.language).startsWith('ko')) return 'en'
+  } catch { /* 무시 */ }
+  return 'ko'
+}
+
+export function saveLang(lang) {
+  try {
+    localStorage.setItem(LANG_KEY, lang)
+  } catch { /* 무시 */ }
+}
+
+let lang = typeof window !== 'undefined' ? loadLang() : 'ko'
+
+export function getLang() {
+  return lang
+}
+
+// 언어를 바꾸고 새로고침한다. resumeScreen: 새로고침 뒤 돌아갈 솔로 셸 화면 이름.
+export function switchLang(next, resumeScreen = 'settings') {
+  saveLang(next)
+  try {
+    sessionStorage.setItem('bgp.rift.resume.v1', resumeScreen)
+  } catch { /* 무시 */ }
+  window.location.reload()
+}
+
+export function t(str) {
+  if (lang === 'ko' || str == null) return str
+  return DICT[str] ?? str
+}
+
+// ── 한국어 → 영어 사전 ──
+const DICT = {
+  // 직업 이름
+  '전사': 'Warrior', '궁수': 'Archer', '마법사': 'Mage', '힐러': 'Healer', '암살자': 'Assassin',
+  '탱커': 'Tank', '한빙술사': 'Cryomancer', '검투사': 'Gladiator', '주술사': 'Warlock',
+  '수호기사': 'Guardian', '검성': 'Sword Saint', '사슬잡이': 'Chaincatcher', '야수조련사': 'Beastmaster',
+  '엔지니어': 'Engineer', '넝쿨사냥꾼': 'Vinehunter', '돌풍술사': 'Windcaller', '시간술사': 'Chronomancer',
+  '공포술사': 'Fearmonger', '환영무희': 'Mirage Dancer', '대지술사': 'Terramancer',
+
+  // 직업 소개
+  '빠르게 파고들어 베는 근접 딜러 — 딜은 평균이지만 기동으로 승부한다': 'A mobile melee fighter — average damage, but wins with speed and engagement',
+  '제일 긴 사거리·제일 약한 몸의 원거리 딜러 — 초반은 약해도 후반 공속으로 캐리한다': 'Longest range, squishiest body — weak early, carries late with attack speed',
+  '폭발 마법의 광역 딜러': 'Area damage with explosive magic',
+  '아군을 살리는 서포터': 'A supporter who keeps allies alive',
+  '제일 빠른 발·제일 높은 공격력이지만 몸이 약한 기습 딜러 — 한 방이 제일 세다': 'Fastest feet, highest attack, fragile body — the hardest single hit in the game',
+  '앞장서서 버티는 방패 — 느리지만 단단하다': 'A frontline shield — slow but rock solid',
+  '얼리고 묶는 군중제어 마법사 — 폭발보다 통제': 'A crowd-control mage of ice — control over burst',
+  '평타마다 흡혈하며 끈질기게 버티는 근접 딜탱(브루저) — 딜은 낮아도 안 죽는다': 'A lifesteal bruiser who refuses to die — low damage, endless fight',
+  '갉아먹는 지속피해·저주의 원거리 zoner': 'A ranged zoner of curses and damage-over-time',
+  '아군에 보호막을 둘러 지키는 인챈터 서포터': 'An enchanter who wraps allies in shields',
+  '받아넘기고 베는 평타 듀얼리스트 — 한 방은 약해도 빠른 검이 지속 딜을 쌓는다': 'A parry-and-strike duelist — light hits, relentless blade',
+  '갈고리로 적을 끌어와 묶는 이니시에이터': 'An initiator who hooks enemies in and binds them',
+  '늑대와 곰을 부려 함께 싸우는 소환사': 'A summoner who fights alongside wolves and a bear',
+  '미니포탑을 설치해 진영을 장악하는 기술자': 'A technician who controls space with mini turrets',
+  '멀리서 옭아매고 아군에게 합류하는 속박 정글러': 'A root-focused jungler who snares from afar and joins allies',
+  '적을 밀쳐내고 날려버리는 바람 컨트롤러 — 벽에 처박으면 기절': 'A wind controller who shoves and launches — slam them into walls to stun',
+  '시간을 되감아 살아남는 시간 암살자 — 4초 전 위치로 돌아가며 체력을 크게 회복한다': 'A time assassin who survives by rewinding — returns to where it was 4s ago with a big heal',
+  '공포로 적의 컨트롤을 빼앗는 심리전 메이지 — 갈팡질팡하는 사이를 노려라': 'A psychological mage who steals control with fear — strike while they scatter',
+  '분신으로 적을 속이는 정보전 암살자 — 셋 중 진짜는 하나': 'A deception assassin with mirror images — only one of three is real',
+  '돌벽을 세워 전장을 바꾸는 지형 술사 — 길을 막고, 가두고, 갈라놓는다': 'A terrain shaper who raises stone walls — block, trap, divide',
+
+  // 스킬 이름
+  '베며 돌진': 'Cleaving Dash', '광폭화': 'Berserk', '회전베기': 'Whirlwind',
+  '꿰뚫는 화살': 'Piercing Arrow', '사냥매': 'Hunting Hawk', '빛의 화살': 'Arrow of Light',
+  '화염구': 'Fireball', '체인 라이트닝': 'Chain Lightning', '운석': 'Meteor',
+  '치유': 'Heal', '가속': 'Haste', '성역': 'Sanctuary',
+  '배후일섬': 'Backstab Flash', '은신': 'Stealth', '그림자처형': 'Shadow Execution',
+  '방패막기': 'Shield Wall', '도발': 'Taunt', '대지균열': 'Earth Fissure',
+  '서리파동': 'Frost Wave', '서리고리': 'Frost Ring', '절대영도': 'Absolute Zero',
+  '휘둘러베기': 'Sweeping Slash', '도약강타': 'Leap Strike', '검투의 분노': "Gladiator's Fury",
+  '저주살': 'Curse Bolt', '역병안개': 'Plague Mist', '파멸의 낙인': 'Brand of Doom',
+  '수호의 빛': 'Guardian Light', '결속': 'Bond', '불굴의 진형': 'Unbreakable Formation',
+  '발도 카운터': 'Iaido Counter', '잔영 스텝': 'Afterimage Step', '무형검': 'Formless Blade',
+  '사슬갈고리': 'Chain Hook', '옭아매기': 'Entangle', '단죄': 'Judgment Chains',
+  '늑대 소환': 'Summon Wolves', '사냥 명령': 'Hunt Command', '곰 소환': 'Summon Bear',
+  '미니포탑 설치': 'Deploy Turret', '과부하': 'Overload', '거포 설치': 'Deploy Cannon',
+  '올가미': 'Snare', '덩굴 합류': 'Vine Travel', '포획망': 'Capture Net',
+  '돌풍': 'Gust', '밀쳐내기': 'Repulse', '태풍': 'Typhoon',
+  '시간 도약': 'Time Leap', '시간 지연': 'Time Dilation', '역행': 'Rewind',
+  '공포의 시선': 'Gaze of Fear', '망령걸음': 'Wraith Walk', '단말마': 'Death Shriek',
+  '환영 분신': 'Mirror Image', '자리바꿈': 'Swap', '환영난무': 'Phantom Frenzy',
+  '돌팔매': 'Stone Sling', '융기': 'Upheaval', '바위감옥': 'Rock Prison',
+
+  // 스킬 설명
+  '앞으로 돌진하며 길을 가르고 착지 지점을 후려쳐 1초 기절': 'Dash forward, cutting through, then smash the landing spot for a 1s stun',
+  '3초간 빨갛게 폭주 — 이동·공격속도 ↑, 상태이상 면역·즉시 해제. 이후 3초간 서서히 원래대로': 'Rage for 3s — move/attack speed up, CC immune & cleansed. Fades over the next 3s',
+  '2초간 팽이처럼 돌며(이동 가능) 주변 적을 계속 후린다 — 도는 동안 받는 피해 30% 감소(앞라인 탱킹)': 'Spin like a top for 2s (can move), striking all nearby — 30% damage reduction while spinning',
+  '앞으로 화살을 쏴 일직선의 적을 모두 관통': 'Fire an arrow that pierces every enemy in a line',
+  '매를 맵 끝까지 날려 지나간 길의 안개를 걷고(정찰), 매에 발견된 적을 1.5초 둔화시킨다': 'Send a hawk across the map, revealing fog along its path and slowing spotted enemies for 1.5s',
+  '화면 끝까지 관통하는 넓은 빛줄기 — 직선상의 적 모두 피해': 'A wide beam of light that pierces to the edge of the map — hits everything in line',
+  '크게 터지는 불덩이 — 맞으면 1초 빙결(이동/공격 둔화)': 'A big exploding fireball — chills for 1s (slows movement/attacks)',
+  '가까운 적에게 번개 → 근처 적으로 최대 5회 연쇄(튕길수록 약해짐). 한 방은 가볍고, 뭉칠수록 아프다': 'Lightning jumps to up to 5 nearby enemies (weakens per jump). Light alone, deadly in a crowd',
+  '조준한 자리에 운석 3발이 차례로 낙하 — 아주 넓게 강타': 'Three meteors fall on the target area — massive area damage',
+  '제일 아픈 아군(나 포함)을 회복': 'Heals the most wounded ally (including yourself)',
+  '주변 아군 챔피언을 잠시 빠르게 — 추격·후퇴를 돕는다': 'Briefly speeds up nearby allies — for chases and retreats',
+  '하늘에서 성광이 내려와 아군 전원(거리 무관) 회복 + 기절/빙결 해제': 'Holy light heals all allies anywhere + cleanses stun/chill',
+  '적 등 뒤로 순간이동해 벤다': "Blink behind an enemy and cut",
+  '1.5초간 모습을 감춘다 — 적에겐 안 보이고 아군에겐 반투명': 'Vanish for 1.5s — invisible to enemies, translucent to allies',
+  '빈사 상태 적에게 2배 일격 — 이 처형으로 처치하면 처형 쿨 초기화': 'Double damage to low-health enemies — a kill with this resets its own cooldown',
+  '3초간 받는 피해 65% 감소 + 돌진 가속': '65% damage reduction for 3s + charge speed',
+  '주변 적을 도발 — 2초간 나만 노려보며 평타치게 만든다': 'Taunt nearby enemies — they can only attack you for 2s',
+  '앞으로 땅을 길게 갈라 길목의 적을 길게 기절': 'Crack the earth in a long line, stunning everything in the path',
+  '앞으로 냉기를 부채꼴로 뿜어 맞은 적을 빙결(이동·공격 둔화)': 'Breathe frost in a cone, chilling enemies (slows movement/attacks)',
+  '내 주변에 얼음가시가 솟아 가까운 적을 빙결시킨다(피일)': 'Ice spikes erupt around you, chilling nearby enemies',
+  '넓은 범위를 얼려 적 전원을 길게 빙결 + 피해': 'Freeze a huge area — long chill + damage to all enemies inside',
+  '주변을 넓게 베어 피해를 주고 입힌 피해의 일부를 흡혈': 'Sweep a wide slash, healing for part of the damage dealt',
+  '적에게 도약해 착지 지점을 강타(교전 합류)': 'Leap to an enemy and smash the landing spot',
+  '수 초간 흡혈·이동속도 ↑, 받는 군중제어 감소': 'For a few seconds: lifesteal & speed up, reduced crowd control taken',
+  '가까운 적에게 강한 즉시 피해 + 3.5초 지속피해(중독·회복 감소)': 'Heavy instant damage + 3.5s poison (reduces healing)',
+  '넓은 독안개를 잠깐 깔아 머무는 적을 계속 중독시킨다': 'Lay a wide poison mist that keeps poisoning enemies inside',
+  '넓은 범위 적 전원에 강한 중독 + 받는 피해 증가 낙인': 'Strong poison on all enemies in a wide area + a brand that increases damage taken',
+  '가장 다친 아군(나 포함)에게 피해를 흡수하는 보호막': 'Shield the most wounded ally (including yourself)',
+  '근처 아군을 4초간 묶어, 그들이 받을 피해를 대신 받는다(50%+인원×10%, 최대 90% 감소)': 'Bond nearby allies for 4s, absorbing their damage instead (50% + 10% per ally, up to 90%)',
+  '아군 전원에게 보호막 + 잠깐의 피해 감소': 'Shields for all allies + brief damage reduction',
+  '1.5초간 발도 자세 — 그 사이 받는 첫 피해를 막고 그 2배로 되받아친다(즉발기·평타도 반격)': 'Iaido stance for 1.5s — blocks the first hit and ripostes for double (counters instants and attacks)',
+  '바라보는 방향으로 짧게 순간이동해 위치를 바꾼다(리포지션)': 'Short blink in the direction you face (reposition)',
+  '10초간 사거리·공격속도가 크게 오르고, 평타마다 초승달 검기를 날려 직선의 적을 모두 벤다': 'For 10s: greatly increased range & attack speed, every attack fires a crescent wave that cuts through a line',
+  '직선으로 사슬을 던져 첫 적을 끌어오고 잠시 속박 + 피해': 'Throw a chain in a line — pulls the first enemy in, roots + damage',
+  '주변 적을 사슬로 묶어 잠시 이동 불가(피해)': 'Bind nearby enemies in chains — briefly rooted (damage)',
+  '주변 적을 강하게 내리쳐 큰 피해 + 속박 연장': 'Slam everything nearby — heavy damage + extends roots',
+  '늑대 두 마리를 불러내 주인을 따라다니며 적을 문다': 'Summon two wolves that follow you and bite enemies',
+  '늑대/곰이 광폭화하며 가장 가까운 적에게 거리 무시하고 도약해 달려든다': 'Your beasts enrage and leap at the nearest enemy, ignoring distance',
+  '거대한 곰을 불러내 앞장세운다 — 단단하고 강한 일격': 'Summon a giant bear to lead the charge — tanky, heavy hits',
+  '재고를 써서 자동 사격 포탑을 세운다(재고는 20초마다 +1·최대 3개, 동시 3기 유지 — 초과 설치 시 오래된 것 회수)': 'Spend a charge to build an auto-firing turret (+1 charge per 20s, max 3; oldest is recycled past 3 turrets)',
+  '내 포탑들의 공격속도를 잠시 크게 올린다': 'Briefly overclocks all your turrets — much faster fire',
+  '강력한 장거리 거포를 세운다 — 넓은 사거리·큰 피해': 'Build a powerful long-range cannon — huge range, heavy damage',
+  '직선 경로에서 넝쿨이 솟아 닿은 모든 적을 1.6초 속박 + 피해(관통)': 'Vines erupt in a line, rooting everything they touch for 1.6s + damage (piercing)',
+  '교전 중인(없으면 가장 가까운) 아군에게 순간이동해 갱에 합류': 'Teleport to an ally in combat (or the nearest one) to join the fight',
+  '겨눈 자리에 넓은 넝쿨 그물 — 범위 안 적 전원을 길게 속박 + 피해': 'A wide vine net at the target — long root + damage to all inside',
+  '앞으로 긴 회오리를 일으켜 닿은 적을 1.5초 공중에 띄운다 + 피해(연계용)': 'Send a long tornado forward, knocking enemies airborne for 1.5s + damage (combo setup)',
+  '주변 적을 사방으로 밀어낸다(피일/이탈) — 벽/타워에 처박히면 기절 + 약간의 피해': 'Shove all nearby enemies away — wall/tower slams stun + some damage',
+  '겨눈 자리에 1초간 거대한 태풍 — 범위 안 적 전원을 바깥으로 크게 날리고 피해 + 둔화': 'A giant typhoon at the target for 1s — hurls everyone outward, damage + slow',
+  '보이는 적 뒤로 순간이동해 강하게 벤다(교전 진입)': 'Blink behind a visible enemy and strike hard (engage)',
+  '겨눈 자리에 시간이 느려지는 장판 — 머무는 적의 이동·공격을 늦추고 갉아먹는다(추격·고립)': 'A zone of slowed time — enemies inside move/attack slower and take damage over time',
+  '4초 전 위치로 되돌아가며 체력을 최대치의 80%까지 회복 + 주변에 충격파 피해': 'Rewind to where you were 4s ago, healing up to 80% max HP + shockwave damage',
+  '전방 부채꼴의 적에게 피해를 주고 1.5초 공포 — 통제를 잃고 아무 방향으로나 내달린다(둔화)': 'Damage enemies in a cone + 1.5s fear — they lose control and bolt in random directions (slowed)',
+  '유령처럼 흐려져 잠깐 발이 빨라지고 어둠 장막(피해 흡수)을 두른다': 'Fade like a wraith — brief speed up and a dark veil (damage absorb)',
+  '보이는 적에게 순간이동해 비명을 터뜨린다 — 주변 모든 적 1.6초 공포 + 어둠 도트(적진 이니시)': 'Teleport to a visible enemy and shriek — fears everyone nearby for 1.6s + dark DoT (dive initiation)',
+  '분신이 앞길을 걷다 적을 발견하면 쫓아가 내리찍는다(반드시 명중) — 펑 사라지고, 나는 잠깐 은신': 'A clone walks ahead; on spotting an enemy it chases and slams (never misses), then pops — you briefly stealth',
+  '내 분신과 위치를 맞바꾼다 — 진입도 탈출도 자유자재': 'Swap places with your clone — engage or escape at will',
+  '연막이 펑! 세 몸(본체+분신 둘)이 튀어나온다 — 분신은 봇처럼 싸운다(평타, 내 공격력의 80%)': 'Smoke pops! Three of you burst out (you + two clones) — clones fight on their own (80% of your attack)',
+  '바라보는 방향으로 큼직한 돌을 0.5초 간격 3연투 — 각도는 첫 발에 고정, 착탄 시 주변에 파편 스플래시 피해': 'Hurl three big stones every 0.5s in the direction you face — angle locks on the first throw, shrapnel splash on impact',
+  '먼 전방에 돌벽을 솟게 해 3초간 길을 막는다 — 벽에 맞은 적은 밀쳐지며 1.2초 기절(돌팔매 연계)': 'Raise a stone wall ahead, blocking the path for 3s — enemies hit are shoved and stunned for 1.2s',
+  '보이는 적 하나를 원형 돌벽으로 2.5초 가둔다 — 강제 1:1': 'Trap one visible enemy in a ring of stone for 2.5s — a forced duel',
+
+  // ── 셸 UI (타이틀/메뉴/모드/캐릭터/전적/설정/가이드) ──
+  '조디악 블리츠': 'ZODIAC BLITZ',
+  '너의 수호 지신은?': 'Choose your guardian zodiac',
+  '전장에서 네 얼굴이 될 동물이야 — 언제든 메뉴에서 바꿀 수 있어': 'This animal becomes your face in battle — change it anytime from the menu',
+  '⚔️ 게임 시작': '⚔️ PLAY',
+  '🌐 온라인': '🌐 Online',
+  '준비 중': 'Soon',
+  '📊 전적': '📊 Records',
+  '❓ 조작법': '❓ How to Play',
+  '⚙️ 설정': '⚙️ Settings',
+  '첫 출전 대기': 'Ready for first battle',
+  '수호 지신 바꾸기': 'Change guardian zodiac',
+  'ⓘ 오픈소스 라이선스': 'ⓘ Open-source Licenses',
+  '오픈소스 라이선스': 'Open-source Licenses',
+  '설정': 'Settings',
+  '언어': 'Language',
+  '사운드': 'Sound',
+  '켜짐': 'On',
+  '꺼짐': 'Off',
+  '전적': 'Records',
+  '← 뒤로': '← Back',
+  '모드 선택': 'Choose Mode',
+  '3 대 3': '3 vs 3',
+  '5 대 5': '5 vs 5',
+  '작은 맵 · 빠른 한판': 'Small map · quick match',
+  '넓은 맵 · 정글 대격전': 'Big map · jungle warfare',
+  '기본': 'Standard',
+  '큰판': 'Big',
+  '봇 난이도': 'Bot difficulty',
+  '😌 쉬움': '😌 Easy',
+  '🙂 보통': '🙂 Normal',
+  '😈 어려움': '😈 Hard',
+  '봇이 뜸을 들이고 덜 아파요 — 처음이라면 여기부터': 'Bots hesitate and hit softer — start here if you are new',
+  '기본 밸런스 그대로': 'The baseline balance',
+  '봇이 빠르게 반응하고 더 아파요': 'Bots react faster and hit harder',
+  '아직 기록이 없어 — 첫 판을 치르고 오자! ⚔️': 'No records yet — go win your first match! ⚔️',
+  '전투에서 나갈까요?': 'Leave the battle?',
+  '지금 나가면 이 판은 전적에 기록되지 않아요': "If you leave now, this match won't be recorded",
+  '⚔️ 계속 싸우기': '⚔️ Keep Fighting',
+  '🚪 나가기': '🚪 Leave',
+  '출전!': 'Battle!',
+  '해금': 'Unlock',
+  '승리로 해금': 'Win to unlock',
+
+  // ── 인게임 HUD ──
+  '공격': 'Attack',
+  '기본 공격': 'Basic Attack',
+  '사거리 안 가장 가까운 적을 자동으로 친다(누르고 있으면 연타)': 'Auto-hits the nearest enemy in range (hold to repeat)',
+  '귀환': 'Recall',
+  '상점': 'Shop',
+  '상점 (대기중)': 'Shop (waiting)',
+  '일시정지': 'Pause',
+  '재개': 'Resume',
+  '▶️ 재개하기': '▶️ Resume',
+  '소리 켜짐': 'Sound On',
+  '소리 꺼짐': 'Sound Off',
+  '타격 효과 켜짐': 'Hit Effects On',
+  '타격 효과 꺼짐': 'Hit Effects Off',
+  '상 (최고화질)': 'High (best)',
+  '중 (균형)': 'Medium (balanced)',
+  '하 (성능)': 'Low (performance)',
+  '그래픽': 'Graphics',
+  '버튼 크기': 'Button Size',
+  '버튼 크기 슬라이더': 'Button size slider',
+  '🎮 조작 방식': '🎮 Controls',
+  'WASD 키보드': 'WASD Keyboard',
+  '롤 방식': 'MOBA Mouse',
+  '추후 도입': 'Coming soon',
+  '모바일': 'Mobile',
+  '드래그 조이스틱 + 터치 버튼': 'Drag joystick + touch buttons',
+  'Xbox 컨트롤러': 'Xbox Controller',
+  '나가기': 'Leave',
+  '전적판': 'Scoreboard',
+  '🔵 파랑팀': '🔵 Blue Team',
+  '🔴 빨강팀': '🔴 Red Team',
+  '파랑팀 승리': 'Blue Team Wins',
+  '빨강팀 승리': 'Red Team Wins',
+  '무승부': 'Draw',
+  '🔁 다시 하기': '🔁 Play Again',
+  '🔁 새 매치 찾기': '🔁 Find New Match',
+  'Lv5 해금': 'Unlock at Lv5',
+  '언어를 바꾸면 화면이 새로고침돼요': 'Changing language reloads the screen',
+  'Lv3 해금': 'Unlock at Lv3',
+
+  // 12지신
+  '쥐': 'Rat', '소': 'Ox', '호랑이': 'Tiger', '토끼': 'Rabbit', '용': 'Dragon', '뱀': 'Snake',
+  '말': 'Horse', '양': 'Sheep', '원숭이': 'Monkey', '닭': 'Rooster', '개': 'Dog', '돼지': 'Pig',
+
+  // 화면별 잔여 문구
+  '누구로 싸울까?': 'Choose your fighter',
+  '어디서 싸울까?': 'Choose the battlefield',
+  '스킬': 'Skill',
+  '보조 Lv3': '2nd · Lv3',
+  '궁극 Lv5': 'Ult · Lv5',
+  '승': 'W',
+  '패': 'L',
+  '평균': 'avg',
+  '⚔️ 출전!': '⚔️ Battle!',
+  '직업을 골라줘': 'Pick a class',
+  '직업을 고르면 스킬을 미리 볼 수 있어 👉': 'Pick a class to preview its skills 👉',
+  '🔓 승리하면': '🔓 Next win unlocks',
+  '해금!': '!',
+  '승리할 때마다 새 캐릭터가 하나씩 열려요': 'A new character unlocks with every win',
+  '전장을 불러오는 중...': 'Loading the battlefield...',
+  '아직 기록이 없어 — 첫 판을 치르고 오자! ⚔️': 'No records yet — go win your first match! ⚔️',
+  '모드·난이도 바꾸기': 'Change mode & difficulty',
+  '타격 효과': 'Hit Effects',
+  '부활까지': 'Respawn in',
+  '초': 's',
+  '시전중': 'Casting',
+  '게임이 멈췄어요. 다시 시작하려면 재개를 눌러요.': 'Game paused. Press Resume to continue.',
+  '방장이 게임을 잠시 멈췄어요...': 'The host paused the game...',
+  '🏃 달리기': '🏃 Run',
+  '⚔️ 평타': '⚔️ Attack',
+}

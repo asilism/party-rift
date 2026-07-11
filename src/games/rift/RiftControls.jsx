@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { CLASSES, RECALL_TIME, ABILITY_SCALING, powerLabel } from './engine.js'
 import { getItem } from './items.js'
+import { t } from '../../shared/i18n.js'
 
 // 스킬 한 줄 데미지/회복/보호막 공식 + 현재 수치를 만든다(툴팁용).
 //  me.power(주력 스탯)·me.dmgMult(버프 배율)·me.lvl로 실제 값을 계산한다.
@@ -131,7 +132,7 @@ function RecallButton({ recallT, onPress, interactive = true, pulse = 0 }) {
       onContextMenu={(e) => e.preventDefault()}
     >
       <span className="rift-btn__icon">🏠</span>
-      <small>{channeling ? '시전중' : '귀환'}</small>
+      <small>{channeling ? t('시전중') : t('귀환')}</small>
       {channeling && (
         <span
           className="rift-btn__cd"
@@ -370,14 +371,14 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
       <CdButton
         className="rift-btn--ult"
         icon={cls.ult.icon}
-        label={cls.ult.name}
-        name={cls.ult.name}
-        desc={cls.ult.desc}
+        label={t(cls.ult.name)}
+        name={t(cls.ult.name)}
+        desc={t(cls.ult.desc)}
         lines={abilityLines(me?.cls, 'ult', me)}
         cd={me?.ultCd ?? 0}
         cdMax={cls.ult.cd}
         locked={me?.ultLocked}
-        lockText="Lv5 해금"
+        lockText={t('Lv5 해금')}
         onPress={onUlt}
         interactive={mobile}
         pulse={pulses.ult || 0}
@@ -386,14 +387,14 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
         <CdButton
           className="rift-btn--skill2"
           icon={cls.skill2.icon}
-          label={cls.skill2.name}
-          name={cls.skill2.name}
-          desc={cls.skill2.desc}
+          label={t(cls.skill2.name)}
+          name={t(cls.skill2.name)}
+          desc={t(cls.skill2.desc)}
           lines={abilityLines(me?.cls, 'skill2', me)}
           cd={me?.skill2Cd ?? 0}
           cdMax={cls.skill2.cd}
           locked={me?.skill2Locked}
-          lockText="Lv3 해금"
+          lockText={t('Lv3 해금')}
           onPress={onSkill2}
           interactive={mobile}
           pulse={pulses.skill2 || 0}
@@ -402,9 +403,9 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
       <CdButton
         className="rift-btn--skill"
         icon={cls.skill.icon}
-        label={cls.skill.name}
-        name={cls.skill.name}
-        desc={cls.skill.desc}
+        label={t(cls.skill.name)}
+        name={t(cls.skill.name)}
+        desc={t(cls.skill.desc)}
         lines={abilityLines(me?.cls, 'skill', me)}
         cd={me?.skillCd ?? 0}
         cdMax={cls.skill.cd}
@@ -416,9 +417,9 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
       <CdButton
         className="rift-btn--atk"
         icon="⚔️"
-        label="공격"
-        name="기본 공격"
-        desc="사거리 안 가장 가까운 적을 자동으로 친다(누르고 있으면 연타)"
+        label={t('공격')}
+        name={t('기본 공격')}
+        desc={t('사거리 안 가장 가까운 적을 자동으로 친다(누르고 있으면 연타)')}
         cd={0}
         cdMax={0}
         onPress={atkPress}
