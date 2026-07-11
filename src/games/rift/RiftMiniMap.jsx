@@ -90,7 +90,7 @@ export default function RiftMiniMap({ view, myId }) {
               fontSize={13} textAnchor="middle"
               opacity={m.alive ? 1 : 0.3}
             >
-              {m.kind === 'dragon' ? '🐉' : '🐍'}
+              {m.kind === 'dragon' ? '🐉' : '👹'}
             </text>
           )
       )}

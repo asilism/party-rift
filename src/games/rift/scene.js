@@ -1744,7 +1744,7 @@ function buildMinion(m, barColor) {
 const MONSTER_LOOK = {
   wolf: { emoji: '🐺', size: 2.6, body: 0x9aa3b2, r: 1.2 },
   dragon: { emoji: '🐉', size: 4.6, body: 0x59b96a, r: 2.4 }, // r은 피격 파티클 높이로도 쓴다
-  baron: { emoji: '🐍', size: 5, body: 0x9b6bd6, r: 2.8 },
+  baron: { emoji: '👹', size: 5, body: 0x9b6bd6, r: 2.8 },
 }
 
 // 몬스터 회전 보간 — 공격 대상 쪽으로 부드럽게 돌아선다

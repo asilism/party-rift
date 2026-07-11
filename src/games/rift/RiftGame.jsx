@@ -548,7 +548,7 @@ function RiftPlay({
               })}
             </span>
             {me.dragonT > 0 && <span title="용 버프">🐉</span>}
-            {me.baronT > 0 && <span title="이무기 버프">🐍</span>}
+            {me.baronT > 0 && <span title="이무기 버프">👹</span>}
           </div>
         )}
 
