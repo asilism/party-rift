@@ -71,8 +71,8 @@ export default function RiftGame({ onExit, net }) {
     return (
       <div className="net-screen">
         <div className="net-screen__icon">⚔️</div>
-        <p>조디악 블리츠는 온라인 방 전용이에요. 각자 기기로 접속해 주세요!</p>
-        <button className="btn btn--primary" onClick={onExit}>← 돌아가기</button>
+        <p>{t('조디악 블리츠는 온라인 방 전용이에요. 각자 기기로 접속해 주세요!')}</p>
+        <button className="btn btn--primary" onClick={onExit}>{t('← 돌아가기')}</button>
       </div>
     )
   }
@@ -96,7 +96,7 @@ export default function RiftGame({ onExit, net }) {
       onUseItem={useItemSlot}
       rtt={rtt}
       onTogglePause={net.rtPause ? () => net.rtPause(!view.paused) : null}
-      exitLabel={net.local ? '🔁 다시 하기' : '🔁 새 매치 찾기'}
+      exitLabel={net.local ? t('🔁 다시 하기') : t('🔁 새 매치 찾기')}
       onExit={onExit}
       soundOn={soundOn}
       onToggleSound={toggleSound}
@@ -241,7 +241,7 @@ function RiftRoster({ hud, crown = null }) {
             <span className="rift-result__name">
               <span className="rift-result__nick">{h.name}{h.isBot ? ' 🤖' : ''}</span>
               {bounty > 0 && (
-                <span className="rift-result__bounty" title={`연속 ${h.killStreak}킬 — 잡으면 현상금 +${bounty}`}>
+                <span className="rift-result__bounty" title={`${t('연속')} ${h.killStreak}${t('킬 — 잡으면 현상금 +')}${bounty}`}>
                   🔥{bounty}
                 </span>
               )}
@@ -278,7 +278,7 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
       <button
         className={`btn btn--ghost rift-settings__toggle ${open ? 'rift-settings__toggle--on' : ''}`}
         onClick={() => setOpen((o) => !o)}
-        aria-label="설정"
+        aria-label={t('설정')}
         aria-expanded={open}
       >
         ⚙️
@@ -597,7 +597,7 @@ function RiftPlay({
         <div className="rift__pause">
           <div className="rift__pause-card">
             <div className="rift__pause-emoji">⏸️</div>
-            <h2>일시정지</h2>
+            <h2>{t('일시정지')}</h2>
             <p>{onTogglePause ? t('게임이 멈췄어요. 다시 시작하려면 재개를 눌러요.') : t('방장이 게임을 잠시 멈췄어요...')}</p>
             {onTogglePause && (
               <button className="btn btn--primary" onClick={onTogglePause}>{t('▶️ 재개하기')}</button>

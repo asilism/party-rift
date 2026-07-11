@@ -255,7 +255,7 @@ function TitleScreen({ onEnter }) {
       </div>
       <div className="toy-logo">
         <h1 className="toy-logo__en">ZODIAC<span className="toy-logo__bolt">⚡</span>BLITZ</h1>
-        <p className="toy-logo__ko">조디악 블리츠</p>
+        {getLang() !== 'en' && <p className="toy-logo__ko">조디악 블리츠</p>}
       </div>
       <p className="title-screen__press">TOUCH TO START</p>
       <p className="title-screen__ver">v0.1</p>
@@ -302,11 +302,11 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onLicenses, o
       <div className="menu-screen__logo">
         <h1 className="toy-logo__en toy-logo__en--small">ZODIAC<span className="toy-logo__bolt">⚡</span>BLITZ</h1>
       </div>
-      <button className="profile-chip" onClick={onProfile} title="수호 지신 바꾸기">
+      <button className="profile-chip" onClick={onProfile} title={t('수호 지신 바꾸기')}>
         <span className="profile-chip__emoji">{z?.emoji}</span>
         <span className="profile-chip__info">
           <b>{z?.name}</b>
-          <small>{total.games > 0 ? `${total.wins}W ${total.games - total.wins}L` : t('첫 출전 대기')}</small>
+          <small>{total.games > 0 ? `${total.wins}${t('승')} ${total.games - total.wins}${t('패')}` : t('첫 출전 대기')}</small>
         </span>
       </button>
       <nav className="menu-screen__list">
@@ -511,7 +511,7 @@ function RecordsScreen({ onBack }) {
         ) : (
           <>
             <p className="records-card__total">
-              🏆 통산 <b>{total.wins}승 {total.games - total.wins}패</b> · 승률 {Math.round((total.wins / total.games) * 100)}%
+              {t('🏆 통산')} <b>{total.wins}{t('승')} {total.games - total.wins}{t('패')}</b> · {t('승률')} {Math.round((total.wins / total.games) * 100)}%
             </p>
             <div className="records-card__rows">
               {rows.map((id) => {
@@ -520,7 +520,7 @@ function RecordsScreen({ onBack }) {
                 return (
                   <div key={id} className="records-row">
                     <span className="records-row__cls">{CLASSES[id].icon} {t(CLASSES[id].name)}</span>
-                    <span className="records-row__wl">{r.wins}승 {r.games - r.wins}패</span>
+                    <span className="records-row__wl">{r.wins}{t('승')} {r.games - r.wins}{t('패')}</span>
                     <span className="records-row__bar"><span style={{ width: `${rate}%` }} /></span>
                     <span className="records-row__rate">{rate}%</span>
                     <span className="records-row__kda">
@@ -605,7 +605,7 @@ function LicensesScreen({ onBack }) {
 
 function BackButton({ onBack }) {
   return (
-    <button className="toy-back" onClick={onBack} aria-label="뒤로">
+    <button className="toy-back" onClick={onBack} aria-label={t('뒤로')}>
       {t('← 뒤로')}
     </button>
   )
