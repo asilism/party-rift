@@ -1,3 +1,4 @@
+import { t } from '../shared/i18n.js'
 import { CLASS_IDS, TEAM_SIZE, TEAM_SIZES } from '../games/rift/engine.js'
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
 
@@ -19,7 +20,7 @@ export function buildSoloRoster({ zodiacId, cls, mode }) {
   const freeZ = shuffle(ZODIAC.filter((z) => z.id !== zodiacId))
   const takenCls = new Set([cls]) // 매치 전체 공용 — 팀별이 아니다
   const roster = [
-    { id: 'solo', name: me?.name || '나', zodiacId, color: me?.color, team: 'blue', cls, deviceId: 'solo' },
+    { id: 'solo', name: t(me?.name) || t('나'), zodiacId, color: me?.color, team: 'blue', cls, deviceId: 'solo' },
   ]
   for (const team of ['blue', 'red']) {
     for (let i = team === 'blue' ? 1 : 0; i < size; i++) {
@@ -28,7 +29,7 @@ export function buildSoloRoster({ zodiacId, cls, mode }) {
       takenCls.add(botCls)
       const z = freeZ.shift()
       if (!z) break
-      roster.push({ id: `bot-${z.id}`, name: `${z.name}봇`, zodiacId: z.id, color: z.color, team, cls: botCls, isBot: true })
+      roster.push({ id: `bot-${z.id}`, name: `${t(z.name)}${t('봇')}`, zodiacId: z.id, color: z.color, team, cls: botCls, isBot: true })
     }
   }
   return roster

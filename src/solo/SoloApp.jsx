@@ -611,41 +611,62 @@ function BackButton({ onBack }) {
   )
 }
 
-// 조작 가이드 — 첫 캐릭터 선택 진입 때 자동 1회 + 메뉴의 ❓ 버튼
+// 조작 가이드 — 첫 캐릭터 선택 진입 때 자동 1회 + 메뉴의 ❓ 버튼.
+// 본문에 강조 마크업이 섞여 있어 문장 단위 t() 대신 언어별 블록으로 분기한다.
 function SoloHelp({ onClose }) {
+  const en = getLang() === 'en'
   return (
     <div className="solo-help" onClick={onClose}>
       <div className="toy-card solo-help__card" onClick={(e) => e.stopPropagation()}>
-        <h2 className="toy-heading">🎮 처음 오셨나요?</h2>
+        <h2 className="toy-heading">{t('🎮 처음 오셨나요?')}</h2>
 
         <div className="solo-help__sec">
-          <h3>🏆 목표</h3>
-          <p>3갈래 레인의 <b>타워</b>를 부수며 전진해 적 <b>수호석</b>를 터뜨리면 승리!</p>
+          <h3>{t('🏆 목표')}</h3>
+          {en
+            ? <p>Push down the <b>towers</b> along three lanes and destroy the enemy <b>Guardian Stone</b> to win!</p>
+            : <p>3갈래 레인의 <b>타워</b>를 부수며 전진해 적 <b>수호석</b>를 터뜨리면 승리!</p>}
         </div>
 
         <div className="solo-help__sec">
-          <h3>🕹️ 조작 <small>(게임 중 ⚙️ 설정에서 바꿀 수 있어요)</small></h3>
-          <ul>
-            <li>⌨️ <b>키보드</b> — WASD·화살표 이동 · <b>L</b> 평타 · <b>H/J/K</b> 스킬 · <b>1·2</b> 아이템</li>
-            <li>📱 <b>모바일/터치</b> — 왼쪽 드래그로 이동 · 오른쪽 버튼으로 공격/스킬</li>
-            <li>🎮 <b>Xbox 패드</b> — 스틱 이동 · A 평타 · X/Y/B 스킬 · LB·RB 아이템</li>
-          </ul>
+          <h3>{t('🕹️ 조작')} <small>{t('(게임 중 ⚙️ 설정에서 바꿀 수 있어요)')}</small></h3>
+          {en ? (
+            <ul>
+              <li>⌨️ <b>Keyboard</b> — WASD/arrows to move · <b>L</b> attack · <b>H/J/K</b> skills · <b>1·2</b> items</li>
+              <li>📱 <b>Mobile/Touch</b> — drag left side to move · right buttons to attack/cast</li>
+              <li>🎮 <b>Xbox Pad</b> — stick to move · A attack · X/Y/B skills · LB·RB items</li>
+            </ul>
+          ) : (
+            <ul>
+              <li>⌨️ <b>키보드</b> — WASD·화살표 이동 · <b>L</b> 평타 · <b>H/J/K</b> 스킬 · <b>1·2</b> 아이템</li>
+              <li>📱 <b>모바일/터치</b> — 왼쪽 드래그로 이동 · 오른쪽 버튼으로 공격/스킬</li>
+              <li>🎮 <b>Xbox 패드</b> — 스틱 이동 · A 평타 · X/Y/B 스킬 · LB·RB 아이템</li>
+            </ul>
+          )}
         </div>
 
         <div className="solo-help__sec">
-          <h3>📈 성장</h3>
-          <p>
-            병사·정글몹을 잡아 <b>경험치·골드</b>를 모으고, 우물(시작 지점)에서 🛒 <b>상점</b>으로 장비를 맞춰요.
-            Lv3에 보조 스킬, Lv5에 궁극기가 열려요.
-          </p>
+          <h3>{t('📈 성장')}</h3>
+          {en ? (
+            <p>
+              Kill soldiers and jungle monsters for <b>XP & gold</b>, then gear up at the 🛒 <b>shop</b> in your fountain.
+              Your 2nd skill unlocks at Lv3, your ultimate at Lv5.
+            </p>
+          ) : (
+            <p>
+              병사·정글몹을 잡아 <b>경험치·골드</b>를 모으고, 우물(시작 지점)에서 🛒 <b>상점</b>으로 장비를 맞춰요.
+              Lv3에 보조 스킬, Lv5에 궁극기가 열려요.
+            </p>
+          )}
         </div>
 
         <div className="solo-help__sec">
-          <h3>💡 꿀팁</h3>
-          <p>🌿 수풀에 숨으면 안 보여요 · 🐉 용/👹 이무기는 팀 버프 · 위험하면 🏠 귀환!</p>
+          <h3>{t('💡 꿀팁')}</h3>
+          {en
+            ? <p>🌿 Bushes hide you · 🐉 Dragon / 👹 Imugi grant team buffs · in danger, 🏠 recall!</p>
+            : <p>🌿 수풀에 숨으면 안 보여요 · 🐉 용/👹 이무기는 팀 버프 · 위험하면 🏠 귀환!</p>}
         </div>
 
-        <button className="toy-btn toy-btn--yellow solo-help__ok" onClick={onClose}>알겠어, 가보자!</button>
+        <button className="toy-btn toy-btn--yellow solo-help__ok" onClick={onClose}>{t('알겠어, 가보자!')}</button>
       </div>
     </div>
   )

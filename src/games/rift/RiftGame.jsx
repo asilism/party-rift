@@ -14,7 +14,7 @@ import { loadRiftControl, saveRiftControl, loadRiftHitFx, saveRiftHitFx, loadRif
 import { useRealtimeGame } from '../../net/useRealtimeGame.js'
 import { riftNet } from './netgame.js'
 import { NetWaiting } from '../../net/NetParts.jsx'
-import { t } from '../../shared/i18n.js'
+import { t, tFeed } from '../../shared/i18n.js'
 
 // 조디악 블리츠 — 3:3 AOS. 온라인 방 전용(기기마다 조이스틱이 필요해서).
 //  - 서버 권위(④): 서버가 60Hz로 시뮬레이션을 돌리고 30Hz로 바이너리 델타 스냅샷을 방송.
@@ -79,7 +79,7 @@ export default function RiftGame({ onExit, net }) {
 
   // 아직 서버 스냅샷을 못 받았을 때(전장 생성 직후) — 곧 엔진 카운트다운이 이어진다
   if (!view || view.phase !== 'play') {
-    return <NetWaiting text="이제 곧 경기가 시작합니다… ⚔️" onExit={onExit} />
+    return <NetWaiting text={t('이제 곧 경기가 시작합니다… ⚔️')} onExit={onExit} />
   }
 
   // ── 전투 단계 ──
@@ -408,7 +408,7 @@ function RiftPlay({
     if (!meCanShop) setShopOpen(false)
   }, [meCanShop])
   if (!hud || hud.phase !== 'play') {
-    return <NetWaiting text="전장을 준비하고 있어요... ⚔️" onExit={onExit} />
+    return <NetWaiting text={t('전장을 준비하고 있어요... ⚔️')} onExit={onExit} />
   }
 
   const finished = hud.status === 'finished'
@@ -519,7 +519,7 @@ function RiftPlay({
         {me && !finished && (
           <div className="rift__me rift__nameplate">
             <span className="rift__me-emoji">{getZodiac(me.zodiacId)?.emoji}</span>
-            <span className="rift__me-cls">{CLASSES[me.cls]?.icon}{CLASSES[me.cls]?.name}</span>
+            <span className="rift__me-cls">{CLASSES[me.cls]?.icon}{t(CLASSES[me.cls]?.name)}</span>
             <span className="rift__me-lvl">Lv.{me.lvl}</span>
             <div className="rift__me-bars">
               <div className="rift__bar rift__bar--hp">
@@ -566,11 +566,11 @@ function RiftPlay({
         )}
         {hud.go && <div className="rift__count rift__count--go">전투 개시!</div>}
         {banner && (
-          <div className="rift__banner" key={banner.key}>{banner.text}</div>
+          <div className="rift__banner" key={banner.key}>{tFeed(banner.text)}</div>
         )}
         {nexusUnderAttack && (
           <div className="rift__nexus-alert">
-            ⚠️ {myTeam ? '우리' : ''} 수호석이 공격받고 있어요!
+            ⚠️ {t('수호석이 공격받고 있어요!')}
           </div>
         )}
         {me && me.respawnT > 0 && !finished && (
