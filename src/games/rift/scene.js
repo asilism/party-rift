@@ -210,6 +210,7 @@ function emojiSprite(emoji, scale = 2) {
 let _glowTex = null
 function glowTexture() {
   if (_glowTex) return _glowTex
+  if (typeof document === 'undefined') return null // 헤드리스 테스트: 텍스처 없이(map=null) 조형만
   const size = 128
   const c = document.createElement('canvas')
   c.width = c.height = size
@@ -2055,16 +2056,12 @@ function buildSummon(s, barColor) {
   return g
 }
 
-// glow = 후광 크기(반지름 배율), trail = 꼬리 발광 입자를 흘릴지 (스킬 투사체만 켠다)
+// 발광 구체로 그리는 투사체(평타·포탑·미니언 — 가독성용 빛덩이). 스킬 투사체는 PROJ_BUILDERS의 전용 조형.
+// glow = 후광 크기(반지름 배율), trail = 꼬리 발광 입자를 흘릴지
 const PROJ_LOOK = {
   bolt: { r: 0.4, y: 2.4, color: null, glow: 3 }, // null → 팀 색
   mbolt: { r: 0.26, y: 1.5, color: null, glow: 2 }, // 원거리 병사의 작은 화살 (낮고 작게)
-  fireball: { r: 0.95, y: 2, color: 0xff8c2e, glow: 4, trail: true },
   towerbolt: { r: 0.55, y: 4, color: null, glow: 3 },
-  pierce: { r: 0.34, y: 2.2, color: 0xfff0a0, glow: 3.6, trail: true }, // 궁수 꿰뚫는 화살 (밝은 노랑)
-  lightarrow: { r: 0.6, y: 2.2, color: 0xfff4b0, glow: 5, trail: true }, // 빛의 화살 궁극기 (크고 환한 빛)
-  hawk: { r: 0.7, y: 5.5, color: 0xffe066, glow: 4, trail: true }, // 궁수 사냥매 (높이 떠 날아가는 빛점)
-  hook: { r: 0.55, y: 1.6, color: 0xcfd4e0, glow: 2.4 }, // 사슬잡이 갈고리 (낮게 직진하는 금속 집게)
 }
 
 // 대지술사 돌덩이 — 맵에 놓인 바위와 같은 저폴리 돌(면처리 회색)이 데굴데굴 구르며 날아간다
@@ -2135,6 +2132,204 @@ function buildTornadoProj() {
     for (const { ring, f } of rings) ring.scale.setScalar(0.9 + Math.sin(time * 9 + f * 5) * 0.12)
   }
   return g
+}
+
+// ── 스킬 투사체 전용 조형 ──
+//  공통 규약: 로컬 +x가 진행 방향. 서버는 위치만 보내므로 userData.orient=true면
+//  렌더러가 위치 델타로 기수를 돌려 준다. userData.anim(time, p)은 매 프레임 자체 연출.
+
+// 화살 조형 — 촉(원뿔) + 몸통(원기둥) + 꼬리깃(십자 판). 궁수 계열 공용.
+function buildArrowMesh(len, r, colors) {
+  const g = new THREE.Group()
+  const shaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(r, r, len * 0.72, 6),
+    new THREE.MeshBasicMaterial({ color: colors.shaft })
+  )
+  shaft.rotation.z = Math.PI / 2
+  const head = new THREE.Mesh(
+    new THREE.ConeGeometry(r * 2.6, len * 0.28, 6),
+    new THREE.MeshBasicMaterial({ color: colors.head })
+  )
+  head.rotation.z = -Math.PI / 2
+  head.position.x = len * 0.48
+  g.add(shaft, head)
+  const finMat = new THREE.MeshBasicMaterial({
+    color: colors.fletch, side: THREE.DoubleSide, transparent: true, opacity: 0.9, depthWrite: false,
+  })
+  for (const rot of [0, Math.PI / 2]) {
+    const fin = new THREE.Mesh(new THREE.PlaneGeometry(len * 0.24, r * 7), finMat)
+    fin.position.x = -len * 0.38
+    fin.rotation.x = rot
+    g.add(fin)
+  }
+  return g
+}
+
+// 궁수 꿰뚫는 화살 — 진짜 화살이 진행 방향으로 눕는다 + 은은한 후광과 꼬리
+function buildPierceProj() {
+  const g = new THREE.Group()
+  const halo = glowSprite(0xfff0a0, 1.5)
+  g.add(buildArrowMesh(1.7, 0.07, { shaft: 0xffe9a0, head: 0xfff6d0, fletch: 0xffd34d }), halo)
+  g.position.y = 2.2
+  g.userData = { orient: true, trail: true, color: 0xfff0a0 }
+  return g
+}
+
+// 궁수 빛의 화살(궁극기) — 크고 환한 빛의 화살 + 맥동하는 큰 후광 (빛줄기 fx와 함께 나간다)
+function buildLightArrowProj() {
+  const g = new THREE.Group()
+  const halo = glowSprite(0xfff4b0, 3.4)
+  g.add(buildArrowMesh(3.0, 0.13, { shaft: 0xfff4b0, head: 0xffffff, fletch: 0xffe066 }), halo)
+  g.position.y = 2.2
+  g.userData = {
+    orient: true, trail: true, color: 0xfff4b0,
+    anim: (t) => {
+      const s = 3.4 * (1 + Math.sin(t * 14) * 0.18)
+      halo.scale.set(s, s, 1)
+    },
+  }
+  return g
+}
+
+// 궁수 사냥매 — 금빛 매: 몸통·머리·부리에 좌우 날개가 날갯짓하며 높이 날아간다
+function buildHawkProj() {
+  const g = new THREE.Group()
+  const gold = new THREE.MeshLambertMaterial({ color: 0xd8ae54, emissive: 0xffe066, emissiveIntensity: 0.35 })
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.34, 1.5, 6), gold)
+  body.rotation.z = -Math.PI / 2 // 꼬리→머리가 +x
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.26, 8, 6),
+    new THREE.MeshLambertMaterial({ color: 0xf2d68a, emissive: 0xffe066, emissiveIntensity: 0.3 })
+  )
+  head.position.set(0.82, 0.12, 0)
+  const beak = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.3, 5), new THREE.MeshBasicMaterial({ color: 0xffb020 }))
+  beak.rotation.z = -Math.PI / 2
+  beak.position.set(1.12, 0.1, 0)
+  // 날개: 몸통 옆 피벗에 눕힌 판 — 피벗을 x축으로 돌려 퍼덕인다
+  const wingMat = new THREE.MeshLambertMaterial({
+    color: 0xd9b566, emissive: 0xffe066, emissiveIntensity: 0.25, side: THREE.DoubleSide,
+  })
+  const mkWing = (side) => {
+    const pivot = new THREE.Group()
+    const wing = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.4), wingMat)
+    wing.rotation.x = -Math.PI / 2 // XZ 평면에 눕힘 (긴 쪽이 좌우)
+    wing.position.z = side * 0.8
+    pivot.add(wing)
+    g.add(pivot)
+    return pivot
+  }
+  const lw = mkWing(1)
+  const rw = mkWing(-1)
+  const halo = glowSprite(0xffe066, 2.4)
+  halo.position.y = -0.3
+  g.add(body, head, beak, halo)
+  g.position.y = 5.5
+  g.userData = {
+    orient: true, trail: true, color: 0xffe066,
+    anim: (t) => {
+      const flap = Math.sin(t * 9) * 0.55
+      lw.rotation.x = flap
+      rw.rotation.x = -flap
+      g.position.y = 5.5 + Math.sin(t * 4.5) * 0.35 // 활공 둥실거림
+    },
+  }
+  return g
+}
+
+// 사슬잡이 갈고리 — 3발 금속 집게가 회전하며 직진하고, 시전 지점까지 사슬 줄이 늘어난다
+function buildHookProj(p) {
+  const g = new THREE.Group()
+  const metal = new THREE.MeshLambertMaterial({ color: 0xb8c0cf, flatShading: true })
+  const claw = new THREE.Group()
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.36, 8), metal)
+  hub.rotation.z = Math.PI / 2
+  claw.add(hub)
+  for (let i = 0; i < 3; i++) {
+    // 발톱: 축에서 벌어졌다가 앞에서 오므라드는 갈퀴 — y축 오프셋을 x축 회전으로 원형 배치
+    const arm = new THREE.Group()
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.8, 5), metal)
+    spike.position.set(0.34, 0.3, 0)
+    spike.rotation.z = -(Math.PI / 2 + 0.5) // 앞(+x)을 지나 살짝 안쪽으로 굽는 각
+    arm.add(spike)
+    arm.rotation.x = (i / 3) * Math.PI * 2
+    claw.add(arm)
+  }
+  const chain = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.07, 0.07, 1, 6),
+    new THREE.MeshLambertMaterial({ color: 0x77808f })
+  )
+  chain.rotation.z = Math.PI / 2 // x축으로 눕힘 — 길이는 scale.y로 늘인다
+  chain.visible = false
+  g.add(claw, chain)
+  g.position.y = 1.6
+  const sx = p.x
+  const sz = p.z // 시전 지점 — 사슬 줄의 반대쪽 끝
+  g.userData = {
+    orient: true,
+    anim: (t, pp) => {
+      claw.rotation.x = t * 6 // 드릴처럼 회전
+      const len = Math.hypot(pp.x - sx, pp.z - sz)
+      chain.visible = len > 0.5
+      chain.scale.y = Math.max(0.001, len)
+      chain.position.x = -len / 2 // 뒤(-x) = 시전 지점 방향
+    },
+  }
+  return g
+}
+
+// 마법사 화염구 — 백열 코어 + 겹후광 + 뒤로 나부끼며 이글거리는 불꽃 혀
+function buildFireballProj() {
+  const g = new THREE.Group()
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff3c0 }))
+  const shell = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.95, 0),
+    new THREE.MeshBasicMaterial({ color: 0xff8c2e, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false })
+  )
+  const haloIn = glowSprite(0xffc46a, 2.2)
+  const haloOut = glowSprite(0xff6a2e, 3.8)
+  const tongues = []
+  for (const [x, y, z, col] of [
+    [-0.85, 0.18, 0, 0xffd28a],
+    [-0.78, -0.14, 0.16, 0xff8c2e],
+    [-0.78, 0.02, -0.18, 0xff8c2e],
+  ]) {
+    const tongue = new THREE.Mesh(
+      new THREE.ConeGeometry(0.28, 1.3, 5),
+      new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false })
+    )
+    tongue.rotation.z = Math.PI / 2 // 뒤(-x)를 향한다
+    tongue.position.set(x, y, z)
+    g.add(tongue)
+    tongues.push(tongue)
+  }
+  g.add(core, shell, haloIn, haloOut)
+  g.position.y = 2
+  g.userData = {
+    orient: true, trail: true, color: 0xff8c2e,
+    anim: (t) => {
+      shell.rotation.x = t * 3.5
+      shell.rotation.z = t * 2.6
+      tongues.forEach((tongue, i) => {
+        tongue.scale.y = 0.7 + 0.45 * (0.5 + Math.sin(t * 17 + i * 2.1) * 0.5)
+        tongue.material.opacity = 0.45 + 0.3 * (0.5 + Math.sin(t * 13 + i * 1.7) * 0.5)
+      })
+      const s = 3.8 * (1 + Math.sin(t * 15) * 0.14)
+      haloOut.scale.set(s, s, 1)
+    },
+  }
+  return g
+}
+
+// 전용 조형이 있는 투사체 kind → 빌더. 없으면 PROJ_LOOK 발광 구체로 그린다.
+export const PROJ_BUILDERS = {
+  tornado: buildTornadoProj, // 돌풍술사 회오리 — 빙글빙글 도는 입체 회오리
+  rock: buildRockProj, // 대지술사 돌덩이 — 발광체가 아니라 진짜 돌
+  swordwave: buildSwordwaveProj, // 검성 무형검 검기 — 날아가는 초승달 칼날
+  pierce: buildPierceProj,
+  lightarrow: buildLightArrowProj,
+  hawk: buildHawkProj,
+  hook: buildHookProj,
+  fireball: buildFireballProj,
 }
 
 // 스킬 이펙트 색 + 파티클 모드 (kind → 색/파티클 움직임).
@@ -3715,14 +3910,13 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
       }
     )
-    // 투사체
+    // 투사체 — 스킬 투사체는 전용 조형(PROJ_BUILDERS), 평타·포탑·미니언은 발광 구체
     syncPool(scene, projPool, view.projectiles, (p) => {
-      if (p.kind === 'tornado') return buildTornadoProj() // 돌풍술사 회오리 — 빙글빙글 도는 입체 회오리
-      if (p.kind === 'rock') return buildRockProj(p) // 대지술사 돌덩이 — 발광체가 아니라 진짜 돌
-      if (p.kind === 'swordwave') return buildSwordwaveProj(p) // 검성 무형검 검기 — 날아가는 초승달 칼날
+      const custom = PROJ_BUILDERS[p.kind]
+      if (custom) return custom(p)
       const look = PROJ_LOOK[p.kind] || PROJ_LOOK.bolt
       const color = look.color ?? TEAM_COLOR[p.team]
-      // 단색 구체 대신 "발광체": 밝은 코어 + 가산 후광 스프라이트(맥동) + (스킬은) 혜성 꼬리
+      // 단색 구체 대신 "발광체": 밝은 코어 + 가산 후광 스프라이트(맥동)
       const g = new THREE.Group()
       const core = new THREE.Mesh(
         new THREE.SphereGeometry(look.r, 8, 6),
@@ -3737,15 +3931,25 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       obj.position.x = p.x
       obj.position.z = p.z
       obj.visible = inVision(p.x, p.z) // 안개 속 투사체도 숨긴다
-      if (obj.userData.spin) { obj.userData.spin(view.time); return } // 회오리
       const u = obj.userData
-      const pulse = 1 + Math.sin(view.time * 16 + p.x) * 0.2 // 발광 맥동
-      u.halo.scale.set(u.haloBase * pulse, u.haloBase * pulse, 1)
-      u.core.scale.setScalar(0.85 + Math.sin(view.time * 22 + p.z) * 0.15)
+      if (u.orient) {
+        // 서버는 위치만 보내므로 진행 방향은 위치 델타로 추정해 기수를 돌린다
+        const dx = p.x - (u.lastX ?? p.x)
+        const dz = p.z - (u.lastZ ?? p.z)
+        if (dx * dx + dz * dz > 1e-6) obj.rotation.y = -Math.atan2(dz, dx)
+        u.lastX = p.x
+        u.lastZ = p.z
+      }
+      if (u.spin) { u.spin(view.time); return } // 회오리·돌덩이 (자체 회전만)
+      u.anim?.(view.time, p) // 전용 조형의 자체 연출 (날갯짓·불꽃 이글거림·사슬 늘이기)
       // 혜성 꼬리: 지나온 자리에 발광 알갱이를 흘려 서서히 잦아든다
       if (u.trail && obj.visible) {
         particles.emit(p.x, obj.position.y, p.z, u.color, 1, { spread: 0.6, up: 0.5, gravity: 2, size: 0.8, lifeMin: 0.18, lifeMax: 0.34 })
       }
+      if (!u.halo) return
+      const pulse = 1 + Math.sin(view.time * 16 + p.x) * 0.2 // 발광 맥동
+      u.halo.scale.set(u.haloBase * pulse, u.haloBase * pulse, 1)
+      u.core.scale.setScalar(0.85 + Math.sin(view.time * 22 + p.z) * 0.15)
     })
     // 대지술사 임시 돌벽 — 물리적 지형이라 안개와 무관하게 항상 보인다(안 보이는 벽에 막히면 억울하다)
     syncPool(scene, stoneWallPool, view.stoneWalls || [], buildStoneWall, (obj, w) => {
