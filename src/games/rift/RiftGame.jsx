@@ -222,7 +222,7 @@ const CONTROL_SCHEMES = [
 ]
 
 // 양 팀 현황판(팀 킬 스코어 + 영웅별 K/D/A·레벨·아이템). 두 팀 카드를 나란히 반환한다 —
-// 감싸는 래퍼(.rift__dead-board / .rift-result / .rift-settings__board)는 호출부가 정한다.
+// 감싸는 래퍼(.rift__dead-board / .rift-result / .rift-board__panel)는 호출부가 정한다.
 // 사망 화면·설정 팝업·결과창에서 공용으로 쓴다.
 function RiftRoster({ hud, crown = null }) {
   return ['blue', 'red'].map((team) => (
@@ -260,7 +260,7 @@ function RiftRoster({ hud, crown = null }) {
 // 우상단 설정 버튼 하나로 통합한 메뉴: 팀 현황·일시정지·소리·전체화면·조작 방식·나가기를 분기 메뉴로 띄운다.
 const GFX_LABEL = { high: '상 (최고화질)', med: '중 (균형)', low: '하 (성능)' }
 
-function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onToggleSound, scheme, onSchemeChange, hitFx, onToggleHitFx, gfx, onCycleGfx, btnScale, onBtnScaleChange, onExit }) {
+function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSound, scheme, onSchemeChange, hitFx, onToggleHitFx, gfx, onCycleGfx, btnScale, onBtnScaleChange, onExit }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   useEffect(() => {
@@ -286,16 +286,6 @@ function RiftSettingsMenu({ hud, paused, finished, onTogglePause, soundOn, onTog
       {open && <div className="rift-settings__backdrop" onClick={() => setOpen(false)} />}
       {open && (
         <div className="rift-settings__menu" role="menu">
-          {/* 현재 팀 상황 — 사망 화면과 같은 양 팀 현황판을 여기서도 본다 */}
-          {hud && (
-            <>
-              <div className="rift-settings__label">📊 팀 현황</div>
-              <div className="rift-settings__board">
-                <RiftRoster hud={hud} />
-              </div>
-              <div className="rift-settings__sep" />
-            </>
-          )}
           {onTogglePause && !finished && (
             <button className="rift-settings__item" onClick={() => { onTogglePause(); setOpen(false) }}>
               <span>{paused ? '▶️' : '⏸️'}</span> {paused ? '재개' : '일시정지'}
@@ -361,6 +351,7 @@ function RiftPlay({
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
   const [shopOpen, setShopOpen] = useState(false)
+  const [boardOpen, setBoardOpen] = useState(false) // 📊 전적판(양 팀 KDA·아이템) 오버레이
   const [scheme, setScheme] = useState(loadRiftControl) // 조작 방식: mobile/wasd/xbox
   function changeScheme(s) {
     setScheme(s)
@@ -481,8 +472,16 @@ function RiftPlay({
                 </span>
               )}
             </div>
+            {/* 📊 전적판 — 설정과 분리된 전용 버튼 (양 팀 KDA·레벨·아이템) */}
+            <button
+              className={`btn btn--ghost rift-board__toggle ${boardOpen ? 'rift-board__toggle--on' : ''}`}
+              onClick={() => setBoardOpen((o) => !o)}
+              aria-label="전적판"
+              aria-expanded={boardOpen}
+            >
+              📊
+            </button>
             <RiftSettingsMenu
-              hud={hud}
               paused={paused}
               finished={finished}
               onTogglePause={onTogglePause}
@@ -500,6 +499,15 @@ function RiftPlay({
             />
           </div>
         </div>
+
+        {/* 전적판 오버레이 — 📊 버튼/바깥 클릭으로 여닫는다 */}
+        {boardOpen && !finished && (
+          <div className="rift-board" onClick={() => setBoardOpen(false)}>
+            <div className="rift-board__panel rift-result" onClick={(e) => e.stopPropagation()}>
+              <RiftRoster hud={hud} />
+            </div>
+          </div>
+        )}
 
         {/* 좌상단: 미니맵 */}
         <div className="rift__side">

@@ -2020,7 +2020,11 @@ body {
 .rift__dead-board {
   position: absolute; left: 50%; top: 56%; transform: translateX(-50%);
   width: min(680px, 94vw); display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
-  pointer-events: none;
+  pointer-events: none; font-size: 13.5px;
+}
+@media (max-height: 470px) {
+  .rift__respawn { top: 34%; padding: 8px 18px; }
+  .rift__dead-board { top: 47%; width: min(560px, 96vw); gap: 6px; font-size: 10.5px; }
 }
 .rift__dead-board .rift-result__team { background: rgba(12, 18, 36, 0.86); }
 .rift__dead-board .rift-result__team--blue { box-shadow: inset 0 0 0 2px rgba(79, 140, 255, 0.5); }
@@ -2196,6 +2200,23 @@ body {
   opacity: 1; visibility: visible; transform: translateY(0);
 }
 
+/* 📊 전적판 오버레이 — 설정과 분리된 전용 버튼으로 여닫는다 */
+.rift-board__toggle { pointer-events: auto; }
+.rift-board__toggle--on { background: rgba(255, 255, 255, 0.14); }
+.rift-board {
+  position: absolute; inset: 0; z-index: 30; pointer-events: auto;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 10, 22, 0.55); backdrop-filter: blur(2px);
+}
+.rift-board__panel {
+  width: min(680px, 94vw); max-height: 88vh; overflow-y: auto; margin: 0;
+  background: rgba(14, 20, 40, 0.97); border: 1px solid var(--line);
+  border-radius: 16px; padding: 12px; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+}
+@media (max-height: 470px) {
+  .rift-board__panel { padding: 8px; max-height: 94vh; }
+}
+
 /* 우상단 설정 메뉴 — 톱니 버튼 하나에서 분기 메뉴를 띄운다 */
 .rift-settings { position: relative; pointer-events: auto; }
 .rift-settings__toggle--on { filter: brightness(1.2); box-shadow: 0 0 0 2px var(--accent) inset; }
@@ -2231,6 +2252,14 @@ body {
 .rift-settings__slider input { flex: 1; min-width: 0; accent-color: var(--accent); }
 .rift-settings__slider b { min-width: 42px; text-align: right; font-size: 13px; color: var(--accent); }
 .rift-settings__item--full .btn { width: 100%; justify-content: flex-start; }
+@media (max-height: 470px) {
+  .rift-settings__menu { width: min(340px, 92vw); padding: 6px; max-height: 88vh; }
+  .rift-settings__item { padding: 6px 10px; font-size: 13px; }
+  .rift-settings__item span { font-size: 15px; }
+  .rift-settings__slider { padding: 6px 10px; font-size: 12px; }
+  .rift-settings__scheme { padding: 6px 10px; }
+  .rift-settings__scheme-text small { display: none; } /* 설명 줄은 숨겨 세로 절약 */
+}
 .rift-settings__item--exit { color: #ff9a9a; }
 .rift-settings__sep { height: 1px; background: var(--line); margin: 6px 4px; }
 .rift-settings__label { padding: 2px 12px 4px; font-size: 12px; color: var(--muted); font-weight: 800; }
@@ -2309,17 +2338,22 @@ body {
 .rift-setup__start { align-self: center; font-size: 18px; padding: 12px 38px; }
 
 /* 결과 스코어보드 */
-.rift-result { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 4px; }
-.rift-result__team { border-radius: 14px; padding: 8px 12px; text-align: left; }
+/* 팀 현황판 — 컨테이너 font-size 하나로 전체 배율이 잡히게 em 기반.
+   낮은 화면(모바일 가로)에선 미디어쿼리로 base만 줄이면 통째로 작아진다. */
+.rift-result { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 4px; font-size: 13.5px; }
+.rift-result__team { border-radius: 14px; padding: 0.6em 0.9em; text-align: left; }
 .rift-result__team--blue { background: rgba(79, 140, 255, 0.16); }
 .rift-result__team--red { background: rgba(255, 107, 107, 0.14); }
-.rift-result__team h4 { margin: 0 0 6px; font-size: 15px; }
+.rift-result__team h4 { margin: 0 0 0.4em; font-size: 1.1em; }
 /* 영웅 한 줄을 grid로 칸 맞춤: [별자리][직업][이름·현상금][레벨][KDA][아이템] */
 .rift-result__row {
   display: grid;
   grid-template-columns: 1.5em 1.5em minmax(0, 1fr) auto auto auto;
   align-items: center; column-gap: 8px;
-  font-size: 13.5px; font-weight: 800; line-height: 1.95;
+  font-size: 1em; font-weight: 800; line-height: 1.9;
+}
+@media (max-height: 470px) {
+  .rift-result { font-size: 11px; gap: 6px; }
 }
 .rift-result__zodiac, .rift-result__cls { text-align: center; }
 .rift-result__name { display: flex; align-items: center; gap: 5px; min-width: 0; }
@@ -2330,12 +2364,9 @@ body {
 }
 .rift-result__lvl { color: var(--accent); text-align: right; white-space: nowrap; }
 .rift-result__kda { font-size: 0.86em; opacity: 0.92; white-space: nowrap; text-align: right; }
-.rift-result__items { font-size: 13px; letter-spacing: 1px; text-align: right; white-space: nowrap; }
+.rift-result__items { font-size: 0.96em; letter-spacing: 1px; text-align: right; white-space: nowrap; }
 .rift-result__teamkills { float: right; color: var(--accent); }
 /* 설정 팝업 안의 팀 현황판 — 두 팀을 세로로 쌓는다(팝업을 넓혀 한 줄에 깔끔히) */
-.rift-settings__board { display: flex; flex-direction: column; gap: 8px; padding: 2px 2px 4px; }
-.rift-settings__board .rift-result__team { background: rgba(12, 18, 36, 0.55); padding: 7px 11px; }
-.rift-settings__board .rift-result__row { font-size: 12px; column-gap: 7px; line-height: 1.8; }
 
 /* 내 영웅 패널: 골드 + 인벤토리 */
 .rift__me-gold { color: #ffd34d; flex-shrink: 0; white-space: nowrap; }
