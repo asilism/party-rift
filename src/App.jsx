@@ -5,6 +5,7 @@ import DraftScreen from './lobby/DraftScreen.jsx'
 import ErrorBoundary from './shared/ErrorBoundary.jsx'
 import { MatchProvider, useMatch } from './net/MatchContext.jsx'
 import { IS_APP_SHELL } from './shared/appShell.js'
+import { t } from './shared/i18n.js'
 
 // 조디악 블리츠 — 단독 게임. three.js(3D)를 쓰므로 전장에 들어갈 때만 내려받는다(번들 분리).
 const RiftGame = lazy(() => import('./games/rift/RiftGame.jsx'))
@@ -30,17 +31,17 @@ export default function App() {
       <div className="rotate-hint">
         <div className="rotate-hint__inner">
           <div className="rotate-hint__icon">📱↻</div>
-          <p>가로로 돌려서 즐겨주세요</p>
+          <p>{t('가로로 돌려서 즐겨주세요')}</p>
         </div>
       </div>
 
       {facesMode ? (
-        <Suspense fallback={<NetScreen icon="⏳" text="갤러리를 불러오는 중..." />}>
+        <Suspense fallback={<NetScreen icon="⏳" text={t('갤러리를 불러오는 중...')} />}>
           <FaceGallery />
         </Suspense>
       ) : soloMode ? (
         <ErrorBoundary>
-          <Suspense fallback={<NetScreen icon="⏳" text="게임을 불러오는 중..." />}>
+          <Suspense fallback={<NetScreen icon="⏳" text={t('게임을 불러오는 중...')} />}>
             <SoloApp />
           </Suspense>
         </ErrorBoundary>
@@ -57,7 +58,7 @@ function Flow() {
   const { status, queue, match, you, notice, joinQueue, leaveQueue, startNow, pick, leaveMatch, net } = useMatch()
 
   if (status === 'connecting') {
-    return <NetScreen icon="🌐" text="서버에 연결하는 중..." />
+    return <NetScreen icon="🌐" text={t('서버에 연결하는 중...')} />
   }
 
   if (status === 'gate') {
@@ -70,7 +71,7 @@ function Flow() {
 
   // status === 'match'
   if (!match) {
-    return <NetScreen icon="⏳" text="매치를 준비하는 중..." />
+    return <NetScreen icon="⏳" text={t('매치를 준비하는 중...')} />
   }
 
   if (match.phase === 'draft') {
@@ -83,7 +84,7 @@ function Flow() {
   return (
     <ErrorBoundary onExit={leaveMatch}>
       {notice && <div className="net-toast net-toast--ingame">{notice}</div>}
-      <Suspense fallback={<NetScreen icon="⏳" text="전장을 불러오는 중..." />}>
+      <Suspense fallback={<NetScreen icon="⏳" text={t('전장을 불러오는 중...')} />}>
         <RiftGame roster={match.players} onExit={leaveMatch} net={net} />
       </Suspense>
     </ErrorBoundary>

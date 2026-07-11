@@ -8,21 +8,21 @@ import { t } from '../../shared/i18n.js'
 function abilityLines(clsId, slot, me) {
   const info = ABILITY_SCALING[clsId]?.[slot]
   if (!info || !me) return []
-  const label = powerLabel(clsId)
+  const label = t(powerLabel(clsId))
   const power = me.power ?? 0
   const mult = me.dmgMult ?? 1
   const lines = []
   const scale = (base, coef, m) => Math.round((base + coef * power) * m)
   const formula = (base, coef) => (base ? `${base} + ${coef}×${label}` : `${coef}×${label}`)
-  if (info.dmg) lines.push(`💥 피해 ${formula(info.dmg[0], info.dmg[1])} = ${scale(info.dmg[0], info.dmg[1], mult)}`)
+  if (info.dmg) lines.push(`💥 ${t('피해')} ${formula(info.dmg[0], info.dmg[1])} = ${scale(info.dmg[0], info.dmg[1], mult)}`)
   if (info.dot) {
     const dps = scale(info.dot[0], info.dot[1], mult)
-    lines.push(`☠️ 지속피해 ${formula(info.dot[0], info.dot[1])} = ${dps}/초 · ${info.dotDur}초(총 ${Math.round(dps * info.dotDur)})`)
+    lines.push(`☠️ ${t('지속피해')} ${formula(info.dot[0], info.dot[1])} = ${dps}/${t('초')} · ${info.dotDur}${t('초')}(${t('총')} ${Math.round(dps * info.dotDur)})`)
   }
-  if (info.heal) lines.push(`💚 회복 ${formula(info.heal[0], info.heal[1])} = ${scale(info.heal[0], info.heal[1], 1)}`)
-  if (info.shield) lines.push(`🛡️ 보호막 ${formula(info.shield[0], info.shield[1])} = ${scale(info.shield[0], info.shield[1], 1)}`)
-  if (info.summon) lines.push(`🐾 소환수 공격력 ${formula(info.summon[0], info.summon[1])} = ${scale(info.summon[0], info.summon[1], 1)}${info.count ? ` (×${info.count}마리)` : ''}`)
-  if (info.note) lines.push(`· ${info.note}`)
+  if (info.heal) lines.push(`💚 ${t('회복')} ${formula(info.heal[0], info.heal[1])} = ${scale(info.heal[0], info.heal[1], 1)}`)
+  if (info.shield) lines.push(`🛡️ ${t('보호막')} ${formula(info.shield[0], info.shield[1])} = ${scale(info.shield[0], info.shield[1], 1)}`)
+  if (info.summon) lines.push(`🐾 ${t('소환수 공격력')} ${formula(info.summon[0], info.summon[1])} = ${scale(info.summon[0], info.summon[1], 1)}${info.count ? ` (×${info.count}${t('마리')})` : ''}`)
+  if (info.note) lines.push(`· ${t(info.note)}`)
   return lines
 }
 
@@ -96,7 +96,7 @@ function CdButton({ className, icon, label, name, desc, lines, cd, cdMax, locked
       {stock != null && <span className="rift-btn__stock">{stock}</span>}
       {desc && (
         <span className="rift-btn__tip" role="tooltip">
-          <b>{icon} {name}{cdMax > 0 ? ` · 쿨 ${cdMax}초` : ''}{locked ? ` (${lockText})` : ''}</b>
+          <b>{icon} {name}{cdMax > 0 ? ` · ${t('쿨')} ${cdMax}${t('초')}` : ''}{locked ? ` (${lockText})` : ''}</b>
           {desc}
           {lines && lines.length > 0 && (
             <span className="rift-btn__tip-stats">
