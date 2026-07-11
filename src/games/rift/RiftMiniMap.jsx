@@ -44,7 +44,7 @@ function FogOverlay({ view, myTeam, pad, map }) {
   )
 }
 
-// 우측 상단 미니맵: 3갈래 레인/타워/넥서스/수풀 위에 영웅·용·바론 위치 표시.
+// 우측 상단 미니맵: 3갈래 레인/타워/수호석/수풀 위에 영웅·용·이무기 위치 표시.
 // 내 팀 시야 규칙 그대로 — 안 보이는 적은 미니맵에도 안 찍힌다.
 export default function RiftMiniMap({ view, myId }) {
   const map = useMemo(() => buildMap(view.mode), [view.mode])
@@ -75,10 +75,10 @@ export default function RiftMiniMap({ view, myId }) {
       {BUSHES.map((b, i) => (
         <circle key={i} cx={b.x} cy={b.z} r={b.r} fill="rgba(47, 125, 61, 0.9)" />
       ))}
-      {/* 전장의 안개: 아군 시야(영웅/미니언/타워/우물) 밖 지형은 어둡게 — 3D 화면과 동일 규칙.
+      {/* 전장의 안개: 아군 시야(영웅/병사/타워/우물) 밖 지형은 어둡게 — 3D 화면과 동일 규칙.
           관전(myTeam 없음)이면 안개 없음. 지형 위에만 덮고 랜드마크/유닛은 위에 그려 또렷이 보인다. */}
       {myTeam && <FogOverlay view={view} myTeam={myTeam} pad={pad} map={map} />}
-      {/* 정글몹/용/바론 */}
+      {/* 정글몹/용/이무기 */}
       {view.monsters?.map((m) =>
         m.kind === 'wolf'
           ? m.alive && <circle key={m.id} cx={m.x} cy={m.z} r={3} fill="#cfd6e4" />
@@ -90,11 +90,11 @@ export default function RiftMiniMap({ view, myId }) {
               fontSize={13} textAnchor="middle"
               opacity={m.alive ? 1 : 0.3}
             >
-              {m.kind === 'dragon' ? '🐉' : '👹'}
+              {m.kind === 'dragon' ? '🐉' : '🐍'}
             </text>
           )
       )}
-      {/* 타워/넥서스 */}
+      {/* 타워/수호석 */}
       {view.towers?.map((t) => (
         <rect
           key={t.id}
@@ -111,7 +111,7 @@ export default function RiftMiniMap({ view, myId }) {
           stroke="#fff" strokeWidth={1.5}
         />
       ))}
-      {/* 적 미니언 무리 (시야 안만) */}
+      {/* 적 병사 무리 (시야 안만) */}
       {view.minions?.map((m) =>
         isUnitVisible(view, m, myTeam) ? (
           <circle key={m.id} cx={m.x} cy={m.z} r={1.8} fill={TEAM_FILL[m.team]} opacity={0.8} />

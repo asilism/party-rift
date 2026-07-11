@@ -4,16 +4,16 @@
 //  · '5v5' — 팀당 5명. 같은 레이아웃을 키운 큰 맵 + 정글 캠프를 늘렸다
 //            (탑/미드 솔로, 봇 듀오[원거리+힐러], 정글러가 돌 캠프가 많아진다).
 //  - 파랑 진영: 왼쪽(x<0), 빨강 진영: 오른쪽(x>0)
-//  - 레인마다 외곽 타워 → 내곽 타워, 본진엔 넥서스 (터지면 게임 끝!)
+//  - 레인마다 외곽 타워 → 내곽 타워, 본진엔 수호석 (터지면 게임 끝!)
 //  - 본진은 성벽으로 둘러싸여 있고, 출입구 3곳은 모두 내곽 타워 사거리 안 —
-//    길(레인)을 따라 타워를 뚫지 않고는 넥서스에 갈 수 없다.
-//  - 정글엔 늑대 캠프, 아래 강가에 용, 위 강가에 바론
+//    길(레인)을 따라 타워를 뚫지 않고는 수호석에 갈 수 없다.
+//  - 정글엔 늑대 캠프, 아래 강가에 용, 위 강가에 이무기
 //  - 수풀에 들어가면 적에게 안 보인다 (은신)
 
 // ── 엔티티 크기(모드와 무관한 상수) ──
 export const NEXUS_RADIUS = 4.5
-export const FOUNTAIN_RADIUS = 11 // 리스폰 존(회복 지대) 반경 — 넥서스가 아니라 뒤편에 넉넉하게 둔다
-// 넥서스 중심 → 리스폰 존 중심 거리. 넥서스 위에선 회복이 안 되게 뒤편으로 넉넉히(넥서스 지름 이상) 띄운다.
+export const FOUNTAIN_RADIUS = 11 // 리스폰 존(회복 지대) 반경 — 수호석이 아니라 뒤편에 넉넉하게 둔다
+// 수호석 중심 → 리스폰 존 중심 거리. 수호석 위에선 회복이 안 되게 뒤편으로 넉넉히(수호석 지름 이상) 띄운다.
 export const RESPAWN_BACK = 40
 export const TOWER_RADIUS = 2.4 // 통행 막는 몸통 반경
 export const WALL_RADIUS = 3 // 벽 두께(충돌 원 반경)
@@ -41,7 +41,7 @@ const BASE = {
       { x: 42, z: 56 }, { x: 70, z: 48 }, { x: 88, z: 30 }, { x: 96, z: 0 },
     ],
   },
-  // 타워 배치. tier 1 = 외곽, tier 2 = 내곽, tier 3 = 넥서스 최후의 포탑.
+  // 타워 배치. tier 1 = 외곽, tier 2 = 내곽, tier 3 = 수호석 최후의 포탑.
   TOWER_SPOTS: [
     { id: 'b-top-1', team: 'blue', lane: 'top', tier: 1, x: -34, z: -56 },
     { id: 'b-top-2', team: 'blue', lane: 'top', tier: 2, x: -78, z: -36 },
@@ -169,7 +169,7 @@ function nearestWpFor(geo, lane, x, z) {
   return bi
 }
 
-// 지형 충돌: 성벽/바위/살아있는 타워/넥서스 원에서 밀어내고 맵 밖으로 못 나가게.
+// 지형 충돌: 성벽/바위/살아있는 타워/수호석 원에서 밀어내고 맵 밖으로 못 나가게.
 // towers는 [{x, z, alive}] 형태 (엔진 상태를 그대로 받는다).
 function resolveTerrainFor(geo, p, radius, towers) {
   const push = (cx, cz, cr) => {
@@ -198,7 +198,7 @@ function resolveTerrainFor(geo, p, radius, towers) {
   p.z = Math.max(geo.WORLD.minZ, Math.min(geo.WORLD.maxZ, p.z))
 }
 
-// 장애물 회피 조향: (tx,tz)로 가는 직선 경로를 성벽/바위/타워/넥서스가 막으면
+// 장애물 회피 조향: (tx,tz)로 가는 직선 경로를 성벽/바위/타워/수호석이 막으면
 // 원의 접선 쪽으로 방향을 꺾어 준다. 반환: 정규화된 이동 방향 {x, z}.
 function avoidDirFor(geo, e, tx, tz, towers, selfR = 1) {
   let dx = tx - e.x
@@ -239,12 +239,12 @@ function avoidDirFor(geo, e, tx, tz, towers, selfR = 1) {
 // ── 내비게이션 (봇 경로탐색) ──
 // 국소 회피(avoidDir)는 볼록한 장애물 하나는 잘 비켜 가지만, 본진 성벽·미드 협곡처럼
 // 길게 이어진 오목한 지형에선 좌우 밀치기가 서로 상쇄돼 벽에 직진하며 갇힌다.
-// 정적 지형(성벽/바위/넥서스)만 구운 격자 위에서 A*로 길을 찾아 그 문제를 없앤다.
+// 정적 지형(성벽/바위/수호석)만 구운 격자 위에서 A*로 길을 찾아 그 문제를 없앤다.
 // (타워는 부서지는 동적 장애물 + 반경이 작아 경로탐색에서 빼고 국소 회피에 맡긴다)
 const NAV_CELL = 2 // 격자 한 칸(월드 단위)
 const NAV_CLEAR = 1.5 // 영웅 몸통 반경(1.3) + 여유 — 이만큼 지형에서 떨어진 칸만 걷는다
 
-// 경로탐색이 보는 정적 충돌 원 목록 (성벽 + 바위 + 양 팀 넥서스)
+// 경로탐색이 보는 정적 충돌 원 목록 (성벽 + 바위 + 양 팀 수호석)
 function navCircles(geo) {
   if (!geo._navCircles) {
     geo._navCircles = [
@@ -304,7 +304,7 @@ function findPathFor(geo, sx, sz, tx, tz) {
   const { w, h, minX, minZ, blocked } = grid
   const clampI = (x) => Math.max(0, Math.min(w - 1, Math.round((x - minX) / NAV_CELL)))
   const clampJ = (z) => Math.max(0, Math.min(h - 1, Math.round((z - minZ) / NAV_CELL)))
-  // 시작/목표가 막힌 칸(지형에 밀착·넥서스 중심 등)이면 가까운 열린 칸으로 스냅
+  // 시작/목표가 막힌 칸(지형에 밀착·수호석 중심 등)이면 가까운 열린 칸으로 스냅
   const snap = (i, j) => {
     if (!blocked[j * w + i]) return j * w + i
     for (let r = 1; r <= 6; r++) {
@@ -439,8 +439,8 @@ export function buildMap(mode = '3v3') {
     blue: scalePt(BASE.NEXUS_POS.blue, s),
     red: scalePt(BASE.NEXUS_POS.red, s),
   }
-  // 리스폰(회복) 존 — 넥서스 뒤편(맵 중앙 반대쪽)으로 한 넥서스만큼 떨어뜨린다.
-  //  부활·귀환·HP리필이 여기서만 일어나므로, 넥서스에 붙어 무한 회복하며 버티지 못한다.
+  // 리스폰(회복) 존 — 수호석 뒤편(맵 중앙 반대쪽)으로 한 수호석만큼 떨어뜨린다.
+  //  부활·귀환·HP리필이 여기서만 일어나므로, 수호석에 붙어 무한 회복하며 버티지 못한다.
   const FOUNTAIN_POS = {
     blue: { x: NEXUS_POS.blue.x - RESPAWN_BACK, z: NEXUS_POS.blue.z },
     red: { x: NEXUS_POS.red.x + RESPAWN_BACK, z: NEXUS_POS.red.z },

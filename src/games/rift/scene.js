@@ -447,7 +447,7 @@ function goldSprite(n) {
   return sp
 }
 
-// "🛡 공격불가" 라벨 — 선행 구조물이 안 부서져 무적인 포탑/넥서스 위에 띄운다
+// "🛡 공격불가" 라벨 — 선행 구조물이 안 부서져 무적인 포탑/수호석 위에 띄운다
 function lockLabel() {
   const c = document.createElement('canvas')
   c.width = 256
@@ -1527,7 +1527,7 @@ function buildHero(h, mine, barColor) {
   ring.rotation.x = -Math.PI / 2
   ring.position.y = 0.06
   ring.visible = !!mine
-  // 버프 링 (용=주황 / 바론=보라)
+  // 버프 링 (용=주황 / 이무기=보라)
   const buff = new THREE.Mesh(
     new THREE.RingGeometry(1.2, 1.45, 20),
     new THREE.MeshBasicMaterial({ color: 0xffa94d, transparent: true, opacity: 0.9, side: THREE.DoubleSide })
@@ -1744,7 +1744,7 @@ function buildMinion(m, barColor) {
 const MONSTER_LOOK = {
   wolf: { emoji: '🐺', size: 2.6, body: 0x9aa3b2, r: 1.2 },
   dragon: { emoji: '🐉', size: 4.6, body: 0x59b96a, r: 2.4 }, // r은 피격 파티클 높이로도 쓴다
-  baron: { emoji: '👹', size: 5, body: 0x9b6bd6, r: 2.8 },
+  baron: { emoji: '🐍', size: 5, body: 0x9b6bd6, r: 2.8 },
 }
 
 // 몬스터 회전 보간 — 공격 대상 쪽으로 부드럽게 돌아선다
@@ -1858,7 +1858,7 @@ function buildDragon(m) {
   return g
 }
 
-// 바론: 또아리를 튼 채 우뚝 솟아오른 거대 독사 — 코브라 후드/송곳니/붉은 눈/낼름거리는 혀.
+// 이무기: 또아리를 튼 채 우뚝 솟아오른 거대 독사 — 코브라 후드/송곳니/붉은 눈/낼름거리는 혀.
 // 공격은 머리를 뒤로 젖혔다 내리꽂는 스트라이크(엔진이 표적 자리에 독 웅덩이를 남긴다).
 function buildBaron(m) {
   const g = new THREE.Group()
@@ -2058,7 +2058,7 @@ function buildSummon(s, barColor) {
 // glow = 후광 크기(반지름 배율), trail = 꼬리 발광 입자를 흘릴지 (스킬 투사체만 켠다)
 const PROJ_LOOK = {
   bolt: { r: 0.4, y: 2.4, color: null, glow: 3 }, // null → 팀 색
-  mbolt: { r: 0.26, y: 1.5, color: null, glow: 2 }, // 원거리 미니언의 작은 화살 (낮고 작게)
+  mbolt: { r: 0.26, y: 1.5, color: null, glow: 2 }, // 원거리 병사의 작은 화살 (낮고 작게)
   fireball: { r: 0.95, y: 2, color: 0xff8c2e, glow: 4, trail: true },
   towerbolt: { r: 0.55, y: 4, color: null, glow: 3 },
   pierce: { r: 0.34, y: 2.2, color: 0xfff0a0, glow: 3.6, trail: true }, // 궁수 꿰뚫는 화살 (밝은 노랑)
@@ -2159,7 +2159,7 @@ const FX_LOOK = {
   shadowexec: { color: 0xff3b3b, ring: true, mode: 'out', pcolor: 0xff9a9a, slash: true, emoji: '☠️' }, // 암살자 그림자처형 — 붉은 참격 + 해골 팍!
   level: { color: 0xffe066, ring: true, mode: 'rise', pcolor: 0xfff0a0, pillar: true }, // 레벨 업 — 금빛 기둥
   towerfall: { color: 0xff8c2e, ring: true, mode: 'out', pcolor: 0xffcaa0, ring2: true, debris: { count: 16, rock: 0x8c8c98, dur: 1.7 } }, // 포탑 붕괴 — 돌무더기 와르르
-  nexusfall: { color: 0xffe066, ring: true, mode: 'out', pcolor: 0xfff3b0, ring2: true, debris: { count: 24, rock: 0xb0b6c4, burst: true, dur: 2.0 } }, // 넥서스 폭발 — 펑! 파편이 터져나간다
+  nexusfall: { color: 0xffe066, ring: true, mode: 'out', pcolor: 0xfff3b0, ring2: true, debris: { count: 24, rock: 0xb0b6c4, burst: true, dur: 2.0 } }, // 수호석 폭발 — 펑! 파편이 터져나간다
   death: { color: 0x39405c, ring: true, mode: 'out' },
   shield: { color: 0x9fd0ff, ring: true, mode: 'rise', pcolor: 0xd0eaff },
   recall: { color: 0x4ad6e0, ring: true, mode: 'rise', pcolor: 0xa0f0f7 },
@@ -2197,7 +2197,7 @@ const FX_LOOK = {
   rewind: { color: 0x7ac0ff, ring: true, mode: 'rise', pcolor: 0xd0eaff, pillar: true }, // 역행 — 시간을 거슬러 솟는 빛기둥
   // 회오리 기둥(돌풍술사 돌풍/태풍) — 실제로 빙글빙글 도는 입체 회오리
   tornado: { color: 0xd6f0ff, tornado: true, pcolor: 0xffffff },
-  // 바론 독 뿜기 착탄 — 초록 튐 + 웅덩이는 zone(venom)이 그린다
+  // 이무기 독 뿜기 착탄 — 초록 튐 + 웅덩이는 zone(venom)이 그린다
   venom: { color: 0x86d94a, ring: true, mode: 'out', pcolor: 0xb7f06a },
   // 공포술사: 어둠 계열(창백한 보라)
   dread: { color: 0x7a5fae, line: true, mode: 'forward', pcolor: 0xb9a3e0, w: 5 }, // 공포의 시선 — 넓은 어둠 물결
@@ -2273,7 +2273,7 @@ function makeBurst(n, look) {
 }
 
 // 붕괴 파편 — 입체 덩어리들이 솟구쳤다 중력으로 떨어져 바닥에 구른다.
-//  burst=true(넥서스): 사방으로 강하게 터져나간다. burst 없음(포탑): 와르르 무너져 내린다.
+//  burst=true(수호석): 사방으로 강하게 터져나간다. burst 없음(포탑): 와르르 무너져 내린다.
 //  dur(초)에 맞춰 마지막 0.4초간 사라진다. 시드(n.id)로 호스트/게스트가 같은 모양.
 function makeDebris(n, dcfg, team) {
   const g = new THREE.Group()
@@ -2283,7 +2283,7 @@ function makeDebris(n, dcfg, team) {
   for (let i = 0; i < dcfg.count; i++) {
     const a = rnd() * Math.PI * 2
     const sz = (dcfg.burst ? 0.5 : 0.55) + rnd() * (dcfg.burst ? 1.2 : 1.0)
-    // 대부분 돌 파편, 넥서스는 일부를 팀색 결정 조각으로
+    // 대부분 돌 파편, 수호석은 일부를 팀색 결정 조각으로
     let col = dcfg.rock
     if (dcfg.burst && team != null && rnd() < 0.4) col = TEAM_COLOR[team]
     const m = new THREE.Mesh(
@@ -2543,7 +2543,7 @@ function buildStoneWall(w) {
   return g
 }
 
-// 바론 독 웅덩이 — 초록 원판 + 가장자리 링 + 보글보글 솟는 기포. life에 맞춰 페이드아웃.
+// 이무기 독 웅덩이 — 초록 원판 + 가장자리 링 + 보글보글 솟는 기포. life에 맞춰 페이드아웃.
 function buildVenomZone(z) {
   const g = new THREE.Group()
   g.position.set(z.x, 0, z.z)
@@ -2744,7 +2744,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   )
   ground.rotation.x = -Math.PI / 2
   scene.add(ground)
-  // 강 (가운데 세로 물길 — 용/바론 둥지를 잇는다). 흐르는 물 텍스처(render에서 천천히 굴린다)
+  // 강 (가운데 세로 물길 — 용/이무기 둥지를 잇는다). 흐르는 물 텍스처(render에서 천천히 굴린다)
   const waterTex = waterTexture(256)
   waterTex.repeat.set(1, Math.max(2, Math.round((WORLD.maxZ - WORLD.minZ) / 30)))
   const river = new THREE.Mesh(
@@ -2799,7 +2799,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   scene.add(makeScatter(
     new THREE.DodecahedronGeometry(0.5),
     new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), laneStoneItems))
-  // 리스폰 존 (회복 지대) 표시 — 넥서스 뒤편에 원판 + 빛나는 테두리 + 회복 십자
+  // 리스폰 존 (회복 지대) 표시 — 수호석 뒤편에 원판 + 빛나는 테두리 + 회복 십자
   for (const team of ['blue', 'red']) {
     const fp = FOUNTAIN_POS[team]
     const pad = new THREE.Mesh(
@@ -2825,8 +2825,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   //  수풀(은신)·성벽은 병합 대상에서 제외(게임플레이/구조물).
   const staticDecor = makeStaticMerger()
 
-  // 용/바론 둥지 — 같은 돌 테두리 구조에 서로 다른 테마를 입혀 멀리서도 구분되게 한다.
-  //  용 굴: 그을린 모래 + 이글대는 호박빛 결정 / 바론 둥지: 창백한 보랏빛 + 마력 결정 + 짐승 뼈 가시
+  // 용/이무기 둥지 — 같은 돌 테두리 구조에 서로 다른 테마를 입혀 멀리서도 구분되게 한다.
+  //  용 굴: 그을린 모래 + 이글대는 호박빛 결정 / 이무기 둥지: 창백한 보랏빛 + 마력 결정 + 짐승 뼈 가시
   const pitRnd = lcg(4242)
   const PIT_THEMES = [
     { pit: DRAGON_PIT, pad: 0xd4a878, rock: 0x99856e, crystal: 0xff9d4d, boneSpikes: 0 },
@@ -2865,7 +2865,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       crystal.rotation.y = pitRnd() * 3
       scene.add(crystal)
     }
-    // 바론 둥지의 짐승 뼈 가시 (무광 → 병합)
+    // 이무기 둥지의 짐승 뼈 가시 (무광 → 병합)
     for (let i = 0; i < theme.boneSpikes; i++) {
       const a = (i / Math.max(1, theme.boneSpikes)) * Math.PI * 2 + 1.1
       const bone = new THREE.Mesh(
@@ -3216,7 +3216,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   rewindGhost.visible = false
   scene.add(rewindGhost)
 
-  // 넥서스 폭발 섬광: 경기 종료 순간 진 쪽 넥서스 자리에서 크게 "펑" 번쩍인다(클라 연출)
+  // 수호석 폭발 섬광: 경기 종료 순간 진 쪽 수호석 자리에서 크게 "펑" 번쩍인다(클라 연출)
   const endFlash = new THREE.Mesh(
     new THREE.SphereGeometry(1, 16, 12),
     new THREE.MeshBasicMaterial({
@@ -3234,7 +3234,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   let lastT = null // 공격 모션 진행용 프레임 시간
   let hitFxOn = true // 피격 테두리 on/off (데미지 숫자는 항상 표시)
   let prevStatus = null // 직전 프레임의 경기 상태 (finished 전환 감지)
-  let endT = -1 // 넥서스 폭발 연출 진행 시간(>=0이면 진행 중)
+  let endT = -1 // 수호석 폭발 연출 진행 시간(>=0이면 진행 중)
 
   // 떠오르는 데미지 숫자 풀 — 다 쓴 스프라이트를 재활용한다
   const dmgNumbers = []
@@ -3351,7 +3351,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       }
       u.range.visible = warn
     }
-    // 넥서스
+    // 수호석
     for (const team of ['blue', 'red']) {
       const nx = view.nexus[team]
       const u = nexusObjs[team].userData
@@ -3565,7 +3565,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         bindPool.delete(id)
       }
     }
-    // 미니언 — 시야 밖 적 미니언은 안 보인다
+    // 병사 — 시야 밖 적 병사는 안 보인다
     syncPool(
       scene, minionPool, view.minions,
       (m) => buildMinion(m, barColorOf(m.team)),
@@ -3574,7 +3574,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         obj.position.set(m.x, 0, m.z)
         const u = obj.userData
         setHpBar(u.bar, m.hp / m.maxHp)
-        // 타격감: 미니언이 맞으면 데미지 숫자 + (옵션 켜짐 시) 잠깐 붉게 물든다 (막타 손맛)
+        // 타격감: 병사가 맞으면 데미지 숫자 + (옵션 켜짐 시) 잠깐 붉게 물든다 (막타 손맛)
         const mdHp = (u.lastHp == null ? m.hp : u.lastHp) - m.hp
         u.lastHp = m.hp
         if (mdHp > 0.5 && obj.visible) {
@@ -3600,7 +3600,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         u.body.rotation.z = m.ranged ? pulse * 0.3 : -pulse * 0.35 // 기울이기
       }
     )
-    // 정글몹/용/바론 (중립 — 늘 보인다)
+    // 정글몹/용/이무기 (중립 — 늘 보인다)
     syncPool(
       scene, monsterPool,
       view.monsters.filter((m) => m.alive),
@@ -3609,7 +3609,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         obj.visible = inVision(m.x, m.z) // 안개 속 정글몹은 안 보인다
         obj.position.set(m.x, Math.sin(view.time * 2 + m.x) * 0.15, m.z)
         setHpBar(obj.userData.bar, m.hp / m.maxHp)
-        // 타격감: 정글몹/용/바론이 맞으면 데미지 숫자 (오브젝트 다굴 손맛)
+        // 타격감: 정글몹/용/이무기가 맞으면 데미지 숫자 (오브젝트 다굴 손맛)
         const ud2 = obj.userData
         const jdHp = (ud2.lastHp == null ? m.hp : ud2.lastHp) - m.hp
         ud2.lastHp = m.hp
@@ -3618,7 +3618,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           particles.emit(m.x, (MONSTER_LOOK[m.kind]?.r || 2), m.z, 0xffb42a, 9, { spread: 10, up: 10, gravity: 22, size: 1.6, hard: true, lifeMin: 0.16, lifeMax: 0.34 })
         }
         // 분노(enrage): 교전이 길어질수록 붉게 달아오르고 거칠게 떤다
-        //  용/바론은 멀티파트 모델이라 살갗 재질 목록(rageMats)을 물들인다
+        //  용/이무기는 멀티파트 모델이라 살갗 재질 목록(rageMats)을 물들인다
         const body = obj.userData.body
         if (body) {
           const rage = Math.min(1, (m.enrage || 0) / 6)
@@ -3630,7 +3630,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           const shake = rage > 0 ? 1 + Math.sin(view.time * 18) * 0.06 * rage : 1
           body.scale.setScalar(shake)
         }
-        ud2.anim?.(view.time) // 용 날갯짓·꼬리 / 바론 몸놀림·혀
+        ud2.anim?.(view.time) // 용 날갯짓·꼬리 / 이무기 몸놀림·혀
         ud2.turn?.(m.dir ?? 0) // 공격 대상(또는 복귀 방향)을 부드럽게 바라본다
         // 공격 모션: atkSeq가 바뀌면 0.45초짜리 물기/스트라이크 포즈를 재생한다
         if (ud2.pose) {
@@ -3751,7 +3751,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     syncPool(scene, stoneWallPool, view.stoneWalls || [], buildStoneWall, (obj, w) => {
       obj.userData.update?.(w)
     })
-    // 지면 범위 장판 (운석 조준+낙하 / 바론 독 웅덩이)
+    // 지면 범위 장판 (운석 조준+낙하 / 이무기 독 웅덩이)
     syncPool(
       scene, zonePool, view.zones || [],
       (z) => (z.kind === 'venom' ? buildVenomZone(z) : buildMeteorZone(z)),
@@ -3795,7 +3795,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     }
     fog.plane.visible = fogVisible
 
-    // 넥서스 폭발 연출: finished로 막 바뀐 순간 진 쪽 넥서스를 크게 "펑" 번쩍(+카메라가 그리로 모인다)
+    // 수호석 폭발 연출: finished로 막 바뀐 순간 진 쪽 수호석을 크게 "펑" 번쩍(+카메라가 그리로 모인다)
     const loser = view.winner === 'blue' ? 'red' : view.winner === 'red' ? 'blue' : null
     if (view.status === 'finished' && prevStatus !== 'finished' && loser) {
       endT = 0
@@ -3811,7 +3811,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       if (k >= 1) { endT = -1; endFlash.visible = false }
     }
 
-    // 카메라: 평소엔 내 영웅을, 경기가 끝나면 터진 넥서스로 모아 폭발을 보여 준다(관전은 위에서 전체)
+    // 카메라: 평소엔 내 영웅을, 경기가 끝나면 터진 수호석로 모아 폭발을 보여 준다(관전은 위에서 전체)
     const want = _want
     let offY = 42
     let offZ = 30

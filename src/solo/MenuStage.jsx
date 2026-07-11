@@ -12,7 +12,7 @@ import { buildSoloRoster } from './roster.js'
 // 전투에 들어가면 언마운트되어 시뮬/렌더 자원을 돌려준다.
 
 const FOLLOW_MS = 8000
-const REMATCH_MS = 6000 // 넥서스 폭발 연출을 잠깐 보여준 뒤 새 판
+const REMATCH_MS = 6000 // 수호석 폭발 연출을 잠깐 보여준 뒤 새 판
 
 function dioramaRoster() {
   const z = ZODIAC[Math.floor(Math.random() * ZODIAC.length)]

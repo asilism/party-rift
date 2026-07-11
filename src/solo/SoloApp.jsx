@@ -491,7 +491,7 @@ function SoloHelp({ onClose }) {
 
         <div className="solo-help__sec">
           <h3>🏆 목표</h3>
-          <p>3갈래 레인의 <b>타워</b>를 부수며 전진해 적 <b>넥서스</b>를 터뜨리면 승리!</p>
+          <p>3갈래 레인의 <b>타워</b>를 부수며 전진해 적 <b>수호석</b>를 터뜨리면 승리!</p>
         </div>
 
         <div className="solo-help__sec">
@@ -506,14 +506,14 @@ function SoloHelp({ onClose }) {
         <div className="solo-help__sec">
           <h3>📈 성장</h3>
           <p>
-            미니언·정글몹을 잡아 <b>경험치·골드</b>를 모으고, 우물(시작 지점)에서 🛒 <b>상점</b>으로 장비를 맞춰요.
+            병사·정글몹을 잡아 <b>경험치·골드</b>를 모으고, 우물(시작 지점)에서 🛒 <b>상점</b>으로 장비를 맞춰요.
             Lv3에 보조 스킬, Lv5에 궁극기가 열려요.
           </p>
         </div>
 
         <div className="solo-help__sec">
           <h3>💡 꿀팁</h3>
-          <p>🌿 수풀에 숨으면 안 보여요 · 🐉 용/👹 바론은 팀 버프 · 위험하면 🏠 귀환!</p>
+          <p>🌿 수풀에 숨으면 안 보여요 · 🐉 용/🐍 이무기는 팀 버프 · 위험하면 🏠 귀환!</p>
         </div>
 
         <button className="toy-btn toy-btn--yellow solo-help__ok" onClick={onClose}>알겠어, 가보자!</button>

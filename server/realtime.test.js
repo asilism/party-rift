@@ -10,7 +10,7 @@ function rebuild(frames) {
   return view
 }
 
-test('리프트 세션: 엔진 헤드리스 구동 + 영웅/넥서스 스냅샷', async () => {
+test('리프트 세션: 엔진 헤드리스 구동 + 영웅/수호석 스냅샷', async () => {
   const devices = new Map()
   devices.set('devH', { players: [{ id: 'rat', name: '쥐', zodiacId: 'rat', deviceId: 'devH' }] })
   const room = { code: 'WXYZ', hostId: 'devH', devices }
