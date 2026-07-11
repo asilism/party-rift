@@ -6,7 +6,7 @@ import ErrorBoundary from './shared/ErrorBoundary.jsx'
 import { MatchProvider, useMatch } from './net/MatchContext.jsx'
 import { IS_APP_SHELL } from './shared/appShell.js'
 
-// 조디악 럼블 — 단독 게임. three.js(3D)를 쓰므로 전장에 들어갈 때만 내려받는다(번들 분리).
+// 조디악 블리츠 — 단독 게임. three.js(3D)를 쓰므로 전장에 들어갈 때만 내려받는다(번들 분리).
 const RiftGame = lazy(() => import('./games/rift/RiftGame.jsx'))
 
 // 솔로(오프라인) 모드 — 앱 셸(Electron/안드로이드 Capacitor) 또는 ?solo.

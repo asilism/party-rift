@@ -1,20 +1,20 @@
-# 스토어 출시 준비 문서 (조디악 럼블)
+# 스토어 출시 준비 문서 (조디악 블리츠)
 
 출시 전 체크리스트와 스토어 등록 정보 초안. 2026-07-10 작성.
 
-## ✅ 게임 이름: 조디악 럼블 (ZODIAC RUMBLE) — 2026-07-11 확정
+## ✅ 게임 이름: 조디악 블리츠 (ZODIAC BLITZ) — 2026-07-11 확정
 
 - 원래 이름 "조디악 러쉬(ZODIAC RUSH)"는 Apple App Store에 동명 앱("Zodiac Rush", Backpack Games, 2021 캐주얼 퀴즈 — https://apps.apple.com/us/app/zodiac-rush/id1589745063 )이 있어 교체.
-- 후보 검증(2026-07-11 검색): Zodiac Rumble/Blitz/Stampede/Summoner 모두 스토어 비어 있음 확인. Zodiac Arena는 기존 앱 존재로 탈락, Clash/Brawl은 Supercell 상표 공세 이력으로 배제. 최종 선택: **조디악 럼블**.
-- 한국어 "조디악 럼블" 충돌 없음. 정식 상표 등록 여부는 출시 직전 KIPRIS/USPTO에서 재확인 권장.
+- 후보 검증(2026-07-11 검색): Zodiac Rumble/Blitz/Stampede/Summoner 모두 스토어 비어 있음 확인. Zodiac Arena는 기존 앱 존재로 탈락, Clash/Brawl은 Supercell 상표 공세 이력으로 배제. 1차 선택은 럼블이었으나 "~ Rumble"이 대형 IP(Pokémon/Warcraft/Sonic Rumble, Rumble Stars)의 흔한 접미사라 최종 선택: **조디악 블리츠**(Blitz = 번개 — 로고의 ⚡와 뜻이 맞고, 3~5분 속전속결 정체성 계승).
+- 한국어 "조디악 블리츠" 충돌 없음. 정식 상표 등록 여부는 출시 직전 KIPRIS/USPTO에서 재확인 권장.
 
 ## 등록 정보 초안 (Google Play 기준)
 
-- **앱 이름 (30자)**: 조디악 럼블: 12지신 대난투
+- **앱 이름 (30자)**: 조디악 블리츠: 12지신 대난투
 - **짧은 설명 (80자)**: 12지신 동물들의 3분 스피드 MOBA! 스킬 콤보로 적진을 부수고 넥서스를 지켜라
 - **자세한 설명 (초안)**:
 
-  > ⚡ 조디악 럼블 (ZODIAC RUMBLE)
+  > ⚡ 조디악 블리츠 (ZODIAC BLITZ)
   >
   > 12지신 동물 영웅들이 펼치는 캐주얼 3D MOBA!
   > 쥐부터 돼지까지, 너의 수호 지신을 골라 전장을 누벼라.

@@ -24,7 +24,7 @@ export default function SshGate({ onQueue, notice }) {
         <FullscreenButton />
       </div>
 
-      <div className="gate__term" role="group" aria-label="조디악 럼블 접속">
+      <div className="gate__term" role="group" aria-label="조디악 블리츠 접속">
         <div className="gate__bar">
           <span className="gate__dot gate__dot--r" />
           <span className="gate__dot gate__dot--y" />
@@ -42,8 +42,8 @@ export default function SshGate({ onQueue, notice }) {
               ))}
               <div className="gate__crest">⚡</div>
             </div>
-            <h1 className="gate__name">ZODIAC<span> RUMBLE</span></h1>
-            <p className="gate__sub">조디악 럼블</p>
+            <h1 className="gate__name">ZODIAC<span> BLITZ</span></h1>
+            <p className="gate__sub">조디악 블리츠</p>
             <p className="gate__tag">12지신이 달린다 · 넥서스를 터뜨려라!</p>
           </div>
 

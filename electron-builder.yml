@@ -1,8 +1,8 @@
-# 조디악 럼블 데스크톱 설치본 패키징 (electron-builder)
+# 조디악 블리츠 데스크톱 설치본 패키징 (electron-builder)
 #   npm run app:pack  →  release/ 에 Windows NSIS 설치본 + 포터블 exe
 # 아이콘은 scripts/render-icon.cjs 가 favicon.svg에서 만든 build/icon.png (512px).
 appId: rush.zodiac.desktop
-productName: ZODIAC RUMBLE
+productName: ZODIAC BLITZ
 directories:
   output: release
   buildResources: build
@@ -22,7 +22,7 @@ win:
     - portable
 nsis:
   oneClick: true
-  shortcutName: ZODIAC RUMBLE
+  shortcutName: ZODIAC BLITZ
   artifactName: ZodiacRush-Setup-${version}.${ext}
 portable:
   artifactName: ZodiacRush-Portable-${version}.${ext}

@@ -1,4 +1,4 @@
-package com.asilism.zodiacrumble;
+package com.asilism.zodiacblitz;
 
 import android.view.View;
 
