@@ -44,7 +44,7 @@ export default function SshGate({ onQueue, notice }) {
             </div>
             <h1 className="gate__name">ZODIAC<span> BLITZ</span></h1>
             <p className="gate__sub">조디악 블리츠</p>
-            <p className="gate__tag">12지신이 달린다 · 넥서스를 터뜨려라!</p>
+            <p className="gate__tag">12지신이 달린다 · 수호석을 터뜨려라!</p>
           </div>
 
           <div className="gate__modes">

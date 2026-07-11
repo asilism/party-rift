@@ -89,7 +89,7 @@ test('로컬 net: 경기가 끝나면 onFinish가 최종 스냅샷으로 한 번
   })
   try {
     await sleep(120)
-    // 넥서스 파괴를 기다릴 순 없으니 시뮬 상태를 직접 종료로 (테스트 훅 _sim)
+    // 수호석 파괴를 기다릴 순 없으니 시뮬 상태를 직접 종료로 (테스트 훅 _sim)
     net._sim.state.status = 'finished'
     net._sim.state.winner = 'blue'
     await sleep(120)

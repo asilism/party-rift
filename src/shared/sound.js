@@ -464,7 +464,7 @@ export const sound = {
     setTimeout(() => beep(55, 0.4, 'sawtooth', 0.05), 260)
     if (ac) cymbal(ac, ac.currentTime, 0.05, 3000, 0.25) // 파편
   },
-  // 넥서스 파괴: 거대한 폭발 — 하강하는 굉음 + 무너지는 파편
+  // 수호석 파괴: 거대한 폭발 — 하강하는 굉음 + 무너지는 파편
   nexusFall() {
     if (!enabled) return
     const ac = getCtx()

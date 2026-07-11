@@ -109,7 +109,7 @@ const FX_SOUND = {
   volley: 'ranged', lightarrow: 'ranged', // 원거리 타격
   boom: 'magic', meteorhit: 'magic', fissure: 'magic', chain: 'magic', frost: 'magic', // 마법 타격
   curse: 'magic', frostnova: 'magic', abszero: 'magic', plague: 'magic', doom: 'magic', // 직업 전용 마법
-  venom: 'magic', // 바론 독 뿜기
+  venom: 'magic', // 이무기 독 뿜기
   dread: 'magic', shriek: 'magic', // 공포술사
   quake: 'tower', cage: 'magic', rocksplash: 'magic', // 대지술사 (융기는 돌 구르는 묵직함 → 타워 계열음)
   poof: 'shield', // 환영무희 연막 펑
@@ -171,7 +171,7 @@ function useRiftSounds(hud, myId) {
       FX_PLAY[cat]()
     }
     fxSeen.current = Math.max(fxSeen.current, curMax)
-    // 우리 넥서스가 공격받기 시작하면 경고음
+    // 우리 수호석이 공격받기 시작하면 경고음
     const myTeam = me?.team
     const nexusAlert = !!(hud.nexus && (
       myTeam ? hud.nexus[myTeam]?.underAttack
@@ -387,7 +387,7 @@ function RiftPlay({
     setBtnScale(v)
     saveRiftBtnScale(v)
   }
-  // 배경음악(칩튠 루프): 경기 중에만 흐르고, 어느 한쪽 넥서스가 위태로우면 템포 업
+  // 배경음악(칩튠 루프): 경기 중에만 흐르고, 어느 한쪽 수호석이 위태로우면 템포 업
   const bgmStatus = hud?.status
   const paused = !!hud?.paused
   const nexusCrisis = !!(
@@ -401,7 +401,7 @@ function RiftPlay({
     sound.musicSetFast(nexusCrisis)
   }, [bgmStatus, nexusCrisis, soundOn, paused])
   useEffect(() => () => sound.musicStop(), [])
-  // 승리 팝업은 넥서스 폭발 연출(카메라 이동 + 펑)이 끝난 뒤 페이드인하도록 잠깐 늦춘다
+  // 승리 팝업은 수호석 폭발 연출(카메라 이동 + 펑)이 끝난 뒤 페이드인하도록 잠깐 늦춘다
   const finishedNow = hud?.status === 'finished'
   const [showWin, setShowWin] = useState(false)
   useEffect(() => {
@@ -427,7 +427,7 @@ function RiftPlay({
   const winChars = [...winText].map((ch, i) => ({
     ch, key: i, space: ch === ' ', delay: ch === ' ' ? 0 : winBeat++ * 0.16,
   }))
-  // 우리 넥서스가 공격받고 있으면 경고 (관전자는 양 팀 모두 표시)
+  // 우리 수호석이 공격받고 있으면 경고 (관전자는 양 팀 모두 표시)
   const nexusUnderAttack = !finished && !!(hud.nexus && (
     myTeam ? hud.nexus[myTeam]?.underAttack
       : (hud.nexus.blue?.underAttack || hud.nexus.red?.underAttack)
@@ -548,7 +548,7 @@ function RiftPlay({
               })}
             </span>
             {me.dragonT > 0 && <span title="용 버프">🐉</span>}
-            {me.baronT > 0 && <span title="바론 버프">👹</span>}
+            {me.baronT > 0 && <span title="이무기 버프">🐍</span>}
           </div>
         )}
 
@@ -561,7 +561,7 @@ function RiftPlay({
         )}
         {nexusUnderAttack && (
           <div className="rift__nexus-alert">
-            ⚠️ {myTeam ? '우리' : ''} 넥서스가 공격받고 있어요!
+            ⚠️ {myTeam ? '우리' : ''} 수호석이 공격받고 있어요!
           </div>
         )}
         {me && me.respawnT > 0 && !finished && (
