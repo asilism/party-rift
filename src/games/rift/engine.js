@@ -190,11 +190,11 @@ export const CLASSES = {
     ult: { name: '역행', icon: '⏪', cd: 60, desc: '4초 전 위치로 되돌아가며 체력을 최대치의 80%까지 회복 + 주변에 충격파 피해' },
   },
   fearmonger: {
-    name: '공포술사', icon: '👻', desc: '적을 공포에 질려 달아나게 하는 심리전 메이지 — 도망치는 등 뒤를 노려라',
+    name: '공포술사', icon: '👻', desc: '공포로 적의 컨트롤을 빼앗는 심리전 메이지 — 갈팡질팡하는 사이를 노려라',
     hp: 460, hpLvl: 50, atk: 41, atkLvl: 6, range: 9.5, atkCd: 0.95, speed: 12.4,
-    skill: { name: '공포의 시선', icon: '👁️', cd: 10, desc: '전방 부채꼴의 적에게 피해를 주고 2초 공포 — 겁에 질려 내게서 엉금엉금 달아난다' },
+    skill: { name: '공포의 시선', icon: '👁️', cd: 10, desc: '전방 부채꼴의 적에게 피해를 주고 1.5초 공포 — 통제를 잃고 아무 방향으로나 내달린다(둔화)' },
     skill2: { name: '망령걸음', icon: '🌫️', cd: 12, desc: '유령처럼 흐려져 잠깐 발이 빨라지고 어둠 장막(피해 흡수)을 두른다' },
-    ult: { name: '단말마', icon: '💀', cd: 60, desc: '보이는 적에게 순간이동해 비명을 터뜨린다 — 주변 모든 적 2초 공포 + 어둠 도트(적진 이니시)' },
+    ult: { name: '단말마', icon: '💀', cd: 60, desc: '보이는 적에게 순간이동해 비명을 터뜨린다 — 주변 모든 적 1.6초 공포 + 어둠 도트(적진 이니시)' },
   },
   illusionist: {
     name: '환영무희', icon: '🎭', desc: '분신으로 적을 속이는 정보전 암살자 — 셋 중 진짜는 하나',
@@ -248,7 +248,7 @@ export const ABILITY_SCALING = {
   snarer: { skill: { dmg: [40, 0.6], note: '경로의 모든 적 1.6초 속박(관통)' }, ult: { dmg: [70, 0.8], note: '범위 속박' } },
   windcaller: { skill: { dmg: [44, 0.7], note: '1.5초 공중에 띄움' }, skill2: { dmg: [26, 0.4], note: '사방으로 밀침 · 벽에 박으면 기절' }, ult: { dmg: [70, 0.8], note: '바깥으로 날림 + 둔화' } },
   chronomancer: { skill: { dmg: [40, 0.9], note: '적 뒤로 순간이동' }, skill2: { dot: [10, 0.2], dotDur: 3, note: '장판 안 이동·공격 둔화' }, ult: { dmg: [60, 0.9], note: '도착 충격파 · 체력 80%까지 회복' } },
-  fearmonger: { skill: { dmg: [30, 0.55], note: '2초 공포(거의 정지 수준으로 느려져 도주)' }, skill2: { shield: [45, 0.7], note: '가속 + 어둠 장막' }, ult: { dmg: [40, 0.6], dot: [10, 0.18], dotDur: 2, note: '적에게 순간이동 · 주변 전체 2초 공포' } },
+  fearmonger: { skill: { dmg: [30, 0.55], note: '1.5초 공포(통제 불능 질주 + 둔화)' }, skill2: { shield: [45, 0.7], note: '가속 + 어둠 장막' }, ult: { dmg: [40, 0.6], dot: [10, 0.18], dotDur: 2, note: '적에게 순간이동 · 주변 전체 1.6초 공포' } },
   illusionist: { skill: { dmg: [50, 0.9], note: '분신이 적을 쫓아가 내리찍음(확정 명중) + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '연막 펑 — 3체 돌출, 전투 분신 2(평타 80%)' } },
   terramancer: { skill: { dmg: [30, 0.55], note: '0.5초 간격 3연투 · 각도는 첫 발에 고정' }, skill2: { dmg: [15, 0.25], note: '벽 명중 시 1.5초 기절 + 3초 길막' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
 }
@@ -694,8 +694,9 @@ export function createGame(players, opts = {}) {
       pullT: 0, // 갈고리에 끌려오는 남은 시간(그동안 스턴)
       pullBy: null, // 나를 끌어당기는 사슬잡이 id
       stealthT: 0, // 암살자 은신 남은 시간 — 적에게 안 보인다
-      fearT: 0, // 공포(공포술사) — 시전자 반대 방향으로 강제 도주, 행동 불가
-      fearFrom: null, // 공포 도주 기준점 {x, z}
+      fearT: 0, // 공포(공포술사) — 통제 불능: 랜덤 방향 질주, 행동 불가
+      fearDir: 0, // 공포 질주 방향(라디안) — FEAR_TURN_T마다 재추첨
+      fearTurnT: 0, // 다음 방향 재추첨까지 남은 시간
       slingN: 0, // 대지술사 돌팔매 — 남은 연투 수 (>0이면 시퀀스 진행 중)
       slingT: 0, // 다음 발사까지 남은 시간
       slingDir: 0, // 첫 발에 고정된 발사 각도
@@ -888,15 +889,17 @@ function trailSampleBack(h, secs) {
 const canAct = (h) => h.respawnT <= 0 && h.stunT <= 0 && h.fearT <= 0 // 공포 중엔 공격/시전 불가(도망만)
 
 // ── 신규 직업 상수 ──
-// 공포술사: 공포 = 시전자 반대 방향으로 강제 도주(새 CC). 넉백(밀침)·도발(끌림)과 구분되는 심리 CC.
+// 공포술사: 공포 = 통제 불능(새 CC). 도망이 아니라 컨트롤을 잃고 아무 방향으로나 갈팡질팡 내달린다.
+//  넉백(밀침)·도발(끌림)과 구분되는 심리 CC — 어디로 튈지 몰라 시전자도 등 뒤를 장담 못 한다.
 const FEAR_RANGE = 10 // 공포의 시선 부채꼴 길이
 const FEAR_HALF_ANG = 0.55 // 부채꼴 절반 각(rad)
-const FEAR_T = 2 // 스킬 공포 지속
+const FEAR_T = 1.5 // 스킬 공포 지속 — 방향이 두어 번 바뀌는 갈팡질팡이 보일 만큼
 const SPECTRE_T = 2.2 // 망령걸음(가속+어둠 장막) 지속
 const SHRIEK_RADIUS = 9 // 단말마 반경
-const SHRIEK_FEAR_T = 2
+const SHRIEK_FEAR_T = 1.6
 const SHRIEK_TELE_RANGE = 16 // 단말마 순간이동 사거리(보이는 적 탐색) — 적진으로 파고드는 이니시
-const FEAR_FLEE_SPD = 0.25 // 도주 속도 배율(본인 이속 기준) — 공포에 얼어붙어 겨우 기어간다
+const FEAR_FLEE_SPD = 0.7 // 질주 속도 배율(본인 이속 기준) — 약한 슬로우
+const FEAR_TURN_T = 0.4 // 이 간격마다 질주 방향을 무작위로 다시 뽑는다
 // 환영무희: 분신(미끼/전투형) + 자리바꿈
 const CLONE_LIFE = 6 // 분신 수명(초)
 const CLONE_HP_COEF = 1.6 // 분신 체력 = 주력 스탯 × 계수 (잘 속을 만큼은 단단하게)
@@ -928,11 +931,13 @@ const CAGE_RANGE = 14 // 바위감옥 시전 사거리
 const CAGE_RADIUS = 5.2 // 감옥 반지름
 const CAGE_LIFE = 2.5 // 감옥 지속
 
-// 공포 부여 — 검투의 분노(CC 감소) 존중, 귀환 채널링도 끊는다
-function applyFear(e, from, t) {
+// 공포 부여 — 통제를 잃고 아무 방향으로나 내달린다(첫 방향부터 무작위).
+//  검투의 분노(CC 감소) 존중, 귀환 채널링도 끊는다. rng는 시드 고정(state.rng) — 넷플레이 결정성 유지.
+function applyFear(state, e, t) {
   const cc = e.rageT > 0 ? RAGE_CC_CUT : 1
   e.fearT = Math.max(e.fearT, t * cc)
-  e.fearFrom = { x: from.x, z: from.z }
+  e.fearDir = state.rng() * Math.PI * 2
+  e.fearTurnT = FEAR_TURN_T
   cancelRecall(e)
 }
 
@@ -1310,7 +1315,6 @@ export function useItem(state, id, slot) {
     h.slowT = 0
     h.poisonT = 0
     h.fearT = 0
-    h.fearFrom = null
     if (h.tauntT > 0) {
       h.tauntT = 0
       h.tauntBy = null
@@ -1669,7 +1673,7 @@ const SKILLS = {
     damageHero(state, foe, skillDmg(h, 40, 0.9), h) // 주문력 계수
     pushFx(state, 'timeleap', h.x, h.z, 3, h.team)
   },
-  // 공포술사 공포의 시선: 전방 부채꼴의 적에게 피해 + 공포(내게서 강제 도주)
+  // 공포술사 공포의 시선: 전방 부채꼴의 적에게 피해 + 공포(통제 불능 — 랜덤 방향 질주)
   fearmonger(state, h) {
     const foe = nearestFoeHero(state, h, FEAR_RANGE)
     if (!foe) return false
@@ -1684,7 +1688,7 @@ const SKILLS = {
       while (da < -Math.PI) da += 2 * Math.PI
       if (Math.abs(da) > FEAR_HALF_ANG) continue
       damageHero(state, e, skillDmg(h, 30, 0.55), h) // 주문력 계수
-      applyFear(e, h, FEAR_T)
+      applyFear(state, e, FEAR_T)
       hitAny = true
     }
     if (!hitAny) return false
@@ -1946,8 +1950,8 @@ const ULTS = {
     for (const e of state.heroes) {
       if (e.team === h.team || e.respawnT > 0 || dist2(h, e) > r2) continue
       damageHero(state, e, skillDmg(h, 40, 0.6), h) // 주문력 계수
-      applyFear(e, h, SHRIEK_FEAR_T)
-      applyPoison(e, h, skillDmg(h, 10, 0.18), 2) // 도주 중 어둠 도트
+      applyFear(state, e, SHRIEK_FEAR_T)
+      applyPoison(e, h, skillDmg(h, 10, 0.18), 2) // 정신없이 내닫는 동안 어둠 도트
     }
     pushFx(state, 'shriek', h.x, h.z, SHRIEK_RADIUS, h.team)
     h.revealT = Math.max(h.revealT, REVEAL_TIME)
@@ -2045,7 +2049,6 @@ const SKILLS2 = {
     h.stunT = 0
     h.freezeT = 0
     h.fearT = 0 // 공포도 떨쳐낸다
-    h.fearFrom = null
     h.revealT = Math.max(h.revealT, REVEAL_TIME)
     pushFx(state, 'berserk', h.x, h.z, 3.5, h.team)
   },
@@ -2504,7 +2507,6 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   victim.hookWindT = 0
   victim.pullT = 0
   victim.fearT = 0
-  victim.fearFrom = null
   victim.slingN = 0 // 죽으면 남은 연투도 끊긴다
   // 영웅은 공중 분해 버스트 대신, 렌더러가 시체를 바닥에 쌓이는 파티클로 표현한다(부활까지 유지).
   // 킬 크레딧: 마지막으로 때린 적 영웅이 최근(KILL_CREDIT_T 초)일 때만. 오래됐으면
@@ -2804,7 +2806,7 @@ function stepHero(state, h, dt) {
   h.bladeT = Math.max(0, h.bladeT - dt)
   if (h.barrierT > 0 && (h.barrierT = Math.max(0, h.barrierT - dt)) === 0) h.barrierHp = 0
   h.stealthT = Math.max(0, h.stealthT - dt)
-  if (h.fearT > 0 && (h.fearT = Math.max(0, h.fearT - dt)) === 0) h.fearFrom = null
+  h.fearT = Math.max(0, h.fearT - dt)
   h.hasteT = Math.max(0, h.hasteT - dt)
   if (h.tauntT > 0 && (h.tauntT = Math.max(0, h.tauntT - dt)) === 0) h.tauntBy = null
   h.revealT = Math.max(0, h.revealT - dt)
@@ -2915,13 +2917,18 @@ function stepHero(state, h, dt) {
     if (h.knockT <= 0) { h.knockVx = 0; h.knockVz = 0; h.knockStun = 0 }
     h.bushI = state.map.bushIndexAt(h.x, h.z)
   }
-  // 공포(공포술사): 시전자 반대 방향으로 강제 도주 — 이동 입력 무시 (기절/속박이 겹치면 그쪽이 우선)
-  if (h.fearT > 0 && h.stunT <= 0 && h.rootT <= 0 && h.knockT <= 0 && h.pullT <= 0 && h.fearFrom) {
-    const away = Math.atan2(h.z - h.fearFrom.z, h.x - h.fearFrom.x)
-    h.dir = away
+  // 공포(공포술사): 통제 불능 — 컨트롤을 잃고 랜덤한 방향으로 갈팡질팡 내달린다(약한 슬로우).
+  //  이동 입력 무시 (기절/속박이 겹치면 그쪽이 우선). 방향은 FEAR_TURN_T마다 재추첨 — 어디로 튈지 모른다.
+  if (h.fearT > 0 && h.stunT <= 0 && h.rootT <= 0 && h.knockT <= 0 && h.pullT <= 0) {
+    h.fearTurnT -= dt
+    if (h.fearTurnT <= 0) {
+      h.fearDir = state.rng() * Math.PI * 2
+      h.fearTurnT = FEAR_TURN_T
+    }
+    h.dir = h.fearDir
     const sp = heroSpeed(h) * FEAR_FLEE_SPD * (h.freezeT > 0 ? FREEZE_MOVE : 1)
-    h.x += Math.cos(away) * sp * dt
-    h.z += Math.sin(away) * sp * dt
+    h.x += Math.cos(h.fearDir) * sp * dt
+    h.z += Math.sin(h.fearDir) * sp * dt
   }
   // 이동 — 기절·정신집중·귀환 채널·속박·발사준비·넉백·공포 중엔 제자리에 멈춘다(이동 입력 무시)
   if (h.stunT <= 0 && h.castT <= 0 && h.recallT <= 0 && h.rootT <= 0 && h.hookWindT <= 0 && h.knockT <= 0 && h.fearT <= 0) {
