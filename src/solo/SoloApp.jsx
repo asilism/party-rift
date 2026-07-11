@@ -513,7 +513,7 @@ function SoloHelp({ onClose }) {
 
         <div className="solo-help__sec">
           <h3>💡 꿀팁</h3>
-          <p>🌿 수풀에 숨으면 안 보여요 · 🐉 용/🐍 이무기는 팀 버프 · 위험하면 🏠 귀환!</p>
+          <p>🌿 수풀에 숨으면 안 보여요 · 🐉 용/👹 이무기는 팀 버프 · 위험하면 🏠 귀환!</p>
         </div>
 
         <button className="toy-btn toy-btn--yellow solo-help__ok" onClick={onClose}>알겠어, 가보자!</button>

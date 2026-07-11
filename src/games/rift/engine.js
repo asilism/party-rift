@@ -151,7 +151,7 @@ export const CLASSES = {
     hp: 560, hpLvl: 62, atk: 50, atkLvl: 7, range: 5, atkCd: 0.8, speed: 12.8, def: 0.9,
     skill: { name: '사슬갈고리', icon: '⛓️', cd: 9, desc: '직선으로 사슬을 던져 첫 적을 끌어오고 잠시 속박 + 피해' },
     skill2: { name: '옭아매기', icon: '🕸️', cd: 11, desc: '주변 적을 사슬로 묶어 잠시 이동 불가(피해)' },
-    ult: { name: '철쇄 단죄', icon: '🪓', cd: 60, desc: '주변 적을 강하게 내리쳐 큰 피해 + 속박 연장' },
+    ult: { name: '단죄', icon: '🪓', cd: 60, desc: '주변 적을 강하게 내리쳐 큰 피해 + 속박 연장' },
   },
   beastmaster: {
     name: '야수조련사', icon: '🐺', desc: '늑대와 곰을 부려 함께 싸우는 소환사',
@@ -423,8 +423,8 @@ const HOOK_HIT_R = HERO_RADIUS + 0.7 // 투사체 적중 반경
 const HOOK_PULL_TIME = 1.0 // 끌려오는 시간 — 그동안 천천히 당겨지며 아무것도 못 함(스턴)
 const ENSNARE_RADIUS = 7 // 옭아매기 반경
 const ENSNARE_ROOT = 1.2 // 옭아매기 속박 시간
-const GUILLOTINE_RADIUS = 7 // 철쇄 단죄 반경
-const GUILLOTINE_ROOT = 1.2 // 철쇄 단죄 속박 연장
+const GUILLOTINE_RADIUS = 7 // 단죄 반경
+const GUILLOTINE_ROOT = 1.2 // 단죄 속박 연장
 // ── 넝쿨사냥꾼(P6): 원거리 속박 정글러 — 멀리서 묶고, 아군에게 순간이동해 합류 ──
 const NET_RANGE = 18 // 올가미 사거리(앞으로 직선) — 15의 1.2배(밸런스 패스 2)
 const NET_HALF = HERO_RADIUS * 1.2 // 올가미 폭(반) — 1.2배 확대
@@ -687,7 +687,7 @@ export function createGame(players, opts = {}) {
       bindAnchorT: 0, // (수호기사) 결속 진형을 유지 중인 시간 — 링크/구체 연출용
       vulnT: 0, // 주술사 낙인 — 받는 피해 증가 남은 시간
       parryT: 0, // 검성 발도 카운터 유효 시간(받는 첫 피해 무효 + 반격)
-      rootT: 0, // 사슬잡이 속박(옭아매기/철쇄 단죄) — 이동 불가(공격/시전은 가능)
+      rootT: 0, // 사슬잡이 속박(옭아매기/단죄) — 이동 불가(공격/시전은 가능)
       bladeT: 0, // 검성 무형검 — 사거리·공격속도 ↑
       hookWindT: 0, // 사슬잡이 발사 준비 남은 시간
       hookDir: 0, // 발사 방향(준비 시작 시 고정)
@@ -1851,7 +1851,7 @@ const ULTS = {
     h.bladeT = BLADE_TIME
     pushFx(state, 'berserk', h.x, h.z, 3, h.team)
   },
-  // 사슬잡이 철쇄 단죄: 주변 적을 강하게 내리쳐 큰 피해 + 속박 연장
+  // 사슬잡이 단죄: 주변 적을 강하게 내리쳐 큰 피해 + 속박 연장
   catcher(state, h) {
     const r2 = GUILLOTINE_RADIUS * GUILLOTINE_RADIUS
     let hitAny = false
@@ -2593,7 +2593,7 @@ function damageMonster(state, m, amount, attacker) {
       m.kind,
       m.kind === 'dragon'
         ? `🐉 ${attacker.team === 'blue' ? '파랑팀' : '빨강팀'}이 용을 잡았다! 공격력 UP!`
-        : `🐍 ${attacker.team === 'blue' ? '파랑팀' : '빨강팀'}이 이무기를 잡았다! 강해졌다!!`
+        : `👹 ${attacker.team === 'blue' ? '파랑팀' : '빨강팀'}이 이무기를 잡았다! 강해졌다!!`
     )
   }
 }
@@ -3229,7 +3229,7 @@ function stepMonsters(state, dt) {
         m.z = m.camp.z
         m.combatT = 0 // 분노 초기화
         if (m.kind === 'dragon') pushFeed(state, 'spawn', '🐉 용이 나타났다! (아래 강가)')
-        else if (m.kind === 'baron') pushFeed(state, 'spawn', '🐍 이무기가 나타났다! (위 강가)')
+        else if (m.kind === 'baron') pushFeed(state, 'spawn', '👹 이무기가 나타났다! (위 강가)')
       }
       continue
     }
@@ -4670,7 +4670,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
   } else if (h.cls === 'swordmaster' && (nearCount >= 1 || d < 8)) {
     castUlt(state, h.id) // 무형검으로 평타 몰아치기
   } else if (h.cls === 'catcher' && (nearCount >= 2 || (d < GUILLOTINE_RADIUS && foe.hp < foe.maxHp * 0.6))) {
-    castUlt(state, h.id) // 철쇄 단죄
+    castUlt(state, h.id) // 단죄
   } else if (h.cls === 'snarer' && (nearCount >= 2 || d < SNARE_RADIUS)) {
     castUlt(state, h.id) // 포획망으로 한타를 묶는다
   } else if (h.cls === 'beastmaster' && (nearCount >= 1 || d < 10)) {
