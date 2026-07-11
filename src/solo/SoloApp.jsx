@@ -48,6 +48,7 @@ export default function SoloApp() {
   const [net, setNet] = useState(null)
   const netRef = useRef(null)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [exitAsk, setExitAsk] = useState(false) // 전투 중 뒤로가기 → "나갈까요?" 확인
   useEffect(() => () => netRef.current?.close(), [])
 
   function go(next) {
@@ -97,21 +98,85 @@ export default function SoloApp() {
     setScreen('char') // 모드·난이도 유지한 채 "한 판 더" 흐름
   }
 
-  // ESC = 뒤로 (전투 중엔 게임 메뉴가 담당)
+  // 뒤로가기(ESC/안드로이드 하드웨어 버튼) 공통 처리:
+  //  가이드 열림 → 닫기 / 전투 중 → 일시정지 + "나갈까요?" 확인 / 메뉴 → 이전 화면 / 타이틀 → 앱 종료(안드로이드만)
   useEffect(() => {
-    if (screen === 'play' || screen === 'title') return undefined
     const back = { profile: profile ? 'menu' : 'title', menu: 'title', mode: 'menu', char: 'mode', records: 'menu', licenses: 'menu' }
-    const onKey = (e) => {
-      if (e.key === 'Escape' && back[screen]) setScreen(back[screen])
+    const handleBack = () => {
+      if (helpOpen) { saveGuideSeen(); setHelpOpen(false); return }
+      if (screen === 'play') {
+        if (exitAsk) { setExitAsk(false); netRef.current?.rtPause(false) } // 확인창에서 뒤로 = 계속 싸우기
+        else { setExitAsk(true); netRef.current?.rtPause(true) }
+        return
+      }
+      if (back[screen]) { setScreen(back[screen]); return }
+      // 타이틀에서 뒤로 = 안드로이드 관례상 앱 종료 (웹/데스크톱은 무시)
+      if (screen === 'title' && window.Capacitor?.isNativePlatform?.()) {
+        import('@capacitor/app').then(({ App }) => App.exitApp()).catch(() => {})
+      }
     }
+    const onKey = (e) => { if (e.key === 'Escape') handleBack() }
+    const onBack = () => handleBack()
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [screen, profile])
+    window.addEventListener('zodiac-back', onBack)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('zodiac-back', onBack)
+    }
+  }, [screen, profile, helpOpen, exitAsk])
+
+  // 안드로이드 하드웨어 뒤로가기 → zodiac-back 이벤트로 위 핸들러에 합류
+  useEffect(() => {
+    if (!window.Capacitor?.isNativePlatform?.()) return undefined
+    let handle = null
+    let dead = false
+    import('@capacitor/app').then(({ App }) => {
+      const p = App.addListener('backButton', () => window.dispatchEvent(new CustomEvent('zodiac-back')))
+      Promise.resolve(p).then((h) => { if (dead) h.remove?.(); else handle = h })
+    }).catch(() => {})
+    return () => {
+      dead = true
+      handle?.remove?.()
+    }
+  }, [])
+
+  // 백그라운드로 가면(전화·홈 화면) 전투를 자동 일시정지 — 복귀하면 기존 일시정지
+  // 화면("재개하기" 버튼)이 떠 있어 유저 타이밍에 재개한다.
+  useEffect(() => {
+    if (screen !== 'play') return undefined
+    const onVis = () => {
+      if (document.hidden) netRef.current?.rtPause(true)
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [screen])
 
   if (screen === 'play') {
     return (
       <Suspense fallback={<div className="net-screen"><div className="net-screen__icon">⏳</div><p>전장을 불러오는 중...</p></div>}>
         <RiftGame net={net} onExit={exitBattle} />
+        {exitAsk && (
+          <div className="solo-help" onClick={() => { setExitAsk(false); netRef.current?.rtPause(false) }}>
+            <div className="toy-card solo-help__card" onClick={(e) => e.stopPropagation()}>
+              <h2 className="toy-heading">전투에서 나갈까요?</h2>
+              <p className="toy-sub">지금 나가면 이 판은 전적에 기록되지 않아요</p>
+              <div className="solo-exit__btns">
+                <button
+                  className="toy-btn toy-btn--green"
+                  onClick={() => { setExitAsk(false); netRef.current?.rtPause(false) }}
+                >
+                  ⚔️ 계속 싸우기
+                </button>
+                <button
+                  className="toy-btn toy-btn--orange"
+                  onClick={() => { setExitAsk(false); exitBattle() }}
+                >
+                  🚪 나가기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </Suspense>
     )
   }

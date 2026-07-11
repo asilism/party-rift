@@ -3048,6 +3048,9 @@ body {
 .solo-help__sec ul { padding-left: 18px; }
 .solo-help__sec b { color: var(--ink); }
 .solo-help__ok { margin-top: 4px; align-self: center; min-width: 220px; }
+/* 전투 이탈 확인 — 계속/나가기 두 버튼 나란히 */
+.solo-exit__btns { display: flex; gap: 10px; justify-content: center; margin-top: 6px; }
+.solo-exit__btns .toy-btn { min-width: 150px; }
 
 /* 낮은 화면(모바일 가로 등): 세로 예산 추가 절약 — 설명은 줄이고 스킬 설명은 숨긴다 */
 @media (max-height: 470px) {
