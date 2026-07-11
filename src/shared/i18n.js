@@ -40,6 +40,36 @@ export function switchLang(next, resumeScreen = 'settings') {
   window.location.reload()
 }
 
+// 킬/오브젝트 피드 번역 — 엔진이 조립한 한국어 문장에서 고정 구절만 치환한다.
+//  이름(봇 이름은 로스터 생성 시 이미 현지화)·이모지·숫자는 그대로 남는다.
+const FEED_PARTS = [
+  [' 처치!', ' slain!'],
+  [' 쓰러짐!', ' down!'],
+  ['💰현상금 +', '💰Bounty +'],
+  ['(도움: ', '(assist: '],
+  ['최후의 포탑 파괴! 수호석이 열렸다!', 'last tower destroyed — the Guardian Stone is exposed!'],
+  ['외곽 타워 파괴!', 'outer tower destroyed!'],
+  ['내곽 타워 파괴!', 'inner tower destroyed!'],
+  ['🐉 용이 나타났다! (아래 강가)', '🐉 The Dragon has appeared! (south river)'],
+  ['👹 이무기가 나타났다! (위 강가)', '👹 The Imugi has appeared! (north river)'],
+  ['이 이무기를 잡았다! 강해졌다!!', ' team slew the Imugi — empowered!!'],
+  ['이 용을 잡았다! 강해졌다!', ' team slew the Dragon — empowered!'],
+  ['파랑팀', 'Blue'],
+  ['빨강팀', 'Red'],
+  ['파랑 ', 'Blue '],
+  ['빨강 ', 'Red '],
+  ['윗길 ', 'Top '],
+  ['가운데길 ', 'Mid '],
+  ['아랫길 ', 'Bot '],
+]
+
+export function tFeed(msg) {
+  if (lang === 'ko' || !msg) return msg
+  let out = msg
+  for (const [ko, en] of FEED_PARTS) out = out.split(ko).join(en)
+  return out
+}
+
 export function t(str) {
   if (lang === 'ko' || str == null) return str
   return DICT[str] ?? str
@@ -190,11 +220,11 @@ const DICT = {
   '큰판': 'Big',
   '봇 난이도': 'Bot difficulty',
   '😌 쉬움': '😌 Easy',
-  '🙂 보통': '🙂 Normal',
-  '😈 어려움': '😈 Hard',
+  '⚔️ 보통': '⚔️ Normal',
+  '🔥 어려움': '🔥 Hard',
   '봇이 뜸을 들이고 덜 아파요 — 처음이라면 여기부터': 'Bots hesitate and hit softer — start here if you are new',
-  '기본 밸런스 그대로': 'The baseline balance',
-  '봇이 빠르게 반응하고 더 아파요': 'Bots react faster and hit harder',
+  '온라인과 같은 봇': 'Same bots as online',
+  '칼같이 반응하고 더 아프게': 'Razor-sharp reactions, harder hits',
   '아직 기록이 없어 — 첫 판을 치르고 오자! ⚔️': 'No records yet — go win your first match! ⚔️',
   '전투에서 나갈까요?': 'Leave the battle?',
   '지금 나가면 이 판은 전적에 기록되지 않아요': "If you leave now, this match won't be recorded",
@@ -274,4 +304,92 @@ const DICT = {
   '방장이 게임을 잠시 멈췄어요...': 'The host paused the game...',
   '🏃 달리기': '🏃 Run',
   '⚔️ 평타': '⚔️ Attack',
+  // 상점 카테고리·스탯
+  '마법': 'Magic', '방어': 'Defense', '유틸': 'Utility',
+  '공격력': 'Attack', '주문 위력': 'Spell Power', '체력': 'HP', '피해 감소': 'Damage Reduction',
+  '이동 속도': 'Move Speed', '공격 속도': 'Attack Speed', '쿨다운 감소': 'Cooldown Reduction',
+  '체력 재생': 'HP Regen', '흡혈': 'Lifesteal', '사거리': 'Range',
+
+  // 아이템 이름
+  '마력의 구슬': 'Mana Orb', '화염의 핵': 'Flame Core', '지혜의 모자': 'Hat of Wisdom',
+  '서리 지팡이': 'Frost Staff', '영혼의 등불': 'Soul Lantern', '폭풍의 셉터': 'Storm Scepter',
+  '공허의 지팡이': 'Void Staff', '대마법사의 홀': "Archmage's Scepter",
+  '단검': 'Dagger', '장검': 'Longsword', '흡혈낫': 'Vampire Scythe', '광폭의 장갑': 'Rage Gloves',
+  '광전사의 도끼': "Berserker's Axe", '결투가의 레이피어': "Duelist's Rapier",
+  '처형자의 대검': "Executioner's Greatsword", '용살자의 대검': 'Dragonslayer Greatsword',
+  '가죽 갑옷': 'Leather Armor', '강철 판금': 'Steel Plate', '수호의 망토': 'Guardian Cloak',
+  '거인의 심장': "Giant's Heart", '전장의 깃발': 'War Banner', '거울 방패': 'Mirror Shield',
+  '가시 갑옷': 'Thornmail', '불멸의 갑주': 'Immortal Plate',
+  '신속의 장화': 'Swift Boots', '빛의 부적': 'Light Charm', '사냥꾼의 인장': "Hunter's Seal",
+  '재생의 목걸이': 'Regen Pendant', '회복의 물병': 'Healing Flask', '정화의 종': 'Cleansing Bell',
+  '현자의 돌': "Sage's Stone", '시간의 모래시계': 'Hourglass of Time',
+
+  // 아이템 설명
+  '주문 위력을 살짝 올려준다.': 'A small boost to spell power.',
+  '스킬·궁극기 위력이 크게 오른다.': 'Greatly increases skill & ultimate power.',
+  '주문 위력 + 쿨다운 감소.': 'Spell power + cooldown reduction.',
+  '주문 위력 + 단단함.': 'Spell power + toughness.',
+  '주문 위력 + 꾸준한 재생 — 라인에 오래 버티는 마법사용.': 'Spell power + steady regen — for mages who hold the lane.',
+  '주문 위력 + 공격 속도 — 평타를 섞어 싸우는 전투 마법사용.': 'Spell power + attack speed — for battle mages who weave attacks.',
+  '주문 위력을 폭발적으로 올린다.': 'An explosive boost to spell power.',
+  '주문 위력 + 쿨다운 + 체력. 마법 최종 장비.': 'Spell power + cooldown + HP. The final magic item.',
+  '값싼 공격력.': 'Cheap attack power.',
+  '묵직한 공격력.': 'Solid attack power.',
+  '공격력 + 때릴 때마다 흡혈.': 'Attack + lifesteal on every hit.',
+  '공격 속도를 크게 올린다.': 'Greatly increases attack speed.',
+  '공격력 + 이동 속도 — 추격전에 강하다.': 'Attack + move speed — built for the chase.',
+  '공격력 + 쿨다운 감소 — 스킬을 섞어 싸우는 전사용.': 'Attack + cooldown reduction — for skill-weaving fighters.',
+  '압도적인 공격력.': 'Overwhelming attack power.',
+  '엄청난 공격력 + 공격 속도 + 흡혈. 공격 최종 장비.': 'Huge attack + attack speed + lifesteal. The final attack item.',
+  '값싼 체력.': 'Cheap HP.',
+  '체력 + 피해 감소.': 'HP + damage reduction.',
+  '받는 피해를 크게 줄이고 주문 위력도 더해 준다 — 무른 마법사용 방어구.': 'Greatly reduces damage taken and adds spell power — armor for squishy mages.',
+  '엄청난 체력.': 'Massive HP.',
+  '체력 + 공격력 — 맞으면서 때리는 브루저용.': 'HP + attack — for bruisers who trade hits.',
+  '피해 감소 + 체력 + 쿨다운 감소.': 'Damage reduction + HP + cooldown reduction.',
+  '체력 + 피해 감소 + 재생.': 'HP + damage reduction + regen.',
+  '거대한 체력 + 피해 감소 + 재생 + 주문 위력. 마법사도 단단해지는 방어 최종 장비.': 'Huge HP + damage reduction + regen + spell power. The final defense item.',
+  '발이 빨라진다.': 'Makes you faster.',
+  '스킬을 더 자주 쓴다.': 'Cast skills more often.',
+  '사거리 + 약간의 공격력.': 'Range + a little attack.',
+  '체력이 꾸준히 차오른다.': 'Steadily restores HP.',
+  '사용하면 즉시 최대 체력의 25%를 회복한다 (아이콘 탭/클릭).': 'Use to instantly heal 25% of max HP (tap/click the icon).',
+  '사용하면 기절·빙결·속박·도발·둔화·중독·공포를 즉시 해제한다 (CC 중에도 사용 가능).': 'Use to instantly cleanse stun, chill, root, taunt, slow, poison and fear (usable while CCed).',
+  '모든 능력치를 조금씩.': 'A little of everything.',
+  '쿨다운·이동 속도·위력·체력을 두루. 유틸 최종 장비.': 'Cooldown, speed, power and HP in one. The final utility item.',
+  '25% 회복': 'Heal 25%',
+  'CC 해제': 'Cleanse',
+
+  // 상점 UI
+  '✕ 닫기': '✕ Close',
+  '↺ 되돌리기': '↺ Undo',
+  '상점에 들어온 시점으로 되돌립니다 (무료). 상점을 벗어나면 그 전 구매는 취소할 수 없어요.': 'Reverts to when you entered the shop (free). Purchases made before leaving cannot be undone.',
+  '아직 장비가 없어요': 'No items yet',
+  '보유중': 'Owned',
+  '되팔기': 'Sell',
+  '돌려받음': 'back',
+  '조합 재료': 'Recipe',
+  '갖고 있으면 그 가격만큼 할인 + 슬롯 확보': 'owned parts discount the price and free their slot',
+  '사용 효과': 'Active',
+  '쿨다운': 'Cooldown',
+  '사용 효과가 있는 아이템': 'Item with an active effect',
+  '🎒 인벤토리가 꽉 찼어요 — 되팔아 자리를 비우세요.': '🎒 Inventory is full — sell something to make room.',
+  '병사·정글몹·타워·적 영웅을 처치해 골드를 모으세요!': 'Earn gold by killing soldiers, jungle monsters, towers and enemy heroes!',
+  ' · ↺ 되돌리기로 이번 구매를 무료 취소(상점을 벗어나기 전까지)': " · ↺ Undo cancels this visit's purchases for free (until you leave the shop)",
+
+  // 봇 이름·대기 문구
+  '봇': ' Bot',
+  '나': 'You',
+  '이제 곧 경기가 시작합니다… ⚔️': 'The match is about to begin… ⚔️',
+  '전장을 준비하고 있어요... ⚔️': 'Preparing the battlefield... ⚔️',
+
+  // 조작 가이드
+  '🎮 처음 오셨나요?': '🎮 First time here?',
+  '🏆 목표': '🏆 Goal',
+  '🕹️ 조작': '🕹️ Controls',
+  '(게임 중 ⚙️ 설정에서 바꿀 수 있어요)': '(changeable in ⚙️ settings during a match)',
+  '📈 성장': '📈 Growth',
+  '💡 꿀팁': '💡 Tips',
+  '알겠어, 가보자!': "Got it, let's go!",
+  '수호석이 공격받고 있어요!': 'Your Guardian Stone is under attack!',
 }

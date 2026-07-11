@@ -2493,6 +2493,26 @@ body {
   .rift-shop__grid { grid-template-columns: 1fr; }
 }
 
+/* 낮은 화면(모바일 가로): 상점 전체를 압축 — 슬롯·아이템 행·글자 축소로 92vh 안에 수납 */
+@media (max-height: 470px) {
+  .rift-shop__panel { padding: 8px 10px; gap: 6px; max-height: 96vh; }
+  .rift-shop__who { font-size: 13px; }
+  .rift-shop__gold { font-size: 14px; }
+  .rift-shop__inv { padding: 5px; gap: 5px; }
+  .rift-shop__slot { width: 44px; height: 44px; border-radius: 9px; }
+  .rift-shop__slot-icon { font-size: 18px; }
+  .rift-shop__sell small { font-size: 7.5px; max-width: 42px; }
+  .rift-shop__sell-tag { font-size: 8px; top: -6px; right: -6px; }
+  .rift-shop__stat { font-size: 9.5px; }
+  .rift-shop__tab { padding: 4px 3px; font-size: 12px; }
+  .rift-shop__grid { gap: 5px; }
+  .rift-shop__item { padding: 5px 7px; gap: 7px; }
+  .rift-shop__item-icon { font-size: 20px; }
+  .rift-shop__item-name { font-size: 12px; }
+  .rift-shop__item-cost { font-size: 11px; }
+  .rift-shop__foot { font-size: 10px; }
+}
+
 /* ══════════════════════════════════════════════════════════
    접속 대문(SSH 스타일) · 매치메이킹 큐 · 드래프트
    ══════════════════════════════════════════════════════════ */

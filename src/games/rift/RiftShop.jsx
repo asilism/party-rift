@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CATEGORIES, ITEMS, getItem, sumStats, STAT_LABEL, ITEM_SLOTS, SELL_REFUND, buildQuote } from './items.js'
 import { CLASSES } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
+import { t } from '../../shared/i18n.js'
 
 // 아이템 능력치를 한 줄 칩들로 (예: "공격력 +45"). 실제 적용되는(배율 포함) 값으로 보여 준다.
 function StatTags({ stats }) {
@@ -9,7 +10,7 @@ function StatTags({ stats }) {
     <span className="rift-shop__stats">
       {Object.entries(stats).filter(([, v]) => v).map(([k, v]) => (
         <span key={k} className="rift-shop__stat">
-          {STAT_LABEL[k]?.name} {STAT_LABEL[k]?.fmt(v)}
+          {t(STAT_LABEL[k]?.name)} {STAT_LABEL[k]?.fmt(v)}
         </span>
       ))}
     </span>
@@ -34,7 +35,7 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
       <div className="rift-shop__panel">
         <div className="rift-shop__head">
           <div className="rift-shop__title">
-            <span className="rift-shop__who">{getZodiac(me.zodiacId)?.emoji} {cls?.icon}{cls?.name}</span>
+            <span className="rift-shop__who">{getZodiac(me.zodiacId)?.emoji} {cls?.icon}{t(cls?.name)}</span>
             <span className="rift-shop__gold">💰 {me.gold}</span>
           </div>
           <div className="rift-shop__head-btns">
@@ -43,12 +44,12 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
                 className="btn btn--ghost rift-shop__undo"
                 onClick={onResetShop}
                 disabled={!me.shopUndo}
-                title="상점에 들어온 시점으로 되돌립니다 (무료). 상점을 벗어나면 그 전 구매는 취소할 수 없어요."
+                title={t('상점에 들어온 시점으로 되돌립니다 (무료). 상점을 벗어나면 그 전 구매는 취소할 수 없어요.')}
               >
-                ↺ 되돌리기
+                {t('↺ 되돌리기')}
               </button>
             )}
-            <button className="btn btn--ghost rift-shop__close" onClick={onClose}>✕ 닫기</button>
+            <button className="btn btn--ghost rift-shop__close" onClick={onClose}>{t('✕ 닫기')}</button>
           </div>
         </div>
 
@@ -63,10 +64,10 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
                   <button
                     className="rift-shop__sell"
                     onClick={() => onSell(i)}
-                    title={`${it.name} 되팔기 — 💰${sellPrice} 돌려받음`}
+                    title={`${t(it.name)} ${t('되팔기')} — 💰${sellPrice} ${t('돌려받음')}`}
                   >
                     <span className="rift-shop__slot-icon">{it.icon}</span>
-                    <small>{it.name}</small>
+                    <small>{t(it.name)}</small>
                     <span className="rift-shop__sell-tag">↩ 💰{sellPrice}</span>
                   </button>
                 ) : (
@@ -77,7 +78,7 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
           })}
           <div className="rift-shop__totals">
             {Object.entries(bonus).filter(([, v]) => v).length === 0 ? (
-              <span className="rift-shop__totals-none">아직 장비가 없어요</span>
+              <span className="rift-shop__totals-none">{t('아직 장비가 없어요')}</span>
             ) : (
               <StatTags stats={Object.fromEntries(Object.entries(bonus).filter(([, v]) => v))} />
             )}
@@ -93,7 +94,7 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
               style={cat === c.id ? { '--cat': c.color } : null}
               onClick={() => setCat(c.id)}
             >
-              {c.icon} {c.name}
+              {c.icon} {t(c.name)}
             </button>
           ))}
         </div>
@@ -107,11 +108,11 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
             const afford = me.gold >= quote.price
             const hasRoom = items.length - quote.consumes.length < ITEM_SLOTS
             const canBuy = !have && hasRoom && afford
-            const recipe = (it.from || []).map((c) => getItem(c)?.name).join(' + ')
+            const recipe = (it.from || []).map((c) => t(getItem(c)?.name)).join(' + ')
             const tip = [
-              it.desc,
-              recipe && `조합 재료: ${recipe} (갖고 있으면 그 가격만큼 할인 + 슬롯 확보)`,
-              it.active && `사용 효과: ${it.active.label} (쿨다운 ${it.active.cd}초)`,
+              t(it.desc),
+              recipe && `${t('조합 재료')}: ${recipe} (${t('갖고 있으면 그 가격만큼 할인 + 슬롯 확보')})`,
+              it.active && `${t('사용 효과')}: ${t(it.active.label)} (${t('쿨다운')} ${it.active.cd}s)`,
             ].filter(Boolean).join('\n')
             return (
               <button
@@ -124,8 +125,8 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
                 <span className="rift-shop__item-icon">{it.icon}</span>
                 <span className="rift-shop__item-body">
                   <span className="rift-shop__item-name">
-                    {it.name}
-                    {it.active && <span className="rift-shop__item-active" title="사용 효과가 있는 아이템">⚡</span>}
+                    {t(it.name)}
+                    {it.active && <span className="rift-shop__item-active" title={t('사용 효과가 있는 아이템')}>⚡</span>}
                     {it.from && (
                       <span className="rift-shop__item-recipe">
                         {it.from.map((c) => getItem(c)?.icon).join('')}▶
@@ -135,7 +136,7 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
                   <StatTags stats={sumStats([it.id])} />
                 </span>
                 <span className="rift-shop__item-cost">
-                  {have ? '보유중' : combining
+                  {have ? t('보유중') : combining
                     ? <><s className="rift-shop__item-full">{it.cost}</s> 🔧💰{quote.price}</>
                     : <>💰 {it.cost}</>}
                 </span>
@@ -144,9 +145,9 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
           })}
         </div>
         <p className="rift-shop__foot">
-          {full ? '🎒 인벤토리가 꽉 찼어요 — 되팔아 자리를 비우세요.'
-            : '병사·정글몹·타워·적 영웅을 처치해 골드를 모으세요!'}
-          <span className="rift-shop__foot-note"> · ↺ 되돌리기로 이번 구매를 무료 취소(상점을 벗어나기 전까지)</span>
+          {full ? t('🎒 인벤토리가 꽉 찼어요 — 되팔아 자리를 비우세요.')
+            : t('병사·정글몹·타워·적 영웅을 처치해 골드를 모으세요!')}
+          <span className="rift-shop__foot-note">{t(' · ↺ 되돌리기로 이번 구매를 무료 취소(상점을 벗어나기 전까지)')}</span>
         </p>
       </div>
     </div>
