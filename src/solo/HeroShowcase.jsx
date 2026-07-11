@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createHeroShowcase } from '../games/rift/scene.js'
 import { CLASSES } from '../games/rift/engine.js'
+import { t } from '../shared/i18n.js'
 
 // 캐릭터 쇼케이스 — 배경 없는 투명 무대 위에서 선택한 직업의 전신 모델이
 // 이동 → 평타 → 스킬 → 보조 → 궁극 모션을 강제로 반복 재생한다.
@@ -40,7 +41,7 @@ export default function HeroShowcase({ cls, zodiacId }) {
       } else {
         stage.play(step.kind)
         const skill = step.slot ? c[step.slot] : null
-        setCaption(skill ? `${skill.icon} ${skill.name}` : step.label)
+        setCaption(skill ? `${skill.icon} ${t(skill.name)}` : t(step.label))
       }
       timer = setTimeout(next, step.dur * 1000)
     }

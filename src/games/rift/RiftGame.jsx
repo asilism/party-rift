@@ -14,6 +14,7 @@ import { loadRiftControl, saveRiftControl, loadRiftHitFx, saveRiftHitFx, loadRif
 import { useRealtimeGame } from '../../net/useRealtimeGame.js'
 import { riftNet } from './netgame.js'
 import { NetWaiting } from '../../net/NetParts.jsx'
+import { t } from '../../shared/i18n.js'
 
 // 조디악 블리츠 — 3:3 AOS. 온라인 방 전용(기기마다 조이스틱이 필요해서).
 //  - 서버 권위(④): 서버가 60Hz로 시뮬레이션을 돌리고 30Hz로 바이너리 델타 스냅샷을 방송.
@@ -228,7 +229,7 @@ function RiftRoster({ hud, crown = null }) {
   return ['blue', 'red'].map((team) => (
     <div key={team} className={`rift-result__team rift-result__team--${team}`}>
       <h4>
-        {team === 'blue' ? '🔵 파랑팀' : '🔴 빨강팀'} {crown === team ? '👑' : ''}
+        {team === 'blue' ? t('🔵 파랑팀') : t('🔴 빨강팀')} {crown === team ? '👑' : ''}
         <span className="rift-result__teamkills"> ⚔️ {hud.kills[team]}</span>
       </h4>
       {hud.heroes.filter((h) => h.team === team).map((h) => {
@@ -288,17 +289,17 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
         <div className="rift-settings__menu" role="menu">
           {onTogglePause && !finished && (
             <button className="rift-settings__item" onClick={() => { onTogglePause(); setOpen(false) }}>
-              <span>{paused ? '▶️' : '⏸️'}</span> {paused ? '재개' : '일시정지'}
+              <span>{paused ? '▶️' : '⏸️'}</span> {paused ? t('재개') : t('일시정지')}
             </button>
           )}
           <button className="rift-settings__item" onClick={onToggleSound}>
-            <span>{soundOn ? '🔊' : '🔇'}</span> 소리 {soundOn ? '켜짐' : '꺼짐'}
+            <span>{soundOn ? '🔊' : '🔇'}</span> {t('사운드')} {soundOn ? t('켜짐') : t('꺼짐')}
           </button>
           <button className="rift-settings__item" onClick={onToggleHitFx}>
-            <span>{hitFx ? '💥' : '🚫'}</span> 타격 효과 {hitFx ? '켜짐' : '꺼짐'}
+            <span>{hitFx ? '💥' : '🚫'}</span> {t('타격 효과')} {hitFx ? t('켜짐') : t('꺼짐')}
           </button>
           <button className="rift-settings__item" onClick={onCycleGfx}>
-            <span>🎨</span> 그래픽 {GFX_LABEL[gfx] || GFX_LABEL.med}
+            <span>🎨</span> {t('그래픽')} {t(GFX_LABEL[gfx] || GFX_LABEL.med)}
           </button>
           {!IS_APP_SHELL && (
             <div className="rift-settings__item rift-settings__item--full">
@@ -307,17 +308,17 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
           )}
           {/* 전투 버튼 크기 — 자동(화면 높이) 배율 위에 유저 배율을 곱한다 */}
           <div className="rift-settings__slider">
-            <span>🔘 버튼 크기</span>
+            <span>🔘 {t('버튼 크기')}</span>
             <input
               type="range" min="0.7" max="1.3" step="0.05" value={btnScale}
               onChange={(e) => onBtnScaleChange(Number(e.target.value))}
-              aria-label="버튼 크기"
+              aria-label={t('버튼 크기')}
             />
             <b>{Math.round(btnScale * 100)}%</b>
           </div>
 
           <div className="rift-settings__sep" />
-          <div className="rift-settings__label">🎮 조작 방식</div>
+          <div className="rift-settings__label">{t('🎮 조작 방식')}</div>
           {CONTROL_SCHEMES.map((s) => (
             <button
               key={s.id}
@@ -327,8 +328,8 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
             >
               <span className="rift-settings__scheme-icon">{s.icon}</span>
               <span className="rift-settings__scheme-text">
-                <strong>{s.label}{s.soon ? ' (추후 도입)' : ''}</strong>
-                <small>{s.desc}</small>
+                <strong>{t(s.label)}{s.soon ? ` (${t('추후 도입')})` : ''}</strong>
+                <small>{t(s.desc)}</small>
               </span>
               {scheme === s.id && <span className="rift-settings__scheme-check">✓</span>}
             </button>
@@ -336,7 +337,7 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
 
           <div className="rift-settings__sep" />
           <button className="rift-settings__item rift-settings__item--exit" onClick={() => { setOpen(false); onExit() }}>
-            <span>🚪</span> 나가기
+            <span>🚪</span> {t('나가기')}
           </button>
         </div>
       )}
@@ -413,7 +414,7 @@ function RiftPlay({
   const finished = hud.status === 'finished'
   const myTeam = me?.team
   // 승리 메시지를 한 글자씩 나타나게 — "파랑팀 승리"를 글자 단위로 쪼갠다(공백은 자리만 차지)
-  const winText = hud.winner === 'blue' ? '파랑팀 승리' : hud.winner === 'red' ? '빨강팀 승리' : '무승부'
+  const winText = hud.winner === 'blue' ? t('파랑팀 승리') : hud.winner === 'red' ? t('빨강팀 승리') : t('무승부')
   let winBeat = 0
   const winChars = [...winText].map((ch, i) => ({
     ch, key: i, space: ch === ' ', delay: ch === ' ' ? 0 : winBeat++ * 0.16,
@@ -476,7 +477,7 @@ function RiftPlay({
             <button
               className={`btn btn--ghost rift-board__toggle ${boardOpen ? 'rift-board__toggle--on' : ''}`}
               onClick={() => setBoardOpen((o) => !o)}
-              aria-label="전적판"
+              aria-label={t('전적판')}
               aria-expanded={boardOpen}
             >
               📊
@@ -576,7 +577,7 @@ function RiftPlay({
           <>
             <div className="rift__dead" />
             <div className="rift__respawn">
-              💀 부활까지 <b>{Math.ceil(me.respawnT)}</b>초...
+              💀 {t('부활까지')} <b>{Math.ceil(me.respawnT)}</b>{t('초')}...
             </div>
             {/* 사망 중엔 양 팀 킬스코어·아이템·레벨 현황을 한눈에 (상대 빌드 파악용) */}
             <div className="rift__dead-board">
@@ -597,9 +598,9 @@ function RiftPlay({
           <div className="rift__pause-card">
             <div className="rift__pause-emoji">⏸️</div>
             <h2>일시정지</h2>
-            <p>{onTogglePause ? '게임이 멈췄어요. 다시 시작하려면 재개를 눌러요.' : '방장이 게임을 잠시 멈췄어요...'}</p>
+            <p>{onTogglePause ? t('게임이 멈췄어요. 다시 시작하려면 재개를 눌러요.') : t('방장이 게임을 잠시 멈췄어요...')}</p>
             {onTogglePause && (
-              <button className="btn btn--primary" onClick={onTogglePause}>▶️ 재개하기</button>
+              <button className="btn btn--primary" onClick={onTogglePause}>{t('▶️ 재개하기')}</button>
             )}
           </div>
         </div>
@@ -608,7 +609,7 @@ function RiftPlay({
       {/* 우물 안 또는 사망 중에 뜨는 상점 버튼 */}
       {me && !finished && meCanShop && !shopOpen && (
         <button className="rift-shop-fab" onClick={() => setShopOpen(true)}>
-          🛒 <small>{me.respawnT > 0 ? '상점 (대기중)' : '상점'}</small>
+          🛒 <small>{me.respawnT > 0 ? t('상점 (대기중)') : t('상점')}</small>
         </button>
       )}
       {shopOpen && me && meCanShop && (

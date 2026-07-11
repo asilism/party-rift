@@ -47,6 +47,25 @@ export function saveRiftHitFx(on) {
   }
 }
 
+// ── 전역 사운드 on/off — 메인 설정과 인게임 설정이 같은 값을 쓴다 ──
+const RIFT_SOUND_KEY = 'bgp.rift.sound.v1'
+
+export function loadSoundOn() {
+  try {
+    return localStorage.getItem(RIFT_SOUND_KEY) !== 'off' // 기본값: 켜짐
+  } catch {
+    return true
+  }
+}
+
+export function saveSoundOn(on) {
+  try {
+    localStorage.setItem(RIFT_SOUND_KEY, on ? 'on' : 'off')
+  } catch {
+    /* 무시 */
+  }
+}
+
 // ── 전투 버튼 크기 배율(0.7~1.3) — 설정 메뉴 슬라이더로 조절 ──
 const RIFT_BTNSCALE_KEY = 'bgp.rift.btnscale.v1'
 

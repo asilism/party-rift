@@ -6,8 +6,9 @@ import { createLocalNet } from '../net/localNet.js'
 import { sound } from '../shared/sound.js'
 import {
   loadSoloPick, saveSoloPick, loadGuideSeen, saveGuideSeen, loadRiftRecords, addRiftRecord,
-  loadUnlockSeen, saveUnlockSeen, loadProfile, saveProfile,
+  loadUnlockSeen, saveUnlockSeen, loadProfile, saveProfile, loadSoundOn, saveSoundOn,
 } from '../shared/storage.js'
+import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
 import MenuStage from './MenuStage.jsx'
@@ -39,7 +40,17 @@ export default function SoloApp() {
     const p = loadProfile()
     return getZodiac(p) ? p : null
   })
-  const [screen, setScreen] = useState('title') // title | profile | menu | mode | char | records | play
+  const [screen, setScreen] = useState(() => {
+    // 언어 전환 등 새로고침 뒤 복귀할 화면(1회성 힌트)
+    try {
+      const r = sessionStorage.getItem('bgp.rift.resume.v1')
+      if (r) {
+        sessionStorage.removeItem('bgp.rift.resume.v1')
+        return r
+      }
+    } catch { /* 무시 */ }
+    return 'title'
+  }) // title | profile | menu | mode | char | records | settings | play
   const saved = loadSoloPick()
   const [mode, setMode] = useState(TEAM_SIZES[saved?.mode] ? saved.mode : '3v3')
   const [botLevel, setBotLevel] = useState(
@@ -55,6 +66,10 @@ export default function SoloApp() {
     sound.step()
     setScreen(next)
   }
+
+  useEffect(() => {
+    sound.setEnabled(loadSoundOn()) // 저장된 전역 사운드 설정 적용
+  }, [])
 
   function enterFromTitle() {
     sound.unlock()
@@ -101,7 +116,7 @@ export default function SoloApp() {
   // 뒤로가기(ESC/안드로이드 하드웨어 버튼) 공통 처리:
   //  가이드 열림 → 닫기 / 전투 중 → 일시정지 + "나갈까요?" 확인 / 메뉴 → 이전 화면 / 타이틀 → 앱 종료(안드로이드만)
   useEffect(() => {
-    const back = { profile: profile ? 'menu' : 'title', menu: 'title', mode: 'menu', char: 'mode', records: 'menu', licenses: 'menu' }
+    const back = { profile: profile ? 'menu' : 'title', menu: 'title', mode: 'menu', char: 'mode', records: 'menu', licenses: 'menu', settings: 'menu' }
     const handleBack = () => {
       if (helpOpen) { saveGuideSeen(); setHelpOpen(false); return }
       if (screen === 'play') {
@@ -153,25 +168,25 @@ export default function SoloApp() {
 
   if (screen === 'play') {
     return (
-      <Suspense fallback={<div className="net-screen"><div className="net-screen__icon">⏳</div><p>전장을 불러오는 중...</p></div>}>
+      <Suspense fallback={<div className="net-screen"><div className="net-screen__icon">⏳</div><p>{t('전장을 불러오는 중...')}</p></div>}>
         <RiftGame net={net} onExit={exitBattle} />
         {exitAsk && (
           <div className="solo-help" onClick={() => { setExitAsk(false); netRef.current?.rtPause(false) }}>
             <div className="toy-card solo-help__card" onClick={(e) => e.stopPropagation()}>
-              <h2 className="toy-heading">전투에서 나갈까요?</h2>
-              <p className="toy-sub">지금 나가면 이 판은 전적에 기록되지 않아요</p>
+              <h2 className="toy-heading">{t('전투에서 나갈까요?')}</h2>
+              <p className="toy-sub">{t('지금 나가면 이 판은 전적에 기록되지 않아요')}</p>
               <div className="solo-exit__btns">
                 <button
                   className="toy-btn toy-btn--green"
                   onClick={() => { setExitAsk(false); netRef.current?.rtPause(false) }}
                 >
-                  ⚔️ 계속 싸우기
+                  {t('⚔️ 계속 싸우기')}
                 </button>
                 <button
                   className="toy-btn toy-btn--orange"
                   onClick={() => { setExitAsk(false); exitBattle() }}
                 >
-                  🚪 나가기
+                  {t('🚪 나가기')}
                 </button>
               </div>
             </div>
@@ -196,8 +211,10 @@ export default function SoloApp() {
           onHelp={() => setHelpOpen(true)}
           onProfile={() => go('profile')}
           onLicenses={() => go('licenses')}
+          onSettings={() => go('settings')}
         />
       )}
+      {screen === 'settings' && <SettingsScreen onBack={() => go('menu')} />}
       {screen === 'mode' && (
         <ModeScreen
           botLevel={botLevel}
@@ -252,8 +269,8 @@ function ProfileScreen({ current, onPick, onBack }) {
     <div className="screen profile-screen">
       {onBack && <BackButton onBack={onBack} />}
       <div className="toy-card profile-card">
-        <h2 className="toy-heading">너의 수호 지신은?</h2>
-        <p className="toy-sub">전장에서 네 얼굴이 될 동물이야 — 언제든 메뉴에서 바꿀 수 있어</p>
+        <h2 className="toy-heading">{t('너의 수호 지신은?')}</h2>
+        <p className="toy-sub">{t('전장에서 네 얼굴이 될 동물이야 — 언제든 메뉴에서 바꿀 수 있어')}</p>
         <div className="profile-card__grid">
           {ZODIAC.map((z) => (
             <button
@@ -263,7 +280,7 @@ function ProfileScreen({ current, onPick, onBack }) {
               onClick={() => onPick(z.id)}
             >
               <span className="toy-zodiac__emoji">{z.emoji}</span>
-              <span className="toy-zodiac__name">{z.name}</span>
+              <span className="toy-zodiac__name">{t(z.name)}</span>
             </button>
           ))}
         </div>
@@ -273,7 +290,7 @@ function ProfileScreen({ current, onPick, onBack }) {
 }
 
 // ── 2. 메인 메뉴 ──
-function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onLicenses }) {
+function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onLicenses, onSettings }) {
   const z = getZodiac(profile)
   const records = loadRiftRecords()
   const total = Object.values(records).reduce(
@@ -289,19 +306,20 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onLicenses })
         <span className="profile-chip__emoji">{z?.emoji}</span>
         <span className="profile-chip__info">
           <b>{z?.name}</b>
-          <small>{total.games > 0 ? `${total.wins}승 ${total.games - total.wins}패` : '첫 출전 대기'}</small>
+          <small>{total.games > 0 ? `${total.wins}W ${total.games - total.wins}L` : t('첫 출전 대기')}</small>
         </span>
       </button>
       <nav className="menu-screen__list">
-        <button className="toy-btn toy-btn--yellow toy-btn--big" onClick={onPlay}>⚔️ 게임 시작</button>
+        <button className="toy-btn toy-btn--yellow toy-btn--big" onClick={onPlay}>{t('⚔️ 게임 시작')}</button>
         {/* 온라인은 멀티 재개방 때까지 비활성 (웹 온라인 플로우는 ?solo 없는 주소로 여전히 접근 가능) */}
         <button className="toy-btn toy-btn--blue is-soon" disabled>
-          🌐 온라인 <span className="toy-btn__badge">준비 중</span>
+          {t('🌐 온라인')} <span className="toy-btn__badge">{t('준비 중')}</span>
         </button>
-        <button className="toy-btn toy-btn--green" onClick={onRecords}>📊 전적</button>
-        <button className="toy-btn toy-btn--orange" onClick={onHelp}>❓ 조작법</button>
+        <button className="toy-btn toy-btn--green" onClick={onRecords}>{t('📊 전적')}</button>
+        <button className="toy-btn toy-btn--orange" onClick={onHelp}>{t('❓ 조작법')}</button>
+        <button className="toy-btn toy-btn--blue" onClick={onSettings}>{t('⚙️ 설정')}</button>
       </nav>
-      <button className="menu-screen__licenses" onClick={onLicenses}>ⓘ 오픈소스 라이선스</button>
+      <button className="menu-screen__licenses" onClick={onLicenses}>{t('ⓘ 오픈소스 라이선스')}</button>
       <div className="menu-screen__corner">
         <FullscreenButton />
       </div>
@@ -314,26 +332,26 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
   return (
     <div className="screen mode-screen">
       <BackButton onBack={onBack} />
-      <h2 className="toy-heading toy-heading--screen">어디서 싸울까?</h2>
+      <h2 className="toy-heading toy-heading--screen">{t('어디서 싸울까?')}</h2>
       <div className="mode-screen__levels">
         {BOT_LEVEL_OPTS.map((o) => (
           <button
             key={o.id}
             className={`toy-pill ${botLevel === o.id ? 'is-on' : ''}`}
-            title={o.desc}
+            title={t(o.desc)}
             onClick={() => { sound.step(); onBotLevel(o.id) }}
           >
-            {o.label}
+            {t(o.label)}
           </button>
         ))}
       </div>
       <div className="mode-screen__cards">
         {MODE_OPTS.map((m, i) => (
           <button key={m.id} className={`toy-card mode-card mode-card--${i}`} onClick={() => onPick(m.id)}>
-            <span className="mode-card__tag">{m.tag}</span>
+            <span className="mode-card__tag">{t(m.tag)}</span>
             <span className="mode-card__emoji">{m.emoji}</span>
-            <span className="mode-card__name">{m.name}</span>
-            <span className="mode-card__desc">{m.desc}</span>
+            <span className="mode-card__name">{t(m.name)}</span>
+            <span className="mode-card__desc">{t(m.desc)}</span>
           </button>
         ))}
       </div>
@@ -373,9 +391,9 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
       {/* 상단 한 줄: 뒤로 · 제목 · 모드요약 — 세로 공간 절약(모바일 가로 화면) */}
       <div className="char-screen__top">
         <BackButton onBack={onBack} />
-        <h2 className="toy-heading toy-heading--screen char-screen__heading">누구로 싸울까?</h2>
-        <button className="char-screen__setup" onClick={onBack} title="모드·난이도 바꾸기">
-          {MODE_OPTS.find((m) => m.id === mode)?.emoji} {mode} · {levelLabel} ✏️
+        <h2 className="toy-heading toy-heading--screen char-screen__heading">{t('누구로 싸울까?')}</h2>
+        <button className="char-screen__setup" onClick={onBack} title={t('모드·난이도 바꾸기')}>
+          {MODE_OPTS.find((m) => m.id === mode)?.emoji} {mode} · {t(levelLabel)} ✏️
         </button>
       </div>
 
@@ -390,11 +408,11 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
             </div>
             <div className="char-show__id">
               <div className="char-show__name">
-                {z?.name}{c && <span className="char-show__clsname"> · {c.name}</span>}
+                {t(z?.name)}{c && <span className="char-show__clsname"> · {t(c.name)}</span>}
               </div>
               {c
-                ? <p className="char-show__desc">{c.desc}</p>
-                : <p className="char-show__desc">직업을 고르면 스킬을 미리 볼 수 있어 👉</p>}
+                ? <p className="char-show__desc">{t(c.desc)}</p>
+                : <p className="char-show__desc">{t('직업을 고르면 스킬을 미리 볼 수 있어 👉')}</p>}
             </div>
           </div>
           {/* 훈련장: 선택한 직업의 전신 모델이 평타·스킬을 실제로 시전한다 */}
@@ -405,9 +423,9 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
               <>
                 <ul className="char-show__skills">
                   {[
-                    { tag: '스킬', ...c.skill },
-                    { tag: '보조 Lv3', ...c.skill2 },
-                    { tag: '궁극 Lv5', ...c.ult },
+                    { tag: t('스킬'), ...c.skill },
+                    { tag: t('보조 Lv3'), ...c.skill2 },
+                    { tag: t('궁극 Lv5'), ...c.ult },
                   ].map((s) => (
                     <li
                       key={s.tag}
@@ -417,31 +435,31 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
                       <span className="char-show__skill-icon">{s.icon}</span>
                       <span className="char-show__skill-main">
                         <b>
-                          {s.name} <small>{s.tag}</small>
+                          {t(s.name)} <small>{s.tag}</small>
                           <span className="char-show__skill-caret" aria-hidden="true">▾</span>
                         </b>
-                        <span className="char-show__skill-desc">{s.desc}</span>
+                        <span className="char-show__skill-desc">{t(s.desc)}</span>
                       </span>
                     </li>
                   ))}
                 </ul>
                 {rec?.games > 0 && (
                   <p className="char-show__rec">
-                    <b>{rec.wins}승 {rec.games - rec.wins}패</b> · 평균 ⚔️{(rec.kills / rec.games).toFixed(1)} 💀{(rec.deaths / rec.games).toFixed(1)} 🤝{(rec.assists / rec.games).toFixed(1)}
+                    <b>{rec.wins}{t('승')} {rec.games - rec.wins}{t('패')}</b> · {t('평균')} ⚔️{(rec.kills / rec.games).toFixed(1)} 💀{(rec.deaths / rec.games).toFixed(1)} 🤝{(rec.assists / rec.games).toFixed(1)}
                   </p>
                 )}
               </>
             )}
           </div>
           <button className="toy-btn toy-btn--yellow char-show__start" disabled={!cls} onClick={() => cls && onStart(cls)}>
-            {cls ? '⚔️ 출전!' : '직업을 골라줘'}
+            {cls ? t('⚔️ 출전!') : t('직업을 골라줘')}
           </button>
         </aside>
 
         <section className="char-screen__pick">
           {next && (
             <p className="char-screen__unlock">
-              🔓 승리하면 <b>{CLASSES[next].icon} {CLASSES[next].name}</b> 해금!
+              {t('🔓 승리하면')} <b>{CLASSES[next].icon} {t(CLASSES[next].name)}</b> {t('해금!')}
             </p>
           )}
           <div className="char-grid">
@@ -455,15 +473,15 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
                   key={id}
                   className={`char-card ${cls === id ? 'is-on' : ''} ${locked ? 'is-locked' : ''}`}
                   disabled={locked}
-                  title={locked ? '승리할 때마다 새 캐릭터가 하나씩 열려요' : cc.desc}
+                  title={locked ? t('승리할 때마다 새 캐릭터가 하나씩 열려요') : t(cc.desc)}
                   onClick={() => { sound.step(); setCls(id); setOpenSkill(null) }}
                 >
                   <span className="char-card__icon">{cc.icon}</span>
-                  <span className="char-card__name">{cc.name}</span>
+                  <span className="char-card__name">{t(cc.name)}</span>
                   {locked && <span className="char-card__lock">🔒</span>}
                   {isNew && <span className="char-card__new">NEW</span>}
                   {!locked && rr?.games > 0 && (
-                    <span className="char-card__rec">{rr.wins}승 {rr.games - rr.wins}패</span>
+                    <span className="char-card__rec">{rr.wins}{t('승')} {rr.games - rr.wins}{t('패')}</span>
                   )}
                 </button>
               )
@@ -486,10 +504,10 @@ function RecordsScreen({ onBack }) {
   return (
     <div className="screen records-screen">
       <BackButton onBack={onBack} />
-      <h2 className="toy-heading toy-heading--screen">전적</h2>
+      <h2 className="toy-heading toy-heading--screen">{t('전적')}</h2>
       <div className="toy-card records-card">
         {rows.length === 0 ? (
-          <p className="records-card__empty">아직 기록이 없어 — 첫 판을 치르고 오자! ⚔️</p>
+          <p className="records-card__empty">{t('아직 기록이 없어 — 첫 판을 치르고 오자! ⚔️')}</p>
         ) : (
           <>
             <p className="records-card__total">
@@ -501,7 +519,7 @@ function RecordsScreen({ onBack }) {
                 const rate = Math.round((r.wins / r.games) * 100)
                 return (
                   <div key={id} className="records-row">
-                    <span className="records-row__cls">{CLASSES[id].icon} {CLASSES[id].name}</span>
+                    <span className="records-row__cls">{CLASSES[id].icon} {t(CLASSES[id].name)}</span>
                     <span className="records-row__wl">{r.wins}승 {r.games - r.wins}패</span>
                     <span className="records-row__bar"><span style={{ width: `${rate}%` }} /></span>
                     <span className="records-row__rate">{rate}%</span>
@@ -519,6 +537,52 @@ function RecordsScreen({ onBack }) {
   )
 }
 
+// ── 4.4. 설정 — 언어·사운드 (게임 전역, 인게임 설정과 같은 저장소) ──
+function SettingsScreen({ onBack }) {
+  const [soundOn, setSoundOn] = useState(loadSoundOn)
+  const lang = getLang()
+  function toggleSound() {
+    const n = !soundOn
+    setSoundOn(n)
+    saveSoundOn(n)
+    sound.setEnabled(n)
+    if (n) { sound.unlock(); sound.step() }
+  }
+  return (
+    <div className="screen settings-screen">
+      <BackButton onBack={onBack} />
+      <h2 className="toy-heading toy-heading--screen">{t('설정')}</h2>
+      <div className="toy-card settings-card">
+        <div className="settings-row">
+          <span className="settings-row__label">🌐 {t('언어')}</span>
+          <div className="settings-row__seg">
+            <button
+              className={`toy-pill ${lang === 'ko' ? 'is-on' : ''}`}
+              onClick={() => { if (lang !== 'ko') switchLang('ko') }}
+            >
+              한국어
+            </button>
+            <button
+              className={`toy-pill ${lang === 'en' ? 'is-on' : ''}`}
+              onClick={() => { if (lang !== 'en') switchLang('en') }}
+            >
+              English
+            </button>
+          </div>
+        </div>
+        <div className="settings-row">
+          <span className="settings-row__label">{soundOn ? '🔊' : '🔇'} {t('사운드')}</span>
+          <div className="settings-row__seg">
+            <button className={`toy-pill ${soundOn ? 'is-on' : ''}`} onClick={() => { if (!soundOn) toggleSound() }}>{t('켜짐')}</button>
+            <button className={`toy-pill ${!soundOn ? 'is-on' : ''}`} onClick={() => { if (soundOn) toggleSound() }}>{t('꺼짐')}</button>
+          </div>
+        </div>
+        <p className="settings-note">{t('언어를 바꾸면 화면이 새로고침돼요')}</p>
+      </div>
+    </div>
+  )
+}
+
 // ── 4.5. 오픈소스 라이선스 — 배포물에 포함된 고지 전문(THIRD_PARTY_NOTICES.md)을 보여준다 ──
 // 원문은 마크다운이라 화면용으로 기호만 걷어낸다(내용 무수정 — 고지 문구는 그대로).
 const NOTICES_TEXT = NOTICES
@@ -531,7 +595,7 @@ function LicensesScreen({ onBack }) {
   return (
     <div className="screen licenses-screen">
       <BackButton onBack={onBack} />
-      <h2 className="toy-heading toy-heading--screen">오픈소스 라이선스</h2>
+      <h2 className="toy-heading toy-heading--screen">{t('오픈소스 라이선스')}</h2>
       <div className="toy-card licenses-card">
         <pre>{NOTICES_TEXT}</pre>
       </div>
@@ -542,7 +606,7 @@ function LicensesScreen({ onBack }) {
 function BackButton({ onBack }) {
   return (
     <button className="toy-back" onClick={onBack} aria-label="뒤로">
-      ← 뒤로
+      {t('← 뒤로')}
     </button>
   )
 }
