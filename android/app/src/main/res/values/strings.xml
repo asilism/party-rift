@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">조디악 럼블</string>
-    <string name="title_activity_main">조디악 럼블</string>
-    <string name="package_name">com.asilism.zodiacrumble</string>
-    <string name="custom_url_scheme">com.asilism.zodiacrumble</string>
+    <string name="app_name">조디악 블리츠</string>
+    <string name="title_activity_main">조디악 블리츠</string>
+    <string name="package_name">com.asilism.zodiacblitz</string>
+    <string name="custom_url_scheme">com.asilism.zodiacblitz</string>
 </resources>

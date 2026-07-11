@@ -1,4 +1,4 @@
-# ⚡ 조디악 럼블 (ZODIAC RUMBLE)
+# ⚡ 조디악 블리츠 (ZODIAC BLITZ)
 
 > 구(舊) 파티 리프트. 리포 폴더/원격 이름은 `party-rift`를 유지한다.
 

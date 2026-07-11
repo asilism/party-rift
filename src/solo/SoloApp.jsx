@@ -172,8 +172,8 @@ function TitleScreen({ onEnter }) {
         <FullscreenButton />
       </div>
       <div className="toy-logo">
-        <h1 className="toy-logo__en">ZODIAC<span className="toy-logo__bolt">⚡</span>RUMBLE</h1>
-        <p className="toy-logo__ko">조디악 럼블</p>
+        <h1 className="toy-logo__en">ZODIAC<span className="toy-logo__bolt">⚡</span>BLITZ</h1>
+        <p className="toy-logo__ko">조디악 블리츠</p>
       </div>
       <p className="title-screen__press">TOUCH TO START</p>
       <p className="title-screen__ver">v0.1</p>
@@ -218,7 +218,7 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onLicenses })
   return (
     <div className="screen menu-screen">
       <div className="menu-screen__logo">
-        <h1 className="toy-logo__en toy-logo__en--small">ZODIAC<span className="toy-logo__bolt">⚡</span>RUMBLE</h1>
+        <h1 className="toy-logo__en toy-logo__en--small">ZODIAC<span className="toy-logo__bolt">⚡</span>BLITZ</h1>
       </div>
       <button className="profile-chip" onClick={onProfile} title="수호 지신 바꾸기">
         <span className="profile-chip__emoji">{z?.emoji}</span>

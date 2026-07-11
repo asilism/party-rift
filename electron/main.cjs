@@ -1,4 +1,4 @@
-// 조디악 럼블 — Electron 데스크톱 셸.
+// 조디악 블리츠 — Electron 데스크톱 셸.
 // 빌드된 웹 클라이언트(dist/)를 file://로 열고, preload가 window.zodiacDesktop을 주입해
 // 앱이 솔로(오프라인 봇전) 플로우로 분기한다. 게임 서버는 필요 없다(멀티는 후속).
 //
