@@ -3888,7 +3888,7 @@ const BOT_SIGHT = 18
 // 표적 선택·교전 자세(붙는다/버틴다)는 매 틱이 아니라 사람 리듬(~0.4s, 난이도 반영)으로만
 // 다시 정한다. 그 사이엔 정한 의도를 유지 → 틱 단위로 태세가 뒤집히는 계산기 같은 움직임이 사라진다.
 // 체력 급락·표적 소실 같은 큰 사건은 즉시 재판단(사람도 맞으면 정신이 번쩍 든다).
-const BOT_THINK_BASE = 0.4 // 기본 판단 주기(초) — easy는 react 배율로 더 뜸을 들인다
+const BOT_THINK_BASE = 0.55 // 기본 판단 주기(초) — easy는 react 배율로 더 뜸을 들인다
 const BOT_THINK_HP_DROP = 0.12 // 이만큼(최대 체력 비율) 훅 깎이면 즉시 재판단
 const BOT_SWITCH_CLOSER = 0.7 // 표적 교체 조건: 새 후보가 현재 표적보다 "확실히"(거리 70% 미만) 가까울 때만
 export const BOT_STUCK_T = 3 // 가려고도 싸우지도 못하고 이만큼 제자리면 "갈 곳 잃음"으로 보고 귀환
@@ -4486,7 +4486,7 @@ function stepBots(state, dt) {
     if (h.botThinkT <= 0) {
       // 다음 판단까지의 텀 — 난이도(react)와 봇별 흔들림으로 리듬을 어긋나게
       const react = BOT_LEVELS[state.botLevel]?.react || 1
-      h.botThinkT = Math.min(0.9, Math.max(0.2, BOT_THINK_BASE * react)) * (0.85 + state.rng() * 0.3)
+      h.botThinkT = Math.min(1.1, Math.max(0.25, BOT_THINK_BASE * react)) * (0.7 + state.rng() * 0.6) // 위상차 ±30%
       // 가장 가까운 "보이는" 적 스캔 — 환영무희 분신도 겉모습이 똑같으니 봇은 구분하지 못한다
       let best = null
       let bd = BOT_SIGHT * BOT_SIGHT
