@@ -904,23 +904,153 @@ const ATK_ANIM_T = 0.35 // 공격 모션 길이 (초)
 // 전부 몸통(body)의 "정적" 자식: 프레임별 갱신이 없고 바라보는 방향/까딱임과 함께 움직인다.
 // 팀 식별색은 몸통 캡슐이 유지하고, 파츠는 직업 고유색 포인트만 얹는다. 로컬 +x = 정면, -x = 등.
 // 주의: 얼굴 이모지 스프라이트(y≈4.4s)와 겹치지 않게 파츠 상단은 로컬 y 2.0s 아래로 유지한다.
-// 뱀 전용 몸 파츠 — 엉덩이에서 뒤로 나와 말려 올라가는 꼬리(마디 구슬 + 끝 원뿔).
-// 얼굴 텍스처에서 몸통을 지운 대신 실루엣으로 "뱀"을 말해 준다. Fluent 뱀 색.
-function buildSnakeTail(s) {
+// ── 12지신 꼬리 파츠 ──
+// 엉덩이(로컬 -x)에 붙는 동물별 꼬리 — 뱀 꼬리가 실루엣 전달에 효과가 좋아 전 동물로 확장.
+// 전부 body의 정적 자식(방향/까딱임과 함께 움직임), 상단은 로컬 y 2.0s 아래 유지(얼굴 불가침).
+const lamb = (color) => new THREE.MeshLambertMaterial({ color })
+
+// 구슬을 이어 붙인 꼬리 곡선 — [x, y, r] 목록 + 끝 원뿔(옵션). 뱀/용/개/원숭이 공용 골격.
+function beadTail(s, mat, beads, tip = null) {
   const g = new THREE.Group()
-  const mat = new THREE.MeshLambertMaterial({ color: 0x2ec48e })
-  for (const [x, y, r] of [
-    [-1.15, -1.35, 0.3], [-1.6, -1.2, 0.25], [-1.95, -0.9, 0.2], [-2.18, -0.5, 0.15],
-  ]) {
+  for (const [x, y, r] of beads) {
     const seg = new THREE.Mesh(new THREE.SphereGeometry(r * s, 8, 6), mat)
     seg.position.set(x * s, y * s, 0)
     g.add(seg)
   }
-  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.13 * s, 0.5 * s, 6), mat)
-  tip.position.set(-2.3 * s, -0.08 * s, 0)
-  tip.rotation.z = 0.45 // 끝은 살짝 뒤로 젖혀 올라간다
-  g.add(tip)
+  if (tip) {
+    const [x, y, rr, len, rot, tipMat] = tip
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(rr * s, len * s, 6), tipMat || mat)
+    cone.position.set(x * s, y * s, 0)
+    cone.rotation.z = rot
+    g.add(cone)
+  }
   return g
+}
+
+// 뱀: 또아리에서 말려 올라가는 마디 꼬리(Fluent 뱀 색) — 원조.
+function buildSnakeTail(s) {
+  return beadTail(s, lamb(0x2ec48e), [
+    [-1.15, -1.35, 0.3], [-1.6, -1.2, 0.25], [-1.95, -0.9, 0.2], [-2.18, -0.5, 0.15],
+  ], [-2.3, -0.08, 0.13, 0.5, 0.45])
+}
+
+const ZODIAC_TAILS = {
+  snake: buildSnakeTail,
+  // 쥐: 가늘고 긴 분홍 꼬리 — 끝이 살짝 들린다
+  rat: (s) => beadTail(s, lamb(0xe8a1a8), [
+    [-1.1, -1.1, 0.16], [-1.5, -1.15, 0.13], [-1.9, -1.05, 0.11], [-2.25, -0.85, 0.09],
+  ], [-2.5, -0.6, 0.07, 0.4, 0.7]),
+  // 소: 아래로 늘어진 가는 줄 + 끝 털 뭉치
+  ox: (s) => {
+    const g = new THREE.Group()
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.09 * s, 0.07 * s, 1.5 * s, 6), lamb(0x8a6242))
+    rope.position.set(-1.35 * s, -0.9 * s, 0)
+    rope.rotation.z = 0.55 // 뒤로 비스듬히 늘어짐
+    const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.24 * s, 8, 6), lamb(0x4a3626))
+    tuft.position.set(-1.75 * s, -1.55 * s, 0)
+    g.add(rope, tuft)
+    return g
+  },
+  // 호랑이: 주황·검정 줄무늬 마디가 뒤로 굽었다 살짝 올라간다
+  tiger: (s) => {
+    const g = new THREE.Group()
+    const orange = lamb(0xe8934a)
+    const black = lamb(0x3c3430)
+    const pts = [[-1.1, -1.0, 0.22], [-1.5, -1.05, 0.19], [-1.88, -0.9, 0.17], [-2.18, -0.62, 0.15], [-2.36, -0.3, 0.13]]
+    pts.forEach(([x, y, r], i) => {
+      const seg = new THREE.Mesh(new THREE.SphereGeometry(r * s, 8, 6), i % 2 ? black : orange)
+      seg.position.set(x * s, y * s, 0)
+      g.add(seg)
+    })
+    return g
+  },
+  // 토끼: 하얀 솜뭉치 — 크고 동그랗게 하나
+  rabbit: (s) => {
+    const g = new THREE.Group()
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.42 * s, 10, 8), lamb(0xf5f2ec))
+    puff.position.set(-1.15 * s, -0.55 * s, 0)
+    const puff2 = new THREE.Mesh(new THREE.SphereGeometry(0.26 * s, 8, 6), lamb(0xffffff))
+    puff2.position.set(-1.32 * s, -0.38 * s, 0.12 * s)
+    g.add(puff, puff2)
+    return g
+  },
+  // 용: 뱀꼴 마디 + 등가시 — Fluent 용 색
+  dragon: (s) => {
+    const g = beadTail(s, lamb(0x59b96a), [
+      [-1.15, -1.2, 0.28], [-1.6, -1.05, 0.23], [-1.98, -0.75, 0.19],
+    ], [-2.28, -0.38, 0.14, 0.55, 0.5])
+    const spike = lamb(0xf2c14e)
+    for (const [x, y] of [[-1.15, -0.88], [-1.6, -0.78]]) {
+      const c = new THREE.Mesh(new THREE.ConeGeometry(0.1 * s, 0.3 * s, 5), spike)
+      c.position.set(x * s, y * s, 0)
+      g.add(c)
+    }
+    return g
+  },
+  // 말: 흘러내리는 말총 — 짙은 갈색 타래 세 가닥
+  horse: (s) => {
+    const g = new THREE.Group()
+    const hair = lamb(0x4a3626)
+    for (const [z, len, tilt] of [[0, 1.5, 0.5], [0.2, 1.25, 0.62], [-0.2, 1.25, 0.4]]) {
+      const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.11 * s, 0.05 * s, len * s, 6), hair)
+      strand.position.set(-1.4 * s, -0.85 * s, z * s)
+      strand.rotation.z = tilt
+      g.add(strand)
+    }
+    return g
+  },
+  // 양: 짧고 뭉실한 크림색 꼬리
+  sheep: (s) => {
+    const g = new THREE.Group()
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.32 * s, 8, 6), lamb(0xf2e8d8))
+    puff.position.set(-1.12 * s, -0.7 * s, 0)
+    g.add(puff)
+    return g
+  },
+  // 원숭이: 위로 말려 올라가는 긴 꼬리 — 끝이 안쪽으로 감긴다
+  monkey: (s) => beadTail(s, lamb(0x9a6f4e), [
+    [-1.1, -1.05, 0.17], [-1.5, -0.8, 0.15], [-1.75, -0.4, 0.14], [-1.85, 0.05, 0.13],
+    [-1.75, 0.45, 0.12], [-1.5, 0.68, 0.11],
+  ]),
+  // 닭: 위로 뻗는 부채꼴 깃털 — 초록·남색 수탉 깃
+  rooster: (s) => {
+    const g = new THREE.Group()
+    const colors = [0x2e8b6e, 0x2456a8, 0x2e8b6e]
+    const tilts = [0.25, 0.6, 0.95] // 원뿔(+y)이 뒤(-x)로 기우는 각 — 부채처럼 벌어진다
+    colors.forEach((c, i) => {
+      const tilt = tilts[i]
+      const feather = new THREE.Mesh(new THREE.ConeGeometry(0.22 * s, 1.6 * s, 5), lamb(c))
+      // 몸통(반지름 ~1.1s)에 묻히지 않게 부채 전체를 뒤로 빼서 세운다
+      feather.position.set(
+        (-1.3 - 0.65 * Math.sin(tilt)) * s,
+        (-0.2 + 0.65 * Math.cos(tilt)) * s,
+        (i - 1) * 0.18 * s
+      )
+      feather.rotation.z = tilt
+      g.add(feather)
+    })
+    return g
+  },
+  // 개: 위로 힘차게 말린 꼬리 — 끝은 밝은 털색
+  dog: (s) => {
+    const g = beadTail(s, lamb(0x8a6242), [
+      [-1.1, -0.85, 0.2], [-1.42, -0.5, 0.18], [-1.6, -0.08, 0.16],
+    ])
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.15 * s, 8, 6), lamb(0xd9c7a8))
+    tip.position.set(-1.62 * s, 0.28 * s, 0)
+    g.add(tip)
+    return g
+  },
+  // 돼지: 돌돌 말린 나선 꼬리 — 토러스 3/4바퀴
+  pig: (s) => {
+    const g = new THREE.Group()
+    const curl = new THREE.Mesh(new THREE.TorusGeometry(0.26 * s, 0.09 * s, 6, 14, Math.PI * 1.6), lamb(0xf0a8b8))
+    curl.position.set(-1.2 * s, -0.55 * s, 0)
+    curl.rotation.y = Math.PI / 2 // 옆에서 보이는 나선
+    curl.rotation.x = 0.4
+    g.add(curl)
+    return g
+  },
 }
 
 export function buildClassParts(cls, s, body) {
@@ -1487,7 +1617,8 @@ function buildHero(h, mine, barColor) {
   body.add(cape)
   buildClassParts(h.cls, s, body) // 직업별 어깨·등 파츠 — 실루엣 구분
   // 조디악 전용 파츠: 뱀은 얼굴(머리)만 쓰는 대신 엉덩이에 말린 꼬리를 단다
-  if (h.zodiacId === 'snake') body.add(buildSnakeTail(s))
+  const tailBuild = ZODIAC_TAILS[h.zodiacId]
+  if (tailBuild) body.add(tailBuild(s)) // 12지신 꼬리 — 엉덩이(-x)에서 실루엣을 만든다
   // 팔·다리 — 짧고 길쭉한 원통(살짝 테이퍼). 몸통 자식이라 바라보는 방향/걷기와 함께 움직인다.
   const limbMat = new THREE.MeshLambertMaterial({ color: darken(col, 0.7) })
   // 다리: 고관절 피벗 그룹으로 감싸 걸을 때 앞뒤로 엇갈려 흔든다(legs[0]=오른쪽 +z, [1]=왼쪽 -z)
