@@ -2905,7 +2905,20 @@ body {
 .menu-screen__logo { position: absolute; top: clamp(10px, 3vh, 24px); left: 24px; transform: rotate(-2deg); }
 .menu-screen__list { display: flex; flex-direction: column; gap: clamp(10px, 2.4vh, 18px); align-items: stretch; min-width: min(78vw, 340px); }
 .menu-screen__list .toy-btn { text-align: center; }
-.menu-screen__corner { position: absolute; bottom: 12px; right: 12px; }
+.menu-screen__corner {
+  position: absolute; bottom: 12px; right: 12px;
+  display: flex; align-items: center; gap: 10px;
+}
+/* 보조 기능 원형 아이콘(조작법·설정) — 토이 스킨 단추 */
+.menu-fab {
+  width: 52px; height: 52px; border-radius: 50%; cursor: pointer;
+  border: 3px solid var(--ink); background: var(--paper);
+  font-size: 22px; line-height: 1; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 0 rgba(43, 35, 80, 0.4);
+  transition: transform 0.08s;
+}
+.menu-fab:hover { transform: translateY(-2px) rotate(-4deg); }
+.menu-fab:active { transform: translateY(2px); box-shadow: none; }
 .profile-chip {
   position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 8px; cursor: pointer;
   padding: 6px 14px 6px 8px; border-radius: 999px; border: 3px solid var(--ink);
@@ -3054,16 +3067,14 @@ body {
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .settings-row__label { font-size: clamp(14px, 2.6vh, 16px); font-weight: 700; color: var(--ink); }
 .settings-row__seg { display: flex; gap: 8px; }
+.settings-link {
+  border: none; background: none; cursor: pointer; text-align: left; padding: 4px 0;
+  font-family: var(--toy-font); font-size: clamp(13px, 2.4vh, 15px); font-weight: 700; color: #6b6390;
+}
+.settings-link:hover { color: var(--ink); text-decoration: underline; }
 .settings-note { margin: 0; text-align: center; color: #8a80ad; font-size: clamp(11px, 2vh, 12.5px); }
 
 /* ── 오픈소스 라이선스 ── */
-.menu-screen__licenses {
-  margin-top: clamp(8px, 2vh, 16px);
-  border: none; background: none; cursor: pointer;
-  font-family: var(--toy-font); font-size: clamp(11px, 2vh, 13px);
-  color: rgba(255, 255, 255, 0.55); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
-}
-.menu-screen__licenses:hover { color: rgba(255, 255, 255, 0.85); text-decoration: underline; }
 .licenses-card {
   margin-top: clamp(10px, 2.6vh, 20px); width: min(92vw, 760px); max-height: 72vh; overflow-y: auto;
   padding: clamp(12px, 2.6vh, 20px) clamp(14px, 2.6vw, 24px);

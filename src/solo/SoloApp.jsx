@@ -116,7 +116,7 @@ export default function SoloApp() {
   // 뒤로가기(ESC/안드로이드 하드웨어 버튼) 공통 처리:
   //  가이드 열림 → 닫기 / 전투 중 → 일시정지 + "나갈까요?" 확인 / 메뉴 → 이전 화면 / 타이틀 → 앱 종료(안드로이드만)
   useEffect(() => {
-    const back = { profile: profile ? 'menu' : 'title', menu: 'title', mode: 'menu', char: 'mode', records: 'menu', licenses: 'menu', settings: 'menu' }
+    const back = { profile: profile ? 'menu' : 'title', menu: 'title', mode: 'menu', char: 'mode', records: 'menu', licenses: 'settings', settings: 'menu' }
     const handleBack = () => {
       if (helpOpen) { saveGuideSeen(); setHelpOpen(false); return }
       if (screen === 'play') {
@@ -210,11 +210,10 @@ export default function SoloApp() {
           onRecords={() => go('records')}
           onHelp={() => setHelpOpen(true)}
           onProfile={() => go('profile')}
-          onLicenses={() => go('licenses')}
           onSettings={() => go('settings')}
         />
       )}
-      {screen === 'settings' && <SettingsScreen onBack={() => go('menu')} />}
+      {screen === 'settings' && <SettingsScreen onBack={() => go('menu')} onLicenses={() => go('licenses')} />}
       {screen === 'mode' && (
         <ModeScreen
           botLevel={botLevel}
@@ -234,7 +233,7 @@ export default function SoloApp() {
         />
       )}
       {screen === 'records' && <RecordsScreen onBack={() => go('menu')} />}
-      {screen === 'licenses' && <LicensesScreen onBack={() => go('menu')} />}
+      {screen === 'licenses' && <LicensesScreen onBack={() => go('settings')} />}
       {helpOpen && <SoloHelp onClose={() => { saveGuideSeen(); setHelpOpen(false) }} />}
     </div>
   )
@@ -290,7 +289,7 @@ function ProfileScreen({ current, onPick, onBack }) {
 }
 
 // ── 2. 메인 메뉴 ──
-function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onLicenses, onSettings }) {
+function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings }) {
   const z = getZodiac(profile)
   const records = loadRiftRecords()
   const total = Object.values(records).reduce(
@@ -316,12 +315,12 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onLicenses, o
           {t('🌐 온라인')} <span className="toy-btn__badge">{t('준비 중')}</span>
         </button>
         <button className="toy-btn toy-btn--green" onClick={onRecords}>{t('📊 전적')}</button>
-        <button className="toy-btn toy-btn--orange" onClick={onHelp}>{t('❓ 조작법')}</button>
-        <button className="toy-btn toy-btn--blue" onClick={onSettings}>{t('⚙️ 설정')}</button>
       </nav>
-      <button className="menu-screen__licenses" onClick={onLicenses}>{t('ⓘ 오픈소스 라이선스')}</button>
+      {/* 보조 기능은 우하단 원형 아이콘으로 — 메뉴 리스트를 핵심 3개로 유지 */}
       <div className="menu-screen__corner">
         <FullscreenButton />
+        <button className="menu-fab" onClick={onHelp} title={t('❓ 조작법')} aria-label={t('❓ 조작법')}>❓</button>
+        <button className="menu-fab" onClick={onSettings} title={t('⚙️ 설정')} aria-label={t('⚙️ 설정')}>⚙️</button>
       </div>
     </div>
   )
@@ -538,7 +537,7 @@ function RecordsScreen({ onBack }) {
 }
 
 // ── 4.4. 설정 — 언어·사운드 (게임 전역, 인게임 설정과 같은 저장소) ──
-function SettingsScreen({ onBack }) {
+function SettingsScreen({ onBack, onLicenses }) {
   const [soundOn, setSoundOn] = useState(loadSoundOn)
   const lang = getLang()
   function toggleSound() {
@@ -577,6 +576,7 @@ function SettingsScreen({ onBack }) {
             <button className={`toy-pill ${!soundOn ? 'is-on' : ''}`} onClick={() => { if (soundOn) toggleSound() }}>{t('꺼짐')}</button>
           </div>
         </div>
+        <button className="settings-link" onClick={onLicenses}>{t('ⓘ 오픈소스 라이선스')} ›</button>
         <p className="settings-note">{t('언어를 바꾸면 화면이 새로고침돼요')}</p>
       </div>
     </div>
