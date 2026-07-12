@@ -937,10 +937,10 @@ const ZODIAC_TAILS = {
   // 소: 늘어진 줄 + 끝 털 뭉치 (두 조각이지만 실루엣은 하나)
   ox: (s) => {
     const g = new THREE.Group()
-    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.08 * s, 0.06 * s, 1.4 * s, 6), lamb(0x8a6242))
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.08 * s, 0.06 * s, 1.4 * s, 6), lamb(0xf2efe8))
     rope.position.set(-1.35 * s, -0.85 * s, 0)
     rope.rotation.z = 0.5
-    const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.22 * s, 8, 6), lamb(0x4a3626))
+    const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.22 * s, 8, 6), lamb(0xdcd7cc))
     tuft.position.set(-1.7 * s, -1.45 * s, 0)
     g.add(rope, tuft)
     return g
@@ -961,13 +961,27 @@ const ZODIAC_TAILS = {
     g.add(puff)
     return g
   },
-  // 용: 도톰한 초록 곡선 + 금색 가시 하나
+  // 용: 마디 꼬리 + 금색 등가시 — 곡선 한 덩어리보다 마디가 용답다(사용자 선택으로 원복)
   dragon: (s) => {
-    const g = arcTail(s, 0x59b96a, { R: 0.8, tube: 0.22, arc: 1.8, x: -1.2, y: -0.55, rotZ: 2.6 })
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.12 * s, 0.38 * s, 5), lamb(0xf2c14e))
-    spike.position.set(-1.55 * s, -0.05 * s, 0)
-    spike.rotation.z = -0.5
-    g.add(spike)
+    const g = new THREE.Group()
+    const mat = lamb(0x59b96a)
+    for (const [x, y, r] of [
+      [-1.15, -1.2, 0.28], [-1.6, -1.05, 0.23], [-1.98, -0.75, 0.19],
+    ]) {
+      const seg = new THREE.Mesh(new THREE.SphereGeometry(r * s, 8, 6), mat)
+      seg.position.set(x * s, y * s, 0)
+      g.add(seg)
+    }
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.14 * s, 0.55 * s, 6), mat)
+    tip.position.set(-2.28 * s, -0.38 * s, 0)
+    tip.rotation.z = 0.5
+    g.add(tip)
+    const spike = lamb(0xf2c14e)
+    for (const [x, y] of [[-1.15, -0.88], [-1.6, -0.78]]) {
+      const c = new THREE.Mesh(new THREE.ConeGeometry(0.1 * s, 0.3 * s, 5), spike)
+      c.position.set(x * s, y * s, 0)
+      g.add(c)
+    }
     return g
   },
   // 말: 흘러내리는 말총 한 타래(위가 굵고 아래로 가늘어진다)
@@ -989,14 +1003,21 @@ const ZODIAC_TAILS = {
   },
   // 원숭이: 크게 말린 곡선 하나 — 물음표 실루엣
   monkey: (s) => arcTail(s, 0x9a6f4e, { R: 0.55, tube: 0.11, arc: 4.4, x: -1.55, y: -0.25, rotZ: -0.4 }),
-  // 닭: 위로 솟는 하얀 깃털 — 납작한 원뿔 하나
+  // 닭: 위로 솟는 깃털 부채 3장 — 모양은 부채(사용자 선택으로 원복), 색은 흰색
   rooster: (s) => {
     const g = new THREE.Group()
-    const feather = new THREE.Mesh(new THREE.ConeGeometry(0.5 * s, 1.5 * s, 7), lamb(0xf7f4ee))
-    feather.position.set(-1.65 * s, 0.35 * s, 0)
-    feather.rotation.z = 0.75 // 뒤로 눕힌 부채 실루엣
-    feather.scale.z = 0.35 // 납작하게 — 옆에서 보면 깃털 판
-    g.add(feather)
+    const white = lamb(0xf7f4ee)
+    const tilts = [0.25, 0.6, 0.95] // 원뿔(+y)이 뒤(-x)로 기우는 각 — 부채처럼 벌어진다
+    tilts.forEach((tilt, i) => {
+      const feather = new THREE.Mesh(new THREE.ConeGeometry(0.22 * s, 1.6 * s, 5), white)
+      feather.position.set(
+        (-1.3 - 0.65 * Math.sin(tilt)) * s,
+        (-0.2 + 0.65 * Math.cos(tilt)) * s,
+        (i - 1) * 0.18 * s
+      )
+      feather.rotation.z = tilt
+      g.add(feather)
+    })
     return g
   },
   // 개: 위로 말려 올라간 곡선 하나
