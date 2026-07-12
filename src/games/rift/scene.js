@@ -905,98 +905,78 @@ const ATK_ANIM_T = 0.35 // 공격 모션 길이 (초)
 // 팀 식별색은 몸통 캡슐이 유지하고, 파츠는 직업 고유색 포인트만 얹는다. 로컬 +x = 정면, -x = 등.
 // 주의: 얼굴 이모지 스프라이트(y≈4.4s)와 겹치지 않게 파츠 상단은 로컬 y 2.0s 아래로 유지한다.
 // ── 12지신 꼬리 파츠 ──
-// 엉덩이(로컬 -x)에 붙는 동물별 꼬리 — 뱀 꼬리가 실루엣 전달에 효과가 좋아 전 동물로 확장.
-// 전부 body의 정적 자식(방향/까딱임과 함께 움직임), 상단은 로컬 y 2.0s 아래 유지(얼굴 불가침).
+// 엉덩이(로컬 -x)에 붙는 동물별 꼬리 — 구슬 사슬 대신 "한 덩어리 곡선"(부분 토러스)으로
+// 심플하게. 전부 body의 정적 자식, 상단은 로컬 y 2.0s 아래 유지(얼굴 불가침).
 const lamb = (color) => new THREE.MeshLambertMaterial({ color })
 
-// 구슬을 이어 붙인 꼬리 곡선 — [x, y, r] 목록 + 끝 원뿔(옵션). 뱀/용/개/원숭이 공용 골격.
-function beadTail(s, mat, beads, tip = null) {
+// 호(弧) 꼬리 — 부분 토러스 하나로 옆 실루엣 곡선을 만든다. xy평면 = 옆에서 보는 면.
+function arcTail(s, color, { R, tube, arc, x, y, rotZ = 0 }) {
   const g = new THREE.Group()
-  for (const [x, y, r] of beads) {
-    const seg = new THREE.Mesh(new THREE.SphereGeometry(r * s, 8, 6), mat)
-    seg.position.set(x * s, y * s, 0)
-    g.add(seg)
-  }
-  if (tip) {
-    const [x, y, rr, len, rot, tipMat] = tip
-    const cone = new THREE.Mesh(new THREE.ConeGeometry(rr * s, len * s, 6), tipMat || mat)
-    cone.position.set(x * s, y * s, 0)
-    cone.rotation.z = rot
-    g.add(cone)
-  }
+  const m = new THREE.Mesh(new THREE.TorusGeometry(R * s, tube * s, 6, 16, arc), lamb(color))
+  m.position.set(x * s, y * s, 0)
+  m.rotation.z = rotZ
+  g.add(m)
   return g
 }
 
-// 뱀: 또아리에서 말려 올라가는 마디 꼬리(Fluent 뱀 색) — 원조.
-function buildSnakeTail(s) {
-  return beadTail(s, lamb(0x2ec48e), [
-    [-1.15, -1.35, 0.3], [-1.6, -1.2, 0.25], [-1.95, -0.9, 0.2], [-2.18, -0.5, 0.15],
-  ], [-2.3, -0.08, 0.13, 0.5, 0.45])
-}
-
 const ZODIAC_TAILS = {
-  snake: buildSnakeTail,
-  // 쥐: 가늘고 긴 분홍 꼬리 — 끝이 살짝 들린다
-  rat: (s) => beadTail(s, lamb(0xe8a1a8), [
-    [-1.1, -1.1, 0.16], [-1.5, -1.15, 0.13], [-1.9, -1.05, 0.11], [-2.25, -0.85, 0.09],
-  ], [-2.5, -0.6, 0.07, 0.4, 0.7]),
-  // 소: 아래로 늘어진 가는 줄 + 끝 털 뭉치
+  // 뱀: 바닥에 깔린 또아리(눕힌 토러스) + 위로 솟는 끝 — 원조를 한 덩어리로
+  snake: (s) => {
+    const g = new THREE.Group()
+    const coil = new THREE.Mesh(new THREE.TorusGeometry(0.5 * s, 0.18 * s, 6, 16), lamb(0x2ec48e))
+    coil.position.set(-1.45 * s, -1.3 * s, 0)
+    coil.rotation.x = Math.PI / 2 // 눕혀서 또아리
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.14 * s, 0.6 * s, 6), lamb(0x2ec48e))
+    tip.position.set(-1.85 * s, -0.85 * s, 0)
+    tip.rotation.z = 0.35
+    g.add(coil, tip)
+    return g
+  },
+  // 쥐: 가늘게 휘어진 분홍 곡선 한 가닥
+  rat: (s) => arcTail(s, 0xe8a1a8, { R: 0.85, tube: 0.08, arc: 2.0, x: -1.15, y: -0.5, rotZ: 2.7 }),
+  // 소: 늘어진 줄 + 끝 털 뭉치 (두 조각이지만 실루엣은 하나)
   ox: (s) => {
     const g = new THREE.Group()
-    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.09 * s, 0.07 * s, 1.5 * s, 6), lamb(0x8a6242))
-    rope.position.set(-1.35 * s, -0.9 * s, 0)
-    rope.rotation.z = 0.55 // 뒤로 비스듬히 늘어짐
-    const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.24 * s, 8, 6), lamb(0x4a3626))
-    tuft.position.set(-1.75 * s, -1.55 * s, 0)
+    const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.08 * s, 0.06 * s, 1.4 * s, 6), lamb(0x8a6242))
+    rope.position.set(-1.35 * s, -0.85 * s, 0)
+    rope.rotation.z = 0.5
+    const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.22 * s, 8, 6), lamb(0x4a3626))
+    tuft.position.set(-1.7 * s, -1.45 * s, 0)
     g.add(rope, tuft)
     return g
   },
-  // 호랑이: 주황·검정 줄무늬 마디가 뒤로 굽었다 살짝 올라간다
+  // 호랑이: 도톰한 주황 곡선 + 검은 끝
   tiger: (s) => {
-    const g = new THREE.Group()
-    const orange = lamb(0xe8934a)
-    const black = lamb(0x3c3430)
-    const pts = [[-1.1, -1.0, 0.22], [-1.5, -1.05, 0.19], [-1.88, -0.9, 0.17], [-2.18, -0.62, 0.15], [-2.36, -0.3, 0.13]]
-    pts.forEach(([x, y, r], i) => {
-      const seg = new THREE.Mesh(new THREE.SphereGeometry(r * s, 8, 6), i % 2 ? black : orange)
-      seg.position.set(x * s, y * s, 0)
-      g.add(seg)
-    })
+    const g = arcTail(s, 0xe8934a, { R: 0.75, tube: 0.17, arc: 1.9, x: -1.2, y: -0.45, rotZ: 2.5 })
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.17 * s, 8, 6), lamb(0x3c3430))
+    tip.position.set(-1.75 * s, 0.18 * s, 0)
+    g.add(tip)
     return g
   },
-  // 토끼: 하얀 솜뭉치 — 크고 동그랗게 하나
+  // 토끼: 하얀 솜뭉치 하나
   rabbit: (s) => {
     const g = new THREE.Group()
-    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.42 * s, 10, 8), lamb(0xf5f2ec))
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(0.42 * s, 10, 8), lamb(0xf7f4ee))
     puff.position.set(-1.15 * s, -0.55 * s, 0)
-    const puff2 = new THREE.Mesh(new THREE.SphereGeometry(0.26 * s, 8, 6), lamb(0xffffff))
-    puff2.position.set(-1.32 * s, -0.38 * s, 0.12 * s)
-    g.add(puff, puff2)
+    g.add(puff)
     return g
   },
-  // 용: 뱀꼴 마디 + 등가시 — Fluent 용 색
+  // 용: 도톰한 초록 곡선 + 금색 가시 하나
   dragon: (s) => {
-    const g = beadTail(s, lamb(0x59b96a), [
-      [-1.15, -1.2, 0.28], [-1.6, -1.05, 0.23], [-1.98, -0.75, 0.19],
-    ], [-2.28, -0.38, 0.14, 0.55, 0.5])
-    const spike = lamb(0xf2c14e)
-    for (const [x, y] of [[-1.15, -0.88], [-1.6, -0.78]]) {
-      const c = new THREE.Mesh(new THREE.ConeGeometry(0.1 * s, 0.3 * s, 5), spike)
-      c.position.set(x * s, y * s, 0)
-      g.add(c)
-    }
+    const g = arcTail(s, 0x59b96a, { R: 0.8, tube: 0.22, arc: 1.8, x: -1.2, y: -0.55, rotZ: 2.6 })
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.12 * s, 0.38 * s, 5), lamb(0xf2c14e))
+    spike.position.set(-1.55 * s, -0.05 * s, 0)
+    spike.rotation.z = -0.5
+    g.add(spike)
     return g
   },
-  // 말: 흘러내리는 말총 — 짙은 갈색 타래 세 가닥
+  // 말: 흘러내리는 말총 한 타래(위가 굵고 아래로 가늘어진다)
   horse: (s) => {
     const g = new THREE.Group()
-    const hair = lamb(0x4a3626)
-    for (const [z, len, tilt] of [[0, 1.5, 0.5], [0.2, 1.25, 0.62], [-0.2, 1.25, 0.4]]) {
-      const strand = new THREE.Mesh(new THREE.CylinderGeometry(0.11 * s, 0.05 * s, len * s, 6), hair)
-      strand.position.set(-1.4 * s, -0.85 * s, z * s)
-      strand.rotation.z = tilt
-      g.add(strand)
-    }
+    const fall = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * s, 0.06 * s, 1.6 * s, 7), lamb(0x4a3626))
+    fall.position.set(-1.35 * s, -0.9 * s, 0)
+    fall.rotation.z = 0.45
+    g.add(fall)
     return g
   },
   // 양: 짧고 뭉실한 크림색 꼬리
@@ -1007,46 +987,26 @@ const ZODIAC_TAILS = {
     g.add(puff)
     return g
   },
-  // 원숭이: 위로 말려 올라가는 긴 꼬리 — 끝이 안쪽으로 감긴다
-  monkey: (s) => beadTail(s, lamb(0x9a6f4e), [
-    [-1.1, -1.05, 0.17], [-1.5, -0.8, 0.15], [-1.75, -0.4, 0.14], [-1.85, 0.05, 0.13],
-    [-1.75, 0.45, 0.12], [-1.5, 0.68, 0.11],
-  ]),
-  // 닭: 위로 뻗는 부채꼴 깃털 — 초록·남색 수탉 깃
+  // 원숭이: 크게 말린 곡선 하나 — 물음표 실루엣
+  monkey: (s) => arcTail(s, 0x9a6f4e, { R: 0.55, tube: 0.11, arc: 4.4, x: -1.55, y: -0.25, rotZ: -0.4 }),
+  // 닭: 위로 솟는 하얀 깃털 — 납작한 원뿔 하나
   rooster: (s) => {
     const g = new THREE.Group()
-    const colors = [0x2e8b6e, 0x2456a8, 0x2e8b6e]
-    const tilts = [0.25, 0.6, 0.95] // 원뿔(+y)이 뒤(-x)로 기우는 각 — 부채처럼 벌어진다
-    colors.forEach((c, i) => {
-      const tilt = tilts[i]
-      const feather = new THREE.Mesh(new THREE.ConeGeometry(0.22 * s, 1.6 * s, 5), lamb(c))
-      // 몸통(반지름 ~1.1s)에 묻히지 않게 부채 전체를 뒤로 빼서 세운다
-      feather.position.set(
-        (-1.3 - 0.65 * Math.sin(tilt)) * s,
-        (-0.2 + 0.65 * Math.cos(tilt)) * s,
-        (i - 1) * 0.18 * s
-      )
-      feather.rotation.z = tilt
-      g.add(feather)
-    })
+    const feather = new THREE.Mesh(new THREE.ConeGeometry(0.5 * s, 1.5 * s, 7), lamb(0xf7f4ee))
+    feather.position.set(-1.65 * s, 0.35 * s, 0)
+    feather.rotation.z = 0.75 // 뒤로 눕힌 부채 실루엣
+    feather.scale.z = 0.35 // 납작하게 — 옆에서 보면 깃털 판
+    g.add(feather)
     return g
   },
-  // 개: 위로 힘차게 말린 꼬리 — 끝은 밝은 털색
-  dog: (s) => {
-    const g = beadTail(s, lamb(0x8a6242), [
-      [-1.1, -0.85, 0.2], [-1.42, -0.5, 0.18], [-1.6, -0.08, 0.16],
-    ])
-    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.15 * s, 8, 6), lamb(0xd9c7a8))
-    tip.position.set(-1.62 * s, 0.28 * s, 0)
-    g.add(tip)
-    return g
-  },
-  // 돼지: 돌돌 말린 나선 꼬리 — 토러스 3/4바퀴
+  // 개: 위로 말려 올라간 곡선 하나
+  dog: (s) => arcTail(s, 0x8a6242, { R: 0.42, tube: 0.15, arc: 3.4, x: -1.3, y: -0.4, rotZ: -0.7 }),
+  // 돼지: 돌돌 말린 나선 — 기준이 된 디자인 그대로
   pig: (s) => {
     const g = new THREE.Group()
     const curl = new THREE.Mesh(new THREE.TorusGeometry(0.26 * s, 0.09 * s, 6, 14, Math.PI * 1.6), lamb(0xf0a8b8))
     curl.position.set(-1.2 * s, -0.55 * s, 0)
-    curl.rotation.y = Math.PI / 2 // 옆에서 보이는 나선
+    curl.rotation.y = Math.PI / 2
     curl.rotation.x = 0.4
     g.add(curl)
     return g
