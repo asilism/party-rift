@@ -4016,6 +4016,16 @@ function nearestEnemyTower(state, h) {
   return best
 }
 
+// 자기 리스폰 존(회복 지대) 안전권에 있는가 — 여기 있는 적은 쫓아봐야
+// 회복으로 못 잡고, 우물 피해(FOUNTAIN_DMG)까지 맞으며 킬만 내준다. 추격 표적에서 제외.
+const FOUNTAIN_SAFE_PAD = 7 // 안전권 여유 — 존 가장자리에서 얼쩡대는 적도 쫓지 않는다
+function inOwnFountainSafety(state, e) {
+  const f = state.map.FOUNTAIN_POS[e.team]
+  if (!f) return false
+  const r = FOUNTAIN_RADIUS + FOUNTAIN_SAFE_PAD
+  return dist2(e, f) < r * r
+}
+
 // 적 영웅 추격 점수: 내가 잡는 시간(killT) vs 내가 죽는 시간(lifeT), 주변 적/아군 수.
 // 준비된 버스트 스킬은 killT를 줄여 더 과감하게, 가까운 적 타워는 들어오는 피해에 더한다.
 function botChaseScore(state, h, foe) {
@@ -4360,6 +4370,17 @@ function stepBots(state, dt) {
     }
     if (inFountain(h)) botShop(state, h) // 우물에 있을 때 장비 보충
     const cls = CLASSES[h.cls]
+    // 적 리스폰 존은 금지 구역 — 우물 피해를 맞으며 회복하는 적을 쫓는 건 자살이다.
+    // 들어갔다면 적 수호석 쪽(존 바깥)으로 즉시 빠져나오고, 이번 틱은 그걸로 끝.
+    {
+      const ef = state.map.FOUNTAIN_POS[enemyOf(h.team)]
+      const escR = FOUNTAIN_RADIUS + 2
+      if (ef && dist2(h, ef) < escR * escR) {
+        steerToward(state, h, state.map.NEXUS_POS[enemyOf(h.team)])
+        botAttack(state, h, dt) // 나오는 길에 사거리 안이면 공성/반격은 한다
+        continue
+      }
+    }
     // 도발당한 봇: 후퇴/임무보다 우선 — 도발한 탱커에게 끌려가 평타친다
     if (h.tauntT > 0) {
       const tk = state.heroes.find((o) => o.id === h.tauntBy && o.team !== h.team && o.respawnT <= 0)
@@ -4442,6 +4463,7 @@ function stepBots(state, dt) {
     for (const e of state.heroes) {
       if (e.team === h.team || e.respawnT > 0) continue
       if (!isHeroVisible(state, e, h.team)) continue
+      if (inOwnFountainSafety(state, e)) continue // 우물로 살아 들어간 적은 놓아준다(다이브 금지)
       const d = dist2(h, e)
       if (d < 9 * 9) nearCount++
       if (d < bd) {
@@ -4452,6 +4474,7 @@ function stepBots(state, dt) {
     for (const s of state.summons) {
       if (s.kind !== 'clone' || s.team === h.team) continue
       if (!isHeroVisible(state, s, h.team)) continue
+      if (inOwnFountainSafety(state, s)) continue
       const d = dist2(h, s)
       if (d < 9 * 9) nearCount++
       if (d < bd) {

@@ -1603,6 +1603,54 @@ test('지형: 바위/맵 경계를 뚫고 나갈 수 없다', () => {
   assert.equal(nearestWp('mid', -96, 0), 0)
 })
 
+test('봇은 적 우물 안전권의 적을 쫓지 않는다 (다이브 금지)', () => {
+  const players = [
+    { id: 'rat', name: 'B', zodiacId: 'rat', color: '#abc', cls: 'warrior', team: 'blue', isBot: true },
+    { id: 'ox', name: 'R', zodiacId: 'ox', color: '#abc', cls: 'mage', team: 'red' },
+  ]
+  const g = createGame(players, () => 0.5)
+  startPlaying(g)
+  g.minions.length = 0
+  const bot = g.heroes[0]
+  const prey = g.heroes[1]
+  const redF = g.map.FOUNTAIN_POS.red
+  // 빈사 적이 자기 우물 가장자리에 서 있고, 건강한 봇이 코앞에 있다 — 미끼 상황
+  prey.x = redF.x - (11 + 3) // FOUNTAIN_RADIUS(11) + 안전권 안쪽
+  prey.z = redF.z
+  prey.hp = prey.maxHp * 0.15
+  bot.x = prey.x - 8
+  bot.z = prey.z
+  const n = Math.round(6 / STEP)
+  for (let i = 0; i < n; i++) {
+    prey.x = redF.x - 14 // 계속 안전권에 머문다
+    prey.z = redF.z
+    prey.hp = prey.maxHp * 0.15
+    step(g, STEP)
+  }
+  assert.ok(prey.respawnT === 0, '우물 안전권의 빈사 적을 잡으러 들어가지 않는다')
+  const dBot = Math.hypot(bot.x - redF.x, bot.z - redF.z)
+  assert.ok(dBot > 11 + 2, `봇이 적 우물권 밖에 있다 (거리 ${dBot.toFixed(1)})`)
+})
+
+test('적 우물권에 들어간 봇은 즉시 빠져나온다', () => {
+  const players = [
+    { id: 'rat', name: 'B', zodiacId: 'rat', color: '#abc', cls: 'warrior', team: 'blue', isBot: true },
+    { id: 'ox', name: 'R', zodiacId: 'ox', color: '#abc', cls: 'mage', team: 'red' },
+  ]
+  const g = createGame(players, () => 0.5)
+  startPlaying(g)
+  g.minions.length = 0
+  const bot = g.heroes[0]
+  const redF = g.map.FOUNTAIN_POS.red
+  bot.x = redF.x - 6 // 존 한복판에 떨어뜨린다
+  bot.z = redF.z
+  bot.hp = bot.maxHp
+  const n = Math.round(3 / STEP)
+  for (let i = 0; i < n; i++) step(g, STEP)
+  const d = Math.hypot(bot.x - redF.x, bot.z - redF.z)
+  assert.ok(d > 11, `우물 반경(11) 밖으로 나왔다 (거리 ${d.toFixed(1)})`)
+})
+
 test('봇은 본진을 떠나 레인을 행군한다 (본진 옆 제자리 왕복 회귀 방지)', () => {
   const players = humans().map((p) => ({ ...p, isBot: true }))
   let seed = 7
