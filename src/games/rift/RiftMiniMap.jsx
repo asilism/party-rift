@@ -80,7 +80,7 @@ export default function RiftMiniMap({ view, myId }) {
       {myTeam && <FogOverlay view={view} myTeam={myTeam} pad={pad} map={map} />}
       {/* 정글몹/용/이무기 */}
       {view.monsters?.map((m) =>
-        m.kind === 'wolf'
+        m.kind !== 'dragon' && m.kind !== 'baron'
           ? m.alive && <circle key={m.id} cx={m.x} cy={m.z} r={3} fill="#cfd6e4" />
           : (
             <text

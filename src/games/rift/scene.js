@@ -1875,6 +1875,8 @@ function buildMinion(m, barColor) {
 
 const MONSTER_LOOK = {
   wolf: { emoji: '🐺', size: 2.6, body: 0x9aa3b2, r: 1.2 },
+  boar: { emoji: '🐗', size: 2.7, body: 0x7a5238, r: 1.25 },
+  golem: { emoji: '🗿', size: 3.2, body: 0x8a8f9c, r: 1.55 },
   dragon: { emoji: '🐉', size: 4.6, body: 0x59b96a, r: 2.4 }, // r은 피격 파티클 높이로도 쓴다
   baron: { emoji: '👹', size: 5, body: 0x9b6bd6, r: 2.8 },
 }
