@@ -3884,6 +3884,13 @@ function stepSummons(state, dt) {
 // 체력이 낮으면 리스폰 존(수호석 뒤편 회복 지대)으로 후퇴, "보이는" 적 영웅과는 직업 사거리에 맞춰 교전,
 // 평소엔 맡은 레인을 행군하며 지나는 길의 정글몹/용/이무기도 사냥한다.
 const BOT_SIGHT = 18
+// ── 봇 "생각의 리듬" ──
+// 표적 선택·교전 자세(붙는다/버틴다)는 매 틱이 아니라 사람 리듬(~0.4s, 난이도 반영)으로만
+// 다시 정한다. 그 사이엔 정한 의도를 유지 → 틱 단위로 태세가 뒤집히는 계산기 같은 움직임이 사라진다.
+// 체력 급락·표적 소실 같은 큰 사건은 즉시 재판단(사람도 맞으면 정신이 번쩍 든다).
+const BOT_THINK_BASE = 0.4 // 기본 판단 주기(초) — easy는 react 배율로 더 뜸을 들인다
+const BOT_THINK_HP_DROP = 0.12 // 이만큼(최대 체력 비율) 훅 깎이면 즉시 재판단
+const BOT_SWITCH_CLOSER = 0.7 // 표적 교체 조건: 새 후보가 현재 표적보다 "확실히"(거리 70% 미만) 가까울 때만
 export const BOT_STUCK_T = 3 // 가려고도 싸우지도 못하고 이만큼 제자리면 "갈 곳 잃음"으로 보고 귀환
 // 봇 평타 반응 지연: 쿨이 돌아온 뒤 이만큼(초) 뜸들이고 평타를 친다.
 // 봇이 프레임 단위로 칼같이 평타를 박아 "딜레이 없이 쉴 새 없이 맞는" 느낌을 주던 걸 완화 —
@@ -4456,50 +4463,82 @@ function stepBots(state, dt) {
       const turrets = state.summons.filter((s) => s.owner === h.id && s.kind === 'turret').length
       if (turrets < ENGI_MAX_TURRETS) castSkill(state, h.id)
     }
-    // 가장 가까운 "보이는" 적 영웅 — 환영무희 분신도 겉모습이 똑같으니 봇은 구분하지 못한다
-    let foe = null
-    let bd = BOT_SIGHT * BOT_SIGHT
-    let nearCount = 0
-    for (const e of state.heroes) {
-      if (e.team === h.team || e.respawnT > 0) continue
-      if (!isHeroVisible(state, e, h.team)) continue
-      if (inOwnFountainSafety(state, e)) continue // 우물로 살아 들어간 적은 놓아준다(다이브 금지)
-      const d = dist2(h, e)
-      if (d < 9 * 9) nearCount++
-      if (d < bd) {
-        bd = d
-        foe = e
+    // ── 판단 틱: 표적·자세는 생각의 리듬으로만 갱신, 실행(이동/조준/스킬)은 매 틱 ──
+    h.botThinkT = (h.botThinkT ?? 0) - dt
+    const hpDrop = (h.botLastHp ?? h.hp) - h.hp
+    h.botLastHp = h.hp
+    if (hpDrop > h.maxHp * BOT_THINK_HP_DROP) h.botThinkT = 0 // 크게 맞음 → 즉시 재판단
+
+    // 현재 표적 유효성 — 죽거나 시야를 잃거나 우물로 도망치면 즉시 재판단
+    const findFoeById = (id) =>
+      state.heroes.find((e) => e.id === id && e.team !== h.team && e.respawnT <= 0) ||
+      state.summons.find((c) => c.id === id && c.kind === 'clone' && c.team !== h.team)
+    let foe = h.botFoeId ? findFoeById(h.botFoeId) : null
+    if (foe && (
+      !isHeroVisible(state, foe, h.team) || inOwnFountainSafety(state, foe) ||
+      dist2(h, foe) > BOT_SIGHT * BOT_SIGHT
+    )) foe = null
+    if (h.botFoeId && !foe) {
+      h.botFoeId = null
+      h.botThinkT = 0
+    }
+
+    if (h.botThinkT <= 0) {
+      // 다음 판단까지의 텀 — 난이도(react)와 봇별 흔들림으로 리듬을 어긋나게
+      const react = BOT_LEVELS[state.botLevel]?.react || 1
+      h.botThinkT = Math.min(0.9, Math.max(0.2, BOT_THINK_BASE * react)) * (0.85 + state.rng() * 0.3)
+      // 가장 가까운 "보이는" 적 스캔 — 환영무희 분신도 겉모습이 똑같으니 봇은 구분하지 못한다
+      let best = null
+      let bd = BOT_SIGHT * BOT_SIGHT
+      let near = 0
+      const consider = (e) => {
+        if (!isHeroVisible(state, e, h.team)) return
+        if (inOwnFountainSafety(state, e)) return // 우물로 살아 들어간 적은 놓아준다(다이브 금지)
+        const d2v = dist2(h, e)
+        if (d2v < 9 * 9) near++
+        if (d2v < bd) {
+          bd = d2v
+          best = e
+        }
+      }
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0) continue
+        consider(e)
+      }
+      for (const c of state.summons) {
+        if (c.kind !== 'clone' || c.team === h.team) continue
+        consider(c) // 분신에게도 교전 판단이 그대로 돈다 — 미끼에 낚인다
+      }
+      // 표적 끈기: 물고 있는 표적이 유효하면, 새 후보가 확실히 더 가까울 때만 갈아탄다
+      if (foe && best && best.id !== foe.id) {
+        if (Math.sqrt(bd) >= dist(h, foe) * BOT_SWITCH_CLOSER) best = foe
+      }
+      foe = best || foe
+      h.botFoeId = foe ? foe.id : null
+      h.botNear = near
+      // 교전 자세(유리/불리)도 이 리듬으로만 다시 정한다
+      if (foe) {
+        const sc = botChaseScore(state, h, foe)
+        const healthy = h.hp > h.maxHp * 0.38
+        h.botWin = healthy && sc.allies >= sc.foes && sc.killT <= sc.lifeT * 1.33
+        h.botLose = !healthy || sc.allies < sc.foes || sc.lifeT < sc.killT * 0.65
+        h.botKillT = sc.killT
+        h.botLifeT = sc.lifeT
       }
     }
-    for (const s of state.summons) {
-      if (s.kind !== 'clone' || s.team === h.team) continue
-      if (!isHeroVisible(state, s, h.team)) continue
-      if (inOwnFountainSafety(state, s)) continue
-      const d = dist2(h, s)
-      if (d < 9 * 9) nearCount++
-      if (d < bd) {
-        bd = d
-        foe = s // 분신에게도 교전 판단(추격/카이팅/스킬)이 그대로 돈다 — 미끼에 낚인다
-      }
-    }
+    const nearCount = h.botNear || 0
     if (foe) {
-      const d = Math.sqrt(bd)
+      const d = dist(h, foe)
       // 직업 사거리에 맞춰 거리 유지(카이팅): 근접은 파고들고 원거리는 빠진다
       const kite = Math.max(2.6, cls.range - 1)
       h.botStrafe += dt * 0.7
       const away = Math.atan2(h.z - foe.z, h.x - foe.x)
       const to = Math.atan2(foe.z - h.z, foe.x - h.x)
-      // ── 교전 stance 판단: 이 싸움이 유리/호각/불리 중 무엇인가 ──
-      // killT(내가 적을 잡는 시간) vs lifeT(내가 버티는 시간) + 주변 아군·적 수로 가늠한다.
-      const sc = botChaseScore(state, h, foe)
+      // ── 교전 stance: 판단 틱에서 정한 의도(h.botWin/h.botLose)를 유지한다 ──
       const tower = nearestEnemyTower(state, h)
       const towerD = tower ? dist(h, tower) : Infinity
-      const healthy = h.hp > h.maxHp * 0.38
-      // 호전적: 체력 여유 + 안 밀리고(아군≥적) + 트레이드가 살짝 손해까진 허용하면 붙는다.
-      //  (원래 1.15 ↔ 한때 1.5 사이의 중간값) — 비등하면 싸움을 걸되 과하게 풀진 않는다.
-      const winning = healthy && sc.allies >= sc.foes && sc.killT <= sc.lifeT * 1.33
-      // 불리: 빈사거나 수적 열세거나 트레이드가 확실히 진다(여기 해당할 때만 물러난다)
-      const losing = !healthy || sc.allies < sc.foes || sc.lifeT < sc.killT * 0.65
+      const winning = !!h.botWin
+      const losing = !!h.botLose
       // ① 불리한데 적이 붙어 있으면 리스폰 존으로 뺀다(생존 우선). 방어·도주기를 쓰며 사거리 안이면 반격.
       if (losing && d < kite + 4) {
         if (h.cls === 'tank' && h.skillCd <= 0 && d < 10) castSkill(state, h.id) // 방패 켜고 후퇴
@@ -4519,7 +4558,7 @@ function stepBots(state, dt) {
       if (d > kite + 1.5) {
         let dive = true // 적 타워 사거리 안 다이브는 빈사 적 + 즉살각 + 생환 여유가 있을 때만
         if (towerD < TOWER_RANGE + 3) {
-          dive = foe.hp < foe.maxHp * 0.4 && sc.killT < 1.3 && sc.lifeT > sc.killT * 1.6
+          dive = foe.hp < foe.maxHp * 0.4 && h.botKillT < 1.3 && h.botLifeT > h.botKillT * 1.6
         }
         if (winning && dive) {
           steerToward(state, h, foe) // 옆걸음 없이 전속 직진으로 따라붙는다
@@ -4532,17 +4571,26 @@ function stepBots(state, dt) {
         // ③ 적이 사거리 안 → 도망치지 않고 선다.
         //    유리하면 공격 사거리까지 파고들어 들러붙어 딜하고, 호각이면 사거리 가장자리를
         //    유지하며 평타를 트레이드한다(붙으면만 살짝 빠지는 진짜 카이팅).
-        let ang
+        // 데드존: 목표 거리를 "한 점"이 아니라 폭 있는 띠로 유지 — 띠 안이면 서서
+        // 딜에 집중한다. 틱마다 전진↔후퇴가 뒤집히던 계산기 떨림이 사라진다.
+        let ang = null
         if (winning) {
           const engage = Math.max(2.6, cls.range - 1.5)
-          ang = d > engage ? to : d < engage - 2 ? away : away + Math.PI / 2
+          if (d > engage + 0.8) ang = to
+          else if (d < engage - 2.4) ang = away
         } else {
-          ang = d < kite - 1.2 ? away : d > kite + 0.8 ? to : away + Math.PI / 2
+          if (d < kite - 2.0) ang = away
+          else if (d > kite + 1.2) ang = to
         }
-        // 붙어 싸우는 중엔 옆걸음을 줄여(딜 집중), 거리 좁힐 땐 직진한다.
-        const wob = winning && d > cls.range - 1 ? 0 : 0.22
-        h.mx = Math.cos(ang) * (1 - wob) + Math.cos(h.botStrafe) * wob
-        h.mz = Math.sin(ang) * (1 - wob) + Math.sin(h.botStrafe) * wob
+        if (ang == null) {
+          h.mx = 0
+          h.mz = 0
+        } else {
+          // 붙어 싸우는 중엔 옆걸음을 줄여(딜 집중), 거리 좁힐 땐 직진한다.
+          const wob = winning && d > cls.range - 1 ? 0 : 0.22
+          h.mx = Math.cos(ang) * (1 - wob) + Math.cos(h.botStrafe) * wob
+          h.mz = Math.sin(ang) * (1 - wob) + Math.sin(h.botStrafe) * wob
+        }
         botAttack(state, h, dt)
         botCombatSkills(state, h, foe, d, nearCount)
         continue
