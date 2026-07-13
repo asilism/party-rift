@@ -459,7 +459,9 @@ export function buildMap(mode = '3v3') {
     mid: BASE.LANES.mid.map((p) => scalePt(p, s)),
     bot: BASE.LANES.bot.map((p) => scalePt(p, s)),
   }
-  const TOWER_SPOTS = BASE.TOWER_SPOTS.map((t) => ({ ...t, x: t.x * s.x, z: t.z * s.z }))
+  let TOWER_SPOTS = BASE.TOWER_SPOTS.map((t) => ({ ...t, x: t.x * s.x, z: t.z * s.z }))
+  // 보스전: 레드 진영은 보스 하나뿐 — 타워 없이 보스 소환 병사만 라인을 민다
+  if (mode === 'boss') TOWER_SPOTS = TOWER_SPOTS.filter((t) => t.team === 'blue')
   const WALL_LINES = BASE.WALL_LINES.map((w) => ({
     x1: w.x1 * s.x, z1: w.z1 * s.z, x2: w.x2 * s.x, z2: w.z2 * s.z,
   }))

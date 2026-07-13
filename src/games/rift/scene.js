@@ -935,6 +935,8 @@ export const CLS_SCALE = {
   archer: 0.95, healer: 0.95, mage: 0.95, warlock: 0.95, cryomancer: 0.95, chronomancer: 0.95,
   windcaller: 0.92, assassin: 0.9,
   terramancer: 1.15, fearmonger: 0.95, illusionist: 0.9,
+  // 보스전 보스 — 3배급 거체. 얼굴·무기·이름표 높이도 이 배율을 따라간다(buildHero)
+  boss_colossus: 2.8, boss_archmage: 2.5, boss_shadow: 2.4,
 }
 
 const ATK_ANIM_T = 0.35 // 공격 모션 길이 (초)
@@ -2928,10 +2930,11 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   armL.add(armLMesh)
   body.add(armL)
   const shadow = blobShadow(2.0 * s)
-  const faceEmoji = getZodiac(h.zodiacId)?.emoji || '🙂'
+  const faceEmoji = getZodiac(h.zodiacId)?.emoji || CLASSES[h.cls]?.icon || '🙂' // 보스는 클래스 아이콘이 얼굴
   // 얼굴 스펙(zodiacFaces.js): scale=스프라이트 배율, dx/dy=위치 보정(몸집 s·바라보는 방향 비례)
   const zspec = ZODIAC_FACES[faceEmoji] || {}
-  const face = emojiSprite(faceEmoji, 3.2 * (zspec.scale || 1))
+  // 보스는 몸집(s)에 비례해 얼굴도 커야 한다 — 일반 영웅 얼굴은 몸집과 무관(가독 우선)
+  const face = emojiSprite(faceEmoji, 3.2 * (zspec.scale || 1) * (CLASSES[h.cls]?.boss ? s * 0.85 : 1))
   face.position.y = (4.4 + (zspec.dy || 0)) * s
   // 모자 — 얼굴이 빌보드(회전 없음)라 몸통이 아닌 루트에 붙인다. 얼굴 이미지 정수리
   // (투명 여백 감안 ≈5.1s) 위 + 살짝 앞(z). 얼굴 위치 보정(dy)만큼 같이 오르내리고,
@@ -2948,10 +2951,11 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   }
   const nameColor = mine ? '#ffe066' : '#ffffff'
   const name = nameSprite(heroLabel(h), nameColor)
-  const bar = makeHpBar(3, barColor)
+  const bar = makeHpBar(s > 1.5 ? 5.5 : 3, barColor) // 보스는 체력바도 큼직하게
   // 이름표·체력바 — 얼굴 위로 여유를 두고(기본도 살짝 위로), 모자를 쓰면
-  // 모자 높이만큼 더 올려 모자가 체력바를 가리지 않게 한다
-  const uiLift = 0.5 + (hat ? 1.0 : 0)
+  // 모자 높이만큼 더 올려 모자가 체력바를 가리지 않게 한다.
+  // 거체(보스)는 머리(≈4.4s+얼굴 반높이)에 맞춰 비례해 올린다.
+  const uiLift = 0.5 + (hat ? 1.0 : 0) + (s > 1.5 ? (s - 1) * 4.4 : 0)
   name.position.y = 6.6 + uiLift
   bar.position.y = 5.7 + uiLift
   // 내 영웅 발밑 링
@@ -2962,6 +2966,16 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   ring.rotation.x = -Math.PI / 2
   ring.position.y = 0.06
   ring.visible = !!mine
+  // 보스: 발밑에 붉은 위협 링 — 거체 + 링으로 "이건 다른 놈이다"가 한눈에 읽힌다
+  if (CLASSES[h.cls]?.boss) {
+    const threat = new THREE.Mesh(
+      new THREE.RingGeometry(2.0 * s, 2.5 * s, 32),
+      new THREE.MeshBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+    )
+    threat.rotation.x = -Math.PI / 2
+    threat.position.y = 0.08
+    g.add(threat)
+  }
   // 버프 링 (용=주황 / 이무기=보라)
   const buff = new THREE.Mesh(
     new THREE.RingGeometry(1.2, 1.45, 20),
@@ -3024,7 +3038,10 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   recallBeam.visible = false
   // 직업 무기 — 오른팔(손)에 쥐게 한다. 팔 그룹은 어깨가 피벗이라 걸을 때 앞뒤로 흔들린다.
   // 무기 스킨(꾸미기)을 장착했으면 직업 무기를 대체한다.
-  const weapon = buildWeapon(h.cls, weaponSkinId)
+  // 보스는 타입별 기본 무기를 차용(전사 검/마법사 지팡이/암살자 단검)해 거체에 맞게 키운다
+  const BOSS_WEAPON = { boss_colossus: 'warrior', boss_archmage: 'mage', boss_shadow: 'assassin' }
+  const weapon = buildWeapon(BOSS_WEAPON[h.cls] || h.cls, weaponSkinId)
+  if (s > 1.5) weapon.scale.setScalar(s * 0.8) // 거인의 손엔 거인의 무기
   // 손 위치 = 무기 그룹의 원점(=손잡이). 무기마다 달라서 각자에 맞춰 팔을 뻗는다(고정값이면 어깨에 뜬 것처럼 보인다).
   const hand = weapon.position.clone()
   if (hand.lengthSq() < 0.04) hand.set(0.35, 0.2, 0.15) // 암살자 등 원점이 0인 무기는 손잡이 보정
