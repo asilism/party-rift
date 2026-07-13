@@ -8,7 +8,8 @@ export const MISSION_POOL = [
   { id: 'kill5', name: '적 영웅 5명 처치', goal: 5, reward: 30, stat: 'kills' },
   { id: 'assist3', name: '어시스트 3회', goal: 3, reward: 30, stat: 'assists' },
   { id: 'jungle8', name: '정글몹 8마리 사냥', goal: 8, reward: 40, stat: 'jungle' },
-  { id: 'play5', name: '5판 플레이', goal: 5, reward: 50, stat: 'games' },
+  // 쓰러트리기 = 킬+어시스트(처치 관여) — '처치'(순수 킬)와 구분. 5판 플레이는 과해서 교체.
+  { id: 'takedown5', name: '적 5번 쓰러트리기', goal: 5, reward: 50, stat: 'takedowns' },
 ]
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -27,6 +28,8 @@ function dayHash(s) {
 export function getTodayMissions() {
   const date = today()
   let st = loadMissionState()
+  // 풀에서 빠진 미션 id가 저장돼 있으면(패치로 교체됨) 오늘 몫을 새로 뽑는다
+  if (st && st.ids?.some((id) => !MISSION_POOL.find((m) => m.id === id))) st = null
   if (!st || st.date !== date) {
     const h = dayHash(date)
     const picks = []
@@ -50,6 +53,7 @@ export function recordMissionProgress({ win, kills, assists, jungle }) {
   p.wins = (p.wins || 0) + (win ? 1 : 0)
   p.kills = (p.kills || 0) + (kills || 0)
   p.assists = (p.assists || 0) + (assists || 0)
+  p.takedowns = (p.takedowns || 0) + (kills || 0) + (assists || 0) // 쓰러트리기 = 킬+어시
   p.jungle = (p.jungle || 0) + (jungle || 0)
   saveMissionState(st)
   return st

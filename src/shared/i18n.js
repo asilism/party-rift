@@ -473,6 +473,7 @@ const DICT = {
   '어시스트 3회': 'Get 3 assists',
   '정글몹 8마리 사냥': 'Hunt 8 jungle monsters',
   '5판 플레이': 'Play 5 matches',
+  '적 5번 쓰러트리기': 'Take down 5 enemies',
   '광고 보고 2배': 'Watch ad for ×2',
   '구매·장착': 'Buy & Equip',
   '코인이 부족해요': 'Not enough coins',
