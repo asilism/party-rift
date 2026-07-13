@@ -1758,15 +1758,6 @@ function buildHero(h, mine, barColor, hatId = null) {
   // 조디악 전용 파츠: 뱀은 얼굴(머리)만 쓰는 대신 엉덩이에 말린 꼬리를 단다
   const tailBuild = ZODIAC_TAILS[h.zodiacId]
   if (tailBuild) body.add(tailBuild(s)) // 12지신 꼬리 — 엉덩이(-x)에서 실루엣을 만든다
-  if (hatId) {
-    const hat = buildHat(hatId, s)
-    if (hat) {
-      // 얼굴이 빌보드(회전 없음)라 모자도 루트에 붙인다 — 얼굴 이미지 정수리(투명 여백
-      // 감안 ≈5.1s) 위에 얹고 살짝 앞(z)으로 빼서 얼굴 스프라이트에 가려지지 않게.
-      hat.position.set(0, 5.05 * s, 0.85 * s)
-      g.add(hat)
-    }
-  }
   // 팔·다리 — 짧고 길쭉한 원통(살짝 테이퍼). 몸통 자식이라 바라보는 방향/걷기와 함께 움직인다.
   const limbMat = new THREE.MeshLambertMaterial({ color: darken(col, 0.7) })
   // 다리: 고관절 피벗 그룹으로 감싸 걸을 때 앞뒤로 엇갈려 흔든다(legs[0]=오른쪽 +z, [1]=왼쪽 -z)
@@ -1794,6 +1785,19 @@ function buildHero(h, mine, barColor, hatId = null) {
   const zspec = ZODIAC_FACES[faceEmoji] || {}
   const face = emojiSprite(faceEmoji, 3.2 * (zspec.scale || 1))
   face.position.y = (4.4 + (zspec.dy || 0)) * s
+  // 모자 — 얼굴이 빌보드(회전 없음)라 몸통이 아닌 루트에 붙인다. 얼굴 이미지 정수리
+  // (투명 여백 감안 ≈5.1s) 위 + 살짝 앞(z). 얼굴 위치 보정(dy)만큼 같이 오르내리고,
+  // 프레임마다 얼굴의 쏠림(leanX)·둥실(bob)을 따라간다(userData.hat 참조) — 안 그러면
+  // 얼굴만 움직이고 모자는 몸통 기준에 남아 어긋나 보인다.
+  let hat = null
+  const hatBaseY = (5.05 + (zspec.dy || 0)) * s
+  if (hatId) {
+    hat = buildHat(hatId, s)
+    if (hat) {
+      hat.position.set(0, hatBaseY, 0.85 * s)
+      g.add(hat)
+    }
+  }
   const nameColor = mine ? '#ffe066' : '#ffffff'
   const name = nameSprite(heroLabel(h), nameColor)
   name.position.y = 6.6
@@ -1920,6 +1924,7 @@ function buildHero(h, mine, barColor, hatId = null) {
     body, outline, face, name, nameColor, nameLvl: h.lvl, isMine: mine, shadow,
     faceEmoji, faceTexOrig: face.material.map, faceTexMirror: null, // 좌우 반전용(미러는 지연 생성)
     faceDX: zspec.dx || 0, clsScale: s, // 얼굴 위치 보정·몸집(쏠림/보정 계산용)
+    hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
     bar, ring, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
@@ -1945,6 +1950,7 @@ function setHeroDead(u, dead) {
   u.bar.visible = !dead
   u.ring.visible = !dead && u.isMine
   u.shadow.visible = !dead
+  if (u.hat) u.hat.visible = !dead // 모자만 공중에 남지 않게
   u.deathPts.visible = dead
   if (dead) {
     u.buff.visible = false
@@ -3906,6 +3912,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         _faceCamV.subVectors(camera.position, _faceCamV).normalize().multiplyScalar(0.8 * fs)
         u.face.position.set(u.faceLeanX + _faceCamV.x, u.faceBaseY + bobOff + _faceCamV.y, _faceCamV.z)
         u.face.material.rotation = -fdx * 0.1
+        if (u.hat) {
+          // 모자는 얼굴에 붙어 보여야 한다 — 쏠림(leanX)과 둥실(bob)을 같이 탄다
+          u.hat.position.x = u.faceLeanX
+          u.hat.position.y = u.hatBaseY + bobOff
+        }
         if (h.whirlT <= 0 && h.airT <= 0) u.body.rotation.z = Math.sin(u.wphase) * 0.06 * wk.amt
         else u.body.rotation.z = 0
         // 다리 성큼성큼 + 팔 흔들기: 다리는 반대 위상, 팔은 같은 쪽 다리와 반대로(자연스러운 걸음)
@@ -4375,6 +4386,14 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null }) {
   u.face.position.z = 1.0 * s
   u.face.material.rotation = -0.1
   scene.add(g)
+  if (u.hat) {
+    // 모자는 얼굴(빌보드) 기준이어야 한다 — 루트에 두면 턴테이블 회전을 따라 돌아
+    // 고정된 얼굴과 어긋난다. 무대(scene)에 직접 붙여 얼굴과 같은 쏠림·기울임으로 고정.
+    g.remove(u.hat)
+    scene.add(u.hat)
+    u.hat.position.set(0.6 * s, u.hatBaseY, 1.0 * s)
+    u.hat.rotation.z = -0.1 // 얼굴 기울임(material.rotation -0.1)과 맞춤
+  }
 
   // 전신 + 머리 위 약간의 여유. 몸집(직업 스케일)에 비례해 물러난다.
   // 모자를 쓰면 머리 위 공간이 더 필요해 카메라를 살짝 올리고 물러난다(프레임 잘림 방지).
@@ -4472,6 +4491,7 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null }) {
 
     u.body.position.y = u.bodyBaseY + bob + lift
     u.face.position.y = u.faceBaseY + bob + lift
+    if (u.hat) u.hat.position.y = u.hatBaseY + bob + lift // 모자도 같이 둥실
     if (u.legs) {
       u.legs[0].rotation.z = stride
       u.legs[1].rotation.z = -stride
