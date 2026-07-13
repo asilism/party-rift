@@ -523,4 +523,5 @@ const DICT = {
   '광고 보고 2배 보상': 'Watch ad for ×2 reward',
   '광고 불러오는 중…': 'Loading ad…',
   '광고 준비 중 — 잠시 후 다시': 'Ad not ready — try again soon',
+  '모두 완료 보너스': 'All-clear bonus',
 }
