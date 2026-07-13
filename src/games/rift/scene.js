@@ -3710,6 +3710,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
 
   const camTarget = new THREE.Vector3(0, 0, 0)
   const _faceCamV = new THREE.Vector3() // 얼굴 깊이 보정용 임시 벡터(매 프레임 재사용)
+  const _hatUpV = new THREE.Vector3() // 모자 "화면 위" 방향 임시 벡터(매 프레임 재사용)
   const _want = new THREE.Vector3() // 카메라 목표점 — 매 프레임 재사용(할당 방지)
   let camInit = false
   let frameN = 0 // 안개 갱신 스로틀용 프레임 카운터
@@ -3913,9 +3914,21 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         u.face.position.set(u.faceLeanX + _faceCamV.x, u.faceBaseY + bobOff + _faceCamV.y, _faceCamV.z)
         u.face.material.rotation = -fdx * 0.1
         if (u.hat) {
-          // 모자는 얼굴에 붙어 보여야 한다 — 쏠림(leanX)과 둥실(bob)을 같이 탄다
-          u.hat.position.x = u.faceLeanX
-          u.hat.position.y = u.hatBaseY + bobOff
+          // 모자는 얼굴 스프라이트 "정수리"에 얹혀 보여야 한다. 월드 y로만 올리면
+          // 톱다운 카메라에선 화면상 위가 아니라 얼굴 한가운데(가면처럼)에 찍힌다 —
+          // 얼굴과 같은 카메라-쪽 밀기(_faceCamV, 살짝 더 앞)에 더해 "화면 위" 방향
+          // (카메라 up)으로 얼굴 중심→정수리 거리만큼 올린다. 쇼케이스와 같은 상대 배치.
+          _hatUpV.setFromMatrixColumn(camera.matrixWorld, 1)
+          const crown = u.hatBaseY - u.faceBaseY // 얼굴 중심→정수리(≈0.65s)
+          u.hat.position.set(
+            u.faceLeanX + _faceCamV.x * 1.25 + _hatUpV.x * crown,
+            u.faceBaseY + bobOff + _faceCamV.y * 1.25 + _hatUpV.y * crown,
+            _faceCamV.z * 1.25 + _hatUpV.z * crown
+          )
+          // 얼굴이 빌보드라 모자도 카메라 정면을 봐야 한짝이다 — 톱다운에서 세워두면
+          // 위에서 내려다본 모습(왕관은 고리만)이 되어 가면처럼 읽힌다. 기울임도 얼굴과 맞춤.
+          u.hat.quaternion.copy(camera.quaternion)
+          u.hat.rotateZ(-fdx * 0.1)
         }
         if (h.whirlT <= 0 && h.airT <= 0) u.body.rotation.z = Math.sin(u.wphase) * 0.06 * wk.amt
         else u.body.rotation.z = 0
