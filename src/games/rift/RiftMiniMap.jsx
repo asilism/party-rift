@@ -52,31 +52,37 @@ export default function RiftMiniMap({ view, myId }) {
   const pad = 8
   const vb = `${WORLD.minX - pad} ${WORLD.minZ - pad} ${WORLD.maxX - WORLD.minX + pad * 2} ${WORLD.maxZ - WORLD.minZ + pad * 2}`
   const myTeam = view.heroes?.find((h) => h.id === myId)?.team || null
+  const abyss = view.mode === 'boss' // 심연 테마 — 3D 씬과 같은 검보라 톤
   return (
     <svg className="rift-minimap" viewBox={vb}>
       <rect
         x={WORLD.minX} y={WORLD.minZ}
         width={WORLD.maxX - WORLD.minX} height={WORLD.maxZ - WORLD.minZ}
-        rx={10} fill="rgba(20, 50, 24, 0.78)"
+        rx={10} fill={abyss ? 'rgba(34, 26, 54, 0.82)' : 'rgba(20, 50, 24, 0.78)'}
       />
       {/* 중앙 강줄기 — 보스전 맵(협곡)엔 강이 없다 */}
-      {view.mode !== 'boss' && (
+      {!abyss && (
         <rect x={-7} y={WORLD.minZ} width={14} height={WORLD.maxZ - WORLD.minZ} fill="rgba(108, 196, 232, 0.4)" />
       )}
       {LANE_IDS.map((l) => (
-        <path key={l} d={laneD(map, l)} fill="none" stroke="rgba(217, 199, 154, 0.55)" strokeWidth={9} strokeLinejoin="round" />
+        <path
+          key={l} d={laneD(map, l)} fill="none"
+          stroke={abyss ? 'rgba(150, 132, 196, 0.5)' : 'rgba(217, 199, 154, 0.55)'}
+          strokeWidth={9} strokeLinejoin="round"
+        />
       ))}
       {/* 성벽 */}
       {WALL_LINES.map((w, i) => (
         <line
           key={i}
           x1={w.x1} y1={w.z1} x2={w.x2} y2={w.z2}
-          stroke="rgba(125, 132, 148, 0.95)" strokeWidth={6} strokeLinecap="round"
+          stroke={abyss ? 'rgba(88, 74, 122, 0.95)' : 'rgba(125, 132, 148, 0.95)'}
+          strokeWidth={6} strokeLinecap="round"
         />
       ))}
       {/* 수풀 */}
       {BUSHES.map((b, i) => (
-        <circle key={i} cx={b.x} cy={b.z} r={b.r} fill="rgba(47, 125, 61, 0.9)" />
+        <circle key={i} cx={b.x} cy={b.z} r={b.r} fill={abyss ? 'rgba(88, 56, 140, 0.9)' : 'rgba(47, 125, 61, 0.9)'} />
       ))}
       {/* 전장의 안개: 아군 시야(영웅/병사/타워/우물) 밖 지형은 어둡게 — 3D 화면과 동일 규칙.
           관전(myTeam 없음)이면 안개 없음. 지형 위에만 덮고 랜드마크/유닛은 위에 그려 또렷이 보인다. */}

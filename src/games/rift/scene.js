@@ -612,14 +612,14 @@ function lcg(seed) {
 
 // ── 절차적 캔버스 텍스처 (단색 평면 대신 얼룩덜룩한 디테일을 입힌다) ──
 // 잔디밭: 톤이 다른 풀 얼룩 + 가는 풀결으로 단조로움을 없앤다
-function grassTexture(size = 512) {
+function grassTexture(size = 512, palette = null) {
   const c = document.createElement('canvas')
   c.width = c.height = size
   const ctx = c.getContext('2d')
-  ctx.fillStyle = '#69b85e'
+  ctx.fillStyle = palette?.base || '#69b85e'
   ctx.fillRect(0, 0, size, size)
   const rnd = lcg(1337)
-  const tones = ['#5fa854', '#74c266', '#62ad58', '#7cc96e', '#5aa251', '#83cf73']
+  const tones = palette?.tones || ['#5fa854', '#74c266', '#62ad58', '#7cc96e', '#5aa251', '#83cf73']
   for (let i = 0; i < 1500; i++) {
     ctx.fillStyle = tones[(rnd() * tones.length) | 0]
     ctx.globalAlpha = 0.14 + rnd() * 0.22
@@ -628,7 +628,7 @@ function grassTexture(size = 512) {
     ctx.fill()
   }
   ctx.globalAlpha = 0.22
-  ctx.strokeStyle = '#4f9447'
+  ctx.strokeStyle = palette?.blade || '#4f9447'
   ctx.lineWidth = 1
   for (let i = 0; i < 1000; i++) {
     const x = rnd() * size
@@ -676,14 +676,14 @@ function waterTexture(size = 256) {
 }
 
 // 흙길: 모래·자갈 얼룩이 섞인 길바닥 텍스처
-function laneTexture(size = 128) {
+function laneTexture(size = 128, palette = null) {
   const c = document.createElement('canvas')
   c.width = c.height = size
   const ctx = c.getContext('2d')
-  ctx.fillStyle = '#d9c79a'
+  ctx.fillStyle = palette?.base || '#d9c79a'
   ctx.fillRect(0, 0, size, size)
   const rnd = lcg(555)
-  const tones = ['#cdb98a', '#e3d3a8', '#c7b282', '#d2c191', '#bda674']
+  const tones = palette?.tones || ['#cdb98a', '#e3d3a8', '#c7b282', '#d2c191', '#bda674']
   for (let i = 0; i < 320; i++) {
     ctx.fillStyle = tones[(rnd() * tones.length) | 0]
     ctx.globalAlpha = 0.45
@@ -4367,32 +4367,75 @@ function createFog(map) {
   return { plane, update }
 }
 
+// ── 맵 테마 ──
+// 기본(default): 초원의 황혼 — 초록 대지·흙길·이끼 낀 성벽.
+// 보스전(boss): "심연" — 검보라 하늘 아래 잿빛 마계 대지, 흑요석 성벽, 마정석 발광,
+//  죽은 숲과 수정 첨탑. 색·오브제를 통째로 갈아 끼워 "다른 세계"로 읽히게 한다.
+const MAP_THEMES = {
+  default: {
+    sky: 0x2b3550, fog: [95, 230],
+    hemi: [0x9aa8c4, 0x33402e, 0.62], sun: [0xffe6bf, 0.95], fill: [0x5b6c92, 0.32],
+    ground: null, // grassTexture 기본 초록
+    river: true,
+    laneEdge: 0xb09a6c, laneFloor: 0xd9c79a, lane: null, // laneTexture 기본 모래
+    laneStones: [0x9aa0ad, 0x8a8f9c],
+    rock: 0x8a8f9c, rockSat: [0x7c818d, 0x969cab], rockCap: 0x4a7a3e,
+    wall: 0x7d8494, wallTop: 0x69b85e, merlon: 0x6b7280,
+    bush: [0x276b34, 0x2f7d3d], berry: [0xff5f7e, 0xffd34d, 0xffffff],
+    tuft: [0x5aa251, 0x74c266],
+    flowers: [0xffffff, 0xffe066, 0xff8fae, 0xb084ff, 0xff6b6b],
+    pebbles: [0x9aa0ad, 0x7e8492],
+    treeTrunk: 0x7a5a3a, treeLeaf: [0x2f7d3d, 0x3c9150],
+    mote: 0xfff3c0,
+    crystal: 0, // 수정 첨탑 없음
+  },
+  boss: {
+    sky: 0x171226, fog: [85, 215],
+    hemi: [0x7a68a8, 0x171226, 0.62], sun: [0xb9a5ff, 0.85], fill: [0x8a3d7a, 0.3],
+    ground: { base: '#463d5e', tones: ['#4e4469', '#3d3556', '#554a73', '#392f50', '#5c517d', '#443a60'], blade: '#332b49' },
+    river: false,
+    laneEdge: 0x584c74, laneFloor: 0x6e6094,
+    lane: { base: '#6e6094', tones: ['#645684', '#7869a2', '#5c4f7a', '#7d6ea8', '#554870'] },
+    laneStones: [0x6b6284, 0x554d70],
+    rock: 0x3b3452, rockSat: [0x322b46, 0x453d60], rockCap: 0x5b3f8f,
+    wall: 0x2f2841, wallTop: 0x6a4a9e, merlon: 0x201a30,
+    bush: [0x3a2a5c, 0x472f6e], berry: [0xc07dff, 0x8a5cff, 0xff7de9],
+    tuft: [0x53447a, 0x655590],
+    flowers: [0xc07dff, 0x8a5cff, 0x6fe0e8, 0xff7de9, 0xffffff],
+    pebbles: [0x54496e, 0x453b5c],
+    treeTrunk: 0x3c3149, treeLeaf: [0x2a2144, 0x362a54],
+    mote: 0xc08aff,
+    crystal: 0.3, // 바깥 숲의 30%가 빛나는 수정 첨탑
+  },
+}
+
 export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') {
   const { WORLD, NEXUS_POS, FOUNTAIN_POS, LANES, ROCKS, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT, WOLF_CAMPS } = map
+  const T = map.mode === 'boss' ? MAP_THEMES.boss : MAP_THEMES.default
   const Q = QUALITY[quality] || QUALITY.med
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q.antialias })
   renderer.setPixelRatio(Math.min(Q.pixelRatio, window.devicePixelRatio || 1))
   const scene = new THREE.Scene()
   // 무거운 황혼 분위기 — 어둑한 하늘 + 가까이 깔리는 대기 안개
-  scene.background = new THREE.Color(0x2b3550)
-  scene.fog = new THREE.Fog(0x2b3550, 95, 230)
+  scene.background = new THREE.Color(T.sky)
+  scene.fog = new THREE.Fog(T.sky, T.fog[0], T.fog[1])
   const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.5, 400)
   camera.position.set(0, 60, 50)
 
   // 전체적으로 빛을 낮춰 음영을 깊게 (차가운 하늘빛 + 어두운 땅반사)
-  scene.add(new THREE.HemisphereLight(0x9aa8c4, 0x33402e, 0.62))
-  const sun = new THREE.DirectionalLight(0xffe6bf, 0.95)
+  scene.add(new THREE.HemisphereLight(T.hemi[0], T.hemi[1], T.hemi[2]))
+  const sun = new THREE.DirectionalLight(T.sun[0], T.sun[1])
   sun.position.set(60, 90, 30)
   scene.add(sun)
   // 반대편 차가운 보조광 — 그림자 쪽을 살짝 살려 묵직한 입체감
-  const fill = new THREE.DirectionalLight(0x5b6c92, 0.32)
+  const fill = new THREE.DirectionalLight(T.fill[0], T.fill[1])
   fill.position.set(-50, 40, -40)
   scene.add(fill)
 
   // ── 지형 ──
   const GW = WORLD.maxX - WORLD.minX + 80
   const GH = WORLD.maxZ - WORLD.minZ + 80
-  const groundTex = grassTexture(512)
+  const groundTex = grassTexture(512, T.ground)
   groundTex.repeat.set(Math.max(4, Math.round(GW / 60)), Math.max(4, Math.round(GH / 60)))
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(GW, GH),
@@ -4401,30 +4444,33 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   ground.rotation.x = -Math.PI / 2
   scene.add(ground)
   // 강 (가운데 세로 물길 — 용/이무기 둥지를 잇는다). 흐르는 물 텍스처(render에서 천천히 굴린다)
+  //  심연(보스전) 테마엔 강이 없다 — 마른 골짜기가 그 자리를 대신한다.
   const waterTex = waterTexture(256)
-  waterTex.repeat.set(1, Math.max(2, Math.round((WORLD.maxZ - WORLD.minZ) / 30)))
-  const river = new THREE.Mesh(
-    new THREE.PlaneGeometry(16, WORLD.maxZ - WORLD.minZ + 10, 1, 24),
-    new THREE.MeshLambertMaterial({ map: waterTex }) // 불투명 — 투명 정렬로 캐릭터를 덮지 않게
-  )
-  river.rotation.x = -Math.PI / 2
-  river.position.y = 0.02
-  scene.add(river)
-  // 강가 모래톱 (물길 양옆 젖은 둑)
-  for (const side of [-1, 1]) {
-    const bank = new THREE.Mesh(
-      new THREE.PlaneGeometry(4.5, WORLD.maxZ - WORLD.minZ + 10),
-      new THREE.MeshLambertMaterial({ color: 0x88a98e })
+  if (T.river) {
+    waterTex.repeat.set(1, Math.max(2, Math.round((WORLD.maxZ - WORLD.minZ) / 30)))
+    const river = new THREE.Mesh(
+      new THREE.PlaneGeometry(16, WORLD.maxZ - WORLD.minZ + 10, 1, 24),
+      new THREE.MeshLambertMaterial({ map: waterTex }) // 불투명 — 투명 정렬로 캐릭터를 덮지 않게
     )
-    bank.rotation.x = -Math.PI / 2
-    bank.position.set(side * 9.8, 0.015, 0)
-    scene.add(bank)
+    river.rotation.x = -Math.PI / 2
+    river.position.y = 0.02
+    scene.add(river)
+    // 강가 모래톱 (물길 양옆 젖은 둑)
+    for (const side of [-1, 1]) {
+      const bank = new THREE.Mesh(
+        new THREE.PlaneGeometry(4.5, WORLD.maxZ - WORLD.minZ + 10),
+        new THREE.MeshLambertMaterial({ color: 0x88a98e })
+      )
+      bank.rotation.x = -Math.PI / 2
+      bank.position.set(side * 9.8, 0.015, 0)
+      scene.add(bank)
+    }
   }
   // 레인 길 3갈래 — 어두운 흙 둑 + 그 위 흙길 텍스처
-  const laneTex = laneTexture(128)
+  const laneTex = laneTexture(128, T.lane)
   for (const lane of LANE_IDS) {
-    scene.add(buildLane(LANES[lane], 6.6, 0xb09a6c, 0.025)) // 가장자리(흙 둑)
-    scene.add(buildLane(LANES[lane], 5, 0xd9c79a, 0.035, laneTex)) // 길 바닥
+    scene.add(buildLane(LANES[lane], 6.6, T.laneEdge, 0.025)) // 가장자리(흙 둑)
+    scene.add(buildLane(LANES[lane], 5, T.laneFloor, 0.035, laneTex)) // 길 바닥
   }
   // 길가 돌멩이 — 길 양옆을 따라 작은 돌을 늘어놓아 경계를 또렷하게
   const laneStoneRnd = lcg(606)
@@ -4447,7 +4493,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           if (laneStoneRnd() > 0.55) continue
           const off = 5.1 + laneStoneRnd() * 0.9
           laneStoneItems.push({ x: px + nx * off * sdir, y: 0.15, z: pz + nz * off * sdir,
-            ry: laneStoneRnd() * 3, s: 0.4 + laneStoneRnd() * 0.6, color: laneStoneRnd() > 0.5 ? 0x9aa0ad : 0x8a8f9c })
+            ry: laneStoneRnd() * 3, s: 0.4 + laneStoneRnd() * 0.6, color: T.laneStones[laneStoneRnd() > 0.5 ? 0 : 1] })
         }
       }
     }
@@ -4535,8 +4581,9 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   }
   // 강 건널목 유적 — 각 레인이 강(x=0)을 건너는 지점 양옆의 이끼 낀 부러진 돌기둥.
   //  옛 다리의 잔해가 "여기서 강을 건넌다"는 랜드마크가 된다. 전부 무광 정적 → 병합.
+  //  (강이 없는 심연 테마엔 유적도 없다)
   const ruinRnd = lcg(1717)
-  for (const lane of LANE_IDS) {
+  for (const lane of T.river ? LANE_IDS : []) {
     const wps = LANES[lane]
     let crossZ = null
     for (let i = 0; i < wps.length - 1; i++) {
@@ -4598,21 +4645,33 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     g.position.set(c.x, 0, c.z)
     staticDecor.addGroup(g)
   }
+  // 빛나는 마정석 병합기(심연 테마 전용) — 발광 결정 수십 개를 한 덩이로 병합해 1드로우콜.
+  //  (staticDecor는 무광 Lambert로 굽기 때문에 발광은 따로 모은다)
+  const crystalGeos = []
+  const addCrystal = (x, z, size, lean = 0.25) => {
+    const g = new THREE.OctahedronGeometry(size).toNonIndexed()
+    if (g.hasAttribute('uv')) g.deleteAttribute('uv')
+    const m = new THREE.Matrix4()
+      .makeRotationFromEuler(new THREE.Euler((rockRnd() - 0.5) * lean, rockRnd() * 3, (rockRnd() - 0.5) * lean))
+      .setPosition(x, size * 0.85, z)
+    g.applyMatrix4(m)
+    crystalGeos.push(g)
+  }
   // 바위 — 큰 돌 + 둘레에 작은 돌이 흩어진 군집 (저폴리 면처리로 거칠게)
   const rockRnd = lcg(88)
   for (const r of ROCKS) {
     const g = new THREE.Group()
     const main = new THREE.Mesh(
       new THREE.IcosahedronGeometry(r.r, 0),
-      new THREE.MeshLambertMaterial({ color: 0x8a8f9c, flatShading: true })
+      new THREE.MeshLambertMaterial({ color: T.rock, flatShading: true })
     )
     main.position.y = r.r * 0.5
     main.rotation.set(rockRnd() * 3, rockRnd() * 3, rockRnd() * 3)
     g.add(main)
-    // 바위 위 이끼 캡 (윗부분 반구를 납작하게)
+    // 바위 위 이끼 캡 (윗부분 반구를 납작하게) — 심연 테마에선 어둠이끼(보랏빛)
     const moss = new THREE.Mesh(
       new THREE.SphereGeometry(r.r * 0.82, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2.3),
-      new THREE.MeshLambertMaterial({ color: 0x4a7a3e })
+      new THREE.MeshLambertMaterial({ color: T.rockCap })
     )
     moss.position.y = r.r * 0.72
     moss.scale.y = 0.5
@@ -4623,7 +4682,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       const a = rockRnd() * Math.PI * 2
       const m = new THREE.Mesh(
         new THREE.IcosahedronGeometry(sr, 0),
-        new THREE.MeshLambertMaterial({ color: rockRnd() > 0.5 ? 0x7c818d : 0x969cab, flatShading: true })
+        new THREE.MeshLambertMaterial({ color: T.rockSat[rockRnd() > 0.5 ? 0 : 1], flatShading: true })
       )
       m.position.set(Math.cos(a) * r.r, sr * 0.4, Math.sin(a) * r.r)
       m.rotation.set(rockRnd() * 3, rockRnd() * 3, rockRnd() * 3)
@@ -4631,11 +4690,16 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     }
     g.position.set(r.x, 0, r.z)
     staticDecor.addGroup(g)
+    // 심연 테마: 바위틈에 돋아난 마정석 — 어두운 협곡 곳곳이 은은하게 빛난다
+    if (T.crystal > 0) {
+      const a = rockRnd() * Math.PI * 2
+      addCrystal(r.x + Math.cos(a) * (r.r + 0.7), r.z + Math.sin(a) * (r.r + 0.7), 0.5 + rockRnd() * 0.5)
+    }
   }
   // 성벽: 길이 아닌 곳을 막는 능선 + 윗면에 성가퀴(merlon) 톱니
-  const wallMat = new THREE.MeshLambertMaterial({ color: 0x7d8494 })
-  const wallTopMat = new THREE.MeshLambertMaterial({ color: 0x69b85e })
-  const merlonMat = new THREE.MeshLambertMaterial({ color: 0x6b7280 })
+  const wallMat = new THREE.MeshLambertMaterial({ color: T.wall })
+  const wallTopMat = new THREE.MeshLambertMaterial({ color: T.wallTop })
+  const merlonMat = new THREE.MeshLambertMaterial({ color: T.merlon })
   for (const w of WALL_LINES) {
     const len = Math.hypot(w.x2 - w.x1, w.z2 - w.z1) + WALL_RADIUS * 2
     const g = new THREE.Group()
@@ -4705,7 +4769,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     for (let i = 0; i < blobs; i++) {
       const blob = new THREE.Mesh(
         new THREE.SphereGeometry(b.r * (0.4 + bushRnd() * 0.3), 10, 8),
-        new THREE.MeshLambertMaterial({ color: i % 3 === 0 ? 0x276b34 : 0x2f7d3d, transparent: true, opacity: 0.94 })
+        new THREE.MeshLambertMaterial({ color: T.bush[i % 3 === 0 ? 0 : 1], transparent: true, opacity: 0.94 })
       )
       blob.scale.y = 0.6
       const ring = i < 6 ? b.r * 0.5 : b.r * 0.22
@@ -4716,7 +4780,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     for (let i = 0; i < 4; i++) {
       const berry = new THREE.Mesh(
         new THREE.SphereGeometry(0.22, 6, 5),
-        new THREE.MeshLambertMaterial({ color: [0xff5f7e, 0xffd34d, 0xffffff][(bushRnd() * 3) | 0] })
+        new THREE.MeshLambertMaterial({ color: T.berry[(bushRnd() * 3) | 0] })
       )
       const ang = bushRnd() * Math.PI * 2
       const rr = bushRnd() * b.r * 0.6
@@ -4729,31 +4793,30 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
 
   // ── 바닥 디테일: 풀포기 · 들꽃 · 자갈 (인스턴싱으로 가볍게 흩뿌린다) ──
   const decoRnd = lcg(31337)
-  const inRiver = (x) => Math.abs(x) < 10
+  const inRiver = (x) => T.river && Math.abs(x) < 10
   const spanX = WORLD.maxX - WORLD.minX
   const spanZ = WORLD.maxZ - WORLD.minZ
   const grassItems = []
   const flowerItems = []
   const pebbleItems = []
-  const FLOWER_COLORS = [0xffffff, 0xffe066, 0xff8fae, 0xb084ff, 0xff6b6b]
   for (let i = 0; i < 520; i++) {
     const x = WORLD.minX + decoRnd() * spanX
     const z = WORLD.minZ + decoRnd() * spanZ
     if (inRiver(x)) continue
     grassItems.push({ x, y: 0.65, z, ry: decoRnd() * Math.PI, s: 0.7 + decoRnd() * 0.9,
-      color: decoRnd() > 0.5 ? 0x5aa251 : 0x74c266 })
+      color: T.tuft[decoRnd() > 0.5 ? 0 : 1] })
   }
   for (let i = 0; i < 150; i++) {
     const x = WORLD.minX + decoRnd() * spanX
     const z = WORLD.minZ + decoRnd() * spanZ
     if (inRiver(x)) continue
     flowerItems.push({ x, y: 0.6, z, s: 0.7 + decoRnd() * 0.7,
-      color: FLOWER_COLORS[(decoRnd() * FLOWER_COLORS.length) | 0] })
+      color: T.flowers[(decoRnd() * T.flowers.length) | 0] })
   }
   for (let i = 0; i < 220; i++) {
     pebbleItems.push({ x: WORLD.minX + decoRnd() * spanX, y: 0.18, z: WORLD.minZ + decoRnd() * spanZ,
       rx: decoRnd() * 3, ry: decoRnd() * 3, s: 0.5 + decoRnd() * 0.8,
-      color: decoRnd() > 0.5 ? 0x9aa0ad : 0x7e8492 })
+      color: T.pebbles[decoRnd() > 0.5 ? 0 : 1] })
   }
   scene.add(makeScatter(
     new THREE.ConeGeometry(0.35, 1.3, 4),
@@ -4765,7 +4828,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     new THREE.DodecahedronGeometry(0.4),
     new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), pebbleItems))
 
-  // 장식 나무 (맵 밖 둘레) — 침엽수(원뿔 3겹)와 활엽수(둥근 잎뭉치)를 섞는다
+  // 장식 나무 (맵 밖 둘레) — 침엽수(원뿔 3겹)와 활엽수(둥근 잎뭉치)를 섞는다.
+  //  심연 테마: 일부가 거대한 마정석 첨탑으로 바뀐다 — 죽은 숲 사이에서 보랏빛이 새어 나온다.
   const rnd = lcg(20260612)
   for (let i = 0; i < 140; i++) {
     const ang = rnd() * Math.PI * 2
@@ -4774,14 +4838,19 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     const z = Math.sin(ang) * (WORLD.maxZ + 6 + rnd() * 24)
     // 전장 안(직사각형)에 떨어지는 나무는 건너뛴다 — 유령 나무 방지
     if (x > WORLD.minX - 2 && x < WORLD.maxX + 2 && z > WORLD.minZ - 2 && z < WORLD.maxZ + 2) continue
+    if (T.crystal > 0 && rnd() < T.crystal) {
+      addCrystal(x, z, 1.6 + rnd() * 2.2, 0.5) // 수정 첨탑 군락 (주변 곁수정 1~2개)
+      if (rnd() > 0.4) addCrystal(x + 2 + rnd() * 2, z + (rnd() - 0.5) * 3, 0.7 + rnd() * 0.8, 0.5)
+      continue
+    }
     const tree = new THREE.Group()
     const trunk = new THREE.Mesh(
       new THREE.CylinderGeometry(0.45, 0.7, 3),
-      new THREE.MeshLambertMaterial({ color: 0x7a5a3a })
+      new THREE.MeshLambertMaterial({ color: T.treeTrunk })
     )
     trunk.position.y = 1.5
     tree.add(trunk)
-    const leaf = rnd() > 0.4 ? 0x2f7d3d : 0x3c9150
+    const leaf = T.treeLeaf[rnd() > 0.4 ? 0 : 1]
     if (rnd() > 0.35) {
       for (let k = 0; k < 3; k++) {
         const cone = new THREE.Mesh(
@@ -4807,7 +4876,62 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     tree.rotation.y = rnd() * Math.PI
     staticDecor.addGroup(tree)
   }
+  // ── 심연 테마 전용 오브제 ──
+  if (T.crystal > 0) {
+    // 보스 성곽(옥좌) 마법진 — 둥근 룬 링 2겹이 옥좌를 감싼다
+    const throne = NEXUS_POS.red
+    const rune1 = new THREE.Mesh(
+      new THREE.RingGeometry(7.6, 9.4, 48),
+      new THREE.MeshBasicMaterial({ color: 0x8a5cff, transparent: true, opacity: 0.34, side: THREE.DoubleSide })
+    )
+    const rune2 = new THREE.Mesh(
+      new THREE.RingGeometry(11.6, 12.4, 56),
+      new THREE.MeshBasicMaterial({ color: 0x6fe0e8, transparent: true, opacity: 0.22, side: THREE.DoubleSide })
+    )
+    for (const r of [rune1, rune2]) {
+      r.rotation.x = -Math.PI / 2
+      r.position.set(throne.x, 0.06, throne.z)
+      scene.add(r)
+    }
+    // 옥좌를 두르는 흑요석 가시 기둥 — 바깥으로 기울어 "짐승의 이빨"처럼 벌어진다
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + 0.4
+      const h = 5.5 + rnd() * 3
+      const spike = new THREE.Mesh(
+        new THREE.ConeGeometry(1.05, h, 5),
+        new THREE.MeshLambertMaterial({ color: 0x241f33, flatShading: true })
+      )
+      spike.position.set(throne.x + Math.cos(a) * 13.5, h * 0.42, throne.z + Math.sin(a) * 13.5)
+      spike.rotation.set(Math.sin(a) * 0.35, rnd() * 3, -Math.cos(a) * 0.35)
+      staticDecor.addMesh(spike)
+    }
+    // 옥좌 곁 마정석 관(冠) — 잠든 보스 주위가 은은하게 빛난다
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 1.0
+      addCrystal(throne.x + Math.cos(a) * 10.2, throne.z + Math.sin(a) * 10.2, 0.8 + rnd() * 0.7, 0.45)
+    }
+    // 진군로(미드) 옆 마정석 가로등 — 보스의 길을 따라 드문드문 빛이 선다
+    const mid = LANES.mid
+    for (let i = 1; i < mid.length - 1; i++) {
+      for (const sdir of [1, -1]) {
+        if (rnd() > 0.5) continue
+        const a = mid[i]
+        const b = mid[i + 1]
+        const d = Math.hypot(b.x - a.x, b.z - a.z) || 1
+        addCrystal(a.x + (-(b.z - a.z) / d) * 8.4 * sdir, a.z + ((b.x - a.x) / d) * 8.4 * sdir, 0.9 + rnd() * 0.6, 0.35)
+      }
+    }
+  }
   staticDecor.build(scene) // 나무·바위·둥지돌을 flat/smooth 두 메시로 병합 완료
+  // 마정석 병합 — 모든 발광 결정이 한 덩이(1드로우콜)
+  if (crystalGeos.length) {
+    const crystals = new THREE.Mesh(
+      mergeGeometries(crystalGeos, false),
+      new THREE.MeshLambertMaterial({ color: 0xa06dff, emissive: 0x8a5cff, emissiveIntensity: 0.6, flatShading: true })
+    )
+    for (const g of crystalGeos) g.dispose()
+    scene.add(crystals)
+  }
 
   // ── 전장의 안개 ──
   const fog = createFog(map)
@@ -4828,7 +4952,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   }
   moteGeo.setAttribute('position', new THREE.BufferAttribute(motePos, 3))
   const motes = new THREE.Points(moteGeo, new THREE.PointsMaterial({
-    color: 0xfff3c0, size: 0.7, transparent: true, opacity: 0.55,
+    color: T.mote, size: 0.7, transparent: true, opacity: 0.55,
     depthWrite: false, blending: THREE.AdditiveBlending,
   }))
   motes.frustumCulled = false
