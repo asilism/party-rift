@@ -10,6 +10,7 @@ import {
   loadCoins, addCoins, claimFirstWinToday, addCoinUnlock,
   loadEquippedHat, saveEquippedHat, loadOwnedHats, addOwnedHat,
   loadEquippedCostume, saveEquippedCostume, loadOwnedCostumes, addOwnedCostume,
+  loadEquippedWeapon, saveEquippedWeapon, loadOwnedWeapons, addOwnedWeapon,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
@@ -516,7 +517,7 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
             </div>
           </div>
           {/* 훈련장: 선택한 직업의 전신 모델이 평타·스킬을 실제로 시전한다 */}
-          {c && <HeroShowcase cls={cls} zodiacId={profile} hat={loadEquippedHat()} costume={loadEquippedCostume()} />}
+          {c && <HeroShowcase cls={cls} zodiacId={profile} hat={loadEquippedHat()} costume={loadEquippedCostume()} weapon={loadEquippedWeapon()} />}
           {/* 가운데(스킬·전적)만 스크롤 — 출전 버튼은 항상 보인다 */}
           <div className="char-show__mid">
             {c && (
@@ -654,21 +655,47 @@ const HATS = [
   { id: 'leaf', name: '새싹', price: 250 },
   { id: 'beanie', name: '털모자', price: 250 },
   { id: 'cap', name: '야구모자', price: 300 },
+  { id: 'flower', name: '꽃 한 송이', price: 350 },
   { id: 'horns', name: '도깨비 뿔', price: 400, fx: true }, // fx: 전용 반짝이 연출(scene.js HAT_FX)
   { id: 'halo', name: '천사 고리', price: 600, fx: true },
   { id: 'wizard', name: '마법사 고깔', price: 600, fx: true },
   { id: 'tophat', name: '신사 모자', price: 800, fx: true },
+  { id: 'viking', name: '바이킹 투구', price: 900, fx: true },
   { id: 'crown', name: '왕관', price: 1500, fx: true },
 ]
 
 // 옷 코스튬 목록 — 모자와 같은 구조(scene.js COSTUME_BUILDERS와 id 일치)
 const COSTUMES = [
   { id: null, name: '기본', price: 0 },
+  { id: 'bowtie', name: '나비넥타이', price: 200 },
   { id: 'scarf', name: '목도리', price: 250 },
+  { id: 'lei', name: '꽃목걸이', price: 300 },
   { id: 'backpack', name: '배낭', price: 300 },
+  { id: 'quiver', name: '화살통', price: 350 },
+  { id: 'tube', name: '오리 튜브', price: 450 },
+  { id: 'lantern', name: '초롱불', price: 500, fx: true },
   { id: 'goldcape', name: '황금 망토', price: 600 },
   { id: 'armor', name: '기사 갑옷', price: 700 },
+  { id: 'redcloak', name: '진홍 망토', price: 800 },
   { id: 'wings', name: '천사 날개', price: 1200, fx: true },
+  { id: 'devilwings', name: '악마 날개', price: 1200, fx: true },
+]
+
+// 무기 스킨 목록 — 장착하면 직업 기본 무기를 대체한다(scene.js WEAPON_SKINS와 id 일치)
+const WEAPONS = [
+  { id: null, name: '기본 무기', price: 0 },
+  { id: 'woodsword', name: '목검', price: 200 },
+  { id: 'pan', name: '프라이팬', price: 300 },
+  { id: 'mallet', name: '뿅망치', price: 350 },
+  { id: 'fish', name: '생선', price: 400 },
+  { id: 'umbrella', name: '우산', price: 450 },
+  { id: 'trident', name: '삼지창', price: 550 },
+  { id: 'doubleaxe', name: '양날도끼', price: 650 },
+  { id: 'scythe', name: '낫', price: 750 },
+  { id: 'gemstaff', name: '보석 지팡이', price: 900, fx: true },
+  { id: 'flamesword', name: '화염검', price: 1200, fx: true },
+  { id: 'frostblade', name: '서리검', price: 1200, fx: true },
+  { id: 'excalibur', name: '성검', price: 1500, fx: true },
 ]
 
 // 개발자 모드 — 웹 테스트(vite dev 서버 또는 주소에 ?devhat)에서는 모든 꾸미기를 코인 없이
@@ -688,16 +715,21 @@ const WARDROBE_TABS = {
     loadOwned: loadOwnedCostumes, addOwned: addOwnedCostume,
     loadEquipped: loadEquippedCostume, saveEquipped: saveEquippedCostume,
   },
+  weapon: {
+    label: '🗡️ 무기', items: WEAPONS,
+    loadOwned: loadOwnedWeapons, addOwned: addOwnedWeapon,
+    loadEquipped: loadEquippedWeapon, saveEquipped: saveEquippedWeapon,
+  },
 }
 
 function HatScreen({ profile, onBack }) {
   const [tab, setTab] = useState('hat')
   const [coins, setCoins] = useState(loadCoins)
-  const [owned, setOwned] = useState(() => ({ hat: loadOwnedHats(), costume: loadOwnedCostumes() }))
-  const [equipped, setEquipped] = useState(() => ({ hat: loadEquippedHat(), costume: loadEquippedCostume() }))
+  const [owned, setOwned] = useState(() => ({ hat: loadOwnedHats(), costume: loadOwnedCostumes(), weapon: loadOwnedWeapons() }))
+  const [equipped, setEquipped] = useState(() => ({ hat: loadEquippedHat(), costume: loadEquippedCostume(), weapon: loadEquippedWeapon() }))
   // 미리 입어보기 — 아무거나 눌러 공짜로 걸쳐 본다(저장 안 함). 보유품을 누르면 장착.
   // 미리보기는 탭별로 따로 들고, 무대에는 모자+옷을 함께 입혀 조합을 보여준다.
-  const [preview, setPreview] = useState(() => ({ hat: loadEquippedHat(), costume: loadEquippedCostume() }))
+  const [preview, setPreview] = useState(() => ({ hat: loadEquippedHat(), costume: loadEquippedCostume(), weapon: loadEquippedWeapon() }))
   const saved = loadSoloPick()
   const previewCls = CLASSES[saved?.cls] ? saved.cls : 'warrior'
   const T = WARDROBE_TABS[tab]
@@ -730,7 +762,7 @@ function HatScreen({ profile, onBack }) {
       <h2 className="toy-heading toy-heading--screen">{t('꾸미기')}</h2>
       <div className="hats-screen__body">
         <aside className="toy-card hats-preview">
-          <HatPreview cls={previewCls} zodiacId={profile} hat={preview.hat} costume={preview.costume} />
+          <HatPreview cls={previewCls} zodiacId={profile} hat={preview.hat} costume={preview.costume} weapon={preview.weapon} />
           <span className="char-screen__coins">🪙 {coins}</span>
           {!previewOwned && previewDef && (
             coins >= previewDef.price

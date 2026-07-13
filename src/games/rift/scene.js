@@ -956,7 +956,7 @@ function equippedHat() {
 // 코인으로 사는 코스메틱 — 얼굴 스프라이트 위(body 로컬 y≈3.2s, 월드 ≈5.4s)에 얹는다.
 // 얼굴은 카메라 쪽으로 깊이를 당겨 그리므로, z=0인 모자는 아랫단이 얼굴 뒤로 살짝
 // 가려져 "쓴" 느낌이 난다. 전부 body의 정적 자식(방향·까딱임과 함께 움직임).
-export const HAT_IDS = ['straw', 'ribbon', 'leaf', 'beanie', 'cap', 'horns', 'halo', 'wizard', 'tophat', 'crown']
+export const HAT_IDS = ['straw', 'ribbon', 'leaf', 'beanie', 'cap', 'flower', 'horns', 'halo', 'wizard', 'viking', 'tophat', 'crown']
 
 const HAT_BUILDERS = {
   // 밀짚모자: 넓은 챙 + 낮은 꼭대기 + 갈색 밴드
@@ -1025,6 +1025,25 @@ const HAT_BUILDERS = {
     g.add(dome, bill)
     return g
   },
+  // 꽃: 한 송이 데이지 — 줄기 + 꽃잎 다섯 장 + 노란 수술
+  flower(s) {
+    const g = new THREE.Group()
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * s, 0.07 * s, 0.45 * s, 6), lamb(0x4fae43))
+    stem.position.y = 0.18 * s
+    const core = new THREE.Mesh(new THREE.SphereGeometry(0.16 * s, 8, 6), lamb(0xffd34d))
+    core.position.y = 0.52 * s
+    const petal = lamb(0xfff5fa)
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.15 * s, 8, 6), petal)
+      p.scale.set(1.4, 0.5, 0.9)
+      p.position.set(Math.cos(a) * 0.26 * s, 0.52 * s, Math.sin(a) * 0.26 * s)
+      p.rotation.y = -a
+      g.add(p)
+    }
+    g.add(stem, core)
+    return g
+  },
   // 도깨비 뿔: 작은 콘 두 개 — 좌우 = ±x (빌보드 정렬), 끝이 바깥으로 벌어진다
   horns(s) {
     const g = new THREE.Group()
@@ -1060,6 +1079,26 @@ const HAT_BUILDERS = {
     const star = new THREE.Mesh(new THREE.SphereGeometry(0.11 * s, 6, 5), lamb(0xffe066))
     star.position.set(0.35 * s, 0.75 * s, 0.5 * s)
     g.add(brim, cone, star)
+    return g
+  },
+  // 바이킹 투구: 은빛 반구 + 좌우로 뻗은 큰 뿔 — FX와 세트
+  viking(s) {
+    const g = new THREE.Group()
+    const steel = new THREE.MeshLambertMaterial({ color: 0xc8ccd8, emissive: 0x3a3e4e, emissiveIntensity: 0.4 })
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.82 * s, 12, 9), steel)
+    dome.scale.y = 0.68
+    dome.position.y = 0.12 * s
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.78 * s, 0.09 * s, 6, 18), lamb(0x8a6242))
+    band.rotation.x = Math.PI / 2
+    band.position.y = 0.02 * s
+    const bone = lamb(0xf0e6d0)
+    for (const side of [-1, 1]) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.2 * s, 0.85 * s, 8), bone)
+      horn.position.set(side * 0.92 * s, 0.35 * s, 0)
+      horn.rotation.z = -side * 0.85 // 좌우 바깥 위로 뻗는다
+      g.add(horn)
+    }
+    g.add(dome, band)
     return g
   },
   // 신사 모자: 챙 + 높은 몸통 + 빨간 밴드 + 사파이어 브로치
@@ -1135,6 +1174,7 @@ function fxSprite(g, color, base, star = true) {
   }))
   sp.scale.setScalar(0.001)
   sp.userData.base = base
+  sp.renderOrder = 8 // 광채는 항상 최상단 — 얼굴·모자·무기 레이어 위
   g.add(sp)
   return sp
 }
@@ -1200,6 +1240,20 @@ const HAT_FX = {
       dust.scale.setScalar(dust.userData.base * (0.7 + 0.3 * Math.sin(c * Math.PI)))
     }
   },
+  // 바이킹 투구: 강철의 위압 — 투구 정수리 은빛 글린트 + 뿔 끝 흰 글린트
+  viking(g, s) {
+    const domeGlint = fxSprite(g, 0xe8ecf8, 0.6 * s)
+    const hornTips = [1, -1].map(() => fxSprite(g, 0xffffff, 0.4 * s))
+    return (t) => {
+      domeGlint.position.set(0.25 * s, 0.45 * s, 0.6 * s)
+      fire(domeGlint, glintCurve(t, 3.0, 0, 0.12) * 0.85, t, 0.8)
+      hornTips.forEach((sp, i) => {
+        const side = i === 0 ? 1 : -1
+        sp.position.set(side * 1.2 * s, 0.75 * s, 0.1 * s)
+        fire(sp, glintCurve(t, 3.6, 0.4 + i * 0.31, 0.1) * 0.8, t, 1.1)
+      })
+    }
+  },
   // 신사 모자: 절제된 품격 — 사파이어 브로치가 이따금 빛나고, 실크 광택이 스르륵 오른다
   tophat(g, s) {
     const gem = g.userData.gems[0]
@@ -1262,7 +1316,10 @@ export function updateHatSparkle(hat, t) {
 // 코인으로 사는 코스메틱 2탄 — 모자(빌보드)와 달리 몸통(body)의 자식이라 바라보는
 // 방향·걷기와 함께 돈다. 좌표계는 꼬리·직업 파츠와 같다: +x 앞, -x 뒤, ±z 옆.
 // 몸통 색(팀 색)은 게임 가독성이라 덮지 않는다 — 목·등·어깨에 "걸치는" 파츠만.
-export const COSTUME_IDS = ['scarf', 'backpack', 'goldcape', 'armor', 'wings']
+export const COSTUME_IDS = [
+  'bowtie', 'scarf', 'lei', 'backpack', 'quiver', 'tube',
+  'lantern', 'goldcape', 'armor', 'redcloak', 'wings', 'devilwings',
+]
 
 function equippedCostume() {
   try {
@@ -1273,6 +1330,33 @@ function equippedCostume() {
 }
 
 const COSTUME_BUILDERS = {
+  // 나비넥타이: 가슴 앞의 작은 멋 — 날개 두 장 + 매듭
+  bowtie(s) {
+    const g = new THREE.Group()
+    const navy = lamb(0x3a4a8a)
+    for (const sz of [1, -1]) {
+      const wing = new THREE.Mesh(new THREE.SphereGeometry(0.3 * s, 8, 6), navy)
+      wing.scale.set(0.5, 0.65, 1.1)
+      wing.position.set(0.98 * s, 0.72 * s, sz * 0.3 * s)
+      g.add(wing)
+    }
+    const knot = new THREE.Mesh(new THREE.SphereGeometry(0.15 * s, 8, 6), lamb(0x2a3868))
+    knot.position.set(1.02 * s, 0.72 * s, 0)
+    g.add(knot)
+    return g
+  },
+  // 꽃목걸이: 알록달록 화환 — 훌라 파티
+  lei(s) {
+    const g = new THREE.Group()
+    const colors = [0xff8fb3, 0xffd34d, 0xfff5fa, 0xb48fff, 0xff8a4d, 0x8fd06a]
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2
+      const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.17 * s, 7, 5), lamb(colors[i % colors.length]))
+      bloom.position.set(Math.cos(a) * 0.95 * s, (0.62 - Math.sin(a) * 0.12) * s, Math.sin(a) * 0.95 * s)
+      g.add(bloom)
+    }
+    return g
+  },
   // 목도리: 가슴께 두른 붉은 천 + 등 뒤로 펄럭이는 자락 — 목(얼굴 뒤)에 두면 안 보인다
   scarf(s) {
     const g = new THREE.Group()
@@ -1302,6 +1386,57 @@ const COSTUME_BUILDERS = {
       g.add(strap)
     }
     g.add(bag, flap)
+    return g
+  },
+  // 화살통: 등에 멘 가죽 통 + 삐죽 나온 깃털 화살들
+  quiver(s) {
+    const g = new THREE.Group()
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.32 * s, 0.28 * s, 1.15 * s, 10), lamb(0x8a6242))
+    tube.rotation.x = 0.5
+    tube.position.set(-1.1 * s, 0.5 * s, 0.15 * s)
+    g.add(tube)
+    for (const [dy, dz] of [[1.15, 0.42], [1.3, 0.62], [1.05, 0.7]]) {
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.03 * s, 0.03 * s, 0.5 * s, 5), lamb(0xd9c8a0))
+      shaft.rotation.x = 0.5
+      shaft.position.set(-1.1 * s, dy * s, dz * s * 0.6)
+      const feather = new THREE.Mesh(new THREE.ConeGeometry(0.09 * s, 0.22 * s, 4), lamb(0xd6453f))
+      feather.rotation.x = 0.5 + Math.PI
+      feather.position.set(-1.1 * s, (dy + 0.24) * s, dz * s * 0.6 + 0.13 * s)
+      g.add(shaft, feather)
+    }
+    return g
+  },
+  // 오리 튜브: 허리에 낀 노란 수영 튜브 + 오리 머리
+  tube(s) {
+    const g = new THREE.Group()
+    const yellow = lamb(0xffd34d)
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.15 * s, 0.3 * s, 10, 20), yellow)
+    ring.rotation.x = Math.PI / 2
+    ring.position.y = -0.25 * s
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.34 * s, 10, 8), yellow)
+    head.position.set(1.25 * s, 0.25 * s, 0)
+    const bill = new THREE.Mesh(new THREE.BoxGeometry(0.3 * s, 0.1 * s, 0.24 * s), lamb(0xff8a4d))
+    bill.position.set(1.55 * s, 0.2 * s, 0)
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.05 * s, 6, 5), lamb(0x2e3038))
+    eye.position.set(1.4 * s, 0.38 * s, 0.18 * s)
+    g.add(ring, head, bill, eye)
+    return g
+  },
+  // 초롱불: 등에 멘 장대 끝의 따뜻한 등불 — 은은히 빛난다
+  lantern(s) {
+    const g = new THREE.Group()
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * s, 0.05 * s, 1.9 * s, 6), lamb(0x6a4e32))
+    pole.rotation.z = 0.35
+    pole.position.set(-1.05 * s, 0.9 * s, 0)
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(0.4 * s, 0.5 * s, 0.4 * s),
+      new THREE.MeshLambertMaterial({ color: 0xffe8a8, emissive: 0xffb84d, emissiveIntensity: 0.75 })
+    )
+    box.position.set(-1.38 * s, 1.75 * s, 0)
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.34 * s, 0.25 * s, 4), lamb(0x8a3a2e))
+    cap.position.set(-1.38 * s, 2.1 * s, 0)
+    g.add(pole, box, cap)
+    g.userData.lanternBox = box
     return g
   },
   // 황금 망토: 기본 망토를 숨기고 금빛 대형 망토로 — 살짝 자체 발광
@@ -1338,6 +1473,30 @@ const COSTUME_BUILDERS = {
     g.add(chest)
     return g
   },
+  // 진홍 망토: 임금님의 붉은 망토 — 흰 모피 깃 + 금 술
+  redcloak(s) {
+    const g = new THREE.Group()
+    const cloak = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.35 * s, 2.75 * s),
+      new THREE.MeshLambertMaterial({ color: 0xb43a3a, side: THREE.DoubleSide })
+    )
+    cloak.rotation.y = Math.PI / 2
+    cloak.position.set(-1.0 * s, 0.05 * s, 0)
+    g.add(cloak)
+    // 어깨를 감싸는 흰 모피 깃(방울 이어붙임)
+    const fur = lamb(0xf5f2ec)
+    for (let i = 0; i < 7; i++) {
+      const a = -Math.PI / 2 + (i / 6) * Math.PI // 등 쪽 반원
+      const puff = new THREE.Mesh(new THREE.SphereGeometry(0.24 * s, 8, 6), fur)
+      puff.position.set(-Math.abs(Math.cos(a)) * 0.55 * s - 0.45 * s, 1.15 * s, Math.sin(a) * 0.9 * s)
+      g.add(puff)
+    }
+    const tassel = gemMesh(0xf2c14e, 0.12 * s)
+    tassel.position.set(0.95 * s, 0.6 * s, 0.3 * s)
+    g.add(tassel)
+    g.userData.hideCape = true
+    return g
+  },
   // 천사 날개: 등에 펼친 흰 깃 두 장 — 크고 작은 깃털 타원을 부채꼴로
   wings(s) {
     const g = new THREE.Group()
@@ -1359,6 +1518,29 @@ const COSTUME_BUILDERS = {
     }
     return g
   },
+  // 악마 날개: 검붉은 박쥐 날개 — 갈퀴 뼈대 + 막
+  devilwings(s) {
+    const g = new THREE.Group()
+    const dark = lamb(0x4a2334)
+    const membrane = new THREE.MeshLambertMaterial({ color: 0x8a2e4a, emissive: 0x4a1020, emissiveIntensity: 0.4, side: THREE.DoubleSide })
+    for (const sz of [1, -1]) {
+      const wing = new THREE.Group()
+      wing.position.set(-0.9 * s, 0.9 * s, sz * 0.5 * s)
+      wing.rotation.x = sz * 0.8
+      const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.07 * s, 0.05 * s, 1.7 * s, 6), dark)
+      bone.position.y = 0.85 * s
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.09 * s, 0.35 * s, 5), dark)
+      spike.position.y = 1.85 * s
+      // 뼈대에 매달린 삼각 막 — 원뿔을 납작하게 눌러 만든다
+      const web = new THREE.Mesh(new THREE.ConeGeometry(0.62 * s, 1.5 * s, 3), membrane)
+      web.scale.z = 0.12
+      web.rotation.z = sz * 0.25
+      web.position.set(0.05 * s, 0.8 * s, sz * -0.1 * s)
+      wing.add(bone, spike, web)
+      g.add(wing)
+    }
+    return g
+  },
 }
 
 // 옷 FX — 최고가만. 날개는 깃 끝 성광 + 등 뒤 은은한 후광 펄스
@@ -1375,6 +1557,34 @@ const COSTUME_FX = {
         sp.position.set(-0.9 * s, 2.5 * s, sz * 1.6 * s) // 활짝 편 깃 끝
         fire(sp, glintCurve(t, 2.9, i * 0.47, 0.12) * 0.85, t, 0.9)
       })
+    }
+  },
+  // 악마 날개: 검붉은 기운 — 핏빛 후광 + 날개 끝에서 떨어지는 불씨
+  devilwings(g, s) {
+    const halo = fxSprite(g, 0xd6455a, 1.4 * s, false)
+    const embers = [1, -1].map(() => fxSprite(g, 0xff5a4d, 0.3 * s, false))
+    return (t) => {
+      halo.position.set(-1.15 * s, 1.0 * s, 0)
+      halo.material.opacity = 0.15 + 0.08 * Math.sin(t * 2.6)
+      halo.scale.setScalar(halo.userData.base * (0.9 + 0.1 * Math.sin(t * 2.6)))
+      embers.forEach((m, i) => {
+        const sz = i === 0 ? 1 : -1
+        const c = (t / 1.8 + i * 0.5) % 1 // 날개 끝에서 아래로 흘러내리는 불씨
+        m.position.set(-0.9 * s, (2.4 - c * 1.2) * s, sz * 1.55 * s)
+        m.material.opacity = Math.sin(c * Math.PI) * 0.6
+        m.scale.setScalar(m.userData.base * (0.7 + 0.3 * Math.sin(c * Math.PI)))
+      })
+    }
+  },
+  // 초롱불: 등불이 숨쉬듯 깜빡인다 — 사면 밤길이 든든한 기분
+  lantern(g, s) {
+    const glow = fxSprite(g, 0xffcf8a, 0.9 * s, false)
+    return (t) => {
+      const breath = 0.75 + 0.2 * Math.sin(t * 3.2) + 0.05 * Math.sin(t * 11)
+      if (g.userData.lanternBox) g.userData.lanternBox.material.emissiveIntensity = breath
+      glow.position.set(-1.38 * s, 1.75 * s, 0.1 * s)
+      glow.material.opacity = 0.22 + 0.08 * Math.sin(t * 3.2)
+      glow.scale.setScalar(glow.userData.base)
     }
   },
 }
@@ -1734,8 +1944,285 @@ export function buildClassParts(cls, s, body) {
 }
 
 // 직업별 무기: 몸통(바라보는 방향으로 회전하는 메시)에 붙어 함께 돈다.
+// ── 무기 스킨(꾸미기) — 장착하면 직업 기본 무기를 "대체"해서 든다 ──
+// 조형 규약은 직업 무기와 동일: 손잡이=원점, 칼끝/머리=+x. 포즈는 공용 크게 베기
+// (직업별 고유 모션 대신) — 어느 직업이 들어도 자연스럽고, 원거리 직업의 투사체는
+// 엔진 몫이라 그대로 나간다. 고가 무기는 HAT_FX와 같은 규약(fxUpdate)으로 반짝인다.
+export const WEAPON_SKIN_IDS = [
+  'woodsword', 'pan', 'mallet', 'fish', 'umbrella', 'trident',
+  'doubleaxe', 'scythe', 'gemstaff', 'flamesword', 'frostblade', 'excalibur',
+]
+
+function equippedWeaponSkin() {
+  try {
+    return localStorage.getItem('bgp.rift.weapon.v1') || null
+  } catch {
+    return null
+  }
+}
+
+const WEAPON_SKINS = {
+  // 목검: 수수한 나무 검 — 입문용
+  woodsword(g) {
+    const wood = lamb(0xc9a06a)
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.14, 0.32), wood)
+    blade.position.x = 1.1
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.17, 6, 5), wood)
+    tip.scale.set(0.6, 0.5, 1)
+    tip.position.x = 1.92
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.2, 0.6), lamb(0x8a6242))
+    guard.position.x = 0.35
+    g.add(blade, tip, guard)
+  },
+  // 프라이팬: 통쾌한 타격감의 상징
+  pan(g) {
+    const iron = lamb(0x4a4e5a)
+    const handle = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.1, 0.16), lamb(0x2e3038))
+    handle.position.x = 0.45
+    const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.55, 0.14, 16), iron)
+    dish.rotation.x = Math.PI / 2 // 팬 바닥이 옆(화면)을 본다
+    dish.position.x = 1.45
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.06, 6, 18), iron)
+    rim.position.x = 1.45
+    g.add(handle, dish, rim)
+  },
+  // 뿅망치: 장난감 나무망치
+  mallet(g) {
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.3), lamb(0x8a6242))
+    handle.rotation.z = -Math.PI / 2
+    handle.position.x = 0.65
+    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.95, 12), lamb(0xe0b088))
+    head.rotation.x = Math.PI / 2
+    head.position.x = 1.45
+    for (const sz of [1, -1]) {
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.46, 0.1, 12), lamb(0xd6453f))
+      cap.rotation.x = Math.PI / 2
+      cap.position.set(1.45, 0, sz * 0.5)
+      g.add(cap)
+    }
+    g.add(handle, head)
+  },
+  // 생선: 파닥이는 밈 무기
+  fish(g) {
+    const blue = lamb(0x6fa8d6)
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), blue)
+    body.scale.set(1.6, 0.55, 0.3)
+    body.position.x = 1.15
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.55, 4), blue)
+    tail.rotation.z = -Math.PI / 2 // 꼬리지느러미가 손잡이 쪽
+    tail.scale.z = 0.35
+    tail.position.x = 0.25
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.09, 6, 5), lamb(0xffffff))
+    eye.position.set(1.75, 0.1, 0.16)
+    g.add(body, tail, eye)
+  },
+  // 우산: 젠틀한 호신구
+  umbrella(g) {
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.9), lamb(0x2e3038))
+    shaft.rotation.z = -Math.PI / 2
+    shaft.position.x = 0.95
+    const canopy = new THREE.Mesh(new THREE.ConeGeometry(0.72, 0.8, 10), lamb(0xd6453f))
+    canopy.rotation.z = -Math.PI / 2 // 갓이 +x(정면)를 향해 접힌 창처럼
+    canopy.position.x = 1.75
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.25, 6), lamb(0xffe066))
+    tip.rotation.z = -Math.PI / 2
+    tip.position.x = 2.25
+    const hook = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.045, 6, 10, Math.PI), lamb(0x8a6242))
+    hook.position.x = 0.02
+    g.add(shaft, canopy, tip, hook)
+  },
+  // 삼지창: 바다의 왕
+  trident(g) {
+    const gold = lamb(0xd9b84e)
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.8), lamb(0x8a6242))
+    shaft.rotation.z = -Math.PI / 2
+    shaft.position.x = 0.9
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.9), gold)
+    bar.position.x = 1.8
+    for (const dz of [-0.38, 0, 0.38]) {
+      const prong = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.6, 5), gold)
+      prong.rotation.z = -Math.PI / 2
+      prong.position.set(dz === 0 ? 2.25 : 2.1, 0, dz)
+      g.add(prong)
+    }
+    g.add(shaft, bar)
+  },
+  // 양날도끼: 묵직한 야만의 맛
+  doubleaxe(g) {
+    const metal = lamb(0xd9dee8)
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.7), lamb(0x6a4e32))
+    handle.rotation.z = -Math.PI / 2
+    handle.position.x = 0.85
+    for (const sz of [1, -1]) {
+      const bit = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.1, 12, 1, false, 0, Math.PI), metal)
+      bit.rotation.x = Math.PI / 2
+      bit.rotation.z = sz > 0 ? 0 : Math.PI // 반달 날 두 장을 위아래로
+      bit.position.set(1.65, sz * 0.15, 0)
+      g.add(bit)
+    }
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 5), metal)
+    knob.position.x = 2.0
+    g.add(handle, knob)
+  },
+  // 낫: 서늘한 곡선
+  scythe(g) {
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.9), lamb(0x4a3a56))
+    shaft.rotation.z = -Math.PI / 2
+    shaft.position.x = 0.95
+    const blade = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.07, 6, 16, 2.1), lamb(0xd9dee8))
+    blade.position.set(1.9, -0.3, 0)
+    blade.rotation.z = 1.9 // 자루 끝에서 아래로 휘어지는 날
+    blade.scale.z = 0.4
+    g.add(shaft, blade)
+  },
+  // 보석 지팡이: 떠 있는 보석 — FX와 세트
+  gemstaff(g) {
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.7), lamb(0x6a4e8a))
+    shaft.rotation.z = -Math.PI / 2
+    shaft.position.x = 0.85
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.05, 6, 12), lamb(0xffe066))
+    collar.rotation.y = Math.PI / 2
+    collar.position.x = 1.75
+    const gem = gemMesh(0xb44ee0, 0.26)
+    gem.position.x = 2.1
+    gem.rotation.z = Math.PI / 2 // 뾰족한 축이 +x
+    g.add(shaft, collar, gem)
+    g.userData.gem = gem
+  },
+  // 화염검: 검신이 달아오른 검 — FX와 세트
+  flamesword(g) {
+    const blade = new THREE.Mesh(
+      new THREE.BoxGeometry(1.9, 0.12, 0.3),
+      new THREE.MeshLambertMaterial({ color: 0xff8a4d, emissive: 0xd6453f, emissiveIntensity: 0.65 })
+    )
+    blade.position.x = 1.25
+    const tip = new THREE.Mesh(
+      new THREE.ConeGeometry(0.16, 0.45, 4),
+      new THREE.MeshLambertMaterial({ color: 0xffb066, emissive: 0xff6a30, emissiveIntensity: 0.8 })
+    )
+    tip.rotation.z = -Math.PI / 2
+    tip.position.x = 2.4
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.22, 0.75), lamb(0x2e3038))
+    guard.position.x = 0.35
+    g.add(blade, tip, guard)
+  },
+  // 서리검: 얼음 결정 검 — FX와 세트
+  frostblade(g) {
+    const ice = new THREE.MeshLambertMaterial({
+      color: 0xbfe8ff, emissive: 0x5aa8d6, emissiveIntensity: 0.5, transparent: true, opacity: 0.92,
+    })
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 0.34), ice)
+    blade.position.x = 1.15
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.5, 4), ice)
+    tip.rotation.z = -Math.PI / 2
+    tip.position.x = 2.2
+    for (const [dx, dy] of [[1.0, 0.22], [1.45, -0.2]]) {
+      const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.14, 0), ice)
+      shard.position.set(dx, dy, 0)
+      g.add(shard)
+    }
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.2, 0.66), lamb(0x3a5a7a))
+    guard.position.x = 0.32
+    g.add(blade, tip, guard)
+  },
+  // 성검: 최고가 — 금 장식 + 빛나는 검신, FX와 세트
+  excalibur(g) {
+    const holy = new THREE.MeshLambertMaterial({ color: 0xfff6e0, emissive: 0xd9b84e, emissiveIntensity: 0.45 })
+    const gold = new THREE.MeshLambertMaterial({ color: 0xf2c14e, emissive: 0x8a6a1a, emissiveIntensity: 0.35 })
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.13, 0.34), holy)
+    blade.position.x = 1.28
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.5, 4), holy)
+    tip.rotation.z = -Math.PI / 2
+    tip.position.x = 2.5
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.24, 0.95), gold)
+    guard.position.x = 0.38
+    for (const sz of [1, -1]) {
+      const wingTip = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.3, 4), gold)
+      wingTip.rotation.x = sz * Math.PI / 2
+      wingTip.position.set(0.38, 0, sz * 0.55)
+      g.add(wingTip)
+    }
+    const gem = gemMesh(0x4f8fe8, 0.12)
+    gem.position.x = 0.38
+    gem.position.y = 0.02
+    g.add(blade, tip, guard, gem)
+    g.userData.gem = gem
+  },
+}
+
+// 무기 스킨 FX — 고가만. 검신을 따라 흐르는 글린트가 "샤링"의 핵심
+const WEAPON_FX = {
+  gemstaff(g) {
+    const glint = fxSprite(g, 0xe0b8ff, 0.7)
+    const mote = fxSprite(g, 0xc9a0ff, 0.3, false)
+    return (t) => {
+      const on = glintCurve(t, 2.6, 0)
+      glint.position.set(2.1, 0, 0.2)
+      fire(glint, on * 0.95, t, 1.0)
+      if (g.userData.gem) g.userData.gem.material.emissiveIntensity = 0.35 + on * 0.55
+      const a = t * 2.2 // 보석 둘레를 도는 마력 입자
+      mote.position.set(2.1 + Math.cos(a) * 0.4, Math.sin(a) * 0.4, 0.15)
+      mote.material.opacity = 0.5
+      mote.scale.setScalar(mote.userData.base)
+    }
+  },
+  flamesword(g) {
+    const embers = [0, 1].map(() => fxSprite(g, 0xff9a4d, 0.32, false))
+    const glint = fxSprite(g, 0xffd08a, 0.6)
+    return (t) => {
+      embers.forEach((m, i) => {
+        const c = (t / 1.4 + i * 0.5) % 1 // 검신에서 피어오르는 불씨
+        m.position.set(0.7 + c * 1.5, 0.15 + c * 0.4, 0.1)
+        m.material.opacity = Math.sin(c * Math.PI) * 0.7
+        m.scale.setScalar(m.userData.base * (0.7 + 0.3 * Math.sin(c * Math.PI)))
+      })
+      glint.position.set(2.35, 0, 0.15)
+      fire(glint, glintCurve(t, 2.4, 0.3, 0.12) * 0.9, t, 1.2)
+    }
+  },
+  frostblade(g) {
+    const glints = [0, 1].map((i) => fxSprite(g, 0xcfeaff, 0.55 - i * 0.15))
+    return (t) => {
+      glints.forEach((sp, i) => {
+        sp.position.set(1.2 + i * 1.0, i === 0 ? 0.15 : -0.1, 0.15)
+        fire(sp, glintCurve(t, 2.8, i * 0.45, 0.1) * 0.9, t, 0.8)
+      })
+    }
+  },
+  excalibur(g) {
+    const glints = [0, 1, 2].map((i) => fxSprite(g, 0xfff2c0, 0.6 - i * 0.1))
+    const aura = fxSprite(g, 0xffe8a8, 0.9, false)
+    return (t) => {
+      glints.forEach((sp, i) => {
+        const c = (t / 2.2 + i / 3) % 1 // 손잡이→칼끝으로 흐르는 성광
+        sp.position.set(0.5 + c * 1.9, 0.1, 0.15)
+        fire(sp, Math.sin(c * Math.PI) ** 2 * glintCurve(t, 2.2, i / 3, 0.35) * 0.9, t, 1.0)
+      })
+      aura.position.set(0.38, 0, 0.1) // 가드의 성스러운 후광
+      aura.material.opacity = 0.18 + 0.1 * Math.sin(t * 2.4)
+      aura.scale.setScalar(aura.userData.base)
+      if (g.userData.gem) g.userData.gem.material.emissiveIntensity = 0.4 + 0.3 * Math.sin(t * 2.4)
+    }
+  },
+}
+
 // userData.pose(t)로 공격 모션 진행도(0→1)를 그린다. 로컬 +x = 정면.
-function buildWeapon(cls) {
+// skinId(꾸미기 무기)가 있으면 직업 무기 대신 스킨을 든다 — 공용 크게 베기 포즈.
+function buildWeapon(cls, skinId = null) {
+  if (skinId && WEAPON_SKINS[skinId]) {
+    const g = new THREE.Group()
+    WEAPON_SKINS[skinId](g)
+    g.position.set(0.3, 0.3, 0.9) // 전사 검과 같은 그립
+    const sw = (t) => Math.sin(Math.min(1, t) * Math.PI)
+    g.userData.pose = (t) => {
+      g.rotation.y = 1.1 - sw(t) * 2.2 // 바깥→안쪽으로 크게 베기
+      g.rotation.z = sw(t) * 0.4
+    }
+    const fx = WEAPON_FX[skinId]
+    if (fx) g.userData.fxUpdate = fx(g)
+    g.userData.pose(1)
+    return g
+  }
   const g = new THREE.Group()
   const metal = new THREE.MeshLambertMaterial({ color: 0xd9dee8 })
   const wood = new THREE.MeshLambertMaterial({ color: 0x8a6242 })
@@ -2039,7 +2526,7 @@ function buildWeapon(cls) {
 }
 
 // 영웅: 팀 색 캡슐 몸통 + 12지신 이모지 얼굴 + 직업 아이콘 이름표 + 체력바
-function buildHero(h, mine, barColor, hatId = null, costumeId = null) {
+function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkinId = null) {
   const g = new THREE.Group()
   const col = TEAM_COLOR[h.team]
   const s = CLS_SCALE[h.cls] || 1
@@ -2211,7 +2698,8 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null) {
   recallBeam.position.y = 17
   recallBeam.visible = false
   // 직업 무기 — 오른팔(손)에 쥐게 한다. 팔 그룹은 어깨가 피벗이라 걸을 때 앞뒤로 흔들린다.
-  const weapon = buildWeapon(h.cls)
+  // 무기 스킨(꾸미기)을 장착했으면 직업 무기를 대체한다.
+  const weapon = buildWeapon(h.cls, weaponSkinId)
   // 손 위치 = 무기 그룹의 원점(=손잡이). 무기마다 달라서 각자에 맞춰 팔을 뻗는다(고정값이면 어깨에 뜬 것처럼 보인다).
   const hand = weapon.position.clone()
   if (hand.lengthSq() < 0.04) hand.set(0.35, 0.2, 0.15) // 암살자 등 원점이 0인 무기는 손잡이 보정
@@ -4194,7 +4682,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     // 영웅 — 적은 시야/수풀 규칙에 걸리면 안 보인다
     syncPool(
       scene, heroPool, view.heroes,
-      (h) => buildHero(h, h.id === myId, barColorOf(h.team), h.id === myId ? equippedHat() : null, h.id === myId ? equippedCostume() : null),
+      (h) => buildHero(h, h.id === myId, barColorOf(h.team), h.id === myId ? equippedHat() : null, h.id === myId ? equippedCostume() : null, h.id === myId ? equippedWeaponSkin() : null),
       (obj, h) => {
         const dead = h.respawnT > 0
         const u = obj.userData
@@ -4272,6 +4760,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           updateHatSparkle(u.hat, view.time)
         }
         if (u.costume) updateHatSparkle(u.costume, view.time) // 옷 FX(날개 후광 등)
+        updateHatSparkle(u.weapon, view.time) // 무기 스킨 FX(화염검 불씨 등) — 없으면 no-op
         if (h.whirlT <= 0 && h.airT <= 0) u.body.rotation.z = Math.sin(u.wphase) * 0.06 * wk.amt
         else u.body.rotation.z = 0
         // 다리 성큼성큼 + 팔 흔들기: 다리는 반대 위상, 팔은 같은 쪽 다리와 반대로(자연스러운 걸음)
@@ -4716,7 +5205,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
 // 엔진·맵 없이 순수 연출: 제자리 걸음, 평타 스윙(실제 무기 pose), 스킬/보조/궁극은
 // 몸동작+발광 버스트로 재생한다. "대상이 있어야 나가는 기술"도 항상 보인다.
 //  반환: { play(kind), resize(w, h), dispose() } — kind: walk|atk|skill|skill2|ult
-export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume = null }) {
+export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume = null, weapon = null }) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setClearColor(0x000000, 0)
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
@@ -4728,7 +5217,7 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume 
   scene.add(sun)
 
   const s = CLS_SCALE[cls] || 1
-  const g = buildHero({ id: 'show', cls, zodiacId, team: 'blue', lvl: 1, atkSeq: 0 }, false, '#fff', hat, costume)
+  const g = buildHero({ id: 'show', cls, zodiacId, team: 'blue', lvl: 1, atkSeq: 0 }, false, '#fff', hat, costume, weapon)
   const u = g.userData
   u.name.visible = false // 무대 위엔 모델만 — 명패/체력바는 숨긴다
   u.bar.visible = false
@@ -4740,6 +5229,27 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume 
   // 카메라 쪽 어깨가 얼굴 가장자리를 자연스럽게 가려 파츠 사이에 "끼운" 느낌을 준다
   u.face.position.z = 1.0 * s
   u.face.material.rotation = -0.1
+  // 미리보기 레이어링: 몸·파츠(불투명) < 얼굴 < 모자 < 무기.
+  // 얼굴은 깊이 무시하고 몸 위에 그린다 — 어깨 파츠가 얼굴을 뚫고 나오지 않게.
+  // 모자·무기는 투명 패스로 옮겨(transparent=true) 얼굴 뒤에 숨지 않고 위에 얹힌다.
+  // (불투명 패스는 renderOrder와 무관하게 투명 패스보다 먼저 그려지므로 필수)
+  u.face.material.depthTest = false
+  u.face.material.depthWrite = false
+  u.face.renderOrder = 5
+  const layerOver = (root, order) => root.traverse((o) => {
+    if (o.material && !o.userData.base) { // FX 스프라이트(base 보유)는 이미 최상단 규약
+      o.material.transparent = true
+      o.renderOrder = order
+    }
+  })
+  if (u.hat) layerOver(u.hat, 6)
+  layerOver(u.weapon, 7)
+  // 진열 자세: 대기 자세(pose(1))는 무기가 등 뒤로 넘어가 안 보인다 —
+  // 스윙 중간(0.5) = 무기를 앞으로 뻗은 순간으로 세우고, 손목의 45° 숙임(tilt)도
+  // 풀어 살짝 치켜들게 한다(칼끝이 땅을 보면 진열맛이 안 난다).
+  u.weapon.userData.pose(0.5)
+  u.weapon.rotation.y = -0.45 // 카메라 정면(-1.1)은 원근 압축으로 뭉개진다 — 3/4 측면각
+  u.weapon.parent.parent.rotation.z = 0.15 // tilt 그룹 — buildHero의 손목 기울임
   scene.add(g)
   if (u.hat) {
     // 모자는 얼굴(빌보드) 기준이어야 한다 — 루트에 두면 턴테이블 회전을 따라 돌아
@@ -4840,7 +5350,7 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume 
         u.body.rotation.x = 0
         u.body.rotation.y = 0
         g.scale.setScalar(1)
-        u.weapon.userData.pose(1)
+        u.weapon.userData.pose(0.5) // 진열 자세로 복귀(대기 자세는 무기가 등 뒤로 숨는다)
       }
     }
 
@@ -4851,6 +5361,7 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume 
       updateHatSparkle(u.hat, time)
     }
     if (u.costume) updateHatSparkle(u.costume, time) // 옷 FX
+    updateHatSparkle(u.weapon, time) // 무기 스킨 FX — 없으면 no-op
     if (u.legs) {
       u.legs[0].rotation.z = stride
       u.legs[1].rotation.z = -stride
@@ -4888,6 +5399,8 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume 
     dispose() {
       cancelAnimationFrame(raf)
       renderer.dispose()
+      // forceContextLoss는 금지 — HatPreview가 같은 canvas를 재사용하므로(이펙트
+      // 재실행) 소실된 컨텍스트가 남아 다음 렌더러 생성이 크래시한다
     },
   }
 }
