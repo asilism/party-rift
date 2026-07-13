@@ -68,6 +68,7 @@ export default function SoloApp() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [exitAsk, setExitAsk] = useState(false) // 전투 중 뒤로가기 → "나갈까요?" 확인
   const [coinMsg, setCoinMsg] = useState(null) // 경기 종료 코인 보상 라인(승리 화면에 표시)
+  const [adState, setAdState] = useState('idle') // 보상형 광고 버튼 상태: idle | loading | fail
   useEffect(() => () => netRef.current?.close(), [])
 
   function go(next) {
@@ -93,6 +94,7 @@ export default function SoloApp() {
 
   function startBattle(cls) {
     setCoinMsg(null) // 새 경기 — 지난 보상 라인 지움
+    setAdState('idle')
     const pick = { zodiacId: profile, cls, mode, botLevel }
     saveSoloPick(pick)
     const n = createLocalNet(riftNet, {
@@ -196,20 +198,27 @@ export default function SoloApp() {
           bonus={coinMsg ? (
             <>
               🪙 +{coinMsg.earn}{coinMsg.firstWin ? ` (${t('오늘 첫 승리!')})` : ''}
-              {coinMsg.doubled
-                ? <span className="win-banner__doubled"> ×2!</span>
-                : adsAvailable() && (
-                  <button
-                    className="win-banner__ad"
-                    onClick={() => showRewarded(() => {
-                      addCoins(coinMsg.earn)
-                      setCoinMsg({ ...coinMsg, earn: coinMsg.earn * 2, doubled: true })
-                    })}
-                  >
-                    📺 {t('광고 보고 2배')}
-                  </button>
-                )}
+              {coinMsg.doubled && <span className="win-banner__doubled"> ×2!</span>}
             </>
+          ) : null}
+          adButton={coinMsg && !coinMsg.doubled && adsAvailable() ? (
+            <button
+              className="btn win-modal__ad"
+              disabled={adState === 'loading'}
+              onClick={async () => {
+                setAdState('loading')
+                const ok = await showRewarded(() => {
+                  addCoins(coinMsg.earn)
+                  setCoinMsg((m) => ({ ...m, earn: m.earn * 2, doubled: true }))
+                })
+                // 실패(미로드·중도 이탈)를 조용히 삼키면 버튼이 "죽은" 것처럼 보인다 — 라벨로 알린다
+                setAdState(ok ? 'idle' : 'fail')
+              }}
+            >
+              {adState === 'loading' ? `⏳ ${t('광고 불러오는 중…')}`
+                : adState === 'fail' ? `📺 ${t('광고 준비 중 — 잠시 후 다시')}`
+                  : `📺 ${t('광고 보고 2배 보상')}`}
+            </button>
           ) : null}
         />
         {exitAsk && (
