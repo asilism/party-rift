@@ -3075,6 +3075,16 @@ body {
 .settings-link:hover { color: var(--ink); text-decoration: underline; }
 .settings-note { margin: 0; text-align: center; color: #8a80ad; font-size: clamp(11px, 2vh, 12.5px); }
 
+/* ── 보상형 광고 버튼 ── */
+.win-banner__ad {
+  margin-left: 10px; padding: 3px 12px; border-radius: 12px; cursor: pointer;
+  border: 2px solid var(--ink); background: var(--toy-green); color: var(--ink);
+  font-family: var(--toy-font); font-weight: 900; font-size: 0.75em;
+  box-shadow: 0 3px 0 var(--toy-green-d); animation: toy-press 1.4s ease-in-out infinite;
+}
+.win-banner__doubled { color: #72eca6; margin-left: 6px; }
+.missions__claim--ad { background: var(--toy-green); box-shadow: 0 2px 0 var(--toy-green-d); animation: none; }
+
 /* ── 오늘의 미션(메뉴 좌하단) ── */
 .missions {
   position: absolute; left: 12px; bottom: 12px; z-index: 2;

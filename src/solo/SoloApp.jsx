@@ -14,6 +14,7 @@ import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
 import { missionRows, recordMissionProgress, claimMission } from './missions.js'
+import { adsAvailable, showRewarded } from '../shared/ads.js'
 import MenuStage from './MenuStage.jsx'
 import HeroShowcase from './HeroShowcase.jsx'
 import HatPreview from './HatPreview.jsx'
@@ -187,7 +188,28 @@ export default function SoloApp() {
   if (screen === 'play') {
     return (
       <Suspense fallback={<div className="net-screen"><div className="net-screen__icon">⏳</div><p>{t('전장을 불러오는 중...')}</p></div>}>
-        <RiftGame net={net} onExit={exitBattle} bonus={coinMsg ? `🪙 +${coinMsg.earn}${coinMsg.firstWin ? ` (${t('오늘 첫 승리!')})` : ''}` : null} />
+        <RiftGame
+          net={net}
+          onExit={exitBattle}
+          bonus={coinMsg ? (
+            <>
+              🪙 +{coinMsg.earn}{coinMsg.firstWin ? ` (${t('오늘 첫 승리!')})` : ''}
+              {coinMsg.doubled
+                ? <span className="win-banner__doubled"> ×2!</span>
+                : adsAvailable() && (
+                  <button
+                    className="win-banner__ad"
+                    onClick={() => showRewarded(() => {
+                      addCoins(coinMsg.earn)
+                      setCoinMsg({ ...coinMsg, earn: coinMsg.earn * 2, doubled: true })
+                    })}
+                  >
+                    📺 {t('광고 보고 2배')}
+                  </button>
+                )}
+            </>
+          ) : null}
+        />
         {exitAsk && (
           <div className="solo-help" onClick={() => { setExitAsk(false); netRef.current?.rtPause(false) }}>
             <div className="toy-card solo-help__card" onClick={(e) => e.stopPropagation()}>
@@ -312,10 +334,10 @@ function ProfileScreen({ current, onPick, onBack }) {
 function MissionWidget() {
   const [, refresh] = useState(0)
   const rows = missionRows()
-  function claim(id) {
+  function claim(id, mult = 1) {
     const reward = claimMission(id)
     if (reward > 0) {
-      addCoins(reward)
+      addCoins(reward * mult)
       sound.go()
       refresh((n) => n + 1)
     }
@@ -332,7 +354,20 @@ function MissionWidget() {
           {m.claimed
             ? <span className="missions__done">✅</span>
             : m.done
-              ? <button className="missions__claim" onClick={() => claim(m.id)}>🪙 {m.reward}</button>
+              ? (
+                <>
+                  <button className="missions__claim" onClick={() => claim(m.id)}>🪙 {m.reward}</button>
+                  {adsAvailable() && (
+                    <button
+                      className="missions__claim missions__claim--ad"
+                      title={t('광고 보고 2배')}
+                      onClick={() => showRewarded(() => claim(m.id, 2))}
+                    >
+                      📺x2
+                    </button>
+                  )}
+                </>
+              )
               : <span className="missions__count">{m.cur}/{m.goal}</span>}
         </div>
       ))}

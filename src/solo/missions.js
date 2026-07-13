@@ -32,7 +32,7 @@ export function getTodayMissions() {
     const picks = []
     // 결정적 셔플: 해시에서 서로 다른 인덱스 3개
     for (let i = 0; picks.length < 3 && i < 24; i++) {
-      const idx = (h >> (i * 3)) % MISSION_POOL.length
+      const idx = (h >>> (i * 3)) % MISSION_POOL.length // 부호 없는 시프트 — 음수 인덱스 방지
       if (!picks.includes(idx)) picks.push(idx)
     }
     for (let i = 0; picks.length < 3; i++) if (!picks.includes(i)) picks.push(i) // 안전망
