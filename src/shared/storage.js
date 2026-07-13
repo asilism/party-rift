@@ -232,6 +232,48 @@ export function addOwnedCostume(costumeId) {
   }
 }
 
+// ── 무기 스킨 꾸미기 — 보유 목록과 장착 상태(모자·옷과 같은 구조) ──
+const WEAPON_EQUIP_KEY = 'bgp.rift.weapon.v1'
+const WEAPONS_OWNED_KEY = 'bgp.rift.weapons.v1'
+
+export function loadEquippedWeapon() {
+  try {
+    return localStorage.getItem(WEAPON_EQUIP_KEY) || null
+  } catch {
+    return null
+  }
+}
+
+export function saveEquippedWeapon(weaponId) {
+  try {
+    if (weaponId) localStorage.setItem(WEAPON_EQUIP_KEY, weaponId)
+    else localStorage.removeItem(WEAPON_EQUIP_KEY)
+  } catch {
+    /* 무시 */
+  }
+}
+
+export function loadOwnedWeapons() {
+  try {
+    const v = JSON.parse(localStorage.getItem(WEAPONS_OWNED_KEY))
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
+  }
+}
+
+export function addOwnedWeapon(weaponId) {
+  const list = loadOwnedWeapons()
+  if (!list.includes(weaponId)) {
+    list.push(weaponId)
+    try {
+      localStorage.setItem(WEAPONS_OWNED_KEY, JSON.stringify(list))
+    } catch {
+      /* 무시 */
+    }
+  }
+}
+
 // ── 전투 버튼 크기 배율(0.7~1.3) — 설정 메뉴 슬라이더로 조절 ──
 const RIFT_BTNSCALE_KEY = 'bgp.rift.btnscale.v1'
 
