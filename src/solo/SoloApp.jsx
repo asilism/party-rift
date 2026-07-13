@@ -660,6 +660,11 @@ const HATS = [
   { id: 'crown', name: '왕관', price: 1500 },
 ]
 
+// 개발자 모드 — 웹 테스트(vite dev 서버 또는 주소에 ?devhat)에서는 모든 모자를 코인 없이
+// 바로 장착해 본다. 앱(Capacitor)과 일반 빌드에서는 꺼져 있어 코인 경제에 영향 없음.
+const HAT_DEV = import.meta.env.DEV
+  || (typeof location !== 'undefined' && new URLSearchParams(location.search).has('devhat'))
+
 function HatScreen({ profile, onBack }) {
   const [coins, setCoins] = useState(loadCoins)
   const [owned, setOwned] = useState(loadOwnedHats)
@@ -669,11 +674,11 @@ function HatScreen({ profile, onBack }) {
   const saved = loadSoloPick()
   const previewCls = CLASSES[saved?.cls] ? saved.cls : 'warrior'
   const previewDef = HATS.find((hh) => (hh.id || null) === (preview || null))
-  const previewOwned = preview === null || owned.includes(preview)
+  const previewOwned = preview === null || HAT_DEV || owned.includes(preview)
 
   function pick(hat) {
     setPreview(hat.id) // 누르면 일단 씌워 본다
-    if (hat.id === null || owned.includes(hat.id)) {
+    if (hat.id === null || HAT_DEV || owned.includes(hat.id)) {
       saveEquippedHat(hat.id) // 보유한 모자 → 장착 (맨머리 = 해제)
       setEquipped(hat.id)
       sound.step()
@@ -731,7 +736,11 @@ function HatScreen({ profile, onBack }) {
               )
             })}
           </div>
-          <p className="hats-note">{t('아무 모자나 눌러서 공짜로 입어 보세요 — 장착은 보유한 모자만 돼요')}</p>
+          <p className="hats-note">
+            {HAT_DEV
+              ? <>🛠 {t('개발자 모드: 모든 모자를 바로 장착해 볼 수 있어요')}</>
+              : t('아무 모자나 눌러서 공짜로 입어 보세요 — 장착은 보유한 모자만 돼요')}
+          </p>
         </div>
       </div>
     </div>
