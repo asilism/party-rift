@@ -474,4 +474,7 @@ const DICT = {
   '정글몹 8마리 사냥': 'Hunt 8 jungle monsters',
   '5판 플레이': 'Play 5 matches',
   '광고 보고 2배': 'Watch ad for ×2',
+  '구매·장착': 'Buy & Equip',
+  '코인이 부족해요': 'Not enough coins',
+  '아무 모자나 눌러서 공짜로 입어 보세요 — 장착은 보유한 모자만 돼요': 'Tap any hat to try it on for free — only owned hats can be equipped',
 }

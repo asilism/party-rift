@@ -664,24 +664,33 @@ function HatScreen({ profile, onBack }) {
   const [coins, setCoins] = useState(loadCoins)
   const [owned, setOwned] = useState(loadOwnedHats)
   const [equipped, setEquipped] = useState(loadEquippedHat)
+  // 미리 입어보기 — 아무 모자나 눌러 공짜로 씌워 본다(저장 안 함). 보유한 모자를 누르면 장착.
+  const [preview, setPreview] = useState(loadEquippedHat)
   const saved = loadSoloPick()
   const previewCls = CLASSES[saved?.cls] ? saved.cls : 'warrior'
+  const previewDef = HATS.find((hh) => (hh.id || null) === (preview || null))
+  const previewOwned = preview === null || owned.includes(preview)
 
   function pick(hat) {
+    setPreview(hat.id) // 누르면 일단 씌워 본다
     if (hat.id === null || owned.includes(hat.id)) {
       saveEquippedHat(hat.id) // 보유한 모자 → 장착 (맨머리 = 해제)
       setEquipped(hat.id)
       sound.step()
-      return
+    } else {
+      sound.step() // 미보유 — 미리보기만, 구매는 아래 버튼으로
     }
-    if (coins < hat.price) return
+  }
+
+  function buyPreview() {
+    if (previewOwned || !previewDef || coins < previewDef.price) return
     sound.go()
-    addCoins(-hat.price)
-    addOwnedHat(hat.id)
-    saveEquippedHat(hat.id) // 사면 바로 씌워 준다
+    addCoins(-previewDef.price)
+    addOwnedHat(preview)
+    saveEquippedHat(preview) // 사면 바로 장착
     setCoins(loadCoins())
     setOwned(loadOwnedHats())
-    setEquipped(hat.id)
+    setEquipped(preview)
   }
 
   return (
@@ -690,21 +699,29 @@ function HatScreen({ profile, onBack }) {
       <h2 className="toy-heading toy-heading--screen">{t('꾸미기')}</h2>
       <div className="hats-screen__body">
         <aside className="toy-card hats-preview">
-          <HatPreview cls={previewCls} zodiacId={profile} hat={equipped} />
+          <HatPreview cls={previewCls} zodiacId={profile} hat={preview} />
           <span className="char-screen__coins">🪙 {coins}</span>
+          {!previewOwned && previewDef && (
+            coins >= previewDef.price
+              ? (
+                <button className="toy-btn toy-btn--yellow hats-buy" onClick={buyPreview}>
+                  🪙 {previewDef.price} {t('구매·장착')}
+                </button>
+              )
+              : <span className="hats-buy hats-buy--poor">🪙 {previewDef.price} — {t('코인이 부족해요')}</span>
+          )}
         </aside>
         <div className="toy-card hats-grid-card">
           <div className="hats-grid">
             {HATS.map((hat) => {
               const isOwned = hat.id === null || owned.includes(hat.id)
               const isOn = (equipped || null) === hat.id
-              const canBuy = !isOwned && coins >= hat.price
+              const isPreview = (preview || null) === hat.id
               return (
                 <button
                   key={hat.id || 'none'}
-                  className={`hat-card ${isOn ? 'is-on' : ''} ${!isOwned && !canBuy ? 'is-poor' : ''}`}
+                  className={`hat-card ${isOn ? 'is-on' : ''} ${!isOn && isPreview ? 'is-preview' : ''}`}
                   onClick={() => pick(hat)}
-                  disabled={!isOwned && !canBuy}
                 >
                   <span className="hat-card__name">{t(hat.name)}</span>
                   <span className="hat-card__tag">
@@ -714,7 +731,7 @@ function HatScreen({ profile, onBack }) {
               )
             })}
           </div>
-          <p className="hats-note">{t('모자는 전투와 캐릭터 선택 화면의 내 캐릭터에 씌워져요')}</p>
+          <p className="hats-note">{t('아무 모자나 눌러서 공짜로 입어 보세요 — 장착은 보유한 모자만 돼요')}</p>
         </div>
       </div>
     </div>
