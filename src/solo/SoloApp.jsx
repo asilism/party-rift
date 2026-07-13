@@ -8,12 +8,14 @@ import {
   loadSoloPick, saveSoloPick, loadGuideSeen, saveGuideSeen, loadRiftRecords, addRiftRecord,
   loadUnlockSeen, saveUnlockSeen, loadProfile, saveProfile, loadSoundOn, saveSoundOn,
   loadCoins, addCoins, claimFirstWinToday, addCoinUnlock,
+  loadEquippedHat, saveEquippedHat, loadOwnedHats, addOwnedHat,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
 import MenuStage from './MenuStage.jsx'
 import HeroShowcase from './HeroShowcase.jsx'
+import HatPreview from './HatPreview.jsx'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
 // 오픈소스 고지 전문 — 빌드에 원문 그대로 번들되어 웹/데스크톱/안드로이드 배포물 모두에 포함된다
 import NOTICES from '../../THIRD_PARTY_NOTICES.md?raw'
@@ -129,7 +131,7 @@ export default function SoloApp() {
   // 뒤로가기(ESC/안드로이드 하드웨어 버튼) 공통 처리:
   //  가이드 열림 → 닫기 / 전투 중 → 일시정지 + "나갈까요?" 확인 / 메뉴 → 이전 화면 / 타이틀 → 앱 종료(안드로이드만)
   useEffect(() => {
-    const back = { profile: profile ? 'menu' : 'title', menu: 'title', mode: 'menu', char: 'mode', records: 'menu', licenses: 'settings', settings: 'menu' }
+    const back = { profile: profile ? 'menu' : 'title', menu: 'title', mode: 'menu', char: 'mode', records: 'menu', licenses: 'settings', settings: 'menu', hats: 'menu' }
     const handleBack = () => {
       if (helpOpen) { saveGuideSeen(); setHelpOpen(false); return }
       if (screen === 'play') {
@@ -224,9 +226,11 @@ export default function SoloApp() {
           onHelp={() => setHelpOpen(true)}
           onProfile={() => go('profile')}
           onSettings={() => go('settings')}
+          onHats={() => go('hats')}
         />
       )}
       {screen === 'settings' && <SettingsScreen onBack={() => go('menu')} onLicenses={() => go('licenses')} />}
+      {screen === 'hats' && <HatScreen profile={profile} onBack={() => go('menu')} />}
       {screen === 'mode' && (
         <ModeScreen
           botLevel={botLevel}
@@ -302,7 +306,7 @@ function ProfileScreen({ current, onPick, onBack }) {
 }
 
 // ── 2. 메인 메뉴 ──
-function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings }) {
+function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings, onHats }) {
   const z = getZodiac(profile)
   const records = loadRiftRecords()
   const total = Object.values(records).reduce(
@@ -328,6 +332,7 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings })
           {t('🌐 온라인')} <span className="toy-btn__badge">{t('준비 중')}</span>
         </button>
         <button className="toy-btn toy-btn--green" onClick={onRecords}>{t('📊 전적')}</button>
+        <button className="toy-btn toy-btn--pink" onClick={onHats}>{t('🎩 꾸미기')}</button>
       </nav>
       {/* 보조 기능은 우하단 원형 아이콘으로 — 메뉴 리스트를 핵심 3개로 유지 */}
       <div className="menu-screen__corner">
@@ -439,7 +444,7 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
             </div>
           </div>
           {/* 훈련장: 선택한 직업의 전신 모델이 평타·스킬을 실제로 시전한다 */}
-          {c && <HeroShowcase cls={cls} zodiacId={profile} />}
+          {c && <HeroShowcase cls={cls} zodiacId={profile} hat={loadEquippedHat()} />}
           {/* 가운데(스킬·전적)만 스크롤 — 출전 버튼은 항상 보인다 */}
           <div className="char-show__mid">
             {c && (
@@ -564,6 +569,82 @@ function RecordsScreen({ onBack }) {
             </div>
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+// ── 4.4a. 꾸미기(모자) — 코인으로 사고 장착한다. 미리보기는 수호 지신 + 대표 직업 ──
+const HATS = [
+  { id: null, name: '맨머리', price: 0 },
+  { id: 'straw', name: '밀짚모자', price: 200 },
+  { id: 'ribbon', name: '리본', price: 200 },
+  { id: 'leaf', name: '새싹', price: 250 },
+  { id: 'beanie', name: '털모자', price: 250 },
+  { id: 'cap', name: '야구모자', price: 300 },
+  { id: 'horns', name: '도깨비 뿔', price: 400 },
+  { id: 'halo', name: '천사 고리', price: 600 },
+  { id: 'wizard', name: '마법사 고깔', price: 600 },
+  { id: 'tophat', name: '신사 모자', price: 800 },
+  { id: 'crown', name: '왕관', price: 1500 },
+]
+
+function HatScreen({ profile, onBack }) {
+  const [coins, setCoins] = useState(loadCoins)
+  const [owned, setOwned] = useState(loadOwnedHats)
+  const [equipped, setEquipped] = useState(loadEquippedHat)
+  const saved = loadSoloPick()
+  const previewCls = CLASSES[saved?.cls] ? saved.cls : 'warrior'
+
+  function pick(hat) {
+    if (hat.id === null || owned.includes(hat.id)) {
+      saveEquippedHat(hat.id) // 보유한 모자 → 장착 (맨머리 = 해제)
+      setEquipped(hat.id)
+      sound.step()
+      return
+    }
+    if (coins < hat.price) return
+    sound.go()
+    addCoins(-hat.price)
+    addOwnedHat(hat.id)
+    saveEquippedHat(hat.id) // 사면 바로 씌워 준다
+    setCoins(loadCoins())
+    setOwned(loadOwnedHats())
+    setEquipped(hat.id)
+  }
+
+  return (
+    <div className="screen hats-screen">
+      <BackButton onBack={onBack} />
+      <h2 className="toy-heading toy-heading--screen">{t('꾸미기')}</h2>
+      <div className="hats-screen__body">
+        <aside className="toy-card hats-preview">
+          <HatPreview cls={previewCls} zodiacId={profile} hat={equipped} />
+          <span className="char-screen__coins">🪙 {coins}</span>
+        </aside>
+        <div className="toy-card hats-grid-card">
+          <div className="hats-grid">
+            {HATS.map((hat) => {
+              const isOwned = hat.id === null || owned.includes(hat.id)
+              const isOn = (equipped || null) === hat.id
+              const canBuy = !isOwned && coins >= hat.price
+              return (
+                <button
+                  key={hat.id || 'none'}
+                  className={`hat-card ${isOn ? 'is-on' : ''} ${!isOwned && !canBuy ? 'is-poor' : ''}`}
+                  onClick={() => pick(hat)}
+                  disabled={!isOwned && !canBuy}
+                >
+                  <span className="hat-card__name">{t(hat.name)}</span>
+                  <span className="hat-card__tag">
+                    {isOn ? t('장착 중') : isOwned ? t('보유') : `🪙 ${hat.price}`}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <p className="hats-note">{t('모자는 전투와 캐릭터 선택 화면의 내 캐릭터에 씌워져요')}</p>
+        </div>
       </div>
     </div>
   )
