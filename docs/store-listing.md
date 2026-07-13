@@ -41,9 +41,11 @@
 
 - [x] 보상 경제: 조디악 코인(승30/패10/첫승+50) · 모자 10종 · 일일 미션 3개
 - [x] 보상형 광고 접점: 경기 종료 "광고 보고 2배" / 미션 수령 "📺x2" — 전부 선택형, 강제 광고 없음
-- [x] AdMob 연동(테스트 ID) — `src/shared/ads.js`, AndroidManifest APPLICATION_ID
-- [ ] **AdMob 실계정**: admob.google.com 가입 → 앱 등록 → 앱 ID·보상형 광고 단위 ID 발급 → ads.js와 AndroidManifest 교체 (사용자 작업)
-- [ ] UMP 동의 UI(유럽 대응): 실계정 전환 시 `AdMob.requestConsentInfo` 연동
+- [x] AdMob 연동 — `src/shared/ads.js`, AndroidManifest APPLICATION_ID
+- [x] **AdMob 실계정** 반영(2026-07-14): 앱 ID `…~3734985001`, 보상형 단위 "2배보상" `…/8280166455`
+  - ⚠️ 기기 테스트 전에 AdMob 콘솔 > 설정 > 테스트 기기에 본인 폰 등록(실광고 반복 시청은 계정 정지 위험)
+  - 신규 앱은 광고 게재 활성화까지 몇 시간~며칠 걸릴 수 있음 · 스토어 게시 후 앱↔리스팅 연결
+- [ ] UMP 동의 UI(유럽 대응): `AdMob.requestConsentInfo` 연동
 - [ ] **광고 제거 IAP**: Play Console에 관리 상품(remove_ads, ₩3,300~5,500) 등록 → Play Billing 연동(@capacitor 계열 또는 RevenueCat) → 성공 시 `bgp.rift.noads.v1='on'` 세팅(코드는 이 플래그 기준으로 이미 동작: 광고 없이 상시 2배)
 - [ ] Play 데이터 안전 섹션: "광고 ID 수집(광고 목적, AdMob)" 반영 — PRIVACY.md는 개정 완료
 
