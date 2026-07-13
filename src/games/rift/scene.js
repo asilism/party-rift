@@ -2215,8 +2215,12 @@ function buildWeapon(cls, skinId = null) {
     g.position.set(0.3, 0.3, 0.9) // 전사 검과 같은 그립
     const sw = (t) => Math.sin(Math.min(1, t) * Math.PI)
     g.userData.pose = (t) => {
-      g.rotation.y = 1.1 - sw(t) * 2.2 // 바깥→안쪽으로 크게 베기
-      g.rotation.z = sw(t) * 0.4
+      const p = sw(t)
+      // 대기(p=0): 칼끝을 몸 바깥(전방 오른쪽)으로 수평하게 든다 — 직업 무기의 대기
+      // 자세(등 뒤 45° 아래)는 톱다운 카메라에서 몸에 가려 스킨이 안 보인다.
+      // 손목 숙임(tilt -45°)은 rotation.z로 상쇄. 공격(p=1 부근): 안쪽으로 크게 베기.
+      g.rotation.y = -0.5 + p * 1.9
+      g.rotation.z = 0.6 - p * 0.2
     }
     const fx = WEAPON_FX[skinId]
     if (fx) g.userData.fxUpdate = fx(g)
