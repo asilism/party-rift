@@ -466,4 +466,11 @@ const DICT = {
   '장착 중': 'Equipped',
   '보유': 'Owned',
   '모자는 전투와 캐릭터 선택 화면의 내 캐릭터에 씌워져요': 'Your hat appears on your character in battle and on the select screen',
+  '오늘의 미션': "Today's Missions",
+  '3판 플레이': 'Play 3 matches',
+  '1승 거두기': 'Win a match',
+  '적 영웅 5명 처치': 'Slay 5 enemy heroes',
+  '어시스트 3회': 'Get 3 assists',
+  '정글몹 8마리 사냥': 'Hunt 8 jungle monsters',
+  '5판 플레이': 'Play 5 matches',
 }

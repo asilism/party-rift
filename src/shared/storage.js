@@ -127,6 +127,27 @@ export function addCoinUnlock(clsId) {
   }
 }
 
+// ── 일일 미션 — 로컬 날짜 기준으로 매일 3개, 진행도·수령 상태를 저장 ──
+const MISSIONS_KEY = 'bgp.rift.missions.v1'
+
+export function loadMissionState() {
+  try {
+    const v = JSON.parse(localStorage.getItem(MISSIONS_KEY))
+    if (v && typeof v === 'object') return v
+  } catch {
+    /* 무시 */
+  }
+  return null
+}
+
+export function saveMissionState(state) {
+  try {
+    localStorage.setItem(MISSIONS_KEY, JSON.stringify(state))
+  } catch {
+    /* 무시 */
+  }
+}
+
 // ── 모자 꾸미기 — 보유 목록과 장착 상태 ──
 const HAT_EQUIP_KEY = 'bgp.rift.hat.v1'
 const HATS_OWNED_KEY = 'bgp.rift.hats.v1'

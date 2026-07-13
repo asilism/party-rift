@@ -13,6 +13,7 @@ import {
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
+import { missionRows, recordMissionProgress, claimMission } from './missions.js'
 import MenuStage from './MenuStage.jsx'
 import HeroShowcase from './HeroShowcase.jsx'
 import HatPreview from './HatPreview.jsx'
@@ -113,6 +114,8 @@ export default function SoloApp() {
         }
         addCoins(earn)
         setCoinMsg({ earn, firstWin })
+        // 일일 미션 진행도 누적 (판수/승리/킬/어시/정글몹)
+        recordMissionProgress({ win, kills: me.kills, assists: me.assists, jungle: me.jungleKills })
       },
     })
     netRef.current = n
@@ -305,6 +308,38 @@ function ProfileScreen({ current, onPick, onBack }) {
   )
 }
 
+// ── 2a. 오늘의 미션 위젯 — 메뉴 좌하단. 완료하면 코인을 수령한다 ──
+function MissionWidget() {
+  const [, refresh] = useState(0)
+  const rows = missionRows()
+  function claim(id) {
+    const reward = claimMission(id)
+    if (reward > 0) {
+      addCoins(reward)
+      sound.go()
+      refresh((n) => n + 1)
+    }
+  }
+  return (
+    <div className="missions">
+      <div className="missions__head">📅 {t('오늘의 미션')}</div>
+      {rows.map((m) => (
+        <div key={m.id} className={`missions__row ${m.claimed ? 'is-claimed' : ''}`}>
+          <span className="missions__name">{t(m.name)}</span>
+          <span className="missions__bar">
+            <span style={{ width: `${Math.round((m.cur / m.goal) * 100)}%` }} />
+          </span>
+          {m.claimed
+            ? <span className="missions__done">✅</span>
+            : m.done
+              ? <button className="missions__claim" onClick={() => claim(m.id)}>🪙 {m.reward}</button>
+              : <span className="missions__count">{m.cur}/{m.goal}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── 2. 메인 메뉴 ──
 function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings, onHats }) {
   const z = getZodiac(profile)
@@ -334,6 +369,7 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings, o
         <button className="toy-btn toy-btn--green" onClick={onRecords}>{t('📊 전적')}</button>
         <button className="toy-btn toy-btn--pink" onClick={onHats}>{t('🎩 꾸미기')}</button>
       </nav>
+      <MissionWidget />
       {/* 보조 기능은 우하단 원형 아이콘으로 — 메뉴 리스트를 핵심 3개로 유지 */}
       <div className="menu-screen__corner">
         <FullscreenButton />
