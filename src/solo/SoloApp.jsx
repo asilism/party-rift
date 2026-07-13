@@ -653,11 +653,11 @@ const HATS = [
   { id: 'leaf', name: '새싹', price: 250 },
   { id: 'beanie', name: '털모자', price: 250 },
   { id: 'cap', name: '야구모자', price: 300 },
-  { id: 'horns', name: '도깨비 뿔', price: 400 },
-  { id: 'halo', name: '천사 고리', price: 600 },
-  { id: 'wizard', name: '마법사 고깔', price: 600 },
-  { id: 'tophat', name: '신사 모자', price: 800 },
-  { id: 'crown', name: '왕관', price: 1500 },
+  { id: 'horns', name: '도깨비 뿔', price: 400, fx: true }, // fx: 전용 반짝이 연출(scene.js HAT_FX)
+  { id: 'halo', name: '천사 고리', price: 600, fx: true },
+  { id: 'wizard', name: '마법사 고깔', price: 600, fx: true },
+  { id: 'tophat', name: '신사 모자', price: 800, fx: true },
+  { id: 'crown', name: '왕관', price: 1500, fx: true },
 ]
 
 // 개발자 모드 — 웹 테스트(vite dev 서버 또는 주소에 ?devhat)에서는 모든 모자를 코인 없이
@@ -728,7 +728,7 @@ function HatScreen({ profile, onBack }) {
                   className={`hat-card ${isOn ? 'is-on' : ''} ${!isOn && isPreview ? 'is-preview' : ''}`}
                   onClick={() => pick(hat)}
                 >
-                  <span className="hat-card__name">{t(hat.name)}</span>
+                  <span className="hat-card__name">{t(hat.name)}{hat.fx ? ' ✨' : ''}</span>
                   <span className="hat-card__tag">
                     {isOn ? t('장착 중') : isOwned ? t('보유') : `🪙 ${hat.price}`}
                   </span>

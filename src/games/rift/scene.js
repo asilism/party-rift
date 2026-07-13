@@ -227,6 +227,45 @@ function glowTexture() {
   return _glowTex
 }
 
+// 보석 광채 텍스처: 4갈래 십자 광선 + 45° 짧은 보조 광선 + 밝은 코어 — "샤링" 글린트용
+let _starTex = null
+function starTexture() {
+  if (_starTex) return _starTex
+  if (typeof document === 'undefined') return null // 헤드리스 테스트: 텍스처 없이(map=null) 조형만
+  const size = 128
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d')
+  ctx.globalCompositeOperation = 'lighter'
+  const ray = (angle, len, thin, alpha) => {
+    ctx.save()
+    ctx.translate(size / 2, size / 2)
+    ctx.rotate(angle)
+    ctx.scale(1, thin) // 납작하게 눌러 가늘고 긴 광선을 만든다
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, len)
+    g.addColorStop(0, `rgba(255,255,255,${alpha})`)
+    g.addColorStop(0.35, `rgba(255,255,255,${alpha * 0.45})`)
+    g.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = g
+    ctx.beginPath()
+    ctx.arc(0, 0, len, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.restore()
+  }
+  ray(0, 60, 0.09, 1) // 가로 긴 광선
+  ray(Math.PI / 2, 60, 0.09, 1) // 세로 긴 광선
+  ray(Math.PI / 4, 34, 0.07, 0.7) // 45° 보조 광선 한 쌍
+  ray(-Math.PI / 4, 34, 0.07, 0.7)
+  const core = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, 14)
+  core.addColorStop(0, 'rgba(255,255,255,1)')
+  core.addColorStop(1, 'rgba(255,255,255,0)')
+  ctx.fillStyle = core
+  ctx.fillRect(0, 0, size, size)
+  _starTex = new THREE.CanvasTexture(c)
+  _starTex.colorSpace = THREE.SRGBColorSpace
+  return _starTex
+}
+
 // 결속의 끈: 두 영웅 사이를 잇는 투명한 청록 선 (매 프레임 양끝 좌표만 갱신)
 function makeBindLine() {
   const geo = new THREE.BufferGeometry()
@@ -932,14 +971,14 @@ const HAT_BUILDERS = {
     g.add(brim, top, band)
     return g
   },
-  // 리본: 양 날개 + 중심 매듭
+  // 리본: 양 날개 + 중심 매듭 — 모자는 카메라 빌보드 정렬이라 좌우는 ±x(±z는 앞뒤로 겹쳐 보인다)
   ribbon(s) {
     const g = new THREE.Group()
     const pink = lamb(0xff8fb3)
     for (const side of [-1, 1]) {
       const wing = new THREE.Mesh(new THREE.SphereGeometry(0.42 * s, 8, 6), pink)
-      wing.position.set(0, 0.1 * s, side * 0.5 * s)
-      wing.scale.set(0.8, 0.7, 1.15)
+      wing.position.set(side * 0.5 * s, 0.1 * s, 0)
+      wing.scale.set(1.15, 0.7, 0.8)
       g.add(wing)
     }
     const knot = new THREE.Mesh(new THREE.SphereGeometry(0.2 * s, 8, 6), lamb(0xe06a92))
@@ -955,9 +994,9 @@ const HAT_BUILDERS = {
     stem.position.y = 0.2 * s
     for (const side of [-1, 1]) {
       const lf = new THREE.Mesh(new THREE.SphereGeometry(0.34 * s, 8, 6), green)
-      lf.position.set(0, 0.52 * s, side * 0.3 * s)
-      lf.scale.set(0.5, 0.4, 1)
-      lf.rotation.x = side * 0.5
+      lf.position.set(side * 0.3 * s, 0.52 * s, 0) // 좌우 = ±x (빌보드 정렬)
+      lf.scale.set(1, 0.4, 0.5)
+      lf.rotation.z = -side * 0.5
       g.add(lf)
     }
     g.add(stem)
@@ -986,14 +1025,14 @@ const HAT_BUILDERS = {
     g.add(dome, bill)
     return g
   },
-  // 도깨비 뿔: 작은 콘 두 개
+  // 도깨비 뿔: 작은 콘 두 개 — 좌우 = ±x (빌보드 정렬), 끝이 바깥으로 벌어진다
   horns(s) {
     const g = new THREE.Group()
     const red = lamb(0xd6453f)
     for (const side of [-1, 1]) {
       const horn = new THREE.Mesh(new THREE.ConeGeometry(0.18 * s, 0.6 * s, 6), red)
-      horn.position.set(0, 0.2 * s, side * 0.62 * s)
-      horn.rotation.x = side * 0.45
+      horn.position.set(side * 0.62 * s, 0.2 * s, 0)
+      horn.rotation.z = -side * 0.45
       g.add(horn)
     }
     return g
@@ -1023,7 +1062,7 @@ const HAT_BUILDERS = {
     g.add(brim, cone, star)
     return g
   },
-  // 신사 모자: 챙 + 높은 몸통 + 빨간 밴드
+  // 신사 모자: 챙 + 높은 몸통 + 빨간 밴드 + 사파이어 브로치
   tophat(s) {
     const g = new THREE.Group()
     const black = lamb(0x2e2e38)
@@ -1032,10 +1071,13 @@ const HAT_BUILDERS = {
     top.position.y = 0.55 * s
     const band = new THREE.Mesh(new THREE.CylinderGeometry(0.74 * s, 0.74 * s, 0.18 * s, 12), lamb(0xd6453f))
     band.position.y = 0.16 * s
-    g.add(brim, top, band)
+    const gem = gemMesh(0x4f8fe8, 0.12 * s)
+    gem.position.set(0, 0.16 * s, 0.76 * s) // 밴드 정면(카메라 쪽) 브로치
+    g.add(brim, top, band, gem)
+    g.userData.gems = [gem]
     return g
   },
-  // 왕관: 금 몸통 + 스파이크 + 보석
+  // 왕관: 금 몸통 + 스파이크 + 삼색 보석(정면 사파이어·좌 에메랄드·우 루비)
   crown(s) {
     const g = new THREE.Group()
     const gold = lamb(0xf2c14e)
@@ -1048,48 +1090,171 @@ const HAT_BUILDERS = {
       spike.position.set(Math.cos(a) * 0.66 * s, 0.48 * s, Math.sin(a) * 0.66 * s)
       g.add(spike)
     }
-    const gem = new THREE.Mesh(new THREE.SphereGeometry(0.14 * s, 8, 6), lamb(0xd6453f))
-    gem.position.set(0.72 * s, 0.12 * s, 0)
-    g.add(gem)
+    // 보석은 전부 카메라 쪽(+z) 반원에 — 모자는 빌보드라 뒤쪽은 안 보인다
+    const gems = [
+      [0x4f8fe8, 0, 0.76], // 사파이어(정면)
+      [0xe0484f, 0.6, 0.48], // 루비(우)
+      [0x3fd67f, -0.6, 0.48], // 에메랄드(좌)
+    ].map(([color, x, z]) => {
+      const m = gemMesh(color, 0.13 * s)
+      m.position.set(x * s, 0.12 * s, z * s)
+      g.add(m)
+      return m
+    })
+    g.userData.gems = gems
     return g
   },
 }
 
-// 모자 하나를 만든다 — 위치는 호출부가 정한다(쇼케이스/인게임 공용 순수 조형)
+// 보석 조형 — 팔면체(다이아 컷 느낌)를 세로로 살짝 늘이고 자체 발광을 준다
+function gemMesh(color, r) {
+  const m = new THREE.Mesh(
+    new THREE.OctahedronGeometry(r, 0),
+    new THREE.MeshLambertMaterial({ color, emissive: color, emissiveIntensity: 0.35 })
+  )
+  m.scale.y = 1.3
+  return m
+}
+
+// ── 모자 반짝이 FX — 고가 모자(400+) 전용, 모자마다 다른 연출 ──
+// 과금과 직결되는 코스메틱이라 비싼 모자일수록 눈에 띄게 "샤링"거려야 한다.
+// 모자는 카메라를 보게 빌보드 정렬되므로 로컬 x/y가 곧 화면 좌우/상하, +z가 카메라 쪽.
+// 각 빌더는 스프라이트를 붙이고 update(t) 클로저를 돌려준다(buildHat이 fxUpdate로 저장).
+
+// 주기마다 짧게 확 피었다 지는 광채 커브(0~1) — 보석 글린트의 심장. 대부분 꺼져 있다.
+const glintCurve = (t, period, phase, duty = 0.14) => {
+  const c = (t / period + phase) % 1
+  return c < duty ? Math.sin((c / duty) * Math.PI) : 0
+}
+
+// 4갈래 광채 스프라이트(보석 반사광) / 둥근 빛무리 스프라이트(떠다니는 입자)
+function fxSprite(g, color, base, star = true) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: star ? starTexture() : glowTexture(), color, transparent: true, opacity: 0,
+    depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+  }))
+  sp.scale.setScalar(0.001)
+  sp.userData.base = base
+  g.add(sp)
+  return sp
+}
+// 글린트 점화: 세기(on)에 따라 밝기·크기, 광선은 천천히 돌아 살아 있는 느낌
+const fire = (sp, on, t, spin = 0.7) => {
+  sp.material.opacity = on
+  sp.material.rotation = t * spin
+  sp.scale.setScalar(Math.max(0.001, sp.userData.base * (0.5 + on * 0.6)))
+}
+
+const HAT_FX = {
+  // 도깨비 뿔: 뿔 끝의 불씨 — 발갛게 달아오르는 숨결 + 이따금 톡 튀는 주황 글린트
+  horns(g, s) {
+    const embers = [1, -1].map(() => fxSprite(g, 0xff8a4d, 0.5 * s, false))
+    const pops = [1, -1].map(() => fxSprite(g, 0xffb066, 0.55 * s))
+    return (t) => {
+      for (let i = 0; i < 2; i++) {
+        const side = i === 0 ? 1 : -1
+        embers[i].position.set(side * 0.75 * s, 0.48 * s, 0.15 * s) // 뿔 끝(바깥으로 벌어진 지점)
+        embers[i].material.opacity = 0.3 + 0.25 * Math.sin(t * 3.1 + i * 2.4) // 달아오름
+        embers[i].scale.setScalar(embers[i].userData.base * (0.8 + 0.2 * Math.sin(t * 3.1 + i * 2.4)))
+        pops[i].position.set(side * 0.78 * s, 0.52 * s, 0.18 * s)
+        fire(pops[i], glintCurve(t, 2.7, i * 0.53) * 0.85, t, 1.3)
+      }
+    }
+  },
+  // 천사 고리: 성광 — 링 발광이 숨쉬고, 흰 글린트가 테를 돌고, 빛방울이 피어오른다
+  halo(g, s) {
+    const ring = g.children[0]
+    const rim = fxSprite(g, 0xfff6d0, 0.6 * s)
+    const motes = [0, 1, 2].map(() => fxSprite(g, 0xfff2c0, 0.3 * s, false))
+    return (t) => {
+      ring.material.emissiveIntensity = 0.55 + 0.3 * Math.sin(t * 2.2) // 숨쉬는 발광
+      const a = t * 1.3
+      rim.position.set(Math.cos(a) * 0.62 * s, 0.55 * s, Math.sin(a) * 0.62 * s)
+      fire(rim, 0.25 + glintCurve(t, 2.2, 0) * 0.75, t)
+      motes.forEach((m, i) => {
+        const c = (t / 3.2 + i / 3) % 1 // 링 언저리에서 위로 떠오르며 사라지는 빛방울
+        m.position.set(Math.cos(i * 2.1 + t * 0.3) * 0.4 * s, (0.35 + c * 0.9) * s, 0.25 * s)
+        m.material.opacity = Math.sin(c * Math.PI) * 0.5
+        m.scale.setScalar(m.userData.base * (0.6 + 0.4 * Math.sin(c * Math.PI)))
+      })
+    }
+  },
+  // 마법사 고깔: 마법 가루 — 보라·청록·금 삼색 글린트 + 고깔을 나선으로 타고 오르는 입자
+  wizard(g, s) {
+    const tw = [
+      { sp: fxSprite(g, 0xc9a0ff, 0.5 * s), p: [0.5, 0.3, 0.55], T: 2.0, ph: 0 },
+      { sp: fxSprite(g, 0x9fe8ff, 0.42 * s), p: [-0.42, 0.85, 0.4], T: 2.9, ph: 0.4 },
+      { sp: fxSprite(g, 0xffe066, 0.45 * s), p: [-0.12, 1.5, 0.18], T: 3.6, ph: 0.7 }, // 젖혀진 꼭지
+    ]
+    const dust = fxSprite(g, 0xd7b8ff, 0.26 * s, false)
+    return (t) => {
+      for (const k of tw) {
+        k.sp.position.set(k.p[0] * s, k.p[1] * s, k.p[2] * s)
+        fire(k.sp, glintCurve(t, k.T, k.ph) * 0.9, t, 1.1)
+      }
+      const c = (t / 2.6) % 1 // 챙에서 꼭지까지 나선 상승
+      const a = c * Math.PI * 4
+      const r = 0.68 * (1 - c * 0.85) * s
+      dust.position.set(Math.cos(a) * r, (0.1 + c * 1.45) * s, Math.abs(Math.sin(a)) * r * 0.6 + 0.2 * s)
+      dust.material.opacity = Math.sin(c * Math.PI) * 0.65
+      dust.scale.setScalar(dust.userData.base * (0.7 + 0.3 * Math.sin(c * Math.PI)))
+    }
+  },
+  // 신사 모자: 절제된 품격 — 사파이어 브로치가 이따금 빛나고, 실크 광택이 스르륵 오른다
+  tophat(g, s) {
+    const gem = g.userData.gems[0]
+    const glint = fxSprite(g, 0xcfe4ff, 0.66 * s)
+    const sheen = fxSprite(g, 0xffffff, 0.95 * s)
+    return (t) => {
+      const on = glintCurve(t, 3.4, 0, 0.1) // 드물고 또렷하게 — 신사는 요란하지 않다
+      glint.position.set(0, 0.16 * s, 0.82 * s)
+      fire(glint, on * 0.95, t, 0.9)
+      gem.material.emissiveIntensity = 0.35 + on * 0.5
+      const c = (t / 4.6) % 1 // 몸통을 따라 오르는 은은한 광택 줄기
+      sheen.position.set(0.3 * s, (0.15 + c * 0.85) * s, 0.72 * s)
+      sheen.material.opacity = Math.sin(c * Math.PI) * 0.22
+      sheen.material.rotation = 0.5
+      sheen.scale.set(sheen.userData.base * 0.35, sheen.userData.base, 1)
+    }
+  },
+  // 왕관: 최고가의 존재감 — 삼색 보석이 제 색으로 번갈아 샤링 + 금테를 도는 하이라이트
+  crown(g, s) {
+    const gems = g.userData.gems // [사파이어(정면), 루비(우), 에메랄드(좌)]
+    const tints = [0xb8d4ff, 0xffb0b8, 0xb8ffd6] // 보석색을 밝힌 반사광
+    const Ts = [2.4, 3.1, 3.8]
+    const glints = gems.map((gm, i) => fxSprite(g, tints[i], 0.62 * s))
+    const band = fxSprite(g, 0xfff2b8, 0.5 * s) // 금테 사선 하이라이트
+    const tip = fxSprite(g, 0xffffff, 0.44 * s) // 정면 스파이크 꼭지
+    return (t) => {
+      gems.forEach((gm, i) => {
+        const on = glintCurve(t, Ts[i], i * 0.37)
+        glints[i].position.set(gm.position.x, gm.position.y + 0.04 * s, gm.position.z + 0.12 * s)
+        fire(glints[i], on * 0.95, t, 1.0)
+        gm.material.emissiveIntensity = 0.35 + on * 0.55 // 보석 스스로도 달아오른다
+      })
+      const a = t * 0.9 // 금테 앞반원을 쓸고 지나가는 하이라이트
+      band.position.set(Math.cos(a) * 0.77 * s, 0.14 * s, Math.abs(Math.sin(a)) * 0.77 * s)
+      fire(band, Math.max(0, Math.sin(a)) ** 2 * 0.45, t, 0.5)
+      tip.position.set(0.2 * s, 0.7 * s, 0.63 * s)
+      fire(tip, glintCurve(t, 2.8, 0.62, 0.1) * 0.9, t, 1.2)
+    }
+  },
+}
+
+// 모자 하나를 만든다 — 위치는 호출부가 정한다(쇼케이스/인게임 공용 순수 조형).
+// 고가 모자(HAT_FX 등록분)만 반짝인다 — 비싼 값을 눈으로 하게.
 export function buildHat(hatId, s) {
   const make = HAT_BUILDERS[hatId]
   if (!make) return null
   const g = make(s)
-  // 반짝이 — 모자 둘레를 천천히 돌며 별처럼 깜빡이는 작은 글로우 점.
-  // 모자는 카메라를 보게 빌보드 정렬되므로 로컬 x/y가 곧 화면 좌우/상하 —
-  // 화면 평면에서 도는 궤도가 된다. 매 프레임 updateHatSparkle()로 애니메이션.
-  const sparks = []
-  for (let i = 0; i < 4; i++) {
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: glowTexture(), color: 0xfff2b8, transparent: true, opacity: 0,
-      depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
-    }))
-    sp.scale.setScalar(0.001)
-    g.add(sp)
-    sparks.push({ sp, phase: i * 1.9, r: (0.7 + (i % 2) * 0.45) * s, h: (0.15 + i * 0.28) * s })
-  }
-  g.userData.sparkle = sparks
-  g.userData.sparkleS = s
+  const fx = HAT_FX[hatId]
+  if (fx) g.userData.fxUpdate = fx(g, s)
   return g
 }
 
-// 모자 반짝이 애니메이션 — 궤도를 돌며 별처럼 켜졌다 꺼진다(대부분 시간은 꺼짐)
+// 모자 FX 애니메이션 — 매 프레임 호출(쇼케이스·인게임 공용). FX 없는 모자는 no-op.
 export function updateHatSparkle(hat, t) {
-  const sparks = hat.userData.sparkle
-  if (!sparks) return
-  const s = hat.userData.sparkleS
-  for (const k of sparks) {
-    const on = Math.max(0, Math.sin(t * 2.1 + k.phase * 2.3)) ** 4 // 짧게 반짝
-    const a = t * 0.6 + k.phase
-    k.sp.position.set(Math.cos(a) * k.r, k.h + Math.sin(t * 1.4 + k.phase) * 0.12 * s, 0.4 * s)
-    k.sp.material.opacity = on * 0.85
-    k.sp.scale.setScalar((0.2 + on * 0.4) * s)
-  }
+  hat.userData.fxUpdate?.(t)
 }
 
 // ── 12지신 꼬리 파츠 ──
