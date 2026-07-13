@@ -3074,6 +3074,19 @@ body {
 .settings-link:hover { color: var(--ink); text-decoration: underline; }
 .settings-note { margin: 0; text-align: center; color: #8a80ad; font-size: clamp(11px, 2vh, 12.5px); }
 
+/* ── 조디악 코인 ── */
+.char-screen__coins {
+  font-family: var(--toy-font); font-weight: 800; font-size: clamp(13px, 2.6vh, 17px);
+  color: #ffd34d; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6); white-space: nowrap;
+}
+.win-banner__bonus {
+  margin: 6px 0 0; font-weight: 900; font-size: clamp(15px, 3vh, 22px); color: #ffd34d;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+.char-card__lock--buyable { color: #ffd34d; font-weight: 900; }
+.char-card.is-locked:not(:disabled) { cursor: pointer; opacity: 0.75; }
+.char-card.is-locked:not(:disabled):hover { opacity: 1; }
+
 /* ── 오픈소스 라이선스 ── */
 .licenses-card {
   margin-top: clamp(10px, 2.6vh, 20px); width: min(92vw, 760px); max-height: 72vh; overflow-y: auto;

@@ -22,7 +22,7 @@ import { t, tFeed } from '../../shared/i18n.js'
 //      모든 동기화 배관은 useRealtimeGame이 담당.
 //  - 영웅은 기기당 1명: 그 기기가 드래프트에서 고른 영웅을 조종한다.
 //  - 매치(팀/직업)는 서버가 드래프트로 확정·시작하므로, 이 컴포넌트는 전장을 그리기만 한다.
-export default function RiftGame({ onExit, net }) {
+export default function RiftGame({ onExit, net, bonus = null }) {
   const online = !!net?.online
   const ctrlRef = useRef({ mx: 0, mz: 0 })
   const { view, sample, myId, sendAction } = useRealtimeGame(net, riftNet, ctrlRef)
@@ -97,6 +97,7 @@ export default function RiftGame({ onExit, net }) {
       rtt={rtt}
       onTogglePause={net.rtPause ? () => net.rtPause(!view.paused) : null}
       exitLabel={net.local ? t('🔁 다시 하기') : t('🔁 새 매치 찾기')}
+      bonus={bonus}
       onExit={onExit}
       soundOn={soundOn}
       onToggleSound={toggleSound}
@@ -347,7 +348,7 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
 
 // 전투 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function RiftPlay({
-  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onUseItem, rtt = 0, onTogglePause, exitLabel = '🔁 새 매치 찾기', onExit, soundOn, onToggleSound,
+  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onUseItem, rtt = 0, onTogglePause, exitLabel = '🔁 새 매치 찾기', onExit, soundOn, onToggleSound, bonus = null,
 }) {
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
@@ -633,6 +634,7 @@ function RiftPlay({
                   )
               )}
             </h2>
+            {bonus && <p className="win-banner__bonus">{bonus}</p>}
           </div>
           {/* 아래쪽: 스코어 표 박스 */}
           <div className="win-modal__card">
