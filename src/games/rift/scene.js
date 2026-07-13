@@ -1419,17 +1419,30 @@ function capeMesh(s, material) {
 
 // 망토 천 시뮬 흉내 — 두 사인파(속도 다름)를 겹치고, 좌우 가장자리는 몸을 감싸게
 // 정적 곡률을 준다. 로컬 +z = (rotation.y 90° 후) 월드 +x = 몸 쪽.
+// 몸 뚫기 방지: 망토 평면(x −1.0s)이 몸통 캡슐(반경 1.1s) 안에 있어 그냥 두면
+// 몸 등판이 망토를 뚫고 나온다 — 정점을 캡슐 바깥으로 클램프해 등에 "걸치게" 한다.
 function waveCape(m, t, s) {
   const pos = m.geometry.attributes.position
   const base = m.userData.base
   const H = 2.75 * s
+  const BODY_R = 1.18 * s // 몸통 반경 1.1s + 옷감 두께 여유
+  const CAP_H = 0.7 * s // 캡슐 원통 반높이(위아래는 구 캡)
   for (let i = 0; i < pos.count; i++) {
     const x = base[i * 3]
     const y = base[i * 3 + 1]
     const sway = 0.5 - y / H // 위(어깨선) 0 → 아랫단 1
-    pos.array[i * 3 + 2] = base[i * 3 + 2]
+    let z = base[i * 3 + 2]
       + (Math.sin((x / s) * 2.2 + t * 2.8) * 0.15 + Math.sin(t * 1.7 + x / s) * 0.09) * s * sway
       + (Math.abs(x) / (1.17 * s)) ** 2 * 0.3 * s // 몸을 감싸는 곡률
+    // 몸-로컬 좌표: (x_b, y_b, z_b) = (z − 1.0s, y + 0.05s, −x). 몸 높이 범위에선
+    // 수평 반경이 BODY_R 이상이 되도록 z(몸 쪽 이동)를 뒤로 밀어낸다.
+    const d = Math.max(0, Math.abs(y + 0.05 * s) - CAP_H)
+    const r2 = BODY_R * BODY_R - d * d // 이 높이의 몸 반경²(구 캡 감쇠)
+    if (r2 > x * x) {
+      const q = Math.sqrt(r2 - x * x) // 필요한 뒤쪽(−x_b) 거리
+      z = Math.min(z, 1.0 * s - q)
+    }
+    pos.array[i * 3 + 2] = z
   }
   pos.needsUpdate = true
   m.geometry.computeVertexNormals()
