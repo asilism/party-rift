@@ -7,9 +7,10 @@ import { sound } from '../shared/sound.js'
 import {
   loadSoloPick, saveSoloPick, loadGuideSeen, saveGuideSeen, loadRiftRecords, addRiftRecord,
   loadUnlockSeen, saveUnlockSeen, loadProfile, saveProfile, loadSoundOn, saveSoundOn,
+  loadCoins, addCoins, claimFirstWinToday, addCoinUnlock,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
-import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT } from './unlocks.js'
+import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
 import MenuStage from './MenuStage.jsx'
 import HeroShowcase from './HeroShowcase.jsx'
@@ -60,6 +61,7 @@ export default function SoloApp() {
   const netRef = useRef(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [exitAsk, setExitAsk] = useState(false) // 전투 중 뒤로가기 → "나갈까요?" 확인
+  const [coinMsg, setCoinMsg] = useState(null) // 경기 종료 코인 보상 라인(승리 화면에 표시)
   useEffect(() => () => netRef.current?.close(), [])
 
   function go(next) {
@@ -84,6 +86,7 @@ export default function SoloApp() {
   }
 
   function startBattle(cls) {
+    setCoinMsg(null) // 새 경기 — 지난 보상 라인 지움
     const pick = { zodiacId: profile, cls, mode, botLevel }
     saveSoloPick(pick)
     const n = createLocalNet(riftNet, {
@@ -94,10 +97,20 @@ export default function SoloApp() {
       onFinish(view) {
         const me = view.heroes?.find((h) => h.id === 'solo')
         if (!me) return
+        const win = !!view.winner && view.winner === me.team
         addRiftRecord(me.cls, {
-          win: !!view.winner && view.winner === me.team,
+          win,
           kills: me.kills, deaths: me.deaths, assists: me.assists,
         })
+        // 조디악 코인: 승 30 / 패 10 + 하루 첫 승 보너스 50
+        let earn = win ? 30 : 10
+        let firstWin = false
+        if (win && claimFirstWinToday()) {
+          earn += 50
+          firstWin = true
+        }
+        addCoins(earn)
+        setCoinMsg({ earn, firstWin })
       },
     })
     netRef.current = n
@@ -169,7 +182,7 @@ export default function SoloApp() {
   if (screen === 'play') {
     return (
       <Suspense fallback={<div className="net-screen"><div className="net-screen__icon">⏳</div><p>{t('전장을 불러오는 중...')}</p></div>}>
-        <RiftGame net={net} onExit={exitBattle} />
+        <RiftGame net={net} onExit={exitBattle} bonus={coinMsg ? `🪙 +${coinMsg.earn}${coinMsg.firstWin ? ` (${t('오늘 첫 승리!')})` : ''}` : null} />
         {exitAsk && (
           <div className="solo-help" onClick={() => { setExitAsk(false); netRef.current?.rtPause(false) }}>
             <div className="toy-card solo-help__card" onClick={(e) => e.stopPropagation()}>
@@ -360,6 +373,16 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
 
 // ── 4. 캐릭터 선택 ──
 function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
+  const [coins, setCoins] = useState(loadCoins)
+  const [, forceUnlockRefresh] = useState(0)
+  function buyUnlock(id) {
+    if (loadCoins() < UNLOCK_PRICE) return
+    sound.go()
+    addCoins(-UNLOCK_PRICE)
+    addCoinUnlock(id)
+    setCoins(loadCoins())
+    forceUnlockRefresh((n) => n + 1)
+  }
   const saved = loadSoloPick()
   const records = loadRiftRecords()
   const total = Object.values(records).reduce(
@@ -391,6 +414,7 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
       <div className="char-screen__top">
         <BackButton onBack={onBack} />
         <h2 className="toy-heading toy-heading--screen char-screen__heading">{t('누구로 싸울까?')}</h2>
+        <span className="char-screen__coins" title={t('조디악 코인')}>🪙 {coins}</span>
         <button className="char-screen__setup" onClick={onBack} title={t('모드·난이도 바꾸기')}>
           {MODE_OPTS.find((m) => m.id === mode)?.emoji} {mode} · {t(levelLabel)} ✏️
         </button>
@@ -471,13 +495,22 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
                 <button
                   key={id}
                   className={`char-card ${cls === id ? 'is-on' : ''} ${locked ? 'is-locked' : ''}`}
-                  disabled={locked}
-                  title={locked ? t('승리할 때마다 새 캐릭터가 하나씩 열려요') : t(cc.desc)}
-                  onClick={() => { sound.step(); setCls(id); setOpenSkill(null) }}
+                  disabled={locked && coins < UNLOCK_PRICE}
+                  title={locked
+                    ? `${t('승리할 때마다 새 캐릭터가 하나씩 열려요')}${coins >= UNLOCK_PRICE ? ` · ${t('눌러서 코인으로 바로 해금')}` : ''}`
+                    : t(cc.desc)}
+                  onClick={() => {
+                    if (locked) { buyUnlock(id); return } // 코인 선행 해금
+                    sound.step(); setCls(id); setOpenSkill(null)
+                  }}
                 >
                   <span className="char-card__icon">{cc.icon}</span>
                   <span className="char-card__name">{t(cc.name)}</span>
-                  {locked && <span className="char-card__lock">🔒</span>}
+                  {locked && (
+                    <span className={`char-card__lock ${coins >= UNLOCK_PRICE ? 'char-card__lock--buyable' : ''}`}>
+                      {coins >= UNLOCK_PRICE ? `🪙${UNLOCK_PRICE}` : '🔒'}
+                    </span>
+                  )}
                   {isNew && <span className="char-card__new">NEW</span>}
                   {!locked && rr?.games > 0 && (
                     <span className="char-card__rec">{rr.wins}{t('승')} {rr.games - rr.wins}{t('패')}</span>

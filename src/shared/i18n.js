@@ -447,4 +447,7 @@ const DICT = {
   '승률': 'win rate',
   '수호 지신 바꾸기': 'Change guardian zodiac',
   '뒤로': 'Back',
+  '오늘 첫 승리!': 'First win of the day!',
+  '조디악 코인': 'Zodiac Coins',
+  '눌러서 코인으로 바로 해금': 'tap to unlock now with coins',
 }

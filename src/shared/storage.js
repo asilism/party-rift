@@ -66,6 +66,67 @@ export function saveSoundOn(on) {
   }
 }
 
+// ── 조디악 코인(메타 화폐) — 경기 보상으로 모아 캐릭터 선행 해금·꾸미기에 쓴다 ──
+const COINS_KEY = 'bgp.rift.coins.v1'
+const FIRSTWIN_KEY = 'bgp.rift.firstwin.v1' // 하루 첫 승 보너스 지급일(YYYY-MM-DD)
+const COIN_UNLOCKS_KEY = 'bgp.rift.coinunlocks.v1' // 코인으로 선행 해금한 직업 id 배열
+
+export function loadCoins() {
+  try {
+    const v = Number(localStorage.getItem(COINS_KEY))
+    return Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0
+  } catch {
+    return 0
+  }
+}
+
+export function saveCoins(n) {
+  try {
+    localStorage.setItem(COINS_KEY, String(Math.max(0, Math.floor(n))))
+  } catch {
+    /* 무시 */
+  }
+}
+
+export function addCoins(n) {
+  const next = loadCoins() + Math.floor(n)
+  saveCoins(next)
+  return next
+}
+
+// 오늘(로컬 날짜) 첫 승 보너스를 아직 안 받았으면 true를 반환하며 오늘로 도장 찍는다.
+export function claimFirstWinToday() {
+  const today = new Date().toISOString().slice(0, 10)
+  try {
+    if (localStorage.getItem(FIRSTWIN_KEY) === today) return false
+    localStorage.setItem(FIRSTWIN_KEY, today)
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function loadCoinUnlocks() {
+  try {
+    const v = JSON.parse(localStorage.getItem(COIN_UNLOCKS_KEY))
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
+  }
+}
+
+export function addCoinUnlock(clsId) {
+  const list = loadCoinUnlocks()
+  if (!list.includes(clsId)) {
+    list.push(clsId)
+    try {
+      localStorage.setItem(COIN_UNLOCKS_KEY, JSON.stringify(list))
+    } catch {
+      /* 무시 */
+    }
+  }
+}
+
 // ── 전투 버튼 크기 배율(0.7~1.3) — 설정 메뉴 슬라이더로 조절 ──
 const RIFT_BTNSCALE_KEY = 'bgp.rift.btnscale.v1'
 
