@@ -1059,7 +1059,37 @@ const HAT_BUILDERS = {
 export function buildHat(hatId, s) {
   const make = HAT_BUILDERS[hatId]
   if (!make) return null
-  return make(s)
+  const g = make(s)
+  // 반짝이 — 모자 둘레를 천천히 돌며 별처럼 깜빡이는 작은 글로우 점.
+  // 모자는 카메라를 보게 빌보드 정렬되므로 로컬 x/y가 곧 화면 좌우/상하 —
+  // 화면 평면에서 도는 궤도가 된다. 매 프레임 updateHatSparkle()로 애니메이션.
+  const sparks = []
+  for (let i = 0; i < 4; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture(), color: 0xfff2b8, transparent: true, opacity: 0,
+      depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+    }))
+    sp.scale.setScalar(0.001)
+    g.add(sp)
+    sparks.push({ sp, phase: i * 1.9, r: (0.7 + (i % 2) * 0.45) * s, h: (0.15 + i * 0.28) * s })
+  }
+  g.userData.sparkle = sparks
+  g.userData.sparkleS = s
+  return g
+}
+
+// 모자 반짝이 애니메이션 — 궤도를 돌며 별처럼 켜졌다 꺼진다(대부분 시간은 꺼짐)
+export function updateHatSparkle(hat, t) {
+  const sparks = hat.userData.sparkle
+  if (!sparks) return
+  const s = hat.userData.sparkleS
+  for (const k of sparks) {
+    const on = Math.max(0, Math.sin(t * 2.1 + k.phase * 2.3)) ** 4 // 짧게 반짝
+    const a = t * 0.6 + k.phase
+    k.sp.position.set(Math.cos(a) * k.r, k.h + Math.sin(t * 1.4 + k.phase) * 0.12 * s, 0.4 * s)
+    k.sp.material.opacity = on * 0.85
+    k.sp.scale.setScalar((0.2 + on * 0.4) * s)
+  }
 }
 
 // ── 12지신 꼬리 파츠 ──
@@ -1800,9 +1830,12 @@ function buildHero(h, mine, barColor, hatId = null) {
   }
   const nameColor = mine ? '#ffe066' : '#ffffff'
   const name = nameSprite(heroLabel(h), nameColor)
-  name.position.y = 6.6
   const bar = makeHpBar(3, barColor)
-  bar.position.y = 5.7
+  // 이름표·체력바 — 얼굴 위로 여유를 두고(기본도 살짝 위로), 모자를 쓰면
+  // 모자 높이만큼 더 올려 모자가 체력바를 가리지 않게 한다
+  const uiLift = 0.5 + (hat ? 1.0 : 0)
+  name.position.y = 6.6 + uiLift
+  bar.position.y = 5.7 + uiLift
   // 내 영웅 발밑 링
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(1.5, 2.1, 24),
@@ -3929,6 +3962,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           // 위에서 내려다본 모습(왕관은 고리만)이 되어 가면처럼 읽힌다. 기울임도 얼굴과 맞춤.
           u.hat.quaternion.copy(camera.quaternion)
           u.hat.rotateZ(-fdx * 0.1)
+          updateHatSparkle(u.hat, view.time)
         }
         if (h.whirlT <= 0 && h.airT <= 0) u.body.rotation.z = Math.sin(u.wphase) * 0.06 * wk.amt
         else u.body.rotation.z = 0
@@ -4504,7 +4538,10 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null }) {
 
     u.body.position.y = u.bodyBaseY + bob + lift
     u.face.position.y = u.faceBaseY + bob + lift
-    if (u.hat) u.hat.position.y = u.hatBaseY + bob + lift // 모자도 같이 둥실
+    if (u.hat) {
+      u.hat.position.y = u.hatBaseY + bob + lift // 모자도 같이 둥실
+      updateHatSparkle(u.hat, time)
+    }
     if (u.legs) {
       u.legs[0].rotation.z = stride
       u.legs[1].rotation.z = -stride
