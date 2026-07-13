@@ -23,9 +23,22 @@ const isNative = () =>
   IS_APP_SHELL && typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.()
 
 let inited = false
-async function ensureInit(AdMob) {
+async function ensureInit(mod) {
   if (inited) return
-  await AdMob.initialize({}) // 동의 UI(UMP)는 실계정 전환 시 requestConsentInfo로 확장
+  const { AdMob, AdmobConsentStatus } = mod
+  // UMP 동의(유럽 EEA 대응): 광고 초기화 전에 동의 정보를 확인하고, 폼이 필요하면
+  // 띄운다. 비EEA 지역은 폼이 없어 그대로 통과. 동의 플로우가 실패해도(콘솔에
+  // GDPR 메시지 미설정 등) 광고 초기화는 계속한다 — 광고가 죽어도 게임은 살아야 한다.
+  // ※ AdMob 콘솔 > 개인 정보 보호 및 메시지에서 GDPR 메시지를 만들어야 폼이 나온다.
+  try {
+    const info = await AdMob.requestConsentInfo()
+    if (info?.isConsentFormAvailable && info.status === (AdmobConsentStatus?.REQUIRED ?? 'REQUIRED')) {
+      await AdMob.showConsentForm()
+    }
+  } catch {
+    /* 동의 플로우 실패 — 초기화 계속 */
+  }
+  await AdMob.initialize({})
   inited = true
 }
 
@@ -43,8 +56,9 @@ export async function showRewarded(onReward) {
   }
   if (!isNative()) return false
   try {
-    const { AdMob, RewardAdPluginEvents } = await import('@capacitor-community/admob')
-    await ensureInit(AdMob)
+    const mod = await import('@capacitor-community/admob')
+    const { AdMob, RewardAdPluginEvents } = mod
+    await ensureInit(mod)
     let rewarded = false
     const sub = await AdMob.addListener(RewardAdPluginEvents.Rewarded, () => {
       rewarded = true

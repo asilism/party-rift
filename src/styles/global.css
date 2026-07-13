@@ -998,7 +998,9 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: clamp(14px, 3vh, 26px);
+  gap: clamp(8px, 2.4vh, 26px);
+  padding: 10px;
+  overflow-y: auto; /* 작은 화면에서 현황판이 커도 버튼 줄까지 스크롤로 닿는다 */
   background: rgba(0, 0, 0, 0.55);
   animation: fade-in 0.55s ease both; /* 폭발 연출이 끝난 뒤 부드럽게 떠오른다 */
 }
@@ -1063,7 +1065,28 @@ body {
   background: var(--panel);
   border: 3px solid var(--z-color, var(--accent));
   animation: pop-card 0.45s 0.15s cubic-bezier(0.18, 1.4, 0.4, 1) both;
+  max-width: min(760px, 96vw);
+  flex-shrink: 0; /* 플렉스가 카드를 찌그러뜨려 배너와 겹치지 않게 */
 }
+/* 현황판이 세로로 길어도 버튼 줄은 항상 보이게 — 표 안쪽만 스크롤 */
+.win-modal__card .rift-result { max-height: 44vh; overflow-y: auto; }
+@media (max-height: 470px) {
+  .win-modal { gap: 6px; }
+  .win-banner__trophy { font-size: 38px; }
+  .win-banner__title { font-size: clamp(22px, 7vh, 36px); }
+  .win-modal__card { padding: 10px 14px 12px; }
+  .win-modal__card .rift-result { max-height: 36vh; }
+  .win-modal__btns { margin-top: 8px; }
+}
+/* 📺 보상형 광고 버튼 — 다시하기 옆, 초록으로 구분 */
+.win-modal__ad {
+  background: rgba(66, 190, 106, 0.24);
+  border: 1px solid rgba(110, 230, 150, 0.55);
+  color: #8af0ac;
+  font-weight: 800;
+}
+.win-modal__ad:disabled { opacity: 0.6; cursor: wait; }
+.win-modal__btns { flex-wrap: wrap; }
 @keyframes pop-card {
   from {
     transform: scale(0.6);
@@ -3083,12 +3106,7 @@ body {
 .settings-note { margin: 0; text-align: center; color: #8a80ad; font-size: clamp(11px, 2vh, 12.5px); }
 
 /* ── 보상형 광고 버튼 ── */
-.win-banner__ad {
-  margin-left: 10px; padding: 3px 12px; border-radius: 12px; cursor: pointer;
-  border: 2px solid var(--ink); background: var(--toy-green); color: var(--ink);
-  font-family: var(--toy-font); font-weight: 900; font-size: 0.75em;
-  box-shadow: 0 3px 0 var(--toy-green-d); animation: toy-press 1.4s ease-in-out infinite;
-}
+/* (배너 내 광고 버튼은 win-modal__ad로 이동 — 배너는 장식 영역이라 카드에 덮여 안 눌렸다) */
 .win-banner__doubled { color: #72eca6; margin-left: 6px; }
 .missions__claim--ad { background: var(--toy-green); box-shadow: 0 2px 0 var(--toy-green-d); animation: none; }
 

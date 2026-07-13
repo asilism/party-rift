@@ -520,4 +520,7 @@ const DICT = {
   '사탕 지팡이': 'Candy Cane',
   '일렉 기타': 'Electric Guitar',
   '번개 창': 'Lightning Spear',
+  '광고 보고 2배 보상': 'Watch ad for ×2 reward',
+  '광고 불러오는 중…': 'Loading ad…',
+  '광고 준비 중 — 잠시 후 다시': 'Ad not ready — try again soon',
 }
