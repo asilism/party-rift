@@ -510,4 +510,13 @@ const DICT = {
   '화염검': 'Flame Sword',
   '서리검': 'Frost Blade',
   '성검': 'Holy Sword',
+  '파티 고깔': 'Party Hat',
+  '헤드폰': 'Headphones',
+  '벚꽃 화관': 'Sakura Crown',
+  '등 방패': 'Back Shield',
+  '로켓 배낭': 'Rocket Pack',
+  '별의 망토': 'Cape of Stars',
+  '사탕 지팡이': 'Candy Cane',
+  '일렉 기타': 'Electric Guitar',
+  '번개 창': 'Lightning Spear',
 }
