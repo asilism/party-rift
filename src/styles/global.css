@@ -2828,6 +2828,7 @@ body {
 .toy-btn--blue { background: linear-gradient(180deg, #7fd6ff, var(--toy-blue)); box-shadow: 0 5px 0 var(--toy-blue-d); }
 .toy-btn--green { background: linear-gradient(180deg, #72eca6, var(--toy-green)); box-shadow: 0 5px 0 var(--toy-green-d); }
 .toy-btn--orange { background: linear-gradient(180deg, #ffbe76, var(--toy-orange)); box-shadow: 0 5px 0 var(--toy-orange-d); }
+.toy-btn--pink { background: linear-gradient(180deg, #ffb3cd, #ff8fb3); box-shadow: 0 5px 0 #d66a92; }
 .toy-btn__badge {
   font-size: 10px; background: var(--ink); color: #ffd34d; border-radius: 8px; padding: 2px 7px; margin-left: 6px;
   vertical-align: 2px;
@@ -3073,6 +3074,40 @@ body {
 }
 .settings-link:hover { color: var(--ink); text-decoration: underline; }
 .settings-note { margin: 0; text-align: center; color: #8a80ad; font-size: clamp(11px, 2vh, 12.5px); }
+
+/* ── 꾸미기(모자) ── */
+.hats-screen__body {
+  display: flex; gap: 14px; align-items: stretch; justify-content: center;
+  width: min(94vw, 860px); margin-top: clamp(8px, 2.2vh, 18px); min-height: 0;
+}
+.hats-preview {
+  flex: 0 0 clamp(180px, 30vw, 280px); display: flex; flex-direction: column; align-items: center;
+  gap: 6px; padding: 12px; transform: rotate(-0.6deg);
+}
+.hat-preview__holder { flex: 1; width: 100%; min-height: 160px; position: relative; }
+.hat-preview__holder canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hats-grid-card {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;
+  padding: 12px; max-height: 74vh; overflow-y: auto; transform: rotate(0.4deg);
+}
+.hats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.hat-card {
+  display: flex; flex-direction: column; gap: 3px; align-items: center; cursor: pointer;
+  padding: 10px 6px; border-radius: 14px; border: 3px solid var(--ink); background: #fff;
+  font-family: var(--toy-font); transition: transform 0.08s, background 0.12s;
+}
+.hat-card:hover:not(:disabled) { transform: translateY(-2px) rotate(-1.5deg); background: #fffbe8; }
+.hat-card.is-on { background: var(--toy-yellow); box-shadow: 0 4px 0 var(--toy-yellow-d); }
+.hat-card.is-poor { opacity: 0.55; cursor: default; }
+.hat-card__name { font-weight: 800; font-size: clamp(12px, 2.3vh, 14px); color: var(--ink); }
+.hat-card__tag { font-size: clamp(10px, 2vh, 12px); font-weight: 700; color: #8a80ad; }
+.hat-card.is-on .hat-card__tag { color: #6b5200; }
+.hats-note { margin: 0; text-align: center; color: #8a80ad; font-size: clamp(10px, 2vh, 12px); }
+@media (max-height: 470px) {
+  .hats-preview { flex-basis: 150px; padding: 8px; }
+  .hats-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
+  .hat-card { padding: 6px 4px; }
+}
 
 /* ── 조디악 코인 ── */
 .char-screen__coins {

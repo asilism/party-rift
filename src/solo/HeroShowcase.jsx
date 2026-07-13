@@ -17,13 +17,13 @@ const SEQ = [
   { kind: 'rest', dur: 1.0 },
 ]
 
-export default function HeroShowcase({ cls, zodiacId }) {
+export default function HeroShowcase({ cls, zodiacId, hat = null }) {
   const canvasRef = useRef(null)
   const [caption, setCaption] = useState(null)
 
   useEffect(() => {
     const canvas = canvasRef.current
-    const stage = createHeroShowcase(canvas, { cls, zodiacId })
+    const stage = createHeroShowcase(canvas, { cls, zodiacId, hat })
     const holder = canvas.parentElement
     const fit = () => stage.resize(holder.clientWidth, holder.clientHeight)
     const ro = new ResizeObserver(fit)
@@ -52,7 +52,7 @@ export default function HeroShowcase({ cls, zodiacId }) {
       ro.disconnect()
       stage.dispose()
     }
-  }, [cls, zodiacId])
+  }, [cls, zodiacId, hat])
 
   return (
     <div className="hero-showcase">

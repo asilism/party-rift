@@ -127,6 +127,48 @@ export function addCoinUnlock(clsId) {
   }
 }
 
+// ── 모자 꾸미기 — 보유 목록과 장착 상태 ──
+const HAT_EQUIP_KEY = 'bgp.rift.hat.v1'
+const HATS_OWNED_KEY = 'bgp.rift.hats.v1'
+
+export function loadEquippedHat() {
+  try {
+    return localStorage.getItem(HAT_EQUIP_KEY) || null
+  } catch {
+    return null
+  }
+}
+
+export function saveEquippedHat(hatId) {
+  try {
+    if (hatId) localStorage.setItem(HAT_EQUIP_KEY, hatId)
+    else localStorage.removeItem(HAT_EQUIP_KEY)
+  } catch {
+    /* 무시 */
+  }
+}
+
+export function loadOwnedHats() {
+  try {
+    const v = JSON.parse(localStorage.getItem(HATS_OWNED_KEY))
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
+  }
+}
+
+export function addOwnedHat(hatId) {
+  const list = loadOwnedHats()
+  if (!list.includes(hatId)) {
+    list.push(hatId)
+    try {
+      localStorage.setItem(HATS_OWNED_KEY, JSON.stringify(list))
+    } catch {
+      /* 무시 */
+    }
+  }
+}
+
 // ── 전투 버튼 크기 배율(0.7~1.3) — 설정 메뉴 슬라이더로 조절 ──
 const RIFT_BTNSCALE_KEY = 'bgp.rift.btnscale.v1'
 
