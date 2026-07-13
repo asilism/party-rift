@@ -494,8 +494,9 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
       </div>
       <div className="mode-screen__cards">
         {MODE_OPTS.map((m, i) => {
-          // 유료 모드(보스전): 코인으로 1회 해금 — 해금 전엔 자물쇠와 가격을 보여준다
-          const locked = m.price && !modeUnlocks.includes(`mode:${m.id}`)
+          // 유료 모드(보스전): 코인으로 1회 해금 — 해금 전엔 자물쇠와 가격을 보여준다.
+          // 개발자 모드(HAT_DEV: dev 서버/?devhat)에서는 꾸미기처럼 바로 열린다.
+          const locked = m.price && !HAT_DEV && !modeUnlocks.includes(`mode:${m.id}`)
           return (
             <button
               key={m.id}
