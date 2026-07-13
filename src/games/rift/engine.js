@@ -214,7 +214,7 @@ export const CLASSES = {
   boss_colossus: {
     boss: true, name: '파멸의 거인', icon: '👹',
     desc: '대지를 부수는 전사형 보스 — 강타와 돌진, 회전 격노',
-    hp: 11000, hpLvl: 700, atk: 100, atkLvl: 8, range: 5.2, atkCd: 1.0, speed: 8.0, def: 0.25,
+    hp: 11000, hpLvl: 700, atk: 100, atkLvl: 8, range: 5.2, atkCd: 1.0, speed: 7.0, def: 0.35,
     skill: { name: '대지 강타', icon: '💥', cd: 9, desc: '주변 땅을 내리쳐 큰 피해 + 기절' },
     skill2: { name: '격돌 돌진', icon: '🌋', cd: 16, desc: '적에게 돌진해 들이받아 띄운다' },
     ult: { name: '회전 격노', icon: '🌪️', cd: 30, desc: '팽이처럼 돌며 주변을 계속 후린다' },
@@ -222,7 +222,7 @@ export const CLASSES = {
   boss_archmage: {
     boss: true, name: '대마도사', icon: '🧙',
     desc: '운석과 번개의 마법사형 보스 — 넓게 태우고 얼린다',
-    hp: 9500, hpLvl: 650, atk: 80, atkLvl: 6, range: 11, atkCd: 1.1, speed: 8.0, def: 0.4,
+    hp: 10500, hpLvl: 680, atk: 80, atkLvl: 6, range: 11, atkCd: 1.1, speed: 7.0, def: 0.42,
     skill: { name: '연쇄 뇌격', icon: '⚡', cd: 8, desc: '번개가 최대 5명을 타고 흐른다' },
     skill2: { name: '혹한 폭풍', icon: '❄️', cd: 14, desc: '주변을 얼려 빙결 + 피해' },
     ult: { name: '멸망의 운석', icon: '☄️', cd: 26, desc: '영웅들 머리 위로 운석을 떨어뜨린다' },
@@ -230,7 +230,7 @@ export const CLASSES = {
   boss_shadow: {
     boss: true, name: '그림자 군주', icon: '👺',
     desc: '어둠을 가르는 암살자형 보스 — 습격과 공포',
-    hp: 7600, hpLvl: 520, atk: 92, atkLvl: 8, range: 4.6, atkCd: 0.7, speed: 9.5, def: 0.35,
+    hp: 9000, hpLvl: 600, atk: 92, atkLvl: 8, range: 4.6, atkCd: 0.7, speed: 8.2, def: 0.36,
     skill: { name: '그림자 습격', icon: '🌀', cd: 9, desc: '가장 약한 적 뒤로 순간이동해 벤다' },
     skill2: { name: '공포의 포효', icon: '😱', cd: 16, desc: '주변 모두에게 공포 — 통제를 잃는다' },
     ult: { name: '어둠걸음', icon: '🌫️', cd: 26, desc: '어둠에 스며 모습을 감추고 빨라진다' },
@@ -799,11 +799,12 @@ export function createGame(players, opts = {}) {
       taken.push(h.role)
     }
   }
-  // 보스전: 아군 봇은 미드로 집결(보스 진군로) — 수비 계획이 필요하면 알아서 흩어진다
+  // 보스전: 아군 봇은 전원 정글러 — 라인 병사가 없으니 캠프를 돌며 성장하고,
+  // 타워가 공격받거나 아군이 싸우면 합류한다(수비 콜/갱킹 로직이 그대로 동작).
   if (mode === 'boss') {
     for (const h of heroes) {
       if (h.isBoss) h.role = null
-      else if (h.isBot) h.role = 'mid'
+      else if (h.isBot) h.role = 'jungle'
     }
   }
   const monsters = [
@@ -2658,7 +2659,9 @@ function damageMonster(state, m, amount, attacker) {
 }
 
 function damageTower(state, t, amount, attacker) {
-  if (attacker?.isBoss) amount *= 0.4 // 보스전: 건물은 천천히 밀린다
+  if (attacker?.isBoss) amount *= 0.3 // 보스전: 건물은 천천히 밀린다
+  // 보스전: 소환 병사의 건물 피해도 절반 — 방어선의 시계는 보스 본인이 쥔다
+  if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') amount *= 0.5
   if (!t.alive || !towerVulnerable(state, t)) return
   t.lastHurt = state.time // 공성당하는 중 — 봇 수비 콜 판정용
   t.hp -= amount
@@ -2681,7 +2684,8 @@ function damageTower(state, t, amount, attacker) {
 
 function damageNexus(state, team, amount, attacker) {
   if (!nexusVulnerable(state, team)) return
-  if (attacker?.isBoss) amount *= 0.4 // 보스전: 건물은 "천천히" 밀린다 — 농사 지을 시간을 준다
+  if (attacker?.isBoss) amount *= 0.3 // 보스전: 건물은 "천천히" 밀린다 — 농사 지을 시간을 준다
+  if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') amount *= 0.5
   const nx = state.nexus[team]
   if (nx.hp <= 0) return
   nx.lastHurt = state.time // 공격받는 중 — HUD 경고용
@@ -2731,7 +2735,7 @@ function awardXp(state, team, at, amount, killer) {
 function giveXp(state, h, amount) {
   if (h.respawnT > 0) return // 죽어 있는 동안엔 경험치를 받지 못한다
   if (h.lvl >= MAX_LEVEL) return
-  if (state.mode === 'boss' && h.team === 'blue' && !h.isBoss) amount *= 1.6 // 보스전: 파밍원이 적어 성장 가속
+  if (state.mode === 'boss' && h.team === 'blue' && !h.isBoss) amount *= 2.0 // 보스전: 파밍원이 적어 성장 가속
   h.xp += amount
   let up = false
   while (h.lvl < MAX_LEVEL && h.xp >= xpNeed(h.lvl)) {
@@ -4394,11 +4398,14 @@ function botSupportLane(state, h) {
 // 돌리고, 주기적으로 병사를 소환해 라인을 민다. 영웅들은 정글몹·소환 병사로 성장해
 // 아이템·스킬 연계로 보스를 잡는다. CC 저항(BOSS_CC_RESIST)은 stepHero에서.
 const BOSS_CC_RESIST = 2.5 // CC 잔여시간 추가 소진 배율 — 연계 CC 영구기절 방지
-const BOSS_LEVEL_EVERY = 50 // n초마다 자동 레벨업 — 시간은 보스 편(오래 끌수록 불리)
+const BOSS_LEVEL_EVERY = 70 // n초마다 자동 레벨업 — 시간은 보스 편(오래 끌수록 불리)
 const BOSS_SUMMON_CD = 18 // 병사 소환 주기
-const BOSS_WAKE = 75 // 이 시간까지 본진(우물)에서 잠들어 있다 — 초반은 파밍 타임
+const BOSS_WAKE = 90 // 이 시간까지 성곽(옥좌)에서 잠들어 있다 — 초반은 파밍 타임
+const BOSS_FOCUS_AFTER = 40 // 한 방어선 앞에서 이만큼 지나면 '공성 집중' — 교착을 끊는다
+const BOSS_FOCUS_NEAR = 40 // 공성 집중 타이머는 방어선 이 거리 안에서만 차오른다(행군은 무관)
+const BOSS_REGROUP = 20 // 방어선을 부수면 이만큼 포효·재정비 — 반격(버스트)의 창이 열린다
 const BOSS_AGGRO = 16 // 이 거리 안의 영웅을 상대한다(그 밖이면 진군)
-const BOSS_LEASH = 24 // 진군 축(현재 웨이포인트)에서 이 이상 벗어난 적은 쫓지 않는다
+const BOSS_LEASH = 18 // 진군 축(공성 목표)에서 이 이상 벗어난 적은 쫓지 않는다 — 술래잡기 방지
 
 function bossThink(state, h, dt) {
   if (!h.bossIntro) {
@@ -4414,14 +4421,15 @@ function bossThink(state, h, dt) {
     h.hp = Math.min(h.maxHp, h.hp + (h.maxHp - before))
     pushFx(state, 'level', h.x, h.z, 7, h.team)
   }
-  // 재생: 8초간 무피해면 초당 최대체력 0.8% 회복 — 치고 빠지기만 반복하면 못 잡는다
+  // 재생: 8초간 무피해면 초당 최대체력 0.5% 회복 — 치고 빠지기만 반복하면 못 잡는다
   if (state.time - h.lastHurt > 8 && h.hp < h.maxHp) {
-    h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.008 * dt)
+    h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.005 * dt)
   }
   h.bossCd ||= { a: 5, b: 9, c: 14, summon: 8 }
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
-  // 기상 전: 본진 우물에서 잠들어 있다(우물 레이저가 러시를 응징). 병사만 먼저 내보낸다.
+  // 기상 전: 성곽 안 옥좌에서 잠들어 있다(우물 레이저가 러시를 응징). 병사만 먼저 내보낸다.
   if (state.time < BOSS_WAKE) {
+    h.hp = h.maxHp // 잠든 보스는 흠집도 안 난다 — 원거리 포킹으로 선공 이득을 못 본다
     if (h.bossCd.summon <= 0) {
       h.bossCd.summon = BOSS_SUMMON_CD * 1.8 // 잠결 소환은 뜸하게 — 초반 스노볼 방지
       bossSummon(state, h)
@@ -4467,6 +4475,31 @@ function bossThink(state, h, dt) {
   }
   const nb = state.map.NEXUS_POS.blue
   if (!siege) siege = { tk: 'nexus', id: 'blue', x: nb.x, z: nb.z, surf: NEXUS_RADIUS }
+  // 공성 집중(교착 방지): 같은 방어선 근처(BOSS_FOCUS_NEAR)에서 BOSS_FOCUS_AFTER를 넘기면
+  // 영웅 교전을 끊고 구조물만 두드린다 — 건물이 반드시 순서대로(외곽→내곽→최후→수호석) 무너진다.
+  // 방어선 하나를 부수면 잠시 포효·재정비(BOSS_REGROUP) — 아군이 몰아칠 반격의 창이다.
+  if (h.bossSiegeId !== siege.id) {
+    if (h.bossSiegeId != null) {
+      h.bossRoarT = BOSS_REGROUP
+      pushFx(state, 'berserk', h.x, h.z, 6, h.team)
+      pushFeed(state, 'obj', '🛡️ 방어선이 무너졌다! 보스가 재정비 중 — 지금이 반격의 기회!')
+    }
+    h.bossSiegeId = siege.id
+    h.bossSiegeT = 0
+    h.bossFocusWarned = false
+  }
+  if (h.bossRoarT > 0) {
+    h.bossRoarT -= dt
+    h.mx = 0
+    h.mz = 0
+    return
+  }
+  if (Math.hypot(siege.x - h.x, siege.z - h.z) < BOSS_FOCUS_NEAR) h.bossSiegeT += dt
+  const focus = h.bossSiegeT > BOSS_FOCUS_AFTER
+  if (focus && !h.bossFocusWarned) {
+    h.bossFocusWarned = true
+    pushFeed(state, 'obj', '💢 보스가 방어선 파괴에 집중합니다 — 막아설 수 없다!')
+  }
   // 표적: 공성 목표 근처(BOSS_LEASH 안)의 보이는 가장 가까운 적 영웅 — 우물 캠핑·낚시 방지
   const bf = state.map.FOUNTAIN_POS.blue
   const safeR2 = (FOUNTAIN_RADIUS + 4) ** 2
@@ -4489,20 +4522,20 @@ function bossThink(state, h, dt) {
   // 멈추지 않는다(엔레이지 타이머: 보스를 잡지 못하면 결국 본진이 무너진다).
   // 영웅 응징은 스킬 로테이션과 사거리 밖 접근 이동이 맡는다.
   const range = CLASSES[h.cls].range
-  const sDistNow = Math.hypot(siege.x - h.x, siege.z - h.z) - siege.surf
+  const sDist = Math.hypot(siege.x - h.x, siege.z - h.z) - siege.surf
   const engaged = foe && bd <= (range * 1.15) ** 2
-  castAttack(state, h.id, sDistNow <= range ? siege : engaged ? null : siege)
-  // 이동: 붙은 적과 교전 > 사거리 밖 적에게 접근 > 공성 목표로 진군
+  castAttack(state, h.id, sDist <= range ? siege : engaged && !focus ? null : siege)
+  // 이동: 붙은 적과 교전 > 사거리 밖 적에게 접근 > 공성 목표로 진군.
+  // 공성 집중 중엔 영웅을 무시하고 구조물로 직행한다(스킬 로테이션이 응징을 맡는다).
   let tx
   let tz
-  if (engaged) {
+  if (engaged && !focus) {
     h.mx = 0
     h.mz = 0
     h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
     return
   }
-  const sDist = Math.hypot(siege.x - h.x, siege.z - h.z) - siege.surf
-  if (foe) {
+  if (foe && !focus) {
     tx = foe.x
     tz = foe.z
   } else if (sDist <= range * 0.8) {
@@ -4731,15 +4764,22 @@ function stepBots(state, dt) {
         continue
       }
     }
-    if (inFountain(h)) botShop(state, h) // 우물에 있을 때 장비 보충
+    // 우물에 있을 때 장비 보충. 보스전 아군 봇은 원격 보급 — 보스가 본진에 닿으면
+    // 봇은 전투에서 벗어날 틈이 없어, 우물 조건을 걸면 골드를 쥔 채 맨몸으로 싸운다.
+    if (inFountain(h) || (state.mode === 'boss' && h.team === 'blue')) botShop(state, h)
     const cls = CLASSES[h.cls]
     // 적 리스폰 존은 금지 구역 — 우물 피해를 맞으며 회복하는 적을 쫓는 건 자살이다.
-    // 들어갔다면 적 수호석 쪽(존 바깥)으로 즉시 빠져나오고, 이번 틱은 그걸로 끝.
+    // 들어갔다면 존 중심 반대 방향(바깥)으로 즉시 빠져나오고, 이번 틱은 그걸로 끝.
+    // (수호석 방향으로 나가면 안 된다 — 보스전 옥좌처럼 수호석이 존 안에 있는 맵이 있다)
     {
       const ef = state.map.FOUNTAIN_POS[enemyOf(h.team)]
       const escR = FOUNTAIN_RADIUS + 2
       if (ef && dist2(h, ef) < escR * escR) {
-        steerToward(state, h, state.map.NEXUS_POS[enemyOf(h.team)])
+        const away = Math.atan2(h.z - ef.z, h.x - ef.x) || Math.PI // 중심에 겹치면 서쪽으로
+        steerToward(state, h, {
+          x: ef.x + Math.cos(away) * (escR + 6),
+          z: ef.z + Math.sin(away) * (escR + 6),
+        })
         botAttack(state, h, dt) // 나오는 길에 사거리 안이면 공성/반격은 한다
         continue
       }
@@ -5009,6 +5049,18 @@ function stepBots(state, dt) {
       if (botJungleRole(state, h, dt)) continue
     }
     if (h.botSeekT > 0 ? false : botJungleMove(state, h)) continue
+    // 보스전 아군: 밀 레인이 없다(레드 수호석은 무적, 옥좌는 우물 레이저 안) —
+    // 놀게 되면 다음 방어선(보스의 공성 목표) 앞에서 전열을 갖추고 보스를 기다린다.
+    if (state.mode === 'boss' && h.team === 'blue') {
+      let line = null
+      let bestX = -Infinity
+      for (const t of state.towers) {
+        if (!t.alive || t.team !== 'blue' || t.lane !== 'mid') continue
+        if (t.x > bestX) { bestX = t.x; line = t }
+      }
+      botHoldOutside(state, h, line || state.map.NEXUS_POS.blue, 12)
+      continue
+    }
     botLaneMove(state, h, dt)
   }
 }
@@ -5033,6 +5085,10 @@ function botJungleRole(state, h, dt) {
       gankTo = e
     }
   }
+  // 보스전: 멀리 있는 보스를 쫓아 지도를 가로지르지 않는다 — 가까울 때만 합류하고,
+  // 멀면 파밍을 계속한다(방어는 수비 콜이 부른다). 안 그러면 첫 접촉 후 전원이
+  // 보스에 영구 고착돼 성장이 멈춘다.
+  if (gankTo && state.mode === 'boss' && gankTo.isBoss && dist(h, gankTo) > 30) gankTo = null
   if (gankTo && h.hp > h.maxHp * 0.45) {
     steerToward(state, h, gankTo)
     return true
@@ -5189,9 +5245,10 @@ function botJungleMove(state, h) {
       return true
     }
   }
-  // 가까운 늑대 캠프 (멀리 돌아가진 않는다)
+  // 가까운 늑대 캠프 (멀리 돌아가진 않는다).
+  // 보스전 아군: 라인 병사가 없어 정글이 유일한 농장 — 거리 불문 가장 가까운 캠프로.
   let camp = null
-  let bd = 16 * 16
+  let bd = state.mode === 'boss' && h.team === 'blue' ? Infinity : 16 * 16
   for (const m of state.monsters) {
     if (!m.alive || !CAMP_MOBS[m.kind]) continue
     const d = dist2(h, m)

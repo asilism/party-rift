@@ -549,6 +549,8 @@ function setHpBarShield(bar, hpFrac, shFrac) {
 
 // 체력바를 100단위로 칸 나눠 표시한다 — 칸(눈금)이 많을수록 최대 체력이 큰 캐릭터.
 //  maxHp가 바뀔 때만(레벨업/아이템) 눈금을 다시 그린다.
+//  체력이 아주 크면(보스 수만 HP) 눈금이 바를 뒤덮어 검은 막대가 되므로,
+//  칸이 24개를 넘지 않게 단위를 승급한다(100 → 500 → 2500 …).
 const HP_PER_SEG = 100
 function setHpBarSegments(bar, maxHp) {
   const u = bar.userData
@@ -556,9 +558,11 @@ function setHpBarSegments(bar, maxHp) {
   u.segMaxHp = maxHp
   for (const s of u.segs) bar.remove(s)
   u.segs.length = 0
-  const n = Math.floor(maxHp / HP_PER_SEG)
+  let per = HP_PER_SEG
+  while (maxHp / per > 24) per *= 5
+  const n = Math.floor(maxHp / per)
   for (let i = 1; i <= n; i++) {
-    const frac = (i * HP_PER_SEG) / maxHp
+    const frac = (i * per) / maxHp
     if (frac >= 1) break // 마지막 칸 경계(=바 끝)는 그리지 않는다
     const tick = new THREE.Sprite(
       new THREE.SpriteMaterial({ color: 0x101626, opacity: 0.92, transparent: true, depthWrite: false })
