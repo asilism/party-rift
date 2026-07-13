@@ -59,8 +59,15 @@ function CdButton({ className, icon, label, name, desc, lines, cd, cdMax, locked
   const frac = cdMax > 0 ? Math.max(0, Math.min(1, cd / cdMax)) : 0
   const ready = !locked && (frac <= 0 || (stock ?? 0) > 0)
   const [pressed, setPressed] = useState(false)
+  // 터치 툴팁: 길게(450ms) 누르고 있는 동안만. 탭에는 안 뜬다 — 터치 기기의
+  // 눌어붙는 :hover(다른 곳을 누를 때까지 유지)가 툴팁으로 화면을 가리던 문제.
+  const [tipOn, setTipOn] = useState(false)
+  const tipTimer = useRef(null)
+  useEffect(() => () => clearTimeout(tipTimer.current), []) // 언마운트 시 타이머 정리
   usePressPulse(pulse, setPressed)
   const release = () => {
+    clearTimeout(tipTimer.current)
+    setTipOn(false)
     if (!interactive) return
     if (pressed) setPressed(false)
     onRelease?.()
@@ -68,9 +75,14 @@ function CdButton({ className, icon, label, name, desc, lines, cd, cdMax, locked
   return (
     <button
       // 키보드/게임패드 모드에서도 마우스 오버 툴팁은 보이게 한다(클릭 발동만 막음).
-      className={`rift-btn ${className} ${ready ? 'rift-btn--ready' : ''} ${pressed ? 'rift-btn--press' : ''}`}
+      className={`rift-btn ${className} ${ready ? 'rift-btn--ready' : ''} ${pressed ? 'rift-btn--press' : ''} ${tipOn ? 'rift-btn--tip-on' : ''}`}
       style={interactive ? undefined : { opacity: 0.82 }}
-      onPointerDown={() => {
+      onPointerDown={(e) => {
+        if (e.pointerType !== 'mouse') {
+          // 잠긴 스킬도 길게 누르면 설명은 읽을 수 있게 — 가드보다 먼저 건다
+          clearTimeout(tipTimer.current)
+          tipTimer.current = setTimeout(() => setTipOn(true), 450)
+        }
         if (!interactive || locked) return
         setPressed(true)
         onPress?.()

@@ -2195,8 +2195,15 @@ body {
 }
 .rift-btn__tip-stats span { display: block; color: var(--accent2); margin-top: 1px; }
 .rift-btn__tip-stats span:first-child { margin-top: 0; }
-/* 데스크톱: 마우스 오버일 때만 표시(누름으로는 안 뜬다) */
-.rift-btn:hover .rift-btn__tip {
+/* 데스크톱(마우스 기기)만 오버로 표시 — 터치 기기는 탭하면 :hover가 눌어붙어
+   툴팁이 계속 화면을 가리므로 호버 규칙에서 제외한다 */
+@media (hover: hover) and (pointer: fine) {
+  .rift-btn:hover .rift-btn__tip {
+    opacity: 1; visibility: visible; transform: translateY(0);
+  }
+}
+/* 터치: 길게(450ms) 누르고 있는 동안만 — RiftControls가 클래스를 켠다 */
+.rift-btn--tip-on .rift-btn__tip {
   opacity: 1; visibility: visible; transform: translateY(0);
 }
 
