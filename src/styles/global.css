@@ -3135,7 +3135,9 @@ body {
 }
 .hat-card:hover:not(:disabled) { transform: translateY(-2px) rotate(-1.5deg); background: #fffbe8; }
 .hat-card.is-on { background: var(--toy-yellow); box-shadow: 0 4px 0 var(--toy-yellow-d); }
-.hat-card.is-poor { opacity: 0.55; cursor: default; }
+.hat-card.is-preview { border-color: var(--toy-blue, #6db6ff); background: #eef6ff; }
+.hats-buy { margin-top: 4px; font-size: clamp(12px, 2.3vh, 14px); }
+.hats-buy--poor { font-family: var(--toy-font); font-weight: 700; color: #b06a6a; }
 .hat-card__name { font-weight: 800; font-size: clamp(12px, 2.3vh, 14px); color: var(--ink); }
 .hat-card__tag { font-size: clamp(10px, 2vh, 12px); font-weight: 700; color: #8a80ad; }
 .hat-card.is-on .hat-card__tag { color: #6b5200; }
