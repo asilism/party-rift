@@ -9,6 +9,7 @@ import {
   loadUnlockSeen, saveUnlockSeen, loadProfile, saveProfile, loadSoundOn, saveSoundOn,
   loadCoins, addCoins, claimFirstWinToday, addCoinUnlock,
   loadEquippedHat, saveEquippedHat, loadOwnedHats, addOwnedHat,
+  loadEquippedCostume, saveEquippedCostume, loadOwnedCostumes, addOwnedCostume,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
@@ -515,7 +516,7 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
             </div>
           </div>
           {/* 훈련장: 선택한 직업의 전신 모델이 평타·스킬을 실제로 시전한다 */}
-          {c && <HeroShowcase cls={cls} zodiacId={profile} hat={loadEquippedHat()} />}
+          {c && <HeroShowcase cls={cls} zodiacId={profile} hat={loadEquippedHat()} costume={loadEquippedCostume()} />}
           {/* 가운데(스킬·전적)만 스크롤 — 출전 버튼은 항상 보인다 */}
           <div className="char-show__mid">
             {c && (
@@ -660,42 +661,67 @@ const HATS = [
   { id: 'crown', name: '왕관', price: 1500, fx: true },
 ]
 
-// 개발자 모드 — 웹 테스트(vite dev 서버 또는 주소에 ?devhat)에서는 모든 모자를 코인 없이
+// 옷 코스튬 목록 — 모자와 같은 구조(scene.js COSTUME_BUILDERS와 id 일치)
+const COSTUMES = [
+  { id: null, name: '기본', price: 0 },
+  { id: 'scarf', name: '목도리', price: 250 },
+  { id: 'backpack', name: '배낭', price: 300 },
+  { id: 'goldcape', name: '황금 망토', price: 600 },
+  { id: 'armor', name: '기사 갑옷', price: 700 },
+  { id: 'wings', name: '천사 날개', price: 1200, fx: true },
+]
+
+// 개발자 모드 — 웹 테스트(vite dev 서버 또는 주소에 ?devhat)에서는 모든 꾸미기를 코인 없이
 // 바로 장착해 본다. 앱(Capacitor)과 일반 빌드에서는 꺼져 있어 코인 경제에 영향 없음.
 const HAT_DEV = import.meta.env.DEV
   || (typeof location !== 'undefined' && new URLSearchParams(location.search).has('devhat'))
 
+// 탭별 데이터·저장소 바인딩 — 모자/옷이 같은 화면 로직을 공유한다
+const WARDROBE_TABS = {
+  hat: {
+    label: '🎩 모자', items: HATS,
+    loadOwned: loadOwnedHats, addOwned: addOwnedHat,
+    loadEquipped: loadEquippedHat, saveEquipped: saveEquippedHat,
+  },
+  costume: {
+    label: '🧣 옷', items: COSTUMES,
+    loadOwned: loadOwnedCostumes, addOwned: addOwnedCostume,
+    loadEquipped: loadEquippedCostume, saveEquipped: saveEquippedCostume,
+  },
+}
+
 function HatScreen({ profile, onBack }) {
+  const [tab, setTab] = useState('hat')
   const [coins, setCoins] = useState(loadCoins)
-  const [owned, setOwned] = useState(loadOwnedHats)
-  const [equipped, setEquipped] = useState(loadEquippedHat)
-  // 미리 입어보기 — 아무 모자나 눌러 공짜로 씌워 본다(저장 안 함). 보유한 모자를 누르면 장착.
-  const [preview, setPreview] = useState(loadEquippedHat)
+  const [owned, setOwned] = useState(() => ({ hat: loadOwnedHats(), costume: loadOwnedCostumes() }))
+  const [equipped, setEquipped] = useState(() => ({ hat: loadEquippedHat(), costume: loadEquippedCostume() }))
+  // 미리 입어보기 — 아무거나 눌러 공짜로 걸쳐 본다(저장 안 함). 보유품을 누르면 장착.
+  // 미리보기는 탭별로 따로 들고, 무대에는 모자+옷을 함께 입혀 조합을 보여준다.
+  const [preview, setPreview] = useState(() => ({ hat: loadEquippedHat(), costume: loadEquippedCostume() }))
   const saved = loadSoloPick()
   const previewCls = CLASSES[saved?.cls] ? saved.cls : 'warrior'
-  const previewDef = HATS.find((hh) => (hh.id || null) === (preview || null))
-  const previewOwned = preview === null || HAT_DEV || owned.includes(preview)
+  const T = WARDROBE_TABS[tab]
+  const previewDef = T.items.find((it) => (it.id || null) === (preview[tab] || null))
+  const previewOwned = preview[tab] === null || HAT_DEV || owned[tab].includes(preview[tab])
 
-  function pick(hat) {
-    setPreview(hat.id) // 누르면 일단 씌워 본다
-    if (hat.id === null || HAT_DEV || owned.includes(hat.id)) {
-      saveEquippedHat(hat.id) // 보유한 모자 → 장착 (맨머리 = 해제)
-      setEquipped(hat.id)
-      sound.step()
-    } else {
-      sound.step() // 미보유 — 미리보기만, 구매는 아래 버튼으로
+  function pick(item) {
+    setPreview((p) => ({ ...p, [tab]: item.id })) // 누르면 일단 걸쳐 본다
+    if (item.id === null || HAT_DEV || owned[tab].includes(item.id)) {
+      T.saveEquipped(item.id) // 보유품 → 장착 (기본/맨머리 = 해제)
+      setEquipped((e) => ({ ...e, [tab]: item.id }))
     }
+    sound.step()
   }
 
   function buyPreview() {
     if (previewOwned || !previewDef || coins < previewDef.price) return
     sound.go()
     addCoins(-previewDef.price)
-    addOwnedHat(preview)
-    saveEquippedHat(preview) // 사면 바로 장착
+    T.addOwned(preview[tab])
+    T.saveEquipped(preview[tab]) // 사면 바로 장착
     setCoins(loadCoins())
-    setOwned(loadOwnedHats())
-    setEquipped(preview)
+    setOwned((o) => ({ ...o, [tab]: T.loadOwned() }))
+    setEquipped((e) => ({ ...e, [tab]: preview[tab] }))
   }
 
   return (
@@ -704,7 +730,7 @@ function HatScreen({ profile, onBack }) {
       <h2 className="toy-heading toy-heading--screen">{t('꾸미기')}</h2>
       <div className="hats-screen__body">
         <aside className="toy-card hats-preview">
-          <HatPreview cls={previewCls} zodiacId={profile} hat={preview} />
+          <HatPreview cls={previewCls} zodiacId={profile} hat={preview.hat} costume={preview.costume} />
           <span className="char-screen__coins">🪙 {coins}</span>
           {!previewOwned && previewDef && (
             coins >= previewDef.price
@@ -717,20 +743,31 @@ function HatScreen({ profile, onBack }) {
           )}
         </aside>
         <div className="toy-card hats-grid-card">
+          <div className="hats-tabs">
+            {Object.entries(WARDROBE_TABS).map(([id, def]) => (
+              <button
+                key={id}
+                className={`hats-tab ${tab === id ? 'is-on' : ''}`}
+                onClick={() => { setTab(id); sound.step() }}
+              >
+                {t(def.label)}
+              </button>
+            ))}
+          </div>
           <div className="hats-grid">
-            {HATS.map((hat) => {
-              const isOwned = hat.id === null || owned.includes(hat.id)
-              const isOn = (equipped || null) === hat.id
-              const isPreview = (preview || null) === hat.id
+            {T.items.map((item) => {
+              const isOwned = item.id === null || owned[tab].includes(item.id)
+              const isOn = (equipped[tab] || null) === item.id
+              const isPreview = (preview[tab] || null) === item.id
               return (
                 <button
-                  key={hat.id || 'none'}
+                  key={item.id || 'none'}
                   className={`hat-card ${isOn ? 'is-on' : ''} ${!isOn && isPreview ? 'is-preview' : ''}`}
-                  onClick={() => pick(hat)}
+                  onClick={() => pick(item)}
                 >
-                  <span className="hat-card__name">{t(hat.name)}{hat.fx ? ' ✨' : ''}</span>
+                  <span className="hat-card__name">{t(item.name)}{item.fx ? ' ✨' : ''}</span>
                   <span className="hat-card__tag">
-                    {isOn ? t('장착 중') : isOwned ? t('보유') : `🪙 ${hat.price}`}
+                    {isOn ? t('장착 중') : isOwned ? t('보유') : `🪙 ${item.price}`}
                   </span>
                 </button>
               )
@@ -738,8 +775,8 @@ function HatScreen({ profile, onBack }) {
           </div>
           <p className="hats-note">
             {HAT_DEV
-              ? <>🛠 {t('개발자 모드: 모든 모자를 바로 장착해 볼 수 있어요')}</>
-              : t('아무 모자나 눌러서 공짜로 입어 보세요 — 장착은 보유한 모자만 돼요')}
+              ? <>🛠 {t('개발자 모드: 모든 꾸미기를 바로 장착해 볼 수 있어요')}</>
+              : t('아무거나 눌러서 공짜로 걸쳐 보세요 — 장착은 보유한 것만 돼요')}
           </p>
         </div>
       </div>
