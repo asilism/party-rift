@@ -473,4 +473,5 @@ const DICT = {
   '어시스트 3회': 'Get 3 assists',
   '정글몹 8마리 사냥': 'Hunt 8 jungle monsters',
   '5판 플레이': 'Play 5 matches',
+  '광고 보고 2배': 'Watch ad for ×2',
 }

@@ -21,6 +21,10 @@
             </intent-filter>
         </activity>
 
+        <!-- AdMob 앱 ID — 지금은 Google 공식 테스트 ID. 출시 전 실계정 ID로 교체(ads.js 참고) -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
