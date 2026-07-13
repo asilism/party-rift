@@ -3127,6 +3127,16 @@ body {
   flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;
   padding: 12px; max-height: 74vh; overflow-y: auto; transform: rotate(0.4deg);
 }
+/* 카테고리 탭(모자/옷) — 그리드 카드 상단 */
+.hats-tabs { display: flex; gap: 6px; }
+.hats-tab {
+  flex: 1; padding: 6px 10px; border-radius: 12px; cursor: pointer;
+  border: 3px solid var(--ink); background: #fff; color: var(--ink);
+  font-family: var(--toy-font); font-weight: 900; font-size: clamp(12px, 2.4vh, 15px);
+  transition: transform 0.08s, background 0.12s;
+}
+.hats-tab:hover { transform: translateY(-1px); background: #fffbe8; }
+.hats-tab.is-on { background: var(--toy-yellow); box-shadow: 0 3px 0 var(--toy-yellow-d); }
 .hats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
 .hat-card {
   display: flex; flex-direction: column; gap: 3px; align-items: center; cursor: pointer;

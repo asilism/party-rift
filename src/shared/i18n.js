@@ -478,4 +478,13 @@ const DICT = {
   '코인이 부족해요': 'Not enough coins',
   '아무 모자나 눌러서 공짜로 입어 보세요 — 장착은 보유한 모자만 돼요': 'Tap any hat to try it on for free — only owned hats can be equipped',
   '개발자 모드: 모든 모자를 바로 장착해 볼 수 있어요': 'Dev mode: equip any hat instantly',
+  '🎩 모자': '🎩 Hats',
+  '🧣 옷': '🧣 Outfits',
+  '목도리': 'Scarf',
+  '배낭': 'Backpack',
+  '황금 망토': 'Golden Cape',
+  '기사 갑옷': 'Knight Armor',
+  '천사 날개': 'Angel Wings',
+  '개발자 모드: 모든 꾸미기를 바로 장착해 볼 수 있어요': 'Dev mode: equip anything instantly',
+  '아무거나 눌러서 공짜로 걸쳐 보세요 — 장착은 보유한 것만 돼요': 'Tap anything to try it on for free — only owned items can be equipped',
 }

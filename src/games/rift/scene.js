@@ -1253,8 +1253,140 @@ export function buildHat(hatId, s) {
 }
 
 // 모자 FX 애니메이션 — 매 프레임 호출(쇼케이스·인게임 공용). FX 없는 모자는 no-op.
+// 옷 코스튬 그룹도 같은 규약(userData.fxUpdate)이라 그대로 쓴다.
 export function updateHatSparkle(hat, t) {
   hat.userData.fxUpdate?.(t)
+}
+
+// ── 옷 코스튬 파츠 ──
+// 코인으로 사는 코스메틱 2탄 — 모자(빌보드)와 달리 몸통(body)의 자식이라 바라보는
+// 방향·걷기와 함께 돈다. 좌표계는 꼬리·직업 파츠와 같다: +x 앞, -x 뒤, ±z 옆.
+// 몸통 색(팀 색)은 게임 가독성이라 덮지 않는다 — 목·등·어깨에 "걸치는" 파츠만.
+export const COSTUME_IDS = ['scarf', 'backpack', 'goldcape', 'armor', 'wings']
+
+function equippedCostume() {
+  try {
+    return localStorage.getItem('bgp.rift.costume.v1') || null
+  } catch {
+    return null
+  }
+}
+
+const COSTUME_BUILDERS = {
+  // 목도리: 가슴께 두른 붉은 천 + 등 뒤로 펄럭이는 자락 — 목(얼굴 뒤)에 두면 안 보인다
+  scarf(s) {
+    const g = new THREE.Group()
+    const red = lamb(0xd6453f)
+    const wrap = new THREE.Mesh(new THREE.TorusGeometry(0.92 * s, 0.26 * s, 8, 18), red)
+    wrap.rotation.x = Math.PI / 2
+    wrap.position.y = 0.78 * s
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.18 * s, 1.25 * s, 0.5 * s), red)
+    tail.position.set(-1.05 * s, 0.25 * s, 0.4 * s)
+    tail.rotation.z = 0.22
+    g.add(wrap, tail)
+    return g
+  },
+  // 배낭: 등에 멘 갈색 가방 — 몸통 + 덮개 + 어깨끈
+  backpack(s) {
+    const g = new THREE.Group()
+    const brown = lamb(0x9a6b42)
+    const dark = lamb(0x7a5232)
+    const bag = new THREE.Mesh(new THREE.BoxGeometry(0.55 * s, 1.15 * s, 1.05 * s), brown)
+    bag.position.set(-1.28 * s, 0.15 * s, 0)
+    const flap = new THREE.Mesh(new THREE.BoxGeometry(0.6 * s, 0.4 * s, 1.1 * s), dark)
+    flap.position.set(-1.28 * s, 0.72 * s, 0)
+    for (const sz of [1, -1]) {
+      const strap = new THREE.Mesh(new THREE.TorusGeometry(0.55 * s, 0.07 * s, 6, 12, Math.PI), dark)
+      strap.position.set(-0.6 * s, 0.7 * s, sz * 0.55 * s)
+      strap.rotation.y = Math.PI / 2
+      g.add(strap)
+    }
+    g.add(bag, flap)
+    return g
+  },
+  // 황금 망토: 기본 망토를 숨기고 금빛 대형 망토로 — 살짝 자체 발광
+  goldcape(s) {
+    const g = new THREE.Group()
+    const cape = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.35 * s, 2.75 * s), // 몸보다 넓게 — 정면에서도 금빛 테가 보인다
+      new THREE.MeshLambertMaterial({
+        color: 0xf2c14e, emissive: 0x8a6a1a, emissiveIntensity: 0.35, side: THREE.DoubleSide,
+      })
+    )
+    cape.rotation.y = Math.PI / 2
+    cape.position.set(-1.0 * s, 0.05 * s, 0)
+    // 가슴 고정 브로치(붉은 보석) — 정면에서도 "황금 망토"인 걸 알린다
+    const pin = gemMesh(0xe0484f, 0.15 * s)
+    pin.position.set(0.95 * s, 0.55 * s, 0.35 * s)
+    g.add(cape, pin)
+    g.userData.hideCape = true // 기본 망토와 겹치면 지저분하다
+    return g
+  },
+  // 기사 갑옷: 은빛 흉갑 + 큰 어깨 갑주 — 기본 견갑 위에 겹쳐 실루엣을 키운다
+  armor(s) {
+    const g = new THREE.Group()
+    const silver = new THREE.MeshLambertMaterial({ color: 0xd8dce8, emissive: 0x3a3e4e, emissiveIntensity: 0.45 })
+    const chest = new THREE.Mesh(new THREE.SphereGeometry(0.82 * s, 10, 8), silver)
+    chest.scale.set(0.5, 1.05, 1.2)
+    chest.position.set(0.85 * s, 0.15 * s, 0)
+    for (const sz of [1, -1]) {
+      const pad = new THREE.Mesh(new THREE.SphereGeometry(0.74 * s, 10, 8), silver)
+      pad.scale.y = 0.6
+      pad.position.set(0, 1.08 * s, sz * 1.06 * s) // 기본 견갑보다 크게 — 실루엣이 넓어진다
+      g.add(pad)
+    }
+    g.add(chest)
+    return g
+  },
+  // 천사 날개: 등에 펼친 흰 깃 두 장 — 크고 작은 깃털 타원을 부채꼴로
+  wings(s) {
+    const g = new THREE.Group()
+    const white = new THREE.MeshLambertMaterial({ color: 0xf7f5ee, emissive: 0x8a8ca0, emissiveIntensity: 0.18 })
+    for (const sz of [1, -1]) {
+      // 크고 넓게 — 얼굴 옆·위로 깃 끝이 삐져나와야 정면에서도 날개인 게 보인다
+      const wing = new THREE.Group()
+      wing.position.set(-0.9 * s, 0.9 * s, sz * 0.5 * s)
+      wing.rotation.x = sz * 0.75 // 바깥 위로 활짝
+      const big = new THREE.Mesh(new THREE.SphereGeometry(0.72 * s, 10, 8), white)
+      big.scale.set(0.2, 1.75, 0.6)
+      big.position.y = 0.95 * s
+      const mid = new THREE.Mesh(new THREE.SphereGeometry(0.56 * s, 10, 8), white)
+      mid.scale.set(0.2, 1.35, 0.55)
+      mid.position.set(0, 0.55 * s, sz * 0.5 * s)
+      mid.rotation.x = sz * 0.4
+      wing.add(big, mid)
+      g.add(wing)
+    }
+    return g
+  },
+}
+
+// 옷 FX — 최고가만. 날개는 깃 끝 성광 + 등 뒤 은은한 후광 펄스
+const COSTUME_FX = {
+  wings(g, s) {
+    const halo = fxSprite(g, 0xeef2ff, 1.5 * s, false)
+    const tips = [1, -1].map(() => fxSprite(g, 0xffffff, 0.5 * s))
+    return (t) => {
+      halo.position.set(-1.15 * s, 1.0 * s, 0)
+      halo.material.opacity = 0.16 + 0.08 * Math.sin(t * 1.8) // 숨쉬는 후광
+      halo.scale.setScalar(halo.userData.base * (0.9 + 0.1 * Math.sin(t * 1.8)))
+      tips.forEach((sp, i) => {
+        const sz = i === 0 ? 1 : -1
+        sp.position.set(-0.9 * s, 2.5 * s, sz * 1.6 * s) // 활짝 편 깃 끝
+        fire(sp, glintCurve(t, 2.9, i * 0.47, 0.12) * 0.85, t, 0.9)
+      })
+    }
+  },
+}
+
+// 옷 하나를 만든다 — body에 붙이는 건 호출부(buildHero) 몫
+export function buildCostume(costumeId, s) {
+  const make = COSTUME_BUILDERS[costumeId]
+  if (!make) return null
+  const g = make(s)
+  const fx = COSTUME_FX[costumeId]
+  if (fx) g.userData.fxUpdate = fx(g, s)
+  return g
 }
 
 // ── 12지신 꼬리 파츠 ──
@@ -1907,7 +2039,7 @@ function buildWeapon(cls) {
 }
 
 // 영웅: 팀 색 캡슐 몸통 + 12지신 이모지 얼굴 + 직업 아이콘 이름표 + 체력바
-function buildHero(h, mine, barColor, hatId = null) {
+function buildHero(h, mine, barColor, hatId = null, costumeId = null) {
   const g = new THREE.Group()
   const col = TEAM_COLOR[h.team]
   const s = CLS_SCALE[h.cls] || 1
@@ -1953,6 +2085,15 @@ function buildHero(h, mine, barColor, hatId = null) {
   // 조디악 전용 파츠: 뱀은 얼굴(머리)만 쓰는 대신 엉덩이에 말린 꼬리를 단다
   const tailBuild = ZODIAC_TAILS[h.zodiacId]
   if (tailBuild) body.add(tailBuild(s)) // 12지신 꼬리 — 엉덩이(-x)에서 실루엣을 만든다
+  // 옷 코스튬 — 몸통 자식이라 방향·걷기와 함께 돈다(모자와 달리 빌보드가 아니다)
+  let costume = null
+  if (costumeId) {
+    costume = buildCostume(costumeId, s)
+    if (costume) {
+      body.add(costume)
+      if (costume.userData.hideCape) cape.visible = false // 황금 망토 등은 기본 망토를 대체
+    }
+  }
   // 팔·다리 — 짧고 길쭉한 원통(살짝 테이퍼). 몸통 자식이라 바라보는 방향/걷기와 함께 움직인다.
   const limbMat = new THREE.MeshLambertMaterial({ color: darken(col, 0.7) })
   // 다리: 고관절 피벗 그룹으로 감싸 걸을 때 앞뒤로 엇갈려 흔든다(legs[0]=오른쪽 +z, [1]=왼쪽 -z)
@@ -2123,6 +2264,7 @@ function buildHero(h, mine, barColor, hatId = null) {
     faceEmoji, faceTexOrig: face.material.map, faceTexMirror: null, // 좌우 반전용(미러는 지연 생성)
     faceDX: zspec.dx || 0, clsScale: s, // 얼굴 위치 보정·몸집(쏠림/보정 계산용)
     hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
+    costume, // 옷 — FX(fxUpdate) 애니메이션용 참조
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
     bar, ring, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
@@ -4052,7 +4194,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     // 영웅 — 적은 시야/수풀 규칙에 걸리면 안 보인다
     syncPool(
       scene, heroPool, view.heroes,
-      (h) => buildHero(h, h.id === myId, barColorOf(h.team), h.id === myId ? equippedHat() : null),
+      (h) => buildHero(h, h.id === myId, barColorOf(h.team), h.id === myId ? equippedHat() : null, h.id === myId ? equippedCostume() : null),
       (obj, h) => {
         const dead = h.respawnT > 0
         const u = obj.userData
@@ -4129,6 +4271,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           u.hat.rotateZ(-fdx * 0.1)
           updateHatSparkle(u.hat, view.time)
         }
+        if (u.costume) updateHatSparkle(u.costume, view.time) // 옷 FX(날개 후광 등)
         if (h.whirlT <= 0 && h.airT <= 0) u.body.rotation.z = Math.sin(u.wphase) * 0.06 * wk.amt
         else u.body.rotation.z = 0
         // 다리 성큼성큼 + 팔 흔들기: 다리는 반대 위상, 팔은 같은 쪽 다리와 반대로(자연스러운 걸음)
@@ -4573,7 +4716,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
 // 엔진·맵 없이 순수 연출: 제자리 걸음, 평타 스윙(실제 무기 pose), 스킬/보조/궁극은
 // 몸동작+발광 버스트로 재생한다. "대상이 있어야 나가는 기술"도 항상 보인다.
 //  반환: { play(kind), resize(w, h), dispose() } — kind: walk|atk|skill|skill2|ult
-export function createHeroShowcase(canvas, { cls, zodiacId, hat = null }) {
+export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume = null }) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setClearColor(0x000000, 0)
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
@@ -4585,7 +4728,7 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null }) {
   scene.add(sun)
 
   const s = CLS_SCALE[cls] || 1
-  const g = buildHero({ id: 'show', cls, zodiacId, team: 'blue', lvl: 1, atkSeq: 0 }, false, '#fff', hat)
+  const g = buildHero({ id: 'show', cls, zodiacId, team: 'blue', lvl: 1, atkSeq: 0 }, false, '#fff', hat, costume)
   const u = g.userData
   u.name.visible = false // 무대 위엔 모델만 — 명패/체력바는 숨긴다
   u.bar.visible = false
@@ -4707,6 +4850,7 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null }) {
       u.hat.position.y = u.hatBaseY + bob + lift // 모자도 같이 둥실
       updateHatSparkle(u.hat, time)
     }
+    if (u.costume) updateHatSparkle(u.costume, time) // 옷 FX
     if (u.legs) {
       u.legs[0].rotation.z = stride
       u.legs[1].rotation.z = -stride
