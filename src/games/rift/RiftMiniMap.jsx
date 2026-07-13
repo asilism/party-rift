@@ -59,7 +59,10 @@ export default function RiftMiniMap({ view, myId }) {
         width={WORLD.maxX - WORLD.minX} height={WORLD.maxZ - WORLD.minZ}
         rx={10} fill="rgba(20, 50, 24, 0.78)"
       />
-      <rect x={-7} y={WORLD.minZ} width={14} height={WORLD.maxZ - WORLD.minZ} fill="rgba(108, 196, 232, 0.4)" />
+      {/* 중앙 강줄기 — 보스전 맵(협곡)엔 강이 없다 */}
+      {view.mode !== 'boss' && (
+        <rect x={-7} y={WORLD.minZ} width={14} height={WORLD.maxZ - WORLD.minZ} fill="rgba(108, 196, 232, 0.4)" />
+      )}
       {LANE_IDS.map((l) => (
         <path key={l} d={laneD(map, l)} fill="none" stroke="rgba(217, 199, 154, 0.55)" strokeWidth={9} strokeLinejoin="round" />
       ))}

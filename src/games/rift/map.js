@@ -103,6 +103,95 @@ const BASE = {
 const MODE_SCALE = {
   '3v3': { x: 1, z: 1 },
   '5v5': { x: 1.3, z: 1.32 },
+  boss: { x: 1, z: 1 },
+}
+
+// 호(弧)를 짧은 벽 선분들로 근사한다 — 보스 성곽(둥지)용. 각도는 도(°), z=+가 남쪽.
+function arcWallLines(cx, cz, R, a0, a1) {
+  const len = (Math.abs(a1 - a0) / 180) * Math.PI * R
+  const n = Math.max(4, Math.ceil(len / 2.4))
+  const out = []
+  for (let i = 0; i < n; i++) {
+    const t0 = ((a0 + ((a1 - a0) * i) / n) / 180) * Math.PI
+    const t1 = ((a0 + ((a1 - a0) * (i + 1)) / n) / 180) * Math.PI
+    out.push({
+      x1: cx + R * Math.cos(t0), z1: cz + R * Math.sin(t0),
+      x2: cx + R * Math.cos(t1), z2: cz + R * Math.sin(t1),
+    })
+  }
+  return out
+}
+
+// ── 보스전 전용 맵: "보스의 협곡" ──
+//  동쪽 끝에 보스 성곽(옥좌를 감싼 C자 돌담, 서쪽만 크게 뚫린 관문) — 보스는 그 안에서
+//  잠들었다 깨어나 관문을 나서 서진(西進)한다. 진군로는 하나의 넓은 미드 협곡:
+//  V자 능선이 관문 쪽으로 벌어져 "보스가 나오는 길"이 한눈에 읽힌다.
+//  방어선은 미드에 3중(외곽→내곽→최후 포탑), 측면(탑/봇) 우회로엔 타워 1개씩 —
+//  보스 소환 병사의 측면 압박을 막는 자리다. 정글 캠프는 전부 아군(블루) 농장:
+//  좌우 대칭일 필요가 없어 협곡 곳곳에 흩어 놓았다.
+const BOSS_LAIR = { x: 96, z: 0, r: 24 } // 성곽 중심(=레드 수호석/옥좌)과 반지름
+const BOSS_BASE = {
+  WORLD: { minX: -112, maxX: 126, minZ: -72, maxZ: 72 },
+  NEXUS_POS: { blue: { x: -100, z: 0 }, red: { x: BOSS_LAIR.x, z: BOSS_LAIR.z } },
+  LANES: {
+    top: [
+      { x: -96, z: 0 }, { x: -88, z: -26 }, { x: -70, z: -46 }, { x: -40, z: -58 },
+      { x: -4, z: -62 }, { x: 34, z: -58 }, { x: 62, z: -44 }, { x: 76, z: -10 },
+      { x: 96, z: 0 },
+    ],
+    mid: [
+      { x: -96, z: 0 }, { x: -70, z: 0 }, { x: -40, z: 0 }, { x: -8, z: 0 },
+      { x: 24, z: 0 }, { x: 52, z: 0 }, { x: 74, z: 0 }, { x: 96, z: 0 },
+    ],
+    bot: [
+      { x: -96, z: 0 }, { x: -88, z: 26 }, { x: -70, z: 46 }, { x: -40, z: 58 },
+      { x: -4, z: 62 }, { x: 34, z: 58 }, { x: 62, z: 44 }, { x: 76, z: 10 },
+      { x: 96, z: 0 },
+    ],
+  },
+  // 미드 3중 방어선(보스의 진군 시계) + 측면 타워(소환 병사 압박 방어).
+  TOWER_SPOTS: [
+    { id: 'b-mid-1', team: 'blue', lane: 'mid', tier: 1, x: -30, z: 0 },
+    { id: 'b-mid-2', team: 'blue', lane: 'mid', tier: 2, x: -66, z: 0 },
+    { id: 'b-top-1', team: 'blue', lane: 'top', tier: 1, x: -56, z: -44 },
+    { id: 'b-bot-1', team: 'blue', lane: 'bot', tier: 1, x: -56, z: 44 },
+    { id: 'b-final', team: 'blue', lane: 'mid', tier: 3, x: -90, z: 0 },
+  ],
+  WALL_LINES: [
+    // 블루 본진 성벽(x=-84): 레인이 지나는 출입구 3곳만 뚫려 있다.
+    { x1: -84, z1: -72, x2: -84, z2: -48 },
+    { x1: -84, z1: -26, x2: -84, z2: -12 },
+    { x1: -84, z1: 12, x2: -84, z2: 26 },
+    { x1: -84, z1: 48, x2: -84, z2: 72 },
+    // 미드 협곡 V자 능선 — 관문 쪽(동)으로 벌어진다.
+    { x1: -18, z1: -14, x2: 34, z2: -28 },
+    { x1: -18, z1: 14, x2: 34, z2: 28 },
+    // 관문 앞 깔때기 능선 — 진군로를 관문으로 모은다.
+    { x1: 56, z1: -34, x2: 72, z2: -20 },
+    { x1: 56, z1: 34, x2: 72, z2: 20 },
+    // 보스 성곽: 서쪽 관문(±40°)만 뚫린 C자 돌담. 옥좌(수호석)와 잠든 보스를 감싼다.
+    ...arcWallLines(BOSS_LAIR.x, BOSS_LAIR.z, BOSS_LAIR.r, 220, 500),
+  ],
+  ROCKS: [
+    { x: -52, z: -20, r: 3.5 }, { x: -52, z: 20, r: 3.5 },
+    { x: 12, z: -46, r: 4 }, { x: 12, z: 46, r: 4 },
+    { x: 46, z: -12, r: 3 }, { x: 46, z: 12, r: 3 },
+  ],
+  BUSHES: [
+    { x: -44, z: -50, r: 4.5 }, { x: -44, z: 50, r: 4.5 },
+    { x: 18, z: -56, r: 4.5 }, { x: 18, z: 56, r: 4.5 },
+    { x: -6, z: -20, r: 4 }, { x: -6, z: 20, r: 4 },
+    { x: 64, z: -30, r: 4.5 }, { x: 64, z: 30, r: 4.5 },
+  ],
+  // 전부 아군의 농장 — 성장 루프(정글 파밍 → 아이템 → 보스 격파)의 핵심이라 캠프를 넉넉히.
+  WOLF_CAMPS: [
+    { x: -62, z: -30, kind: 'wolf' }, { x: -62, z: 30, kind: 'wolf' },
+    { x: -30, z: -34, kind: 'boar' }, { x: -30, z: 34, kind: 'boar' },
+    { x: 4, z: -32, kind: 'golem' }, { x: 4, z: 32, kind: 'golem' },
+    { x: 38, z: -44, kind: 'wolf' }, { x: 38, z: 44, kind: 'boar' },
+  ],
+  DRAGON_PIT: { x: -8, z: 44 },
+  BARON_PIT: { x: -8, z: -44 },
 }
 // 5v5 전용 추가 정글 캠프(이미 배율이 적용된 좌표). 180° 회전 대칭.
 //  · 깊은 정글(레인 사이 안쪽)에 늑대를 더 둬 정글러가 돌 곳을 늘린다.
@@ -435,48 +524,53 @@ function findPathFor(geo, sx, sz, tx, tz) {
 
 // 모드별 맵 객체를 만든다. 지형 데이터 + 그 지형에 묶인 헬퍼 메서드를 함께 담는다.
 export function buildMap(mode = '3v3') {
+  const base = mode === 'boss' ? BOSS_BASE : BASE // 보스전은 전용 지형(보스의 협곡)
   const s = MODE_SCALE[mode] || MODE_SCALE['3v3']
   const WORLD = {
-    minX: BASE.WORLD.minX * s.x, maxX: BASE.WORLD.maxX * s.x,
-    minZ: BASE.WORLD.minZ * s.z, maxZ: BASE.WORLD.maxZ * s.z,
+    minX: base.WORLD.minX * s.x, maxX: base.WORLD.maxX * s.x,
+    minZ: base.WORLD.minZ * s.z, maxZ: base.WORLD.maxZ * s.z,
   }
   const NEXUS_POS = {
-    blue: scalePt(BASE.NEXUS_POS.blue, s),
-    red: scalePt(BASE.NEXUS_POS.red, s),
+    blue: scalePt(base.NEXUS_POS.blue, s),
+    red: scalePt(base.NEXUS_POS.red, s),
   }
   // 리스폰(회복) 존 — 수호석 뒤편(맵 중앙 반대쪽)으로 한 수호석만큼 떨어뜨린다.
   //  부활·귀환·HP리필이 여기서만 일어나므로, 수호석에 붙어 무한 회복하며 버티지 못한다.
+  //  보스전의 레드 우물은 옥좌 바로 뒤 — 보스는 성곽 안에서 잠들고, 우물 레이저가 러시를 응징.
   const FOUNTAIN_POS = {
     blue: { x: NEXUS_POS.blue.x - RESPAWN_BACK, z: NEXUS_POS.blue.z },
-    red: { x: NEXUS_POS.red.x + RESPAWN_BACK, z: NEXUS_POS.red.z },
+    red: mode === 'boss'
+      ? { x: NEXUS_POS.red.x + 10, z: NEXUS_POS.red.z }
+      : { x: NEXUS_POS.red.x + RESPAWN_BACK, z: NEXUS_POS.red.z },
   }
   // 리스폰 존이 맵 밖으로 삐져나가지 않게 뒤편 경계를 넓힌다.
   const backPad = FOUNTAIN_RADIUS + 6
   WORLD.minX = Math.min(WORLD.minX, FOUNTAIN_POS.blue.x - backPad)
   WORLD.maxX = Math.max(WORLD.maxX, FOUNTAIN_POS.red.x + backPad)
   const LANES = {
-    top: BASE.LANES.top.map((p) => scalePt(p, s)),
-    mid: BASE.LANES.mid.map((p) => scalePt(p, s)),
-    bot: BASE.LANES.bot.map((p) => scalePt(p, s)),
+    top: base.LANES.top.map((p) => scalePt(p, s)),
+    mid: base.LANES.mid.map((p) => scalePt(p, s)),
+    bot: base.LANES.bot.map((p) => scalePt(p, s)),
   }
-  let TOWER_SPOTS = BASE.TOWER_SPOTS.map((t) => ({ ...t, x: t.x * s.x, z: t.z * s.z }))
+  let TOWER_SPOTS = base.TOWER_SPOTS.map((t) => ({ ...t, x: t.x * s.x, z: t.z * s.z }))
   // 보스전: 레드 진영은 보스 하나뿐 — 타워 없이 보스 소환 병사만 라인을 민다
   if (mode === 'boss') TOWER_SPOTS = TOWER_SPOTS.filter((t) => t.team === 'blue')
-  const WALL_LINES = BASE.WALL_LINES.map((w) => ({
+  const WALL_LINES = base.WALL_LINES.map((w) => ({
     x1: w.x1 * s.x, z1: w.z1 * s.z, x2: w.x2 * s.x, z2: w.z2 * s.z,
   }))
-  const ROCKS = BASE.ROCKS.map((r) => ({ ...r, x: r.x * s.x, z: r.z * s.z }))
-  const BUSHES = BASE.BUSHES.map((b) => ({ ...b, x: b.x * s.x, z: b.z * s.z }))
-  const WOLF_CAMPS = BASE.WOLF_CAMPS.map((c) => scalePt(c, s))
+  const ROCKS = base.ROCKS.map((r) => ({ ...r, x: r.x * s.x, z: r.z * s.z }))
+  const BUSHES = base.BUSHES.map((b) => ({ ...b, x: b.x * s.x, z: b.z * s.z }))
+  const WOLF_CAMPS = base.WOLF_CAMPS.map((c) => scalePt(c, s))
   if (mode === '5v5') WOLF_CAMPS.push(...EXTRA_CAMPS_5V5)
-  const DRAGON_PIT = scalePt(BASE.DRAGON_PIT, s)
-  const BARON_PIT = scalePt(BASE.BARON_PIT, s)
+  const DRAGON_PIT = scalePt(base.DRAGON_PIT, s)
+  const BARON_PIT = scalePt(base.BARON_PIT, s)
   const WALLS = wallCircles(WALL_LINES)
   // 리스폰 존 뒤쪽 절반을 감싸는 반호 성벽을 물리 장벽으로 등록 (블루 -x / 레드 +x 절반).
-  WALLS.push(
-    ...respawnArcCircles(FOUNTAIN_POS.blue.x, FOUNTAIN_POS.blue.z, -1),
-    ...respawnArcCircles(FOUNTAIN_POS.red.x, FOUNTAIN_POS.red.z, 1),
-  )
+  //  보스전의 레드 우물은 성곽(둥지) 돌담이 대신 지키므로 반호를 두지 않는다.
+  WALLS.push(...respawnArcCircles(FOUNTAIN_POS.blue.x, FOUNTAIN_POS.blue.z, -1))
+  if (mode !== 'boss') {
+    WALLS.push(...respawnArcCircles(FOUNTAIN_POS.red.x, FOUNTAIN_POS.red.z, 1))
+  }
 
   const geo = {
     mode, WORLD, NEXUS_POS, FOUNTAIN_POS, LANES, LANE_IDS, TOWER_SPOTS, WALL_LINES, WALLS,
