@@ -4552,11 +4552,10 @@ function bossThink(state, h, dt) {
   h.mz = dir.z
 }
 
-// 보스 병사 소환: 근접 2 + 원거리 2 — 보스 곁에서 튀어나와 배정된 레인을 민다.
-// 60%는 보스와 함께 미드, 40%는 옆 레인으로 우회해 타워를 두드린다(수비 분산 압박).
+// 보스 병사 소환: 근접 3 + 원거리 3 — 보스 곁에서 튀어나와 전부 미드(진군로)를 민다.
+// 전선은 미드 하나뿐이다(측면 길은 파밍·우회용) — 병력이 흩어지면 압박이 안 읽힌다.
 function bossSummon(state, h) {
-  const roll = state.rng()
-  const lane = roll < 0.6 ? 'mid' : roll < 0.8 ? 'top' : 'bot'
+  const lane = 'mid'
   const grow = MINION_HP_GROWTH * (state.time / 60) * 2
   for (let i = 0; i < 6; i++) {
     const ranged = i >= 3

@@ -149,12 +149,10 @@ const BOSS_BASE = {
       { x: 96, z: 0 },
     ],
   },
-  // 미드 3중 방어선(보스의 진군 시계) + 측면 타워(소환 병사 압박 방어).
+  // 미드 3중 방어선(보스의 진군 시계). 전선은 미드 하나 — 측면 길은 파밍·우회용이라 타워가 없다.
   TOWER_SPOTS: [
     { id: 'b-mid-1', team: 'blue', lane: 'mid', tier: 1, x: -30, z: 0 },
     { id: 'b-mid-2', team: 'blue', lane: 'mid', tier: 2, x: -66, z: 0 },
-    { id: 'b-top-1', team: 'blue', lane: 'top', tier: 1, x: -56, z: -44 },
-    { id: 'b-bot-1', team: 'blue', lane: 'bot', tier: 1, x: -56, z: 44 },
     { id: 'b-final', team: 'blue', lane: 'mid', tier: 3, x: -90, z: 0 },
   ],
   WALL_LINES: [
