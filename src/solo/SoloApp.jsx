@@ -7,7 +7,7 @@ import { sound } from '../shared/sound.js'
 import {
   loadSoloPick, saveSoloPick, loadGuideSeen, saveGuideSeen, loadRiftRecords, addRiftRecord,
   loadUnlockSeen, saveUnlockSeen, loadProfile, saveProfile, loadSoundOn, saveSoundOn,
-  loadCoins, addCoins, claimFirstWinToday, addCoinUnlock,
+  loadCoins, addCoins, claimFirstWinToday, addCoinUnlock, loadCoinUnlocks,
   loadEquippedHat, saveEquippedHat, loadOwnedHats, addOwnedHat,
   loadEquippedCostume, saveEquippedCostume, loadOwnedCostumes, addOwnedCostume,
   loadEquippedWeapon, saveEquippedWeapon, loadOwnedWeapons, addOwnedWeapon,
@@ -40,6 +40,7 @@ const BOT_LEVEL_OPTS = [
 const MODE_OPTS = [
   { id: '3v3', emoji: '⚔️', name: '3 대 3', desc: '작은 맵 · 빠른 한판', tag: '기본' },
   { id: '5v5', emoji: '🐉', name: '5 대 5', desc: '넓은 맵 · 정글 대격전', tag: '큰판' },
+  { id: 'boss', emoji: '👹', name: '보스전', desc: '5명이 거대 보스에 도전 — 잡으면 승리', tag: '도전', price: 800 },
 ]
 
 export default function SoloApp() {
@@ -464,6 +465,17 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings, o
 
 // ── 3. 모드·난이도 ──
 function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
+  const [modeUnlocks, setModeUnlocks] = useState(loadCoinUnlocks) // 'mode:boss' 형태로 저장
+  function buyMode(m) {
+    if (loadCoins() < m.price) {
+      sound.step() // 코인 부족 — 카드의 가격 표시가 안내 역할
+      return
+    }
+    sound.go()
+    addCoins(-m.price)
+    addCoinUnlock(`mode:${m.id}`)
+    setModeUnlocks(loadCoinUnlocks())
+  }
   return (
     <div className="screen mode-screen">
       <BackButton onBack={onBack} />
@@ -481,14 +493,24 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
         ))}
       </div>
       <div className="mode-screen__cards">
-        {MODE_OPTS.map((m, i) => (
-          <button key={m.id} className={`toy-card mode-card mode-card--${i}`} onClick={() => onPick(m.id)}>
-            <span className="mode-card__tag">{t(m.tag)}</span>
-            <span className="mode-card__emoji">{m.emoji}</span>
-            <span className="mode-card__name">{t(m.name)}</span>
-            <span className="mode-card__desc">{t(m.desc)}</span>
-          </button>
-        ))}
+        {MODE_OPTS.map((m, i) => {
+          // 유료 모드(보스전): 코인으로 1회 해금 — 해금 전엔 자물쇠와 가격을 보여준다
+          const locked = m.price && !modeUnlocks.includes(`mode:${m.id}`)
+          return (
+            <button
+              key={m.id}
+              className={`toy-card mode-card mode-card--${i} ${locked ? 'mode-card--locked' : ''}`}
+              onClick={() => (locked ? buyMode(m) : onPick(m.id))}
+            >
+              <span className="mode-card__tag">{locked ? '🔒' : t(m.tag)}</span>
+              <span className="mode-card__emoji">{m.emoji}</span>
+              <span className="mode-card__name">{t(m.name)}</span>
+              <span className="mode-card__desc">
+                {locked ? `🪙 ${m.price} — ${t('코인으로 해금')}` : t(m.desc)}
+              </span>
+            </button>
+          )
+        })}
       </div>
     </div>
   )

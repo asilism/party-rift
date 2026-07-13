@@ -2972,6 +2972,10 @@ body {
 }
 .mode-card--0 { transform: rotate(-2deg); }
 .mode-card--1 { transform: rotate(1.6deg); }
+.mode-card--2 { transform: rotate(-1.2deg); }
+/* 잠긴 모드(보스전 해금 전) — 톤 다운 + 자물쇠 태그 */
+.mode-card--locked { filter: saturate(0.35) brightness(0.85); }
+.mode-card--locked .mode-card__desc { color: #ffd34d; font-weight: 900; }
 .mode-card:hover { transform: translateY(-6px) scale(1.03) rotate(0deg); box-shadow: 0 14px 0 rgba(43, 35, 80, 0.35), 0 22px 40px rgba(0, 0, 0, 0.3); }
 .mode-card:active { transform: translateY(0) scale(0.98); }
 .mode-card__tag {
