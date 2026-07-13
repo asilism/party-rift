@@ -21,10 +21,11 @@
             </intent-filter>
         </activity>
 
-        <!-- AdMob 앱 ID — 지금은 Google 공식 테스트 ID. 출시 전 실계정 ID로 교체(ads.js 참고) -->
+        <!-- AdMob 앱 ID (실계정 — 조디악 블리츠). 개발 중 광고 확인은 AdMob 콘솔에
+             본인 기기를 "테스트 기기"로 등록해서 할 것(실광고 반복 시청은 계정 정지 위험) -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="ca-app-pub-9138089691431103~3734985001" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

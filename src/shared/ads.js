@@ -3,10 +3,11 @@ import { IS_APP_SHELL } from './appShell.js'
 // 보상형 광고 래퍼 — 안드로이드(Capacitor)에서만 실제 광고, 그 외(웹/데스크톱)는 조용히 무시.
 // 광고는 전부 "선택형 가산 보상"(안 봐도 기본 보상은 온전)이라는 원칙을 지킨다.
 //
-// ⚠️ 지금은 Google 공식 테스트 광고 단위 ID — 출시 전에 AdMob 계정을 만들고
-//    앱 ID(AndroidManifest의 APPLICATION_ID meta-data)와 아래 단위 ID를 실제 값으로 교체할 것.
-//    docs/store-listing.md의 광고 체크리스트 참고.
-const REWARDED_ID_ANDROID = 'ca-app-pub-3940256099942544/5224354917' // 공식 테스트 ID
+// 실계정 광고 단위(AdMob "2배보상"). 앱 ID는 AndroidManifest의 APPLICATION_ID meta-data.
+// ⚠️ 개발 중 광고 확인은 AdMob 콘솔 > 설정 > 테스트 기기에 본인 폰을 등록하고 할 것 —
+//    본인이 실광고를 반복 시청/클릭하면 계정 정지 위험. 공식 테스트 단위 ID가 필요하면:
+//    ca-app-pub-3940256099942544/5224354917
+const REWARDED_ID_ANDROID = 'ca-app-pub-9138089691431103/8280166455' // 2배보상(실계정)
 
 // "광고 제거 + 보상 상시 2배" 구매 여부 — 결제 연동(Play Billing) 전까지는 항상 false.
 //  결제 성공 콜백이 이 플래그를 세팅하는 구조로만 잡아 둔다.
