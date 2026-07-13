@@ -15,7 +15,7 @@ import {
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
-import { missionRows, recordMissionProgress, claimMission } from './missions.js'
+import { missionRows, recordMissionProgress, claimMission, allClearState, claimAllClear, ALL_CLEAR_REWARD } from './missions.js'
 import { adsAvailable, showRewarded } from '../shared/ads.js'
 import MenuStage from './MenuStage.jsx'
 import HeroShowcase from './HeroShowcase.jsx'
@@ -342,11 +342,21 @@ function ProfileScreen({ current, onPick, onBack }) {
 }
 
 // ── 2a. 오늘의 미션 위젯 — 메뉴 좌하단. 완료하면 코인을 수령한다 ──
+// 각 미션 보상과 올클리어 보너스(+100)를 미리 보여줘 "다 깨면 얼마"가 한눈에 보인다.
 function MissionWidget() {
   const [, refresh] = useState(0)
   const rows = missionRows()
+  const bonus = allClearState() // locked | ready | claimed
   function claim(id, mult = 1) {
     const reward = claimMission(id)
+    if (reward > 0) {
+      addCoins(reward * mult)
+      sound.go()
+      refresh((n) => n + 1)
+    }
+  }
+  function claimBonus(mult = 1) {
+    const reward = claimAllClear()
     if (reward > 0) {
       addCoins(reward * mult)
       sound.go()
@@ -379,9 +389,35 @@ function MissionWidget() {
                   )}
                 </>
               )
-              : <span className="missions__count">{m.cur}/{m.goal}</span>}
+              : (
+                <span className="missions__count">
+                  <b className="missions__hint">🪙{m.reward}</b> {m.cur}/{m.goal}
+                </span>
+              )}
         </div>
       ))}
+      {/* 올클리어 보너스 — 잠김 상태에서도 금액을 보여줘 마지막 판까지 끌고 간다 */}
+      <div className={`missions__row missions__row--bonus ${bonus === 'claimed' ? 'is-claimed' : ''}`}>
+        <span className="missions__name">🎁 {t('모두 완료 보너스')}</span>
+        {bonus === 'claimed'
+          ? <span className="missions__done">✅</span>
+          : bonus === 'ready'
+            ? (
+              <>
+                <button className="missions__claim" onClick={() => claimBonus()}>🪙 {ALL_CLEAR_REWARD}</button>
+                {adsAvailable() && (
+                  <button
+                    className="missions__claim missions__claim--ad"
+                    title={t('광고 보고 2배')}
+                    onClick={() => showRewarded(() => claimBonus(2))}
+                  >
+                    📺x2
+                  </button>
+                )}
+              </>
+            )
+            : <span className="missions__count"><b className="missions__hint">🪙{ALL_CLEAR_REWARD}</b></span>}
+      </div>
     </div>
   )
 }

@@ -3125,7 +3125,10 @@ body {
 .missions__name { flex: 1; min-width: 0; font-size: clamp(10.5px, 2vh, 12.5px); font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .missions__bar { flex: 0 0 52px; height: 7px; border-radius: 5px; background: rgba(255, 255, 255, 0.18); overflow: hidden; }
 .missions__bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--toy-green), #72eca6); }
-.missions__count { font-size: 10.5px; font-weight: 800; color: #cfc8e8; min-width: 30px; text-align: right; }
+.missions__count { font-size: 10.5px; font-weight: 800; color: #cfc8e8; min-width: 30px; text-align: right; white-space: nowrap; }
+.missions__hint { color: #ffd34d; font-weight: 900; } /* 완료 전에도 보이는 보상 예고 */
+.missions__row--bonus { border-top: 1px dashed rgba(255, 255, 255, 0.22); padding-top: 5px; margin-top: 1px; }
+.missions__row--bonus .missions__name { color: #ffe9ad; }
 .missions__done { font-size: 12px; }
 .missions__claim {
   border: 2px solid var(--ink); border-radius: 10px; cursor: pointer;

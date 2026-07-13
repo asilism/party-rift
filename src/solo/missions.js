@@ -12,6 +12,9 @@ export const MISSION_POOL = [
   { id: 'takedown5', name: '적 5번 쓰러트리기', goal: 5, reward: 50, stat: 'takedowns' },
 ]
 
+// 3개 전부 수령하면 받는 올클리어 보너스 — "다 깨면 더 준다"는 마무리 동기
+export const ALL_CLEAR_REWARD = 100
+
 const today = () => new Date().toISOString().slice(0, 10)
 
 // 날짜 문자열 → 간단 해시(결정적 미션 선택용)
@@ -39,7 +42,7 @@ export function getTodayMissions() {
       if (!picks.includes(idx)) picks.push(idx)
     }
     for (let i = 0; picks.length < 3; i++) if (!picks.includes(i)) picks.push(i) // 안전망
-    st = { date, ids: picks.map((i) => MISSION_POOL[i].id), progress: {}, claimed: [] }
+    st = { date, ids: picks.map((i) => MISSION_POOL[i].id), progress: {}, claimed: [], bonusClaimed: false }
     saveMissionState(st)
   }
   return st
@@ -84,4 +87,20 @@ export function claimMission(id) {
   st.claimed.push(id)
   saveMissionState(st)
   return def.reward
+}
+
+// 올클리어 보너스 상태 — locked(아직 3개 미수령) / ready(수령 가능) / claimed
+export function allClearState() {
+  const st = getTodayMissions()
+  if (st.bonusClaimed) return 'claimed'
+  return st.ids.every((id) => st.claimed.includes(id)) ? 'ready' : 'locked'
+}
+
+// 올클리어 보너스 수령 — 3개 전부 수령한 뒤 1회만
+export function claimAllClear() {
+  const st = getTodayMissions()
+  if (st.bonusClaimed || !st.ids.every((id) => st.claimed.includes(id))) return 0
+  st.bonusClaimed = true
+  saveMissionState(st)
+  return ALL_CLEAR_REWARD
 }
