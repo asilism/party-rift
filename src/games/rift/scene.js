@@ -1410,10 +1410,17 @@ function equippedCostume() {
 // 아랫단으로 갈수록 크게 흔들린다(waveCape). userData.base에 원본 정점 보관.
 function capeMesh(s, material) {
   const geo = new THREE.PlaneGeometry(2.35 * s, 2.75 * s, 8, 10)
+  // A라인 실루엣: 위(어깨선)는 좁고 아래로 갈수록 넓게 — 위아래 폭이 같으면
+  // 천이 아니라 박스처럼 보인다. 위 55% → 아랫단 100%.
+  const arr = geo.attributes.position.array
+  const H = 2.75 * s
+  for (let i = 0; i < arr.length; i += 3) {
+    arr[i] *= 0.55 + 0.45 * (0.5 - arr[i + 1] / H)
+  }
   const m = new THREE.Mesh(geo, material)
   m.rotation.y = Math.PI / 2
   m.position.set(-1.0 * s, 0.05 * s, 0)
-  m.userData.base = geo.attributes.position.array.slice()
+  m.userData.base = arr.slice()
   return m
 }
 
@@ -1425,8 +1432,8 @@ function waveCape(m, t, s) {
   const pos = m.geometry.attributes.position
   const base = m.userData.base
   const H = 2.75 * s
-  const BODY_R = 1.18 * s // 몸통 반경 1.1s + 옷감 두께 여유
-  const CAP_H = 0.7 * s // 캡슐 원통 반높이(위아래는 구 캡)
+  const BODY_R = 1.32 * s // 몸통 1.1s + 벨트(1.21s)·장식 파츠 + 옷감 여유
+  const CAP_H = 0.8 * s // 캡슐 원통 반높이(위아래는 구 캡) — 견갑 높이까지 여유
   for (let i = 0; i < pos.count; i++) {
     const x = base[i * 3]
     const y = base[i * 3 + 1]
