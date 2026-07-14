@@ -4505,6 +4505,9 @@ function pushBossZone(state, h, opts) {
     x: opts.x, z: opts.z, r: opts.r, t: 0, tickT: 0,
     rIn: opts.rIn || 0, // >0이면 도넛: 안쪽은 안전지대
     aim: opts.aim || false, // 조준 표식: '아군이 서 있던 자리'를 노리는 기술 — 클라가 십자 마커로 그린다
+    // 돌진 경로(from): 시전 위치 → 착지점 사이에 진행 방향 화살표(> > >)를 그린다
+    ox: opts.from ? opts.from.x : null,
+    oz: opts.from ? opts.from.z : null,
     delay: opts.delay ?? 1.2, dmg: opts.dmg,
     stun: opts.stun || 0, freeze: opts.freeze || 0, fear: opts.fear || 0,
     life: opts.life || 0, dps: opts.dps || 0, slow: opts.slow || 0,
@@ -4950,7 +4953,7 @@ function bossColossus(state, h, foe) {
       h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
       pushBossZone(state, h, {
         x: foe.x, z: foe.z, r: 5, delay: 1.0, dmg: skillDmg(h, 250, 5.0), stun: 1.2,
-        vfx: 'boom', hue: 'lava', aim: true,
+        vfx: 'boom', hue: 'lava', aim: true, from: { x: h.x, z: h.z }, // 경로 화살표(> > >)
       })
       h.bossDash = { x: foe.x, z: foe.z, at: state.time + 1.0 }
     }
@@ -6163,7 +6166,14 @@ export function makeView(state) {
       id: z.id, kind: z.kind, team: z.team, x: r1(z.x), z: r1(z.z),
       r: z.r, t: r2d(z.t), delay: z.delay,
       ...(z.life != null ? { life: z.life } : null), // 지속 장판(독 웅덩이/용암·서리)의 사라짐 페이드용
-      ...(z.kind === 'bosszone' ? { hue: z.hue, ...(z.rIn ? { rIn: z.rIn } : null), ...(z.aim ? { aim: true } : null) } : null), // 보스 장판 색조/도넛/조준 표식
+      ...(z.kind === 'bosszone'
+        ? {
+          hue: z.hue,
+          ...(z.rIn ? { rIn: z.rIn } : null),
+          ...(z.aim ? { aim: true } : null),
+          ...(z.ox != null ? { ox: r1(z.ox), oz: r1(z.oz) } : null), // 돌진 경로 화살표용 시전 원점
+        }
+        : null),
     })),
     fx: state.fx.map((n) => ({
       id: n.id, kind: n.kind, x: r1(n.x), z: r1(n.z), r: n.r, t: r2d(n.t), team: n.team,

@@ -4330,6 +4330,39 @@ function buildBossZone(z) {
     safe.position.y = 0.26
     g.add(safe)
   }
+  // 돌진 경로(ox/oz): 시전 위치 → 착지점으로 화살표(> > >)가 흐른다 — "이 방향으로 온다"
+  let chevrons = null
+  let chevInfo = null
+  if (z.ox != null) {
+    const lx = z.ox - z.x // 존 로컬 좌표계(존 원점 = 착지점)에서의 시전 원점
+    const lz = z.oz - z.z
+    const pathLen = Math.hypot(lx, lz)
+    if (pathLen > 4) {
+      const dirA = Math.atan2(-lz, -lx) // 원점 → 착지점 방향(월드 각)
+      const spacing = 3.2
+      const n = Math.max(2, Math.floor((pathLen - 2) / spacing))
+      // 셰브런(>) 모양 — 진행 방향을 가리키는 꺾쇠
+      const shape = new THREE.Shape()
+      shape.moveTo(-0.8, -0.8)
+      shape.lineTo(0.8, 0)
+      shape.lineTo(-0.8, 0.8)
+      shape.lineTo(-0.25, 0)
+      shape.closePath()
+      const geo = new THREE.ShapeGeometry(shape)
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })
+      chevrons = new THREE.Group()
+      for (let i = 0; i < n; i++) {
+        const c = new THREE.Mesh(geo, mat)
+        c.rotation.x = -Math.PI / 2
+        // 눕힌 평면(shape +y → 월드 -z)에서 월드 yaw d를 내려면 z축 회전은 -d
+        c.rotation.z = -dirA
+        chevrons.add(c)
+      }
+      chevrons.position.y = 0.34
+      chevInfo = { lx, lz, pathLen, spacing, ux: -lx / pathLen, uz: -lz / pathLen }
+      g.add(chevrons)
+    }
+  }
   // 조준 표식(aim): '네가 서 있던 자리를 노린다' — 흰 조준 틱 4개가 조여들며 돌고 중심점이 고동친다
   let aimTicks = null
   let aimDot = null
@@ -4381,10 +4414,27 @@ function buildBossZone(z) {
         aimTicks.scale.setScalar(1.4 - 0.4 * f) // 조여들며 확정되는 조준
         aimDot.scale.setScalar(1 + 0.35 * Math.sin(zz.t * 16)) // 다급한 고동
       }
+      if (chevrons) {
+        // 화살표가 경로를 따라 착지점 쪽으로 흐른다 — "이 방향으로 온다"
+        chevrons.visible = true
+        const { lx, lz, pathLen, spacing, ux, uz } = chevInfo
+        const flow = (zz.t * 7) % spacing
+        chevrons.children.forEach((c, i) => {
+          const d = 1.5 + i * spacing + flow
+          if (d > pathLen - 0.5) {
+            c.visible = false
+            return
+          }
+          c.visible = true
+          c.position.set(lx + ux * d, 0, lz + uz * d)
+          c.material.opacity = 0.45 + 0.45 * Math.min(1, d / 6) // 착지점에 가까울수록 또렷
+        })
+      }
     } else {
-      // 잔류 장판: 웅덩이 — 사라지기 0.5초 전부터 페이드. 조준 표식은 폭발과 함께 걷는다
+      // 잔류 장판: 웅덩이 — 사라지기 0.5초 전부터 페이드. 조준 표식·경로 화살표는 폭발과 함께 걷는다
       mark.visible = spin.visible = false
       if (aimTicks) aimTicks.visible = aimDot.visible = false
+      if (chevrons) chevrons.visible = false
       const left = (zz.life || 0) - (zz.t - delay)
       const fade = Math.max(0, Math.min(1, left / 0.5))
       disc.material.color.setHex(hue.pool)
