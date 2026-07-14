@@ -3336,3 +3336,50 @@ body {
 }
 .face-tuner__btns button:hover { background: #453a75; }
 .face-tuner__hint { margin: 0; color: rgba(255, 255, 255, 0.55); font-size: 10.5px; line-height: 1.5; }
+
+/* ── 보스전 레이드 체력바 — 상단 중앙 고정 ── */
+.boss-bar {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  width: min(520px, 68vw); pointer-events: none; z-index: 5;
+  padding: 6px 10px 8px; border-radius: 12px;
+  background: rgba(10, 8, 20, 0.62); border: 1px solid rgba(178, 102, 255, 0.25);
+  backdrop-filter: blur(3px);
+}
+.boss-bar__title {
+  display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px;
+  color: #fff; font-size: 13px; line-height: 1.2; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+.boss-bar__face { font-size: 16px; }
+.boss-bar__name { font-weight: 700; letter-spacing: 0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.boss-bar__lvl { color: #ffd34d; font-size: 11.5px; }
+.boss-bar__zzz { margin-left: auto; color: #c9a8ff; font-size: 12px; animation: bossZzz 1.6s ease-in-out infinite; }
+@keyframes bossZzz { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+.boss-bar__track {
+  position: relative; height: 14px; border-radius: 7px; overflow: hidden;
+  background: rgba(16, 22, 38, 0.9); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.boss-bar__fill {
+  height: 100%; border-radius: 7px 0 0 7px;
+  transition: width 0.25s ease, background 0.4s ease;
+  box-shadow: 0 0 10px rgba(255, 80, 80, 0.35);
+}
+.boss-bar__mark {
+  position: absolute; top: 0; bottom: 0; width: 2px; background: #ffd34d; opacity: 0.9;
+}
+.boss-bar__pct {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  color: #fff; font-size: 10.5px; font-weight: 700; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+/* 각성 휴지기: 보라 광택 맥동 — '무적, 지금은 정비 시간' */
+.boss-bar--shield { border-color: rgba(178, 102, 255, 0.8); animation: bossShieldGlow 1.8s ease-in-out infinite; }
+.boss-bar--shield .boss-bar__fill { filter: saturate(0.4) brightness(0.8); }
+@keyframes bossShieldGlow {
+  0%, 100% { box-shadow: 0 0 6px rgba(178, 102, 255, 0.35); }
+  50% { box-shadow: 0 0 16px rgba(178, 102, 255, 0.75); }
+}
+/* 좁은 화면: 바를 컴팩트하게 — 상단 우측 스탯과 겹치지 않게 */
+@media (max-width: 640px) {
+  .boss-bar { width: min(420px, 58vw); top: 6px; padding: 4px 8px 6px; }
+  .boss-bar__title { font-size: 11px; }
+  .boss-bar__track { height: 11px; }
+}
