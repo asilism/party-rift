@@ -214,7 +214,7 @@ export const CLASSES = {
   boss_colossus: {
     boss: true, name: '파멸의 거인', icon: '👹',
     desc: '대지를 부수는 전사형 보스 — 강타와 돌진, 회전 격노',
-    hp: 11800, hpLvl: 720, atk: 92, atkLvl: 7, range: 13.2, atkCd: 1.0, speed: 7.0, def: 0.5,
+    hp: 11800, hpLvl: 720, atk: 104, atkLvl: 7, range: 13.2, atkCd: 1.0, speed: 7.0, def: 0.42,
     skill: { name: '대지 강타', icon: '💥', cd: 9, desc: '주변 땅을 내리쳐 큰 피해 + 기절' },
     skill2: { name: '격돌 돌진', icon: '🌋', cd: 16, desc: '적에게 돌진해 들이받아 띄운다' },
     ult: { name: '회전 격노', icon: '🌪️', cd: 30, desc: '팽이처럼 돌며 주변을 계속 후린다' },
@@ -222,7 +222,7 @@ export const CLASSES = {
   boss_archmage: {
     boss: true, name: '대마도사', icon: '🧙',
     desc: '운석과 번개의 마법사형 보스 — 넓게 태우고 얼린다',
-    hp: 11200, hpLvl: 700, atk: 74, atkLvl: 6, range: 15.5, atkCd: 1.1, speed: 7.0, def: 0.52,
+    hp: 11200, hpLvl: 700, atk: 84, atkLvl: 6, range: 15.5, atkCd: 1.1, speed: 7.0, def: 0.44,
     skill: { name: '연쇄 뇌격', icon: '⚡', cd: 8, desc: '번개가 최대 5명을 타고 흐른다' },
     skill2: { name: '혹한 폭풍', icon: '❄️', cd: 14, desc: '주변을 얼려 빙결 + 피해' },
     ult: { name: '멸망의 운석', icon: '☄️', cd: 26, desc: '영웅들 머리 위로 운석을 떨어뜨린다' },
@@ -230,7 +230,7 @@ export const CLASSES = {
   boss_shadow: {
     boss: true, name: '그림자 군주', icon: '👺',
     desc: '어둠을 가르는 암살자형 보스 — 습격과 공포',
-    hp: 10800, hpLvl: 680, atk: 104, atkLvl: 8, range: 13.5, atkCd: 0.7, speed: 8.8, def: 0.46,
+    hp: 10800, hpLvl: 680, atk: 116, atkLvl: 8, range: 13.5, atkCd: 0.7, speed: 8.8, def: 0.4,
     skill: { name: '그림자 습격', icon: '🌀', cd: 9, desc: '가장 약한 적 뒤로 순간이동해 벤다' },
     skill2: { name: '공포의 포효', icon: '😱', cd: 16, desc: '주변 모두에게 공포 — 통제를 잃는다' },
     ult: { name: '어둠걸음', icon: '🌫️', cd: 26, desc: '어둠에 스며 모습을 감추고 빨라진다' },
@@ -2545,8 +2545,11 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   // 죽기 직전까지 쌓은 연속 킬에 비례한 현상금(killStreak 2부터). 죽었으니 killStreak는 0으로.
   const bountyBonus = bountyGold(victim.killStreak)
   victim.killStreak = 0
-  // 보스전: 죽음이 더 아프다(아군 1.7배). 그림자 영웅(정예 소환수)은 부활하지 않는다.
-  victim.respawnT = victim.isBossAdd ? 1e9 : respawnTime(victim.lvl) * (state.mode === 'boss' && !victim.isBoss ? 1.7 : 1)
+  // 보스전 부활: 짧게(상한 18초) — 죽음이 리셋이 아니라 잠깐의 공백이어야 레이드가 굴러간다.
+  // 그림자 영웅(정예 소환수)은 부활하지 않는다.
+  victim.respawnT = victim.isBossAdd ? 1e9
+    : state.mode === 'boss' && !victim.isBoss ? Math.min(respawnTime(victim.lvl), 18)
+    : respawnTime(victim.lvl)
   victim.stunT = 0
   victim.freezeT = 0
   victim.whirlT = 0
@@ -2673,13 +2676,13 @@ function damageMonster(state, m, amount, attacker) {
 }
 
 function damageTower(state, t, amount, attacker) {
-  if (attacker?.isBoss) amount *= 0.3 // 보스전: 건물은 천천히 밀린다
-  // 보스전: 소환수의 건물 피해 감쇠 — 방어선의 시계는 보스 본인이 쥔다.
-  // 그림자 영웅은 '아군을 사냥하는 처형자'지 공성팀이 아니다(안 그러면 7기가 진군 전에 타워를 민다).
-  // 병사 파도는 진군 전엔 거의 못 갉지만, 방치하면 외곽 타워가 실제로 갈린다.
+  // 보스전 역할 분리: 건물 철거는 병사의 일 — 보스와 그림자 영웅은 건물에 관심이 없다(0.1/0.05배).
+  // 병사 파도는 쌓이면 건물이 실제로 무너진다(진군 전 0.3 / 진군 후 0.75배) —
+  // 파도를 치우는 것이 곧 수성이고, 그동안 보스는 영웅을 사냥하러 온다.
+  if (attacker?.isBoss) amount *= 0.1
   if (attacker?.isBossAdd) amount *= 0.05
   else if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
-    amount *= state.time < BOSS_MARCH_AT ? 0.14 : 0.28
+    amount *= state.time < BOSS_MARCH_AT ? 0.3 : 1.0
   }
   if (!t.alive || !towerVulnerable(state, t)) return
   t.lastHurt = state.time // 공성당하는 중 — 봇 수비 콜 판정용
@@ -2703,10 +2706,10 @@ function damageTower(state, t, amount, attacker) {
 
 function damageNexus(state, team, amount, attacker) {
   if (!nexusVulnerable(state, team)) return
-  if (attacker?.isBoss) amount *= 0.3 // 보스전: 건물은 "천천히" 밀린다 — 농사 지을 시간을 준다
-  if (attacker?.isBossAdd) amount *= 0.05 // 그림자 영웅은 처형자 — 건물 시계는 보스의 몫
+  if (attacker?.isBoss) amount *= 0.1 // 보스전 역할 분리: 건물 철거는 병사의 일
+  if (attacker?.isBossAdd) amount *= 0.05 // 그림자 영웅은 처형자 — 건물에 관심이 없다
   else if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
-    amount *= state.time < BOSS_MARCH_AT ? 0.14 : 0.28
+    amount *= state.time < BOSS_MARCH_AT ? 0.3 : 1.0
   }
   const nx = state.nexus[team]
   if (nx.hp <= 0) return
@@ -3225,7 +3228,9 @@ function stepMinions(state, dt) {
           m.atkCd = spec.cd
           m.atkSeq++
           // 상대가 병사이면 피해를 깎아 라인 교전이 천천히 풀리게 한다
-          const out = tgt.ref.tk === 'minion' ? spec.dmg * MINION_VS_MINION : spec.dmg
+          let out = tgt.ref.tk === 'minion' ? spec.dmg * MINION_VS_MINION : spec.dmg
+          // 보스전 역할 분리: 병사의 일은 건물 철거 — 영웅에겐 잽 수준. 영웅 사냥은 보스의 몫
+          if (state.mode === 'boss' && m.team === 'red' && tgt.ref.tk === 'hero') out *= 0.55
           if (m.ranged) {
             // 원거리 병사는 작은 화살을 쏜다 ('mbolt' — 영웅 탄과 구분되는 작은 투사체)
             state.projectiles.push({
@@ -3474,7 +3479,7 @@ function stepTowers(state, dt) {
       } else {
         // 보스전: 타워가 병사를 더 아프게 때린다 — 광역기 없는 조합도 파도 국면에서
         // 타워 화력의 도움으로 초크를 지킬 수 있게(조합 복불복으로 2분대 붕괴 방지)
-        dmg = TOWER_DMG_MINION * (state.mode === 'boss' && t.team === 'blue' ? 1.7 : 1)
+        dmg = TOWER_DMG_MINION * (state.mode === 'boss' && t.team === 'blue' && state.time < 240 ? 1.7 : 1)
       }
       state.projectiles.push({
         id: state.nextId++, kind: 'towerbolt', team: t.team,
@@ -4467,7 +4472,7 @@ function botSupportLane(state, h) {
 // 아이템·스킬 연계로 보스를 잡는다. CC 저항(BOSS_CC_RESIST)은 stepHero에서.
 const BOSS_CC_RESIST = 2.5 // CC 잔여시간 추가 소진 배율 — 연계 CC 영구기절 방지
 const BOSS_LEVEL_EVERY = 80 // n초마다 자동 레벨업 — 시간은 보스 편(오래 끌수록 불리)
-const BOSS_SUMMON_CD = 18 // 병사 소환 주기
+const BOSS_SUMMON_CD = 13 // 병사 소환 주기
 // ── 보스 타임라인(시간 스테이지): 잠 → 대량 소환 → 정예 소환 → 진군 ──
 //  바로 진군하지 않는다 — 소환 페이즈 동안 병력의 파도를 막으며 성장하고,
 //  정예(그림자 영웅 5기)를 정리한 뒤에야 보스 본체가 움직인다.
@@ -4554,6 +4559,47 @@ function bossThink(state, h, dt) {
   }
   h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8 }
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
+  // ── 예고된 처형기 집행: 예고가 끝나는 순간 발동한다 (시전 후 취소 없음 — 읽었다면 이미 피했다) ──
+  // 격돌 돌진: 예고해 둔 착지점으로 몸을 날린다(피해·기절은 예고 장판이 처리)
+  if (h.bossDash && state.time >= h.bossDash.at) {
+    const t = h.bossDash
+    h.bossDash = null
+    const dir = Math.atan2(t.z - h.z, t.x - h.x)
+    pushFxDir(state, 'dash', h.x, h.z, dist(h, t), dir, h.team)
+    h.x = t.x - Math.cos(dir) * 1.5
+    h.z = t.z - Math.sin(dir) * 1.5
+    h.dir = dir
+    state.map.resolveTerrain(h, 2.2, colliders(state))
+  }
+  // 연쇄 뇌격: 표식(⚡)이 끝나면 표식 대상부터 번개가 튄다 — 표식을 본 팀은 산개로 연쇄를 끊는다
+  if (h.bossChain && state.time >= h.bossChain.at) {
+    const first = state.heroes.find((e) => e.id === h.bossChain.id && e.respawnT <= 0 && e.team !== h.team)
+    h.bossChain = null
+    if (first) {
+      const hit = new Set([first.id])
+      let from = first
+      let dmg = skillDmg(h, 28, 0.45)
+      pushFxDir(state, 'chain', h.x, h.z, dist(h, first), Math.atan2(first.z - h.z, first.x - h.x), h.team)
+      damageHero(state, first, dmg, h)
+      const jumps = 3 + (h.bossPhase || 1) // 4~6연쇄 (첫 표적 포함 5~7타)
+      for (let i = 0; i < jumps; i++) {
+        let best = null
+        let bd2 = 9 * 9
+        for (const e of state.heroes) {
+          if (e.team === h.team || e.respawnT > 0 || hit.has(e.id)) continue
+          if (!isHeroVisible(state, e, h.team)) continue
+          const d = dist2(from, e)
+          if (d < bd2) { bd2 = d; best = e }
+        }
+        if (!best) break
+        dmg *= 0.8
+        pushFxDir(state, 'chain', from.x, from.z, dist(from, best), Math.atan2(best.z - from.z, best.x - from.x), h.team)
+        hit.add(best.id)
+        damageHero(state, best, dmg, h)
+        from = best
+      }
+    }
+  }
   // 스테이지 0 — 잠(0~45초): 성곽 안 옥좌에서 무적으로 잠들어 있다(우물 레이저가 러시를 응징).
   if (state.time < BOSS_SLEEP_END) {
     h.hp = h.maxHp // 잠든 보스는 흠집도 안 난다 — 원거리 포킹으로 선공 이득을 못 본다
@@ -4641,9 +4687,9 @@ function bossThink(state, h, dt) {
       h.bossCd.summon = BOSS_MASS_EVERY
       bossSummon(state, h, { count: BOSS_MASS_COUNT, hpMul: 1.0 })
     } else {
-      // 진군 이후엔 12마리 호위 파도 — 보스 주변에서 솟아 함께 민다
+      // 진군 이후엔 14마리 호위 파도 — 건물 철거반이자 아군의 골드 농장. 넉넉히 뽑는다
       h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
-      bossSummon(state, h, { count: 12 })
+      bossSummon(state, h, { count: 14 })
     }
   }
   // 소환 페이즈 동안 보스는 진군하지 않는다 — 옥좌를 지키며 성곽 안까지 덤벼드는 적만 상대한다.
@@ -4661,9 +4707,9 @@ function bossThink(state, h, dt) {
     if (h.cls === 'boss_colossus') bossColossus(state, h, foe)
     else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
     else bossShadow(state, h, foe, { x: throne.x, z: throne.z })
-    if (h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
+    if (h.cls === 'boss_colossus' && h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
       h.bossCd.fan = 6 * BOSS_PHASE_CD[h.bossPhase - 1]
-      bossFan(state, h, foe) // 성곽 안까지 덤빈 자에겐 삼중격
+      bossFan(state, h, foe) // 성곽 안까지 덤빈 자에겐 삼중격 (카르곤 전용)
     }
     castAttack(state, h.id, null)
     const range = heroRange(h)
@@ -4749,8 +4795,8 @@ function bossThink(state, h, dt) {
   if (h.cls === 'boss_colossus') bossColossus(state, h, foe)
   else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
   else bossShadow(state, h, foe, siege)
-  // 파멸의 삼중격 — 표적이 있으면 전방 세 갈래 검기. 근거리는 겹쳐 맞아 처형된다
-  if (h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
+  // 파멸의 삼중격 — 카르곤 전용(전사형의 정체성). 전방 세 갈래 검기, 근거리는 겹쳐 맞는다
+  if (h.cls === 'boss_colossus' && h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
     h.bossCd.fan = 6 * BOSS_PHASE_CD[h.bossPhase - 1]
     bossFan(state, h, foe)
   }
@@ -4907,32 +4953,18 @@ function bossColossus(state, h, foe) {
       }
     }
   }
-  if (h.bossCd.b <= 0 && foe) {
+  // 처형기 '격돌 돌진': 표적의 현재 위치에 착지점을 박고(예고 0.7초) 몸을 날린다 —
+  // 표식을 보고 걸어 나가면 빗나간다. 제자리에 있었다면 각오한 것.
+  if (h.bossCd.b <= 0 && foe && !h.bossDash) {
     const d = dist(h, foe)
     if (d > 8 && d < 30) {
       h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
-      const dir = Math.atan2(foe.z - h.z, foe.x - h.x)
-      pushFxDir(state, 'dash', h.x, h.z, d, dir, h.team)
-      h.x = foe.x - Math.cos(dir) * 2.5
-      h.z = foe.z - Math.sin(dir) * 2.5
-      h.dir = dir
-      state.map.resolveTerrain(h, 2.2, colliders(state))
-      pushFx(state, 'boom', foe.x, foe.z, 6, h.team)
-      for (const e of state.heroes) {
-        if (e.team === h.team || e.respawnT > 0) continue
-        if (dist(e, foe) < 6) {
-          damageHero(state, e, skillDmg(h, 45, 1.0), h)
-          e.airT = Math.max(e.airT, 1.1) // 하늘로 띄운다
-          e.stunT = Math.max(e.stunT, 1.1)
-        }
-      }
+      pushBossZone(state, h, {
+        x: foe.x, z: foe.z, r: 5, delay: 0.7, dmg: skillDmg(h, 50, 1.0), stun: 1.0,
+        vfx: 'boom', hue: 'lava',
+      })
+      h.bossDash = { x: foe.x, z: foe.z, at: state.time + 0.7 }
     }
-  }
-  if (h.bossCd.c <= 0 && nearFoe) {
-    h.bossCd.c = CLASSES[h.cls].ult.cd * cdMul
-    h.whirlT = p === 3 ? 4.5 : 3.0 // 기존 회전베기 시스템 재사용 — 매 틱 광역 타격 + 몸이 팽이처럼 돈다
-    h.whirlTickT = 0
-    pushFx(state, 'berserk', h.x, h.z, 5, h.team)
   }
   // 시그니처 '단층선': 표적 방향 부챗살 균열이 안쪽부터 물결처럼 터진다(3→4→5갈래).
   // 갈래 "사이"가 안전 — 부챗살 틈을 아는 자만 서 있을 자리를 찾는다.
@@ -4962,27 +4994,15 @@ function bossColossus(state, h, foe) {
 function bossArchmage(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1]
-  if (h.bossCd.a <= 0 && foe) {
+  // 처형기 '연쇄 뇌격': 표적에게 ⚡ 표식(0.6초) — 표식이 끝나면 그로부터 번개가 튄다.
+  // 회피가 아니라 '산개'가 답이다: 표식자에게서 9 이상 떨어지면 연쇄가 끊긴다.
+  if (h.bossCd.a <= 0 && foe && !h.bossChain && dist(h, foe) < 16) {
     h.bossCd.a = CLASSES[h.cls].skill.cd * cdMul
-    const hit = new Set()
-    let from = { x: h.x, z: h.z }
-    let dmg = skillDmg(h, 25, 0.4)
-    for (let i = 0; i < 4 + p; i++) {
-      let best = null
-      let bd2 = (i === 0 ? 14 : 9) ** 2
-      for (const e of state.heroes) {
-        if (e.team === h.team || e.respawnT > 0 || hit.has(e.id)) continue
-        if (!isHeroVisible(state, e, h.team)) continue
-        const d = dist2(from, e)
-        if (d < bd2) { bd2 = d; best = e }
-      }
-      if (!best) break
-      pushFxDir(state, 'chain', from.x, from.z, dist(from, best), Math.atan2(best.z - from.z, best.x - from.x), h.team)
-      hit.add(best.id)
-      damageHero(state, best, dmg, h)
-      from = { x: best.x, z: best.z }
-      dmg *= 0.8
-    }
+    pushBossZone(state, h, {
+      x: foe.x, z: foe.z, r: 2.6, delay: 0.6, dmg: skillDmg(h, 12, 0.2),
+      vfx: 'chain', hue: 'frost',
+    })
+    h.bossChain = { id: foe.id, at: state.time + 0.6 }
   }
   const nearFoe = foe && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && dist(h, e) < 10)
   if (h.bossCd.b <= 0 && nearFoe) {
@@ -5029,27 +5049,20 @@ function bossArchmage(state, h, foe) {
       }
     }
   }
-  if (h.bossCd.c <= 0 && foe) {
-    h.bossCd.c = CLASSES[h.cls].ult.cd * cdMul
-    const targets = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && isHeroVisible(state, e, h.team)).slice(0, p === 1 ? 3 : 4)
-    for (const e of targets) {
-      state.zones.push({
-        id: state.nextId++, kind: 'meteor', team: h.team, owner: h.id,
-        x: e.x, z: e.z, r: 6.5, t: 0, delay: 1.4, dmg: skillDmg(h, 50, 0.7),
-      })
-    }
-  }
-  // 시그니처 '빙하기': 거대한 도넛 폭풍(r14→16→18) — 바깥으로 도망치면 얼어 죽고,
-  // 보스 품(안쪽 5.5)으로 파고든 자만 산다. 공략을 아는 자와 모르는 자가 갈리는 기술.
+  // 시그니처 '밀려오는 한파': 보스 중심에서 바깥으로 세 겹의 한파가 차례로 얼어붙는다
+  // (안쪽부터 터진다 — 전 보스 공통 파도 문법). 이미 터진 안쪽 밴드를 밟거나,
+  // 시간 안에 바깥(18)으로 걸어 나가면 산다. 국면이 오르면 서리밭이 남는다.
   if (h.bossCd.d <= 0 && foe && dist(h, foe) < 16) {
     h.bossCd.d = 20 * cdMul
-    const R = p === 3 ? 18 : p === 2 ? 16 : 14
-    pushBossZone(state, h, {
-      x: h.x, z: h.z, r: R, rIn: 5.5, delay: 2.4,
-      dmg: skillDmg(h, 70, 1.2), freeze: p >= 2 ? 2.4 : 1.8,
-      vfx: 'abszero', hue: 'frost',
-      ...(p >= 2 ? { life: 3, dps: skillDmg(h, 8, 0.12), slow: 0.5 } : null),
-    })
+    const bands = [[0, 6], [6, 12], [12, 18]]
+    for (let i = 0; i < 3; i++) {
+      pushBossZone(state, h, {
+        x: h.x, z: h.z, r: bands[i][1], rIn: bands[i][0], delay: 1.2 + i * 0.6,
+        dmg: skillDmg(h, 55, 1.0), freeze: p >= 2 ? 2.2 : 1.6,
+        vfx: 'abszero', hue: 'frost',
+        ...(p >= 2 ? { life: 2.6, dps: skillDmg(h, 7, 0.1), slow: 0.5 } : null),
+      })
+    }
   }
 }
 
@@ -5122,14 +5135,8 @@ function bossShadow(state, h, foe, siege) {
       })
     }
   }
-  if (h.bossCd.c <= 0 && foe && h.hp < h.maxHp * 0.65) {
-    h.bossCd.c = CLASSES[h.cls].ult.cd * cdMul
-    pushFx(state, 'poof', h.x, h.z, 5, h.team)
-    h.stealthT = 2.5 // 렌더러가 적 시점에서 모습을 감춘다 — 5명이 두리번거리는 공포
-    h.hasteT = 2.5
-  }
-  // 시그니처 '어둠의 파문': 안쪽→바깥으로 번지는 도넛 물결(2→3파).
-  // 첫 파문이 터진 자리(안쪽)로 되돌아 들어가는 게 정답 — 밖으로 달아나면 다음 파문에 잡힌다.
+  // 시그니처 '어둠의 파문': 안쪽→바깥으로 번지는 물결(2→3파) — 전 보스 공통 파도 문법.
+  // 이미 터진 안쪽 자리를 밟거나 시간 안에 바깥으로 빠지면 산다. 마지막 파문은 공포.
   if (h.bossCd.d <= 0 && foe && dist(h, foe) < 14) {
     h.bossCd.d = 18 * cdMul
     const waves = p === 1 ? 2 : 3
