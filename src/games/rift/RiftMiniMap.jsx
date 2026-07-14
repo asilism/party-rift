@@ -126,9 +126,10 @@ export default function RiftMiniMap({ view, myId }) {
           <circle key={m.id} cx={m.x} cy={m.z} r={1.8} fill={TEAM_FILL[m.team]} opacity={0.8} />
         ) : null
       )}
-      {/* 영웅 (시야/수풀 규칙 적용) */}
+      {/* 영웅 (시야/수풀 규칙 적용). 보스전의 보스는 아래 비컨이 따로 그린다 */}
       {view.heroes?.map((h) => {
         if (h.respawnT > 0) return null
+        if (view.mode === 'boss' && h.cls?.startsWith('boss_')) return null
         if (!isHeroVisible(view, h, myTeam)) return null
         const mine = h.id === myId
         return (
@@ -139,6 +140,32 @@ export default function RiftMiniMap({ view, myId }) {
             stroke={mine ? '#ffe066' : 'rgba(255,255,255,0.8)'}
             strokeWidth={mine ? 2.5 : 1}
           />
+        )
+      })}
+      {/* 보스전: 보스 위치는 안개를 무시하고 상시 표시 — 소나 핑처럼 퍼지는 맥동 링(삐용삐용).
+          링 색은 국면을 따른다(빨강→주황→보라). view.time 기반이라 프레임마다 매끄럽게 돈다 */}
+      {view.mode === 'boss' && view.heroes?.filter((h) => h.cls?.startsWith('boss_') && h.respawnT <= 0).map((b) => {
+        const ph = b.bossPhase || 1
+        const col = ph === 3 ? '#b266ff' : ph === 2 ? '#ff7d2a' : '#ff4d4d'
+        const t = view.time || 0
+        return (
+          <g key={b.id}>
+            {[0, 0.7].map((off) => {
+              const p = ((t + off) % 1.4) / 1.4 // 0→1 반복 — 퍼지며 사라지는 핑
+              return (
+                <circle
+                  key={off}
+                  cx={b.x} cy={b.z} r={5 + 12 * p}
+                  fill="none" stroke={col} strokeWidth={2.2}
+                  opacity={0.9 * (1 - p)}
+                />
+              )
+            })}
+            <circle cx={b.x} cy={b.z} r={6.5} fill={col} stroke="#fff" strokeWidth={1.5} />
+            <text x={b.x} y={b.z + 4.5} fontSize={11} textAnchor="middle">
+              {{ boss_colossus: '👹', boss_archmage: '🧙', boss_shadow: '👺' }[b.cls] || '👹'}
+            </text>
+          </g>
         )
       })}
     </svg>
