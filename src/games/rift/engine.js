@@ -4503,7 +4503,8 @@ function pushBossZone(state, h, opts) {
   state.zones.push({
     id: state.nextId++, kind: 'bosszone', team: h.team, owner: h.id,
     x: opts.x, z: opts.z, r: opts.r, t: 0, tickT: 0,
-    rIn: opts.rIn || 0, // >0이면 도넛: 안쪽은 안전지대 — "파고들면 산다"를 아는 자만 산다
+    rIn: opts.rIn || 0, // >0이면 도넛: 안쪽은 안전지대
+    aim: opts.aim || false, // 조준 표식: '아군이 서 있던 자리'를 노리는 기술 — 클라가 십자 마커로 그린다
     delay: opts.delay ?? 1.2, dmg: opts.dmg,
     stun: opts.stun || 0, freeze: opts.freeze || 0, fear: opts.fear || 0,
     life: opts.life || 0, dps: opts.dps || 0, slow: opts.slow || 0,
@@ -4582,6 +4583,13 @@ function bossThink(state, h, dt) {
     h.z = t.z - Math.sin(dir) * 1.5
     h.dir = dir
     state.map.resolveTerrain(h, 2.2, colliders(state))
+  }
+  // 돌진 준비 중엔 표적을 노려보며 웅크린다 — 표식과 보스가 한 쌍으로 읽힌다("온다!")
+  if (h.bossDash) {
+    h.dir = Math.atan2(h.bossDash.z - h.z, h.bossDash.x - h.x)
+    h.mx = 0
+    h.mz = 0
+    return
   }
   // 스테이지 0 — 잠(0~45초): 성곽 안 옥좌에서 무적으로 잠들어 있다(우물 레이저가 러시를 응징).
   if (state.time < BOSS_SLEEP_END) {
@@ -4903,13 +4911,13 @@ function bossColossus(state, h, foe) {
     if (p === 1) {
       // 진군: 발밑 단일 균열
       pushBossZone(state, h, {
-        x: h.x, z: h.z, r: 9, delay: 1.5, dmg: skillDmg(h, 170, 3.2), stun: 1.0,
+        x: h.x, z: h.z, r: 9, delay: 1.15, dmg: skillDmg(h, 170, 3.2), stun: 1.0,
         vfx: 'quake', hue: 'lava',
       })
     } else if (p === 2) {
       // 분노: 균열이 넓어지고 용암이 남으며, 파생 균열이 적의 발밑까지 뻗는다
       pushBossZone(state, h, {
-        x: h.x, z: h.z, r: 10.5, delay: 1.5, dmg: skillDmg(h, 170, 3.2), stun: 1.0,
+        x: h.x, z: h.z, r: 10.5, delay: 1.15, dmg: skillDmg(h, 170, 3.2), stun: 1.0,
         vfx: 'quake', hue: 'lava', life: 3.5, dps: skillDmg(h, 18, 0.3),
       })
       let forks = 0
@@ -4919,7 +4927,7 @@ function bossColossus(state, h, foe) {
         if (dist(h, e) > 20) continue
         forks++
         pushBossZone(state, h, {
-          x: e.x, z: e.z, r: 5, delay: 1.8, dmg: skillDmg(h, 150, 2.8), stun: 0.6,
+          x: e.x, z: e.z, r: 5, delay: 1.45, dmg: skillDmg(h, 150, 2.8), stun: 0.6,
           vfx: 'quake', hue: 'lava',
         })
       }
@@ -4927,7 +4935,7 @@ function bossColossus(state, h, foe) {
       // 필사: 3중 파문 — 안쪽부터 바깥으로 차례로 터진다. 파문 사이 틈을 읽고 빠져나가야 한다
       for (let i = 0; i < 3; i++) {
         pushBossZone(state, h, {
-          x: h.x, z: h.z, r: 6 + i * 4, delay: 1.2 + i * 0.6, dmg: skillDmg(h, 160, 3.0), stun: 0.8,
+          x: h.x, z: h.z, r: 6 + i * 4, delay: 1.0 + i * 0.5, dmg: skillDmg(h, 160, 3.0), stun: 0.8,
           vfx: 'quake', hue: 'lava',
           ...(i === 0 ? { life: 3.5, dps: skillDmg(h, 18, 0.3) } : null), // 중심엔 용암이 고인다
         })
@@ -4942,7 +4950,7 @@ function bossColossus(state, h, foe) {
       h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
       pushBossZone(state, h, {
         x: foe.x, z: foe.z, r: 5, delay: 1.0, dmg: skillDmg(h, 250, 5.0), stun: 1.2,
-        vfx: 'boom', hue: 'lava',
+        vfx: 'boom', hue: 'lava', aim: true,
       })
       h.bossDash = { x: foe.x, z: foe.z, at: state.time + 1.0 }
     }
@@ -4985,7 +4993,7 @@ function bossArchmage(state, h, foe) {
       n++
       pushBossZone(state, h, {
         x: e.x, z: e.z, r: 5, delay: 1.7, dmg: skillDmg(h, 250, 5.0), freeze: 1.5,
-        vfx: 'abszero', hue: 'frost',
+        vfx: 'abszero', hue: 'frost', aim: true,
       })
     }
   }
@@ -5053,7 +5061,7 @@ function bossShadow(state, h, foe, siege) {
       // 분노하면 형태가 바뀐다: 연격(도주로 예측) → 참수 난무(여럿 동시 표식)
       pushBossZone(state, h, {
         x: weakest.x, z: weakest.z, r: 4.2, delay: 1.0, dmg: skillDmg(h, 250, 5.0),
-        vfx: 'shadowexec', hue: 'shadow',
+        vfx: 'shadowexec', hue: 'shadow', aim: true,
       })
       if (p === 2) {
         // 연격: 도망갈 방향을 읽고 두 번째 칼날을 심는다
@@ -5061,7 +5069,7 @@ function bossShadow(state, h, foe, siege) {
         const pz = weakest.z + (weakest.mz || 0) * 6
         pushBossZone(state, h, {
           x: px, z: pz, r: 4.2, delay: 1.4, dmg: skillDmg(h, 200, 4.0),
-          vfx: 'shadowexec', hue: 'shadow',
+          vfx: 'shadowexec', hue: 'shadow', aim: true,
         })
       } else if (p === 3) {
         // 참수 난무: 보이는 다른 적들에게도 칼날 표식 — 모두가 발밑을 살펴야 한다
@@ -5073,7 +5081,7 @@ function bossShadow(state, h, foe, siege) {
           marks++
           pushBossZone(state, h, {
             x: e.x, z: e.z, r: 4.2, delay: 1.2 + marks * 0.15, dmg: skillDmg(h, 200, 4.0),
-            vfx: 'shadowexec', hue: 'shadow',
+            vfx: 'shadowexec', hue: 'shadow', aim: true,
           })
         }
       }
@@ -6155,7 +6163,7 @@ export function makeView(state) {
       id: z.id, kind: z.kind, team: z.team, x: r1(z.x), z: r1(z.z),
       r: z.r, t: r2d(z.t), delay: z.delay,
       ...(z.life != null ? { life: z.life } : null), // 지속 장판(독 웅덩이/용암·서리)의 사라짐 페이드용
-      ...(z.kind === 'bosszone' ? { hue: z.hue, ...(z.rIn ? { rIn: z.rIn } : null) } : null), // 보스 장판 색조/도넛 안전지대
+      ...(z.kind === 'bosszone' ? { hue: z.hue, ...(z.rIn ? { rIn: z.rIn } : null), ...(z.aim ? { aim: true } : null) } : null), // 보스 장판 색조/도넛/조준 표식
     })),
     fx: state.fx.map((n) => ({
       id: n.id, kind: n.kind, x: r1(n.x), z: r1(n.z), r: n.r, t: r2d(n.t), team: n.team,
