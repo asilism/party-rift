@@ -652,33 +652,17 @@ function spawnPos(map, team, slot, teamSize) {
 // 시야 계산은 state(.map 보유)와 makeView 스냅샷(.nexusPos) 양쪽에서 호출된다.
 const nexusOf = (snap) => (snap.map ? snap.map.NEXUS_POS : snap.nexusPos) || NEXUS_POS
 
-// players: [{ id, name, zodiacId, color, team, cls, isBot? }]
-// 같은 팀에 같은 직업이 오면(또는 직업 미지정이면) 남은 직업으로 바꿔준다.
-// opts: rng 함수 또는 { mode, rng } 객체 (하위호환을 위해 둘 다 받는다).
-export function createGame(players, opts = {}) {
-  const o = typeof opts === 'function' ? { rng: opts } : opts
-  const rng = o.rng || Math.random
-  const mode = TEAM_SIZES[o.mode] ? o.mode : '3v3'
-  const teamSize = TEAM_SIZES[mode]
-  const map = buildMap(mode)
-  const slotCount = { blue: 0, red: 0 }
-  const usedCls = { blue: new Set(), red: new Set() }
-  const heroes = players.map((p) => {
-    const slot = slotCount[p.team]++
-    const pos = spawnPos(map, p.team, slot, teamSize)
-    let cls = p.cls
-    if (!CLASSES[cls] || usedCls[p.team].has(cls)) {
-      cls = CLASS_IDS.find((c) => !usedCls[p.team].has(c)) || 'warrior'
-    }
-    usedCls[p.team].add(cls)
-    return {
-      id: p.id,
-      name: p.name,
-      zodiacId: p.zodiacId,
-      color: p.color,
-      team: p.team,
-      cls,
-      isBot: !!p.isBot,
+// 영웅 상태 객체 팩토리 — createGame(개전 로스터)과 보스전 정예 소환(bossSummonAdds)이 공유한다.
+// 필드를 여기 한 곳에서만 관리해야 중간 합류 영웅(그림자 영웅)이 필드 누락으로 터지지 않는다.
+function makeHeroState(p, cls, pos, map, rng) {
+  return {
+    id: p.id,
+    name: p.name,
+    zodiacId: p.zodiacId,
+    color: p.color,
+    team: p.team,
+    cls,
+    isBot: !!p.isBot,
       role: null, // 봇 역할은 아래에서 직업 기준으로 배정 (사람은 null로 자유 이동)
       x: pos.x,
       z: pos.z,
@@ -782,7 +766,29 @@ export function createGame(players, opts = {}) {
       botBigT: 0, // 이 시각까지 용/이무기 평타 허용 (커밋 없이 지나가다 어그로 끄는 사고 방지)
       botFocus: null, // 공성 집중 표적(타워/수호석) — botLaneMove가 정하고 다음 틱 평타가 쓴다
       turretStock: 1, // 엔지니어 포탑 설치 재고 — 1개 들고 시작, skillCd가 돌 때마다 1개 충전(최대 3, stepHero)
+  }
+}
+
+// players: [{ id, name, zodiacId, color, team, cls, isBot? }]
+// 같은 팀에 같은 직업이 오면(또는 직업 미지정이면) 남은 직업으로 바꿔준다.
+// opts: rng 함수 또는 { mode, rng } 객체 (하위호환을 위해 둘 다 받는다).
+export function createGame(players, opts = {}) {
+  const o = typeof opts === 'function' ? { rng: opts } : opts
+  const rng = o.rng || Math.random
+  const mode = TEAM_SIZES[o.mode] ? o.mode : '3v3'
+  const teamSize = TEAM_SIZES[mode]
+  const map = buildMap(mode)
+  const slotCount = { blue: 0, red: 0 }
+  const usedCls = { blue: new Set(), red: new Set() }
+  const heroes = players.map((p) => {
+    const slot = slotCount[p.team]++
+    const pos = spawnPos(map, p.team, slot, teamSize)
+    let cls = p.cls
+    if (!CLASSES[cls] || usedCls[p.team].has(cls)) {
+      cls = CLASS_IDS.find((c) => !usedCls[p.team].has(c)) || 'warrior'
     }
+    usedCls[p.team].add(cls)
+    return makeHeroState(p, cls, pos, map, rng)
   })
   for (const h of heroes) {
     h.isBoss = CLASSES[h.cls].boss === true
@@ -1325,7 +1331,9 @@ function applyItems(h) {
 export function buyItem(state, id, itemId) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
-  if (!h || !canShop(h)) return state
+  // 보스전 아군 봇은 원격 구매 허용 — 방어전이 끊이지 않아 우물에 돌아갈 틈이 없다
+  const remoteOk = state.mode === 'boss' && h?.isBot && h.team === 'blue'
+  if (!h || (!canShop(h) && !remoteOk)) return state
   const item = ITEMS_BY_ID[itemId]
   if (!item) return state
   // 조합: 인벤토리의 직접 재료(from)를 소모하고 그 가격만큼 깎아 산다 → 슬롯도 함께 비워진다
@@ -2533,7 +2541,8 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   // 죽기 직전까지 쌓은 연속 킬에 비례한 현상금(killStreak 2부터). 죽었으니 killStreak는 0으로.
   const bountyBonus = bountyGold(victim.killStreak)
   victim.killStreak = 0
-  victim.respawnT = respawnTime(victim.lvl) * (state.mode === 'boss' && !victim.isBoss ? 1.7 : 1) // 보스전: 죽음이 더 아프다
+  // 보스전: 죽음이 더 아프다(아군 1.7배). 그림자 영웅(정예 소환수)은 부활하지 않는다.
+  victim.respawnT = victim.isBossAdd ? 1e9 : respawnTime(victim.lvl) * (state.mode === 'boss' && !victim.isBoss ? 1.7 : 1)
   victim.stunT = 0
   victim.freezeT = 0
   victim.whirlT = 0
@@ -2661,8 +2670,11 @@ function damageMonster(state, m, amount, attacker) {
 
 function damageTower(state, t, amount, attacker) {
   if (attacker?.isBoss) amount *= 0.3 // 보스전: 건물은 천천히 밀린다
-  // 보스전: 소환 병사의 건물 피해도 절반 — 방어선의 시계는 보스 본인이 쥔다
-  if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') amount *= 0.5
+  // 보스전: 소환 병사의 건물 피해 감쇠 — 방어선의 시계는 보스 본인이 쥔다.
+  // 진군 전(소환 페이즈)의 파도는 건물을 거의 못 갉는다(막을 대상이지 시계가 아니다).
+  if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
+    amount *= state.time < BOSS_MARCH_AT ? 0.1 : 0.35
+  }
   if (!t.alive || !towerVulnerable(state, t)) return
   t.lastHurt = state.time // 공성당하는 중 — 봇 수비 콜 판정용
   t.hp -= amount
@@ -2686,7 +2698,9 @@ function damageTower(state, t, amount, attacker) {
 function damageNexus(state, team, amount, attacker) {
   if (!nexusVulnerable(state, team)) return
   if (attacker?.isBoss) amount *= 0.3 // 보스전: 건물은 "천천히" 밀린다 — 농사 지을 시간을 준다
-  if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') amount *= 0.5
+  if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
+    amount *= state.time < BOSS_MARCH_AT ? 0.1 : 0.35 // 진군 전 파도는 건물 시계를 못 돌린다
+  }
   const nx = state.nexus[team]
   if (nx.hp <= 0) return
   nx.lastHurt = state.time // 공격받는 중 — HUD 경고용
@@ -4059,7 +4073,9 @@ const BOT_BUILD = {
 // 봇 자동 구매: 우물 안 + 빈 칸 있으면 빌드 우선순위에서 안 가진 첫 구매 가능 아이템을 산다.
 //  조합으로 상위템에 흡수된 재료는 "이미 거친 것"으로 보고 다시 사지 않는다.
 function botShop(state, h) {
-  if (h.items.length >= ITEM_SLOTS || !inFountain(h)) return
+  if (h.items.length >= ITEM_SLOTS) return
+  // 보스전 아군 봇은 어디서든 보급(buyItem도 허용) — 아니면 골드를 쥔 채 맨몸으로 싸운다
+  if (!inFountain(h) && !(state.mode === 'boss' && h.team === 'blue')) return
   const upgraded = new Set()
   for (const id of h.items) for (const c of ITEMS_BY_ID[id]?.from || []) upgraded.add(c)
   for (const itemId of BOT_BUILD[h.cls] || []) {
@@ -4401,7 +4417,13 @@ function botSupportLane(state, h) {
 const BOSS_CC_RESIST = 2.5 // CC 잔여시간 추가 소진 배율 — 연계 CC 영구기절 방지
 const BOSS_LEVEL_EVERY = 80 // n초마다 자동 레벨업 — 시간은 보스 편(오래 끌수록 불리)
 const BOSS_SUMMON_CD = 18 // 병사 소환 주기
-const BOSS_WAKE = 90 // 이 시간까지 성곽(옥좌)에서 잠들어 있다 — 초반은 파밍 타임
+// ── 보스 타임라인(시간 스테이지): 잠 → 대량 소환 → 정예 소환 → 진군 ──
+//  바로 진군하지 않는다 — 소환 페이즈 동안 병력의 파도를 막으며 성장하고,
+//  정예(그림자 영웅 5기)를 정리한 뒤에야 보스 본체가 움직인다.
+const BOSS_SLEEP_END = 45 // 옥좌에서 잠(무적) — 초반 파밍 타임은 짧게, 소환 페이즈가 곧 온다
+const BOSS_MASS_END = 150 // 45~150초: 대량 소환 페이즈 — 12초마다 10마리 파도가 세 갈래로
+const BOSS_MARCH_AT = 240 // 150~240초: 정예 소환 페이즈(그림자 영웅 5기) — 이후 진군 개시
+const BOSS_MASS_EVERY = 12 // 대량 소환 주기
 const BOSS_FOCUS_AFTER = 40 // 한 방어선 앞에서 이만큼 지나면 '공성 집중' — 교착을 끊는다
 const BOSS_FOCUS_NEAR = 40 // 공성 집중 타이머는 방어선 이 거리 안에서만 차오른다(행군은 무관)
 const BOSS_REGROUP = 20 // 방어선을 부수면 이만큼 포효·재정비 — 반격(버스트)의 창이 열린다
@@ -4430,22 +4452,28 @@ function bossThink(state, h, dt) {
     h.hp = Math.min(h.maxHp, h.hp + (h.maxHp - before))
     pushFx(state, 'level', h.x, h.z, 7, h.team)
   }
+  // 그림자 영웅(정예 소환수)도 보스와 함께 자동 성장 — 파밍 없이도 위협이 유지된다
+  for (const a of state.heroes) {
+    if (!a.isBossAdd || a.respawnT > 0) continue
+    while (a.lvl < wantLvl) {
+      a.lvl++
+      const before = a.maxHp
+      a.maxHp = heroMaxHp(a)
+      a.hp = Math.min(a.maxHp, a.hp + (a.maxHp - before))
+    }
+  }
   // 재생: 8초간 무피해면 초당 최대체력 0.5% 회복 — 치고 빠지기만 반복하면 못 잡는다
   if (state.time - h.lastHurt > 8 && h.hp < h.maxHp) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.005 * dt)
   }
   h.bossCd ||= { a: 5, b: 9, c: 14, summon: 8 }
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
-  // 기상 전: 성곽 안 옥좌에서 잠들어 있다(우물 레이저가 러시를 응징). 병사만 먼저 내보낸다.
-  if (state.time < BOSS_WAKE) {
+  // 스테이지 0 — 잠(0~45초): 성곽 안 옥좌에서 무적으로 잠들어 있다(우물 레이저가 러시를 응징).
+  if (state.time < BOSS_SLEEP_END) {
     h.hp = h.maxHp // 잠든 보스는 흠집도 안 난다 — 원거리 포킹으로 선공 이득을 못 본다
-    if (h.bossCd.summon <= 0) {
-      h.bossCd.summon = BOSS_SUMMON_CD * 1.8 // 잠결 소환은 뜸하게 — 초반 스노볼 방지
-      bossSummon(state, h)
-    }
     h.mx = 0
     h.mz = 0
-    if (!h.bossWakeWarned && state.time > BOSS_WAKE - 15) {
+    if (!h.bossWakeWarned && state.time > BOSS_SLEEP_END - 15) {
       h.bossWakeWarned = true
       pushFeed(state, 'obj', '⚠️ 보스가 곧 깨어납니다 — 전열을 갖추세요!')
     }
@@ -4453,10 +4481,10 @@ function bossThink(state, h, dt) {
   }
   if (!h.bossAwake) {
     h.bossAwake = true
-    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name}이(가) 깨어나 진군을 시작했다!`)
+    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name}이(가) 깨어나 어둠의 병력을 소환한다 — 파도를 막아라! (소환 페이즈)`)
   }
-  // 광폭화(엔레이지): 기상 후 12분이 지나면 CC를 무시하고 피해가 1.5배 — 무한 대치 방지
-  if (!h.bossEnraged && state.time > BOSS_WAKE + 720) {
+  // 광폭화(엔레이지): 진군 후 11분이 지나면 CC를 무시하고 피해가 1.5배 — 무한 대치 방지
+  if (!h.bossEnraged && state.time > BOSS_MARCH_AT + 660) {
     h.bossEnraged = true
     pushFeed(state, 'obj', '🔥 보스가 광폭화했다! 더는 버틸 수 없다 — 지금 끝내야 한다!')
   }
@@ -4485,10 +4513,61 @@ function bossThink(state, h, dt) {
     h.mz = 0
     return
   }
-  // 병사 소환 — 스킬과 독립으로 돈다(포효 중에도 병력은 밀려온다). 페이즈가 오를수록 잦아진다.
+  // ── 시간 스테이지: 대량 소환(45~150) → 정예 소환(150~240) → 진군(240~) ──
+  const stage = state.time < BOSS_MASS_END ? 'mass' : state.time < BOSS_MARCH_AT ? 'elite' : 'march'
+  // 정예 소환: 보스 유형에 맞는 그림자 영웅 5기 — 한 번만, 죽으면 부활하지 않는다
+  if (stage !== 'mass' && !h.bossAddsDone) {
+    h.bossAddsDone = true
+    bossSummonAdds(state, h)
+    pushFeed(state, 'obj', `⚔️ ${h.name}이(가) 정예 그림자 영웅들을 불러냈다 — 진군 전에 쓰러뜨려라! (정예 페이즈)`)
+  }
+  // 병사 소환 — 스킬과 독립으로 돈다(포효 중에도 병력은 밀려온다).
+  // 대량 소환 페이즈엔 10마리 파도가 세 갈래로, 이후엔 6마리가 미드로. 페이즈가 오를수록 잦아진다.
   if (h.bossCd.summon <= 0) {
-    h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
-    bossSummon(state, h)
+    if (stage === 'mass') {
+      h.bossCd.summon = BOSS_MASS_EVERY
+      bossSummon(state, h, { count: 10, hpMul: 1.0, spread: true })
+    } else {
+      h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
+      bossSummon(state, h)
+    }
+  }
+  // 소환 페이즈 동안 보스는 진군하지 않는다 — 옥좌를 지키며 성곽 안까지 덤벼드는 적만 상대한다.
+  if (stage !== 'march') {
+    const throne = state.map.NEXUS_POS.red
+    let foe = null
+    let bd = BOSS_AGGRO * BOSS_AGGRO
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
+      if (!isHeroVisible(state, e, h.team)) continue
+      if (dist2(e, throne) > 26 * 26) continue // 성곽 밖까지 쫓아 나가진 않는다
+      const d = dist2(h, e)
+      if (d < bd) { bd = d; foe = e }
+    }
+    if (h.cls === 'boss_colossus') bossColossus(state, h, foe)
+    else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
+    else bossShadow(state, h, foe, { x: throne.x, z: throne.z })
+    castAttack(state, h.id, null)
+    const range = CLASSES[h.cls].range
+    if (foe && dist(h, foe) > range * 0.9) {
+      const dir = state.map.avoidDir(h, foe.x, foe.z, state.towers, 2.4)
+      h.mx = dir.x
+      h.mz = dir.z
+    } else if (!foe && dist(h, throne) > 10) {
+      // 낚여 나갔다면 옥좌로 복귀
+      const dir = state.map.avoidDir(h, throne.x, throne.z, state.towers, 2.4)
+      h.mx = dir.x
+      h.mz = dir.z
+    } else {
+      h.mx = 0
+      h.mz = 0
+      if (foe) h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    }
+    return
+  }
+  if (!h.bossMarching) {
+    h.bossMarching = true
+    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name}이(가) 진군을 시작했다 — 방어선을 사수하라!`)
   }
   // 공성 목표: 미드 라인의 다음 방어선을 순서대로 — 외곽 타워 → 내곽 → 최후 포탑 → 수호석.
   // 보스의 진군로가 곧 게임의 시계다: 방어선이 하나씩 무너지며 압박이 조여 온다.
@@ -4577,13 +4656,15 @@ function bossThink(state, h, dt) {
   h.mz = dir.z
 }
 
-// 보스 병사 소환: 근접 3 + 원거리 3 — 보스 곁에서 튀어나와 전부 미드(진군로)를 민다.
-// 전선은 미드 하나뿐이다(측면 길은 파밍·우회용) — 병력이 흩어지면 압박이 안 읽힌다.
-function bossSummon(state, h) {
-  const lane = 'mid'
+// 보스 병사 소환: 절반 근접 + 절반 원거리 — 보스 곁에서 튀어나와 레인을 민다.
+// 기본은 전부 미드(진군로 — 병력이 흩어지면 압박이 안 읽힌다).
+// spread(대량 소환 페이즈): 웨이브 단위로 세 갈래에 파도를 보낸다(40% 미드/30% 탑/30% 봇).
+function bossSummon(state, h, { count = 6, hpMul = 1.3, spread = false } = {}) {
+  const roll = state.rng()
+  const lane = spread ? (roll < 0.4 ? 'mid' : roll < 0.7 ? 'top' : 'bot') : 'mid'
   const grow = MINION_HP_GROWTH * (state.time / 60) * 2
-  for (let i = 0; i < 6; i++) {
-    const ranged = i >= 3
+  for (let i = 0; i < count; i++) {
+    const ranged = i >= count / 2
     const spec = ranged ? RANGED : MELEE
     state.minions.push({
       id: state.nextId++,
@@ -4592,8 +4673,8 @@ function bossSummon(state, h) {
       ranged,
       x: h.x + (state.rng() - 0.5) * 5,
       z: h.z + (state.rng() - 0.5) * 5,
-      hp: (spec.hp + grow) * 1.3,
-      maxHp: (spec.hp + grow) * 1.3,
+      hp: (spec.hp + grow) * hpMul,
+      maxHp: (spec.hp + grow) * hpMul,
       atkCd: i * 0.3,
       dir: Math.PI,
       atkSeq: 0,
@@ -4601,6 +4682,38 @@ function bossSummon(state, h) {
     })
   }
   pushFx(state, 'summon', h.x, h.z, 6, h.team, 1.0)
+}
+
+// 보스전 정예 소환: 보스 유형에 맞는 '그림자 영웅' 5기 — 성곽에서 뛰쳐나와 미드로 진군한다.
+//  일반 영웅과 같은 몸(스킬·평타·봇 두뇌·킬 보상)이지만 죽으면 부활하지 않는다(레이드 쫄 페이즈).
+//  잡을 때마다 킬 골드·경험치가 아군의 성장 연료가 된다 — 방치하면 방어선이 먼저 갈린다.
+const BOSS_ADD_SQUADS = {
+  boss_colossus: ['warrior', 'tank', 'gladiator', 'swordmaster', 'guardian'],
+  boss_archmage: ['mage', 'cryomancer', 'warlock', 'terramancer', 'chronomancer'],
+  boss_shadow: ['assassin', 'illusionist', 'fearmonger', 'snarer', 'catcher'],
+}
+function bossSummonAdds(state, h) {
+  const squad = BOSS_ADD_SQUADS[h.cls] || BOSS_ADD_SQUADS.boss_colossus
+  for (let i = 0; i < squad.length; i++) {
+    const cls = squad[i]
+    const a = Math.PI - 0.5 + (i / (squad.length - 1)) * 1.0 // 서쪽 관문 방향 부채꼴로 등장
+    const pos = { x: h.x + Math.cos(a) * 7, z: h.z + Math.sin(a) * 7 }
+    const add = makeHeroState(
+      { id: `add${state.nextId++}`, name: `그림자 ${CLASSES[cls].name}`, zodiacId: cls, team: 'red', isBot: true },
+      cls, pos, state.map, state.rng,
+    )
+    add.isBoss = false
+    add.isBossAdd = true // 부활 없음(damageHero) + 보스와 함께 자동 성장(bossThink)
+    add.role = 'mid'
+    add.lvl = Math.max(1, h.lvl)
+    add.maxHp = heroMaxHp(add)
+    add.hp = add.maxHp
+    add.gold = 0
+    add.dir = Math.PI
+    state.heroes.push(add)
+    pushFx(state, 'summon', pos.x, pos.z, 4, 'red', 1.0)
+  }
+  pushFx(state, 'summon', h.x, h.z, 9, 'red', 1.2)
 }
 
 // 전사형 — 대지 강타(광역 기절) / 격돌 돌진(들이받아 띄움) / 회전 격노(지속 광역)
