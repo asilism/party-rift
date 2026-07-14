@@ -5183,6 +5183,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   let hitFxOn = true // 피격 테두리 on/off (데미지 숫자는 항상 표시)
   let prevStatus = null // 직전 프레임의 경기 상태 (finished 전환 감지)
   let endT = -1 // 수호석 폭발 연출 진행 시간(>=0이면 진행 중)
+  let endBossFinale = false // 보스 토벌 피날레(다단 붕괴 파동) 모드인지
 
   // 떠오르는 데미지 숫자 풀 — 다 쓴 스프라이트를 재활용한다
   const dmgNumbers = []
@@ -5817,18 +5818,37 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
 
     // 수호석 폭발 연출: finished로 막 바뀐 순간 진 쪽 수호석을 크게 "펑" 번쩍(+카메라가 그리로 모인다)
     const loser = view.winner === 'blue' ? 'red' : view.winner === 'red' ? 'blue' : null
+    // 보스 토벌 피날레: 폭발·카메라를 (수호석이 아니라) 쓰러진 보스 자리로 — 다단 붕괴 파동
+    const finaleBoss = view.mode === 'boss' && view.winner === 'blue'
+      ? view.heroes?.find((h) => h.cls?.startsWith('boss_'))
+      : null
     if (view.status === 'finished' && prevStatus !== 'finished' && loser) {
       endT = 0
-      endFlash.position.set(NEXUS_POS[loser].x, 6, NEXUS_POS[loser].z)
+      endBossFinale = !!finaleBoss
+      const at = finaleBoss || NEXUS_POS[loser]
+      endFlash.position.set(at.x, 6, at.z)
     }
     prevStatus = view.status
     if (endT >= 0) {
       endT += dt
-      const k = Math.min(1, endT / 0.7)
-      endFlash.visible = k < 1
-      endFlash.scale.setScalar(2 + k * 20)
-      endFlash.material.opacity = (1 - k) * 0.92
-      if (k >= 1) { endT = -1; endFlash.visible = false }
+      if (endBossFinale) {
+        // 3연속 붕괴 파동 — 점점 커지는 링이 세 번 터진다(1.7초, 승리 팝업 페이드인과 맞물림)
+        const stages = [[0, 0.5, 10], [0.5, 1.0, 22], [1.0, 1.7, 44]]
+        const st = stages.find(([a, b]) => endT >= a && endT < b)
+        if (st) {
+          const f = (endT - st[0]) / (st[1] - st[0])
+          endFlash.visible = true
+          endFlash.scale.setScalar(2 + f * st[2])
+          endFlash.material.opacity = (1 - f) * 0.95
+        }
+        if (endT >= 1.7) { endT = -1; endFlash.visible = false }
+      } else {
+        const k = Math.min(1, endT / 0.7)
+        endFlash.visible = k < 1
+        endFlash.scale.setScalar(2 + k * 20)
+        endFlash.material.opacity = (1 - k) * 0.92
+        if (k >= 1) { endT = -1; endFlash.visible = false }
+      }
     }
 
     // 카메라: 평소엔 내 영웅을, 경기가 끝나면 터진 수호석로 모아 폭발을 보여 준다(관전은 위에서 전체).
@@ -5836,7 +5856,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     const want = _want
     let offY = 42
     let offZ = 30
-    const endNexus = view.status === 'finished' && loser ? NEXUS_POS[loser] : null
+    const endNexus = view.status === 'finished' && loser ? (finaleBoss || NEXUS_POS[loser]) : null
     const introBoss = !endNexus && view.mode === 'boss' && view.status === 'countdown'
       ? view.heroes?.find((h) => h.cls?.startsWith('boss_'))
       : null
