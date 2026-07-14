@@ -5324,11 +5324,21 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
         setHpBar(u.bar, h.hp / h.maxHp)
         setHpBarSegments(u.bar, h.maxHp) // 100단위 칸 — 최대 체력이 큰 캐릭터는 칸이 많다
-        // 보스 위협 링: 페이즈 색 (1: 빨강 → 2: 주황 → 3: 보라 + 다급한 맥동)
+        // 보스 위협 링: 국면 색 (1: 빨강 → 2: 주황 → 3: 보라 + 다급한 맥동)
         if (u.threat) {
           const ph = h.bossPhase || 1
           u.threat.material.color.setHex(ph === 3 ? 0xb266ff : ph === 2 ? 0xff7d2a : 0xff4444)
           u.threat.material.opacity = ph === 3 ? 0.5 + Math.sin(view.time * 6) * 0.25 : 0.55
+          // 국면이 오르면 몸이 커지고 붉게 달아오른다 — 멀리서도 "달라졌다"가 한눈에 읽힌다
+          if (u.bossPhaseShown !== ph) {
+            u.bossPhaseShown = ph
+            u.body.scale.setScalar(1 + 0.09 * (ph - 1))
+            u.body.traverse((o) => {
+              if (o.isMesh && o.material?.emissive) {
+                o.material.emissive.setHex(ph === 3 ? 0x5a1010 : ph === 2 ? 0x380a0a : 0x000000)
+              }
+            })
+          }
         }
         // ── 타격감: 체력이 줄면 데미지 숫자 + 피격 섬광/움찔, 내 영웅이면 화면 흔들림 ──
         const dHp = (u.lastHp == null ? h.hp : u.lastHp) - h.hp
@@ -5383,7 +5393,14 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           u.recallBeam.rotation.y = view.time * 1.2
           u.recallBeam.material.opacity = 0.22 + Math.abs(Math.sin(view.time * 4)) * 0.22 // 깜빡이는 빛
         }
-        u.shield.visible = h.shieldT > 0 // 탱커 방패막기(파란 막)
+        // 탱커 방패막기(파란 막). 보스 각성 휴지기엔 같은 구체를 어둠의 보호막(보라 맥동)으로 쓴다
+        const bossShielded = (h.bossShieldT || 0) > 0
+        u.shield.visible = h.shieldT > 0 || bossShielded
+        if (bossShielded) {
+          u.shield.material.color.setHex(0xa06bff)
+          u.shield.material.opacity = 0.32 + Math.abs(Math.sin(view.time * 3)) * 0.12
+          u.shield.scale.setScalar(1 + Math.sin(view.time * 2.2) * 0.04)
+        }
         // 수호기사 흡수 보호막: barrierHp가 남아 있는 동안 금색 셸 + 체력바에 흰 게이지
         const hasBarrier = h.barrierHp > 0
         u.barrier.visible = hasBarrier
