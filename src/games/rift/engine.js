@@ -214,7 +214,7 @@ export const CLASSES = {
   boss_colossus: {
     boss: true, name: '파멸의 거인', icon: '👹',
     desc: '대지를 부수는 전사형 보스 — 강타와 돌진, 회전 격노',
-    hp: 11800, hpLvl: 720, atk: 92, atkLvl: 7, range: 6.0, atkCd: 1.0, speed: 7.0, def: 0.5,
+    hp: 11800, hpLvl: 720, atk: 92, atkLvl: 7, range: 13.2, atkCd: 1.0, speed: 7.0, def: 0.5,
     skill: { name: '대지 강타', icon: '💥', cd: 9, desc: '주변 땅을 내리쳐 큰 피해 + 기절' },
     skill2: { name: '격돌 돌진', icon: '🌋', cd: 16, desc: '적에게 돌진해 들이받아 띄운다' },
     ult: { name: '회전 격노', icon: '🌪️', cd: 30, desc: '팽이처럼 돌며 주변을 계속 후린다' },
@@ -222,7 +222,7 @@ export const CLASSES = {
   boss_archmage: {
     boss: true, name: '대마도사', icon: '🧙',
     desc: '운석과 번개의 마법사형 보스 — 넓게 태우고 얼린다',
-    hp: 11200, hpLvl: 700, atk: 82, atkLvl: 6, range: 12, atkCd: 1.1, speed: 7.0, def: 0.47,
+    hp: 11200, hpLvl: 700, atk: 74, atkLvl: 6, range: 15.5, atkCd: 1.1, speed: 7.0, def: 0.52,
     skill: { name: '연쇄 뇌격', icon: '⚡', cd: 8, desc: '번개가 최대 5명을 타고 흐른다' },
     skill2: { name: '혹한 폭풍', icon: '❄️', cd: 14, desc: '주변을 얼려 빙결 + 피해' },
     ult: { name: '멸망의 운석', icon: '☄️', cd: 26, desc: '영웅들 머리 위로 운석을 떨어뜨린다' },
@@ -230,7 +230,7 @@ export const CLASSES = {
   boss_shadow: {
     boss: true, name: '그림자 군주', icon: '👺',
     desc: '어둠을 가르는 암살자형 보스 — 습격과 공포',
-    hp: 10800, hpLvl: 680, atk: 104, atkLvl: 8, range: 5.4, atkCd: 0.7, speed: 8.8, def: 0.46,
+    hp: 10800, hpLvl: 680, atk: 104, atkLvl: 8, range: 13.5, atkCd: 0.7, speed: 8.8, def: 0.46,
     skill: { name: '그림자 습격', icon: '🌀', cd: 9, desc: '가장 약한 적 뒤로 순간이동해 벤다' },
     skill2: { name: '공포의 포효', icon: '😱', cd: 16, desc: '주변 모두에게 공포 — 통제를 잃는다' },
     ult: { name: '어둠걸음', icon: '🌫️', cd: 26, desc: '어둠에 스며 모습을 감추고 빨라진다' },
@@ -3722,9 +3722,11 @@ function stepZones(state, dt) {
         z.exploded = true
         const owner = state.heroes.find((o) => o.id === z.owner) || { team: z.team }
         const r2 = z.r * z.r
+        const rIn2 = z.rIn * z.rIn
         for (const e of state.heroes) {
           if (e.team === z.team || e.respawnT > 0) continue
-          if ((e.x - z.x) ** 2 + (e.z - z.z) ** 2 > r2) continue
+          const d2v = (e.x - z.x) ** 2 + (e.z - z.z) ** 2
+          if (d2v > r2 || d2v < rIn2) continue // 도넛 안쪽(안전지대)은 무사하다
           damageHero(state, e, z.dmg, owner.id ? owner : null)
           if (z.stun) e.stunT = Math.max(e.stunT, z.stun)
           if (z.freeze) e.freezeT = Math.max(e.freezeT, z.freeze)
@@ -3740,9 +3742,11 @@ function stepZones(state, dt) {
           z.tickT += 0.5
           const owner = state.heroes.find((o) => o.id === z.owner) || { team: z.team }
           const r2 = z.r * z.r
+          const rIn2 = z.rIn * z.rIn
           for (const e of state.heroes) {
             if (e.team === z.team || e.respawnT > 0) continue
-            if ((e.x - z.x) ** 2 + (e.z - z.z) ** 2 > r2) continue
+            const d2v = (e.x - z.x) ** 2 + (e.z - z.z) ** 2
+            if (d2v > r2 || d2v < rIn2) continue
             if (z.dps) damageHero(state, e, z.dps * 0.5, owner.id ? owner : null)
             if (z.slow) e.freezeT = Math.max(e.freezeT, z.slow)
           }
@@ -4494,6 +4498,7 @@ function pushBossZone(state, h, opts) {
   state.zones.push({
     id: state.nextId++, kind: 'bosszone', team: h.team, owner: h.id,
     x: opts.x, z: opts.z, r: opts.r, t: 0, tickT: 0,
+    rIn: opts.rIn || 0, // >0이면 도넛: 안쪽은 안전지대 — "파고들면 산다"를 아는 자만 산다
     delay: opts.delay ?? 1.2, dmg: opts.dmg,
     stun: opts.stun || 0, freeze: opts.freeze || 0, fear: opts.fear || 0,
     life: opts.life || 0, dps: opts.dps || 0, slow: opts.slow || 0,
@@ -4547,7 +4552,7 @@ function bossThink(state, h, dt) {
   if (state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.005 * dt)
   }
-  h.bossCd ||= { a: 5, b: 9, c: 14, fan: 6, summon: 8 }
+  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8 }
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
   // 스테이지 0 — 잠(0~45초): 성곽 안 옥좌에서 무적으로 잠들어 있다(우물 레이저가 러시를 응징).
   if (state.time < BOSS_SLEEP_END) {
@@ -4863,7 +4868,9 @@ function bossSummonAdds(state, h) {
 function bossColossus(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1]
-  if (h.bossCd.a <= 0 && foe && dist(h, foe) < 8) {
+  // 평타 사거리가 아군보다 길어진 대신, 자기 중심 스킬은 "품에 들어온 적"이 있어야 나간다
+  const nearFoe = foe && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && dist(h, e) < 9)
+  if (h.bossCd.a <= 0 && nearFoe) {
     h.bossCd.a = CLASSES[h.cls].skill.cd * cdMul
     pushFx(state, 'rocksplash', h.x, h.z, 4, h.team) // 땅을 파고드는 예열
     if (p === 1) {
@@ -4921,11 +4928,31 @@ function bossColossus(state, h, foe) {
       }
     }
   }
-  if (h.bossCd.c <= 0 && foe && dist(h, foe) < 7) {
+  if (h.bossCd.c <= 0 && nearFoe) {
     h.bossCd.c = CLASSES[h.cls].ult.cd * cdMul
     h.whirlT = p === 3 ? 4.5 : 3.0 // 기존 회전베기 시스템 재사용 — 매 틱 광역 타격 + 몸이 팽이처럼 돈다
     h.whirlTickT = 0
     pushFx(state, 'berserk', h.x, h.z, 5, h.team)
+  }
+  // 시그니처 '단층선': 표적 방향 부챗살 균열이 안쪽부터 물결처럼 터진다(3→4→5갈래).
+  // 갈래 "사이"가 안전 — 부챗살 틈을 아는 자만 서 있을 자리를 찾는다.
+  if (h.bossCd.d <= 0 && foe && dist(h, foe) < 18) {
+    h.bossCd.d = 18 * cdMul
+    const rays = p === 3 ? 5 : p === 2 ? 4 : 3
+    const base = Math.atan2(foe.z - h.z, foe.x - h.x)
+    const spread = Math.PI * 0.7
+    for (let i = 0; i < rays; i++) {
+      const a = base - spread / 2 + (spread * i) / Math.max(1, rays - 1)
+      for (let k = 0; k < 4; k++) {
+        const d = 5.5 + k * 4.5
+        pushBossZone(state, h, {
+          x: h.x + Math.cos(a) * d, z: h.z + Math.sin(a) * d, r: 3.4,
+          delay: 1.3 + k * 0.22, dmg: skillDmg(h, 55, 1.05), stun: 0.5,
+          vfx: 'quake', hue: 'lava',
+        })
+      }
+    }
+    pushFx(state, 'rocksplash', h.x, h.z, 5, h.team)
   }
 }
 
@@ -4939,7 +4966,7 @@ function bossArchmage(state, h, foe) {
     h.bossCd.a = CLASSES[h.cls].skill.cd * cdMul
     const hit = new Set()
     let from = { x: h.x, z: h.z }
-    let dmg = skillDmg(h, 32, 0.5)
+    let dmg = skillDmg(h, 25, 0.4)
     for (let i = 0; i < 4 + p; i++) {
       let best = null
       let bd2 = (i === 0 ? 14 : 9) ** 2
@@ -4957,7 +4984,8 @@ function bossArchmage(state, h, foe) {
       dmg *= 0.8
     }
   }
-  if (h.bossCd.b <= 0 && foe && dist(h, foe) < 9) {
+  const nearFoe = foe && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && dist(h, e) < 10)
+  if (h.bossCd.b <= 0 && nearFoe) {
     h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
     // 혹한 폭풍: 냉기가 모여드는 예고 → 폭발 빙결. 분노하면 형태가 바뀐다.
     if (p === 1) {
@@ -5010,6 +5038,18 @@ function bossArchmage(state, h, foe) {
         x: e.x, z: e.z, r: 6.5, t: 0, delay: 1.4, dmg: skillDmg(h, 50, 0.7),
       })
     }
+  }
+  // 시그니처 '빙하기': 거대한 도넛 폭풍(r14→16→18) — 바깥으로 도망치면 얼어 죽고,
+  // 보스 품(안쪽 5.5)으로 파고든 자만 산다. 공략을 아는 자와 모르는 자가 갈리는 기술.
+  if (h.bossCd.d <= 0 && foe && dist(h, foe) < 16) {
+    h.bossCd.d = 20 * cdMul
+    const R = p === 3 ? 18 : p === 2 ? 16 : 14
+    pushBossZone(state, h, {
+      x: h.x, z: h.z, r: R, rIn: 5.5, delay: 2.4,
+      dmg: skillDmg(h, 70, 1.2), freeze: p >= 2 ? 2.4 : 1.8,
+      vfx: 'abszero', hue: 'frost',
+      ...(p >= 2 ? { life: 3, dps: skillDmg(h, 8, 0.12), slow: 0.5 } : null),
+    })
   }
 }
 
@@ -5087,6 +5127,20 @@ function bossShadow(state, h, foe, siege) {
     pushFx(state, 'poof', h.x, h.z, 5, h.team)
     h.stealthT = 2.5 // 렌더러가 적 시점에서 모습을 감춘다 — 5명이 두리번거리는 공포
     h.hasteT = 2.5
+  }
+  // 시그니처 '어둠의 파문': 안쪽→바깥으로 번지는 도넛 물결(2→3파).
+  // 첫 파문이 터진 자리(안쪽)로 되돌아 들어가는 게 정답 — 밖으로 달아나면 다음 파문에 잡힌다.
+  if (h.bossCd.d <= 0 && foe && dist(h, foe) < 14) {
+    h.bossCd.d = 18 * cdMul
+    const waves = p === 1 ? 2 : 3
+    const bands = [[0, 7], [7, 13], [13, 19]]
+    for (let i = 0; i < waves; i++) {
+      pushBossZone(state, h, {
+        x: h.x, z: h.z, r: bands[i][1], rIn: bands[i][0], delay: 1.0 + i * 0.6,
+        dmg: skillDmg(h, 50, 1.0), fear: i === waves - 1 ? 1.2 : 0,
+        vfx: 'shriek', hue: 'shadow',
+      })
+    }
   }
 }
 
@@ -5171,6 +5225,8 @@ function stepBots(state, dt) {
         continue
       }
     }
+    // 보스 예고 장판 위 = 만사 제치고 이탈 (보스전 아군 — '공략' 반사신경)
+    if (state.mode === 'boss' && h.team === 'blue' && botDodgeBossZone(state, h, dt)) continue
     // 도발당한 봇: 후퇴/임무보다 우선 — 도발한 탱커에게 끌려가 평타친다
     if (h.tauntT > 0) {
       const tk = state.heroes.find((o) => o.id === h.tauntBy && o.team !== h.team && o.respawnT <= 0)
@@ -5447,6 +5503,39 @@ function stepBots(state, dt) {
     if (h.botSeekT > 0 ? false : botJungleMove(state, h)) continue
     botLaneMove(state, h, dt)
   }
+}
+
+// 보스 예고 장판 회피 — '공략을 아는 플레이어'처럼 경고를 읽고 안전지대로 움직인다.
+// 도넛(rIn)은 안쪽(보스 품)으로 파고들고, 원판은 가장 가까운 바깥으로 빠진다.
+// 여러 장판이 겹치면(융단/파문) 가장 먼저 터질 것부터 피한다.
+function botDodgeBossZone(state, h, dt) {
+  let zone = null
+  let soonest = Infinity
+  for (const z of state.zones) {
+    if (z.kind !== 'bosszone' || z.exploded || z.t >= z.delay) continue
+    const d2v = (h.x - z.x) ** 2 + (h.z - z.z) ** 2
+    if (d2v > (z.r + 0.8) ** 2) continue
+    if (z.rIn > 0 && d2v < (z.rIn - 0.8) ** 2) continue // 이미 안전지대 안
+    const left = z.delay - z.t
+    if (left < soonest) { soonest = left; zone = z }
+  }
+  if (!zone) return false
+  const dx = h.x - zone.x
+  const dz = h.z - zone.z
+  const d = Math.hypot(dx, dz) || 0.001
+  let tx
+  let tz
+  if (zone.rIn > 3) {
+    // 도넛: 중심(보스 품)으로 파고든다 — 밖으로 달아나면 다음 물결에 잡힌다
+    tx = zone.x + (dx / d) * Math.max(0.5, zone.rIn - 1.5)
+    tz = zone.z + (dz / d) * Math.max(0.5, zone.rIn - 1.5)
+  } else {
+    tx = zone.x + (dx / d) * (zone.r + 2.5)
+    tz = zone.z + (dz / d) * (zone.r + 2.5)
+  }
+  steerToward(state, h, { x: tx, z: tz })
+  botAttack(state, h, dt) // 피하면서도 사거리 안이면 계속 때린다
+  return true
 }
 
 // ── 보스전 아군 봇 전용 룰셋 ──
@@ -6073,7 +6162,7 @@ export function makeView(state) {
       id: z.id, kind: z.kind, team: z.team, x: r1(z.x), z: r1(z.z),
       r: z.r, t: r2d(z.t), delay: z.delay,
       ...(z.life != null ? { life: z.life } : null), // 지속 장판(독 웅덩이/용암·서리)의 사라짐 페이드용
-      ...(z.kind === 'bosszone' ? { hue: z.hue } : null), // 보스 장판 색조(lava/frost/shadow)
+      ...(z.kind === 'bosszone' ? { hue: z.hue, ...(z.rIn ? { rIn: z.rIn } : null) } : null), // 보스 장판 색조/도넛 안전지대
     })),
     fx: state.fx.map((n) => ({
       id: n.id, kind: n.kind, x: r1(n.x), z: r1(n.z), r: n.r, t: r2d(n.t), team: n.team,

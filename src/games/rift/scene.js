@@ -4314,12 +4314,22 @@ function buildBossZone(z) {
   )
   mark.rotation.x = -Math.PI / 2
   mark.position.y = 0.3
+  // 도넛(rIn>0)이면 위험 원판이 고리가 되고, 안쪽 가장자리에 "여기는 안전" 초록 경계선을 긋는다
   const disc = new THREE.Mesh(
-    new THREE.CircleGeometry(z.r, 36),
+    z.rIn > 0 ? new THREE.RingGeometry(z.rIn, z.r, 44) : new THREE.CircleGeometry(z.r, 36),
     new THREE.MeshBasicMaterial({ color: hue.fill, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })
   )
   disc.rotation.x = -Math.PI / 2
   disc.position.y = 0.22
+  if (z.rIn > 0) {
+    const safe = new THREE.Mesh(
+      new THREE.RingGeometry(Math.max(0.1, z.rIn - 0.5), z.rIn, 40),
+      new THREE.MeshBasicMaterial({ color: 0x8affc0, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })
+    )
+    safe.rotation.x = -Math.PI / 2
+    safe.position.y = 0.26
+    g.add(safe)
+  }
   // 도는 내곽 링(부챗살 3개) — "차오르는" 긴장감
   const spin = new THREE.Group()
   for (let i = 0; i < 3; i++) {
