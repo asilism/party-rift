@@ -5329,10 +5329,22 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           const ph = h.bossPhase || 1
           u.threat.material.color.setHex(ph === 3 ? 0xb266ff : ph === 2 ? 0xff7d2a : 0xff4444)
           u.threat.material.opacity = ph === 3 ? 0.5 + Math.sin(view.time * 6) * 0.25 : 0.55
-          // 국면이 오르면 몸이 커지고 붉게 달아오른다 — 멀리서도 "달라졌다"가 한눈에 읽힌다
+          // 국면이 오르면 몸이 드라마틱하게 커지고(×1.15/×1.3) 붉게 달아오른다.
+          // 얼굴·이름표·체력바·모자 기준선도 커진 몸에 맞춰 올린다(발밑 기준 유지).
           if (u.bossPhaseShown !== ph) {
             u.bossPhaseShown = ph
-            u.body.scale.setScalar(1 + 0.09 * (ph - 1))
+            const k = ph === 3 ? 1.3 : ph === 2 ? 1.15 : 1
+            u.bossBaseBodyY ??= u.bodyBaseY
+            u.bossBaseFaceY ??= u.faceBaseY
+            u.bossBaseHatY ??= u.hatBaseY
+            u.bossBaseNameY ??= u.name.position.y
+            u.bossBaseBarY ??= u.bar.position.y
+            u.body.scale.setScalar(k)
+            u.bodyBaseY = u.bossBaseBodyY * k // 커진 반신만큼 띄워 발이 땅을 뚫지 않게
+            u.faceBaseY = u.bossBaseFaceY * k
+            u.hatBaseY = u.bossBaseHatY * k
+            u.name.position.y = u.bossBaseNameY * k
+            u.bar.position.y = u.bossBaseBarY * k
             u.body.traverse((o) => {
               if (o.isMesh && o.material?.emissive) {
                 o.material.emissive.setHex(ph === 3 ? 0x5a1010 : ph === 2 ? 0x380a0a : 0x000000)

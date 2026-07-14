@@ -214,7 +214,7 @@ export const CLASSES = {
   boss_colossus: {
     boss: true, name: '파멸의 거인', icon: '👹',
     desc: '대지를 부수는 전사형 보스 — 강타와 돌진, 회전 격노',
-    hp: 11800, hpLvl: 720, atk: 100, atkLvl: 8, range: 5.2, atkCd: 1.0, speed: 7.0, def: 0.4,
+    hp: 11800, hpLvl: 720, atk: 92, atkLvl: 7, range: 6.0, atkCd: 1.0, speed: 7.0, def: 0.5,
     skill: { name: '대지 강타', icon: '💥', cd: 9, desc: '주변 땅을 내리쳐 큰 피해 + 기절' },
     skill2: { name: '격돌 돌진', icon: '🌋', cd: 16, desc: '적에게 돌진해 들이받아 띄운다' },
     ult: { name: '회전 격노', icon: '🌪️', cd: 30, desc: '팽이처럼 돌며 주변을 계속 후린다' },
@@ -222,7 +222,7 @@ export const CLASSES = {
   boss_archmage: {
     boss: true, name: '대마도사', icon: '🧙',
     desc: '운석과 번개의 마법사형 보스 — 넓게 태우고 얼린다',
-    hp: 11200, hpLvl: 700, atk: 82, atkLvl: 6, range: 11, atkCd: 1.1, speed: 7.0, def: 0.47,
+    hp: 11200, hpLvl: 700, atk: 82, atkLvl: 6, range: 12, atkCd: 1.1, speed: 7.0, def: 0.47,
     skill: { name: '연쇄 뇌격', icon: '⚡', cd: 8, desc: '번개가 최대 5명을 타고 흐른다' },
     skill2: { name: '혹한 폭풍', icon: '❄️', cd: 14, desc: '주변을 얼려 빙결 + 피해' },
     ult: { name: '멸망의 운석', icon: '☄️', cd: 26, desc: '영웅들 머리 위로 운석을 떨어뜨린다' },
@@ -230,7 +230,7 @@ export const CLASSES = {
   boss_shadow: {
     boss: true, name: '그림자 군주', icon: '👺',
     desc: '어둠을 가르는 암살자형 보스 — 습격과 공포',
-    hp: 10800, hpLvl: 680, atk: 104, atkLvl: 8, range: 4.6, atkCd: 0.7, speed: 8.8, def: 0.46,
+    hp: 10800, hpLvl: 680, atk: 104, atkLvl: 8, range: 5.4, atkCd: 0.7, speed: 8.8, def: 0.46,
     skill: { name: '그림자 습격', icon: '🌀', cd: 9, desc: '가장 약한 적 뒤로 순간이동해 벤다' },
     skill2: { name: '공포의 포효', icon: '😱', cd: 16, desc: '주변 모두에게 공포 — 통제를 잃는다' },
     ult: { name: '어둠걸음', icon: '🌫️', cd: 26, desc: '어둠에 스며 모습을 감추고 빨라진다' },
@@ -632,7 +632,10 @@ const innateAtk = (h) => {
   return AD_DAMAGE_CLASSES.has(h.cls) ? base * AD_CURVE : base
 }
 const heroAtk = (h) => innateAtk(h) + itemBonus(h).atk
-const heroRange = (h) => CLASSES[h.cls].range + itemBonus(h).range + (h.bladeT > 0 ? BLADE_RANGE : 0)
+// 보스는 국면이 오를수록 몸이 커지고, 커진 만큼 팔도 길어진다(사거리 +15%/국면)
+const heroRange = (h) =>
+  (CLASSES[h.cls].range + itemBonus(h).range + (h.bladeT > 0 ? BLADE_RANGE : 0)) *
+  (h.isBoss ? 1 + 0.15 * ((h.bossPhase || 1) - 1) : 1)
 const heroSpeed = (h) => CLASSES[h.cls].speed + itemBonus(h).speed
 // 레벨업 필요 경험치 — 전반적으로 상향(레벨링을 느리게).
 //  Lv1→Lv2 = 250 ≈ 적 병사 1.5웨이브(병사 28xp × 9마리). 정글러는 늑대 3마리(84×3)면 2렙.
@@ -2676,7 +2679,7 @@ function damageTower(state, t, amount, attacker) {
   // 병사 파도는 진군 전엔 거의 못 갉지만, 방치하면 외곽 타워가 실제로 갈린다.
   if (attacker?.isBossAdd) amount *= 0.05
   else if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
-    amount *= state.time < BOSS_MARCH_AT ? 0.18 : 0.28
+    amount *= state.time < BOSS_MARCH_AT ? 0.14 : 0.28
   }
   if (!t.alive || !towerVulnerable(state, t)) return
   t.lastHurt = state.time // 공성당하는 중 — 봇 수비 콜 판정용
@@ -2703,7 +2706,7 @@ function damageNexus(state, team, amount, attacker) {
   if (attacker?.isBoss) amount *= 0.3 // 보스전: 건물은 "천천히" 밀린다 — 농사 지을 시간을 준다
   if (attacker?.isBossAdd) amount *= 0.05 // 그림자 영웅은 처형자 — 건물 시계는 보스의 몫
   else if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
-    amount *= state.time < BOSS_MARCH_AT ? 0.18 : 0.28
+    amount *= state.time < BOSS_MARCH_AT ? 0.14 : 0.28
   }
   const nx = state.nexus[team]
   if (nx.hp <= 0) return
@@ -3469,7 +3472,9 @@ function stepTowers(state, dt) {
         const ramp = ref === primary ? Math.min(TOWER_RAMP_MAX, 1 + TOWER_RAMP * t.streak) : 1
         dmg = TOWER_DMG_HERO * ramp
       } else {
-        dmg = TOWER_DMG_MINION
+        // 보스전: 타워가 병사를 더 아프게 때린다 — 광역기 없는 조합도 파도 국면에서
+        // 타워 화력의 도움으로 초크를 지킬 수 있게(조합 복불복으로 2분대 붕괴 방지)
+        dmg = TOWER_DMG_MINION * (state.mode === 'boss' && t.team === 'blue' ? 1.7 : 1)
       }
       state.projectiles.push({
         id: state.nextId++, kind: 'towerbolt', team: t.team,
@@ -4496,6 +4501,22 @@ function pushBossZone(state, h, opts) {
   })
 }
 
+// 파멸의 삼중격(보스 공통기): 표적을 향해 전방 세 갈래로 어둠의 검기를 내뿜는다.
+// 정면 근거리 표적은 두세 발을 겹쳐 맞는다 — "보스가 마음먹으면 하나는 죽는다"의 핵심 압박.
+function bossFan(state, h, foe) {
+  const dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+  h.dir = dir
+  for (const off of [-0.32, 0, 0.32]) {
+    const d = dir + off
+    state.projectiles.push({
+      id: state.nextId++, kind: 'swordwave', team: h.team, owner: h.id,
+      x: h.x, z: h.z, dir: d, vx: Math.cos(d) * SWORDWAVE_SPEED, vz: Math.sin(d) * SWORDWAVE_SPEED,
+      dmg: skillDmg(h, 45, 0.9), travel: 0, hit: new Set(),
+    })
+  }
+  pushFx(state, 'shriek', h.x, h.z, 4, h.team, 0.6)
+}
+
 function bossThink(state, h, dt) {
   if (!h.bossIntro) {
     h.bossIntro = true
@@ -4526,7 +4547,7 @@ function bossThink(state, h, dt) {
   if (state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.005 * dt)
   }
-  h.bossCd ||= { a: 5, b: 9, c: 14, summon: 8 }
+  h.bossCd ||= { a: 5, b: 9, c: 14, fan: 6, summon: 8 }
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
   // 스테이지 0 — 잠(0~45초): 성곽 안 옥좌에서 무적으로 잠들어 있다(우물 레이저가 러시를 응징).
   if (state.time < BOSS_SLEEP_END) {
@@ -4573,6 +4594,12 @@ function bossThink(state, h, dt) {
       ? `💢 ${h.name}의 분노가 끓어오른다 — 공격이 거세진다!`
       : `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다, 몰아쳐라!`)
     pushFeed(state, 'obj', `🛡️ ${h.name}이(가) 어둠의 보호막에 감싸여 힘을 모은다(${BOSS_AWAKEN_T}초 무적) — 정비하고 맞을 준비를 하라!`)
+    // 필사 국면: 그림자 영웅들이 다시 일어난다 — 보스가 힘을 모으는 동안 최후의 군세가 앞장선다
+    if (wantPhase === 3 && !h.bossAddsDone2) {
+      h.bossAddsDone2 = true
+      bossSummonAdds(state, h)
+      pushFeed(state, 'obj', `⚔️ ${h.name}의 부름에 그림자 영웅들이 다시 일어난다 — 최후의 군세다!`)
+    }
   }
   // 각성 휴지기 소화: 무적·정지 상태로 서서 힘을 모은다 — 소환·공성·성장이 전부 멈춘
   // 진짜 휴지기다(아군은 이 틈에 회복·보급·정글 파밍). 끝나는 순간 더 크고 붉어져 다시 움직인다.
@@ -4609,8 +4636,9 @@ function bossThink(state, h, dt) {
       h.bossCd.summon = BOSS_MASS_EVERY
       bossSummon(state, h, { count: BOSS_MASS_COUNT, hpMul: 1.0 })
     } else {
+      // 진군 이후엔 12마리 호위 파도 — 보스 주변에서 솟아 함께 민다
       h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
-      bossSummon(state, h)
+      bossSummon(state, h, { count: 12 })
     }
   }
   // 소환 페이즈 동안 보스는 진군하지 않는다 — 옥좌를 지키며 성곽 안까지 덤벼드는 적만 상대한다.
@@ -4628,8 +4656,12 @@ function bossThink(state, h, dt) {
     if (h.cls === 'boss_colossus') bossColossus(state, h, foe)
     else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
     else bossShadow(state, h, foe, { x: throne.x, z: throne.z })
+    if (h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
+      h.bossCd.fan = 6 * BOSS_PHASE_CD[h.bossPhase - 1]
+      bossFan(state, h, foe) // 성곽 안까지 덤빈 자에겐 삼중격
+    }
     castAttack(state, h.id, null)
-    const range = CLASSES[h.cls].range
+    const range = heroRange(h)
     if (foe && dist(h, foe) > range * 0.9) {
       const dir = state.map.avoidDir(h, foe.x, foe.z, state.towers, 2.4)
       h.mx = dir.x
@@ -4685,28 +4717,42 @@ function bossThink(state, h, dt) {
     h.bossFocusWarned = true
     pushFeed(state, 'obj', '💢 보스가 방어선 파괴에 집중합니다 — 막아설 수 없다!')
   }
-  // 표적: 공성 목표 근처(BOSS_LEASH 안)의 보이는 가장 가까운 적 영웅 — 우물 캠핑·낚시 방지
+  // 표적: 공성 목표 근처(BOSS_LEASH 안)의 보이는 적 중 "가장 약한" 영웅 — 우물 캠핑·낚시 방지.
+  // 최약체를 노리는 이유: 보스가 마음먹으면 하나는 반드시 죽는다는 처형압이 난이도의 심장이다.
   const bf = state.map.FOUNTAIN_POS.blue
   const safeR2 = (FOUNTAIN_RADIUS + 4) ** 2
   const leash2 = BOSS_LEASH * BOSS_LEASH
+  const aggro2 = BOSS_AGGRO * BOSS_AGGRO
   let foe = null
-  let bd = BOSS_AGGRO * BOSS_AGGRO
+  let bd = Infinity
+  let bfrac = Infinity
   for (const e of state.heroes) {
     if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
     if (!isHeroVisible(state, e, h.team)) continue
     if (dist2(e, bf) <= safeR2) continue // 우물 안까지 쫓아 들어가진 않는다
     if (dist2(e, siege) > leash2) continue // 공성 목표에서 너무 먼 적은 무시
     const d = dist2(h, e)
-    if (d < bd) { bd = d; foe = e }
+    if (d > aggro2) continue
+    const frac = e.hp / e.maxHp
+    if (frac < bfrac - 0.001 || (Math.abs(frac - bfrac) <= 0.001 && d < bd)) {
+      bfrac = frac
+      bd = d
+      foe = e
+    }
   }
   // 타입별 스킬 로테이션 (siege = 진군 축 — 습격류 스킬이 축을 벗어나지 않게)
   if (h.cls === 'boss_colossus') bossColossus(state, h, foe)
   else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
   else bossShadow(state, h, foe, siege)
+  // 파멸의 삼중격 — 표적이 있으면 전방 세 갈래 검기. 근거리는 겹쳐 맞아 처형된다
+  if (h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
+    h.bossCd.fan = 6 * BOSS_PHASE_CD[h.bossPhase - 1]
+    bossFan(state, h, foe)
+  }
   // ── 행동 결심(3초 커밋): '응징'(붙은 적을 팬다)이냐 '공성'(구조물을 부순다)이냐를 정하고
   //    그동안 유지한다. 틱마다 목표를 바꾸면 타워 앞에서 아무것도 못 때리고 얻어맞기만 하는
   //    우왕좌왕(교전 판정 경계에서 서성이는 사각지대)이 생긴다 — 결심했으면 밀어붙인다.
-  const range = CLASSES[h.cls].range
+  const range = heroRange(h) // 국면이 오르면 몸과 함께 사거리도 커진다
   const sDist = Math.hypot(siege.x - h.x, siege.z - h.z) - siege.surf
   const canFight = foe && !focus
   if (
