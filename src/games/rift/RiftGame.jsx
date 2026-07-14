@@ -444,6 +444,21 @@ function RiftPlay({
     const t = setTimeout(() => setShowWin(true), 1700)
     return () => clearTimeout(t)
   }, [finishedNow])
+  // 보스 국면 전환 화면 연출 — 국면이 오르는 순간 국면 색 플래시(비네트) + 화면 흔들림
+  const [phaseFx, setPhaseFx] = useState(null)
+  const prevPhaseRef = useRef(1)
+  useEffect(() => {
+    const b = hud?.mode === 'boss' ? hud.heroes?.find((h) => h.cls?.startsWith('boss_')) : null
+    const ph = b?.bossPhase || 1
+    if (ph > prevPhaseRef.current) {
+      prevPhaseRef.current = ph
+      setPhaseFx({ color: ph === 3 ? '#b266ff' : '#ff7d2a', key: Date.now() })
+      const timer = setTimeout(() => setPhaseFx(null), 1000)
+      return () => clearTimeout(timer)
+    }
+    prevPhaseRef.current = ph
+    return undefined
+  }, [hud])
   // 상점은 우물 안에 있거나 사망(부활 대기) 중에 열 수 있다 — 그 밖이면 자동으로 닫힌다
   const me = hud?.heroes?.find((h) => h.id === myId)
   const meCanShop = !!(me && canShop(me))
@@ -473,8 +488,9 @@ function RiftPlay({
   ))
 
   return (
-    <div className="rift" style={{ '--btn-user': btnScale }} onContextMenu={(e) => e.preventDefault()}>
+    <div className={`rift ${phaseFx ? 'rift--quake' : ''}`} style={{ '--btn-user': btnScale }} onContextMenu={(e) => e.preventDefault()}>
       <Rift3D sample={sample} myId={myId} mode={hud.mode || '3v3'} hitFx={hitFx} gfx={gfx} />
+      {phaseFx && <div key={phaseFx.key} className="boss-flash" style={{ '--fc': phaseFx.color }} />}
 
       {me && !finished && (
         <RiftControls

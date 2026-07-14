@@ -3411,3 +3411,25 @@ body {
   .boss-intro__name { font-size: 32px; }
   .boss-intro__type { font-size: 13px; }
 }
+
+/* ── 보스 국면 전환 화면 연출 — 국면 색 비네트 플래시 + 화면 흔들림 ── */
+.boss-flash {
+  position: absolute; inset: 0; pointer-events: none; z-index: 7;
+  background: radial-gradient(ellipse at center, transparent 40%, var(--fc, #ff7d2a) 135%);
+  animation: bossFlash 1s ease-out both;
+}
+@keyframes bossFlash {
+  0% { opacity: 0; }
+  12% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+.rift--quake { animation: riftQuake 0.55s linear; }
+@keyframes riftQuake {
+  0%, 100% { transform: none; }
+  10% { transform: translate(6px, -4px); }
+  25% { transform: translate(-7px, 5px); }
+  40% { transform: translate(5px, 3px); }
+  55% { transform: translate(-4px, -5px); }
+  70% { transform: translate(3px, 2px); }
+  85% { transform: translate(-2px, 1px); }
+}
