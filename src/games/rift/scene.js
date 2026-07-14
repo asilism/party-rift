@@ -4311,6 +4311,111 @@ const BOSSZONE_HUES = {
   frost: { ring: 0x8fd8ff, fill: 0x6db8e8, pool: 0x9fe4ff },
   shadow: { ring: 0xb266ff, fill: 0x8a5cff, pool: 0x9a6cff },
 }
+
+// 보스 장판 질감 — 흰색(재질 색으로 물듦) 패턴을 hue별로 1회 구워 캐시한다.
+//  용암: 방사형 균열 / 서리: 눈꽃 결정 / 어둠: 소용돌이 나선
+const bosszoneTexCache = {}
+function bosszoneTexture(hue) {
+  if (bosszoneTexCache[hue]) return bosszoneTexCache[hue]
+  const c = document.createElement('canvas')
+  c.width = c.height = 256
+  const ctx = c.getContext('2d')
+  const cx = 128
+  const rnd = lcg(hue === 'lava' ? 11 : hue === 'frost' ? 22 : 33)
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineCap = 'round'
+  if (hue === 'lava') {
+    // 중심에서 뻗는 들쭉날쭉한 균열 + 마그마 얼룩
+    for (let i = 0; i < 8; i++) {
+      let a = (i / 8) * Math.PI * 2 + rnd() * 0.5
+      let r = 14
+      ctx.beginPath()
+      ctx.moveTo(cx + Math.cos(a) * r, cx + Math.sin(a) * r)
+      while (r < 120) {
+        r += 10 + rnd() * 12
+        a += (rnd() - 0.5) * 0.5
+        ctx.lineWidth = Math.max(1, 6 * (1 - r / 130))
+        ctx.globalAlpha = 0.85 * (1 - r / 150)
+        ctx.lineTo(cx + Math.cos(a) * r, cx + Math.sin(a) * r)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(cx + Math.cos(a) * r, cx + Math.sin(a) * r)
+      }
+    }
+    ctx.globalAlpha = 0.22
+    ctx.fillStyle = '#ffffff'
+    for (let i = 0; i < 16; i++) {
+      const a = rnd() * Math.PI * 2
+      const r = 20 + rnd() * 95
+      ctx.beginPath()
+      ctx.arc(cx + Math.cos(a) * r, cx + Math.sin(a) * r, 3 + rnd() * 9, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  } else if (hue === 'frost') {
+    // 6방 눈꽃 줄기 + 곁가지 + 잔결정
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2
+      ctx.globalAlpha = 0.8
+      ctx.lineWidth = 3.5
+      ctx.beginPath()
+      ctx.moveTo(cx + Math.cos(a) * 10, cx + Math.sin(a) * 10)
+      ctx.lineTo(cx + Math.cos(a) * 116, cx + Math.sin(a) * 116)
+      ctx.stroke()
+      for (const bd of [0.45, 0.7]) {
+        for (const s of [-1, 1]) {
+          const bx = cx + Math.cos(a) * 116 * bd
+          const by = cx + Math.sin(a) * 116 * bd
+          const ba = a + s * Math.PI / 3
+          ctx.lineWidth = 2
+          ctx.globalAlpha = 0.6
+          ctx.beginPath()
+          ctx.moveTo(bx, by)
+          ctx.lineTo(bx + Math.cos(ba) * 24, by + Math.sin(ba) * 24)
+          ctx.stroke()
+        }
+      }
+    }
+    ctx.fillStyle = '#ffffff'
+    for (let i = 0; i < 14; i++) {
+      const a = rnd() * Math.PI * 2
+      const r = 25 + rnd() * 90
+      ctx.globalAlpha = 0.35 + rnd() * 0.3
+      ctx.beginPath()
+      ctx.arc(cx + Math.cos(a) * r, cx + Math.sin(a) * r, 1.5 + rnd() * 3, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  } else {
+    // 어둠: 세 갈래 나선 소용돌이 (업데이트에서 천천히 돌린다)
+    for (let arm = 0; arm < 3; arm++) {
+      ctx.beginPath()
+      let started = false
+      for (let t = 0; t <= 1; t += 0.03) {
+        const r = 12 + 108 * t
+        const a = (arm / 3) * Math.PI * 2 + t * 4.4
+        const x = cx + Math.cos(a) * r
+        const y = cx + Math.sin(a) * r
+        if (!started) { ctx.moveTo(x, y); started = true } else ctx.lineTo(x, y)
+      }
+      ctx.lineWidth = 5
+      ctx.globalAlpha = 0.7
+      ctx.stroke()
+    }
+    ctx.fillStyle = '#ffffff'
+    for (let i = 0; i < 12; i++) {
+      const a = rnd() * Math.PI * 2
+      const r = 20 + rnd() * 95
+      ctx.globalAlpha = 0.3
+      ctx.beginPath()
+      ctx.arc(cx + Math.cos(a) * r, cx + Math.sin(a) * r, 2 + rnd() * 4, 0, Math.PI * 2)
+      ctx.fill()
+    }
+  }
+  ctx.globalAlpha = 1
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  bosszoneTexCache[hue] = tex
+  return tex
+}
 function buildBossZone(z) {
   const hue = BOSSZONE_HUES[z.hue] || BOSSZONE_HUES.lava
   const g = new THREE.Group()
@@ -4321,13 +4426,25 @@ function buildBossZone(z) {
   )
   mark.rotation.x = -Math.PI / 2
   mark.position.y = 0.3
-  // 도넛(rIn>0)이면 위험 원판이 고리가 되고, 안쪽 가장자리에 "여기는 안전" 초록 경계선을 긋는다
+  // 도넛(rIn>0)이면 위험 원판이 고리가 되고, 안쪽 가장자리에 "여기는 안전" 초록 경계선을 긋는다.
+  // 원판엔 hue별 질감(용암 균열/서리 결정/어둠 소용돌이)을 입힌다 — 어둠은 업데이트에서 돈다.
   const disc = new THREE.Mesh(
     z.rIn > 0 ? new THREE.RingGeometry(z.rIn, z.r, 44) : new THREE.CircleGeometry(z.r, 36),
-    new THREE.MeshBasicMaterial({ color: hue.fill, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })
+    new THREE.MeshBasicMaterial({
+      color: hue.fill, map: bosszoneTexture(z.hue || 'lava'),
+      transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false,
+    })
   )
   disc.rotation.x = -Math.PI / 2
   disc.position.y = 0.22
+  // 질감 없는 옅은 바닥판 — 질감의 알파 구멍 사이로도 위험 영역이 읽히게 깔아 준다
+  const under = new THREE.Mesh(
+    disc.geometry.clone(),
+    new THREE.MeshBasicMaterial({ color: hue.fill, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false })
+  )
+  under.rotation.x = -Math.PI / 2
+  under.position.y = 0.2
+  g.add(under)
   if (z.rIn > 0) {
     const safe = new THREE.Mesh(
       new THREE.RingGeometry(Math.max(0.1, z.rIn - 0.5), z.rIn, 40),
@@ -4412,7 +4529,9 @@ function buildBossZone(z) {
       mark.visible = spin.visible = true
       mark.material.opacity = 0.5 + 0.4 * f
       mark.scale.setScalar(1 + (1 - f) * 0.5)
-      disc.material.opacity = 0.1 + 0.3 * f + 0.08 * Math.sin(zz.t * 14)
+      disc.material.opacity = 0.3 + 0.5 * f + 0.08 * Math.sin(zz.t * 14)
+      under.material.opacity = 0.06 + 0.12 * f
+      if ((zz.hue || 'lava') === 'shadow') disc.rotation.z = zz.t * 1.1 // 소용돌이가 천천히 돈다
       spin.rotation.z = zz.t * 2.4
       spin.scale.setScalar(0.6 + 0.4 * f)
       if (aimTicks) {
@@ -4445,7 +4564,10 @@ function buildBossZone(z) {
       const left = (zz.life || 0) - (zz.t - delay)
       const fade = Math.max(0, Math.min(1, left / 0.5))
       disc.material.color.setHex(hue.pool)
-      disc.material.opacity = (0.34 + 0.08 * Math.sin(zz.t * 6)) * fade
+      disc.material.opacity = (0.62 + 0.12 * Math.sin(zz.t * 6)) * fade
+      under.material.color.setHex(hue.pool)
+      under.material.opacity = 0.16 * fade
+      if ((zz.hue || 'lava') === 'shadow') disc.rotation.z = zz.t * 1.1
     }
   }
   return g
