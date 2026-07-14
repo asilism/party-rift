@@ -2973,6 +2973,13 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   // 보스: 발밑에 붉은 위협 링 — 거체 + 링으로 "이건 다른 놈이다"가 한눈에 읽힌다.
   //  페이즈가 오르면 링 색이 변한다(1: 빨강 → 2: 주황 → 3: 보라+맥동) — 업데이트 루프에서 갱신.
   let threat = null
+  let dormant = null // 각성 휴지기(보호막) 중 💤 — "지금은 웅크려 힘을 모으는 중"이 읽히게
+  if (CLASSES[h.cls]?.boss) {
+    dormant = emojiSprite('💤', 2.6)
+    dormant.position.set(1.6 * s, 5.9 * s, 0)
+    dormant.visible = false
+    g.add(dormant)
+  }
   if (CLASSES[h.cls]?.boss) {
     threat = new THREE.Mesh(
       new THREE.RingGeometry(2.0 * s, 2.5 * s, 32),
@@ -3113,7 +3120,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
     costume, // 옷 — FX(fxUpdate) 애니메이션용 참조
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, threat, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, threat, dormant, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
@@ -5501,6 +5508,14 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           u.shield.material.color.setHex(0xa06bff)
           u.shield.material.opacity = 0.32 + Math.abs(Math.sin(view.time * 3)) * 0.12
           u.shield.scale.setScalar(1 + Math.sin(view.time * 2.2) * 0.04)
+        }
+        // 각성 휴지기 💤 — 둥실 떠오르며 깜빡여 "웅크려 힘을 모으는 중"을 알린다
+        if (u.dormant) {
+          u.dormant.visible = bossShielded
+          if (bossShielded) {
+            u.dormant.position.y = 5.9 * (u.clsScale || 1) + Math.sin(view.time * 1.6) * 0.5
+            u.dormant.material.opacity = 0.7 + Math.sin(view.time * 2.4) * 0.3
+          }
         }
         // 수호기사 흡수 보호막: barrierHp가 남아 있는 동안 금색 셸 + 체력바에 흰 게이지
         const hasBarrier = h.barrierHp > 0
