@@ -5831,15 +5831,23 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       if (k >= 1) { endT = -1; endFlash.visible = false }
     }
 
-    // 카메라: 평소엔 내 영웅을, 경기가 끝나면 터진 수호석로 모아 폭발을 보여 준다(관전은 위에서 전체)
+    // 카메라: 평소엔 내 영웅을, 경기가 끝나면 터진 수호석로 모아 폭발을 보여 준다(관전은 위에서 전체).
+    // 보스전 인트로: 카운트다운 동안 성곽의 보스를 클로즈업 — 타이틀 카드(RiftGame)와 한 쌍의 연출
     const want = _want
     let offY = 42
     let offZ = 30
     const endNexus = view.status === 'finished' && loser ? NEXUS_POS[loser] : null
+    const introBoss = !endNexus && view.mode === 'boss' && view.status === 'countdown'
+      ? view.heroes?.find((h) => h.cls?.startsWith('boss_'))
+      : null
     if (endNexus) {
       want.set(endNexus.x, 0, endNexus.z) // 터진 최종 건물로 시선 집중
       offY = 30
       offZ = 24
+    } else if (introBoss) {
+      want.set(introBoss.x, 0, introBoss.z) // 잠든 보스에게 천천히 다가간다
+      offY = 26
+      offZ = 20
     } else if (me) {
       want.set(me.x, 0, me.z)
     } else {
@@ -5851,7 +5859,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       camTarget.copy(want)
       camInit = true
     } else {
-      camTarget.lerp(want, endNexus ? 0.08 : 0.12)
+      camTarget.lerp(want, endNexus ? 0.08 : introBoss ? 0.055 : 0.12)
     }
     camera.position.set(camTarget.x, camTarget.y + offY, camTarget.z + offZ)
     camera.lookAt(camTarget.x, 0, camTarget.z - 6)
