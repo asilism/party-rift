@@ -2809,6 +2809,12 @@ export function step(state, dt) {
     const boss = state.heroes.find((b) => b.isBoss)
     if (!boss || boss.respawnT > 0 || boss.hp <= 0) {
       pushFeed(state, 'obj', '👑 보스 격파! 전설의 사냥이 끝났다!')
+      if (boss) {
+        // 토벌 피날레 — 쓰러진 자리에서 다단 폭발(클라 endFlash 파동과 겹쳐 붕괴감을 만든다)
+        pushFx(state, 'meteorhit', boss.x, boss.z, 14, 'blue', 1.3)
+        pushFx(state, 'berserk', boss.x, boss.z, 10, 'red', 1.1)
+        pushFx(state, 'rocksplash', boss.x, boss.z, 9, 'red')
+      }
       finish(state, 'blue')
     }
   }

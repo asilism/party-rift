@@ -456,8 +456,12 @@ function RiftPlay({
 
   const finished = hud.status === 'finished'
   const myTeam = me?.team
-  // 승리 메시지를 한 글자씩 나타나게 — "파랑팀 승리"를 글자 단위로 쪼갠다(공백은 자리만 차지)
-  const winText = hud.winner === 'blue' ? t('파랑팀 승리') : hud.winner === 'red' ? t('빨강팀 승리') : t('무승부')
+  // 승리 메시지를 한 글자씩 나타나게 — "파랑팀 승리"를 글자 단위로 쪼갠다(공백은 자리만 차지).
+  // 보스전은 토벌 서사로: "카르곤 토벌!" / "토벌 실패..."
+  const raidBoss = hud.mode === 'boss' ? hud.heroes?.find((h) => h.cls?.startsWith('boss_')) : null
+  const winText = raidBoss
+    ? hud.winner === 'blue' ? `${raidBoss.name} ${t('토벌!')}` : t('토벌 실패...')
+    : hud.winner === 'blue' ? t('파랑팀 승리') : hud.winner === 'red' ? t('빨강팀 승리') : t('무승부')
   let winBeat = 0
   const winChars = [...winText].map((ch, i) => ({
     ch, key: i, space: ch === ' ', delay: ch === ' ' ? 0 : winBeat++ * 0.16,
@@ -666,7 +670,7 @@ function RiftPlay({
           {(!myTeam || hud.winner === myTeam) && <Fireworks />}
           {/* 위쪽: 트로피 + 한 글자씩 나타나는 승리 메시지 */}
           <div className="win-banner">
-            <div className="win-banner__trophy">{hud.winner ? '🏆' : '🤝'}</div>
+            <div className="win-banner__trophy">{raidBoss && hud.winner === 'blue' ? '👑' : hud.winner ? '🏆' : '🤝'}</div>
             <h2 className="win-banner__title" aria-label={winText}>
               {winChars.map((c) =>
                 c.space
