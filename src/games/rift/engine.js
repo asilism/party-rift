@@ -214,7 +214,7 @@ export const CLASSES = {
   boss_colossus: {
     boss: true, name: '파멸의 거인', icon: '👹',
     desc: '대지를 부수는 전사형 보스 — 강타와 돌진, 회전 격노',
-    hp: 11800, hpLvl: 720, atk: 100, atkLvl: 8, range: 5.2, atkCd: 1.0, speed: 7.0, def: 0.35,
+    hp: 11800, hpLvl: 720, atk: 100, atkLvl: 8, range: 5.2, atkCd: 1.0, speed: 7.0, def: 0.4,
     skill: { name: '대지 강타', icon: '💥', cd: 9, desc: '주변 땅을 내리쳐 큰 피해 + 기절' },
     skill2: { name: '격돌 돌진', icon: '🌋', cd: 16, desc: '적에게 돌진해 들이받아 띄운다' },
     ult: { name: '회전 격노', icon: '🌪️', cd: 30, desc: '팽이처럼 돌며 주변을 계속 후린다' },
@@ -222,7 +222,7 @@ export const CLASSES = {
   boss_archmage: {
     boss: true, name: '대마도사', icon: '🧙',
     desc: '운석과 번개의 마법사형 보스 — 넓게 태우고 얼린다',
-    hp: 11200, hpLvl: 700, atk: 82, atkLvl: 6, range: 11, atkCd: 1.1, speed: 7.0, def: 0.42,
+    hp: 11200, hpLvl: 700, atk: 82, atkLvl: 6, range: 11, atkCd: 1.1, speed: 7.0, def: 0.47,
     skill: { name: '연쇄 뇌격', icon: '⚡', cd: 8, desc: '번개가 최대 5명을 타고 흐른다' },
     skill2: { name: '혹한 폭풍', icon: '❄️', cd: 14, desc: '주변을 얼려 빙결 + 피해' },
     ult: { name: '멸망의 운석', icon: '☄️', cd: 26, desc: '영웅들 머리 위로 운석을 떨어뜨린다' },
@@ -230,7 +230,7 @@ export const CLASSES = {
   boss_shadow: {
     boss: true, name: '그림자 군주', icon: '👺',
     desc: '어둠을 가르는 암살자형 보스 — 습격과 공포',
-    hp: 10800, hpLvl: 680, atk: 104, atkLvl: 8, range: 4.6, atkCd: 0.7, speed: 8.8, def: 0.36,
+    hp: 10800, hpLvl: 680, atk: 104, atkLvl: 8, range: 4.6, atkCd: 0.7, speed: 8.8, def: 0.46,
     skill: { name: '그림자 습격', icon: '🌀', cd: 9, desc: '가장 약한 적 뒤로 순간이동해 벤다' },
     skill2: { name: '공포의 포효', icon: '😱', cd: 16, desc: '주변 모두에게 공포 — 통제를 잃는다' },
     ult: { name: '어둠걸음', icon: '🌫️', cd: 26, desc: '어둠에 스며 모습을 감추고 빨라진다' },
@@ -2670,10 +2670,12 @@ function damageMonster(state, m, amount, attacker) {
 
 function damageTower(state, t, amount, attacker) {
   if (attacker?.isBoss) amount *= 0.3 // 보스전: 건물은 천천히 밀린다
-  // 보스전: 소환 병사의 건물 피해 감쇠 — 방어선의 시계는 보스 본인이 쥔다.
-  // 진군 전(소환 페이즈)의 파도는 건물을 거의 못 갉는다(막을 대상이지 시계가 아니다).
-  if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
-    amount *= state.time < BOSS_MARCH_AT ? 0.1 : 0.35
+  // 보스전: 소환수의 건물 피해 감쇠 — 방어선의 시계는 보스 본인이 쥔다.
+  // 그림자 영웅은 '아군을 사냥하는 처형자'지 공성팀이 아니다(안 그러면 7기가 진군 전에 타워를 민다).
+  // 병사 파도는 진군 전엔 거의 못 갉지만, 방치하면 외곽 타워가 실제로 갈린다.
+  if (attacker?.isBossAdd) amount *= 0.05
+  else if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
+    amount *= state.time < BOSS_MARCH_AT ? 0.18 : 0.28
   }
   if (!t.alive || !towerVulnerable(state, t)) return
   t.lastHurt = state.time // 공성당하는 중 — 봇 수비 콜 판정용
@@ -2698,8 +2700,9 @@ function damageTower(state, t, amount, attacker) {
 function damageNexus(state, team, amount, attacker) {
   if (!nexusVulnerable(state, team)) return
   if (attacker?.isBoss) amount *= 0.3 // 보스전: 건물은 "천천히" 밀린다 — 농사 지을 시간을 준다
-  if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
-    amount *= state.time < BOSS_MARCH_AT ? 0.1 : 0.35 // 진군 전 파도는 건물 시계를 못 돌린다
+  if (attacker?.isBossAdd) amount *= 0.05 // 그림자 영웅은 처형자 — 건물 시계는 보스의 몫
+  else if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
+    amount *= state.time < BOSS_MARCH_AT ? 0.18 : 0.28
   }
   const nx = state.nexus[team]
   if (nx.hp <= 0) return
@@ -4456,10 +4459,11 @@ const BOSS_SUMMON_CD = 18 // 병사 소환 주기
 // ── 보스 타임라인(시간 스테이지): 잠 → 대량 소환 → 정예 소환 → 진군 ──
 //  바로 진군하지 않는다 — 소환 페이즈 동안 병력의 파도를 막으며 성장하고,
 //  정예(그림자 영웅 5기)를 정리한 뒤에야 보스 본체가 움직인다.
-const BOSS_SLEEP_END = 45 // 옥좌에서 잠(무적) — 초반 파밍 타임은 짧게, 소환 페이즈가 곧 온다
-const BOSS_MASS_END = 150 // 45~150초: 대량 소환 페이즈 — 12초마다 10마리 파도가 세 갈래로
-const BOSS_MARCH_AT = 240 // 150~240초: 정예 소환 페이즈(그림자 영웅 5기) — 이후 진군 개시
-const BOSS_MASS_EVERY = 12 // 대량 소환 주기
+const BOSS_SLEEP_END = 30 // 옥좌에서 잠(무적) — 초반 파밍 타임은 짧게, 소환 국면이 곧 온다
+const BOSS_MASS_END = 150 // 30~150초: 대량 소환 국면 — 쉴새없는 파도(전투→회복→바로 복귀의 리듬)
+const BOSS_MARCH_AT = 240 // 150~240초: 정예 소환 국면(그림자 영웅) — 이후 진군 개시
+const BOSS_MASS_EVERY = 10 // 대량 소환 주기 — 한 파도를 정리하면 다음 파도가 이미 오고 있다
+const BOSS_MASS_COUNT = 14 // 파도 규모 — 여유가 있으면 안 된다. 외곽 타워 하나는 밀릴 각오
 const BOSS_FOCUS_AFTER = 40 // 한 방어선 앞에서 이만큼 지나면 '공성 집중' — 교착을 끊는다
 const BOSS_FOCUS_NEAR = 40 // 공성 집중 타이머는 방어선 이 거리 안에서만 차오른다(행군은 무관)
 const BOSS_REGROUP = 20 // 방어선을 부수면 이만큼 포효·재정비 — 반격(버스트)의 창이 열린다
@@ -4575,11 +4579,12 @@ function bossThink(state, h, dt) {
     pushFeed(state, 'obj', `⚔️ ${h.name}이(가) 정예 그림자 영웅들을 불러냈다 — 진군 전에 쓰러뜨려라!`)
   }
   // 병사 소환 — 스킬과 독립으로 돈다(포효 중에도 병력은 밀려온다).
-  // 대량 소환 페이즈엔 10마리 파도가 세 갈래로, 이후엔 6마리가 미드로. 페이즈가 오를수록 잦아진다.
-  if (h.bossCd.summon <= 0) {
+  // 대량 소환 국면: 쉴새없는 파도. 정예 국면: 소환 정지 — 그림자 영웅들과의 순수 결전
+  // (파도가 겹치면 결전 중에 타워가 덤으로 갈린다). 진군 국면: 6마리 호위 파도 재개.
+  if (h.bossCd.summon <= 0 && stage !== 'elite') {
     if (stage === 'mass') {
       h.bossCd.summon = BOSS_MASS_EVERY
-      bossSummon(state, h, { count: 10, hpMul: 1.0 })
+      bossSummon(state, h, { count: BOSS_MASS_COUNT, hpMul: 1.0 })
     } else {
       h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
       bossSummon(state, h)
@@ -4675,36 +4680,45 @@ function bossThink(state, h, dt) {
   if (h.cls === 'boss_colossus') bossColossus(state, h, foe)
   else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
   else bossShadow(state, h, foe, siege)
-  // 평타: 구조물이 사거리 안이면 무조건 구조물 — 영웅들이 몸으로 막아도 공성은
-  // 멈추지 않는다(엔레이지 타이머: 보스를 잡지 못하면 결국 본진이 무너진다).
-  // 영웅 응징은 스킬 로테이션과 사거리 밖 접근 이동이 맡는다.
+  // ── 행동 결심(3초 커밋): '응징'(붙은 적을 팬다)이냐 '공성'(구조물을 부순다)이냐를 정하고
+  //    그동안 유지한다. 틱마다 목표를 바꾸면 타워 앞에서 아무것도 못 때리고 얻어맞기만 하는
+  //    우왕좌왕(교전 판정 경계에서 서성이는 사각지대)이 생긴다 — 결심했으면 밀어붙인다.
   const range = CLASSES[h.cls].range
   const sDist = Math.hypot(siege.x - h.x, siege.z - h.z) - siege.surf
-  const engaged = foe && bd <= (range * 1.15) ** 2
-  castAttack(state, h.id, sDist <= range ? siege : engaged && !focus ? null : siege)
-  // 이동: 붙은 적과 교전 > 사거리 밖 적에게 접근 > 공성 목표로 진군.
-  // 공성 집중 중엔 영웅을 무시하고 구조물로 직행한다(스킬 로테이션이 응징을 맡는다).
-  let tx
-  let tz
-  if (engaged && !focus) {
-    h.mx = 0
-    h.mz = 0
-    h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+  const canFight = foe && !focus
+  if (
+    h.bossDecideT == null || state.time >= h.bossDecideT ||
+    (h.bossMode === 'fight' && !canFight) // 응징 대상이 사라졌으면 즉시 공성으로
+  ) {
+    // 어그로 반경 안에 적이 있으면 응징이 기본 — 공성만 파면 시계가 너무 빨리 돈다.
+    // 교착은 공성 집중(BOSS_FOCUS_AFTER)이 끊는다.
+    h.bossMode = canFight && bd <= BOSS_AGGRO * BOSS_AGGRO ? 'fight' : 'siege'
+    h.bossDecideT = state.time + 3
+  }
+  if (h.bossMode === 'fight') {
+    // 응징: 표적을 사거리 안까지 쫓아 들어가 팬다 — 경계에서 멈춰 서지 않는다
+    castAttack(state, h.id, dist(h, foe) <= range ? { tk: 'hero', id: foe.id } : null)
+    if (dist(h, foe) > range * 0.9) {
+      const dir = state.map.avoidDir(h, foe.x, foe.z, state.towers, 2.4)
+      h.mx = dir.x
+      h.mz = dir.z
+    } else {
+      h.mx = 0
+      h.mz = 0
+      h.dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    }
     return
   }
-  if (foe && !focus) {
-    tx = foe.x
-    tz = foe.z
-  } else if (sDist <= range * 0.8) {
+  // 공성: 구조물로 직행해 부순다 — 영웅이 몸으로 막아도 멈추지 않는다
+  // (엔레이지 타이머: 보스를 잡지 못하면 결국 본진이 무너진다). 응징은 스킬 로테이션이 맡는다.
+  castAttack(state, h.id, sDist <= range ? siege : null)
+  if (sDist <= range * 0.8) {
     h.mx = 0
     h.mz = 0
     h.dir = Math.atan2(siege.z - h.z, siege.x - h.x)
     return
-  } else {
-    tx = siege.x
-    tz = siege.z
   }
-  const dir = state.map.avoidDir(h, tx, tz, state.towers, 2.4)
+  const dir = state.map.avoidDir(h, siege.x, siege.z, state.towers, 2.4)
   h.mx = dir.x
   h.mz = dir.z
 }
@@ -4739,6 +4753,7 @@ function bossSummon(state, h, { count = 6, hpMul = 1.3 } = {}) {
 // 보스전 정예 소환: 보스 유형에 맞는 '그림자 영웅' 5기 — 성곽에서 뛰쳐나와 미드로 진군한다.
 //  일반 영웅과 같은 몸(스킬·평타·봇 두뇌·킬 보상)이지만 죽으면 부활하지 않는다(레이드 쫄 페이즈).
 //  잡을 때마다 킬 골드·경험치가 아군의 성장 연료가 된다 — 방치하면 방어선이 먼저 갈린다.
+// 5기면 충분하다 — 아군 평균 레벨 + 후퇴 없음이라 순삭당하지 않는다(순삭 문제가 재발하면 확대)
 const BOSS_ADD_SQUADS = {
   boss_colossus: ['warrior', 'tank', 'gladiator', 'swordmaster', 'guardian'],
   boss_archmage: ['mage', 'cryomancer', 'warlock', 'terramancer', 'chronomancer'],
@@ -4746,18 +4761,23 @@ const BOSS_ADD_SQUADS = {
 }
 function bossSummonAdds(state, h) {
   const squad = BOSS_ADD_SQUADS[h.cls] || BOSS_ADD_SQUADS.boss_colossus
+  // 레벨은 아군 평균에 맞춘다 — 보스 자동레벨 기준으로 뽑으면 파도 파밍으로 앞서간
+  // 아군(Lv8+)에게 Lv2 정예가 순삭당해 위협이 아니라 골드 셔틀이 된다
+  const blues = state.heroes.filter((e) => e.team === 'blue')
+  const avgLvl = Math.round(blues.reduce((s, e) => s + e.lvl, 0) / Math.max(1, blues.length))
+  const addLvl = Math.max(1, Math.max(h.lvl, avgLvl - 1))
   for (let i = 0; i < squad.length; i++) {
     const cls = squad[i]
-    const a = Math.PI - 0.5 + (i / (squad.length - 1)) * 1.0 // 서쪽 관문 방향 부채꼴로 등장
+    const a = Math.PI - 0.6 + (i / (squad.length - 1)) * 1.2 // 서쪽 관문 방향 부채꼴로 등장
     const pos = { x: h.x + Math.cos(a) * 7, z: h.z + Math.sin(a) * 7 }
     const add = makeHeroState(
       { id: `add${state.nextId++}`, name: `그림자 ${CLASSES[cls].name}`, zodiacId: cls, team: 'red', isBot: true },
       cls, pos, state.map, state.rng,
     )
     add.isBoss = false
-    add.isBossAdd = true // 부활 없음(damageHero) + 보스와 함께 자동 성장(bossThink)
+    add.isBossAdd = true // 부활 없음·후퇴 없음(damageHero/stepBots) + 보스와 함께 자동 성장(bossThink)
     add.role = 'mid'
-    add.lvl = Math.max(1, h.lvl)
+    add.lvl = addLvl
     add.maxHp = heroMaxHp(add)
     add.hp = add.maxHp
     add.gold = 0
@@ -5092,8 +5112,9 @@ function stepBots(state, dt) {
         continue
       }
     }
-    // 후퇴 판단 (탱커는 더 끈질기게 버틴다)
-    const panic = h.cls === 'tank' ? 0.22 : 0.3
+    // 후퇴 판단 (탱커는 더 끈질기게 버틴다).
+    // 그림자 영웅(보스 정예 소환수)은 후퇴가 없다 — 소모품답게 끝까지 몰아붙인다.
+    const panic = h.isBossAdd ? 0 : h.cls === 'tank' ? 0.22 : 0.3
     if (h.hp < h.maxHp * panic) h.botRetreat = true
     if (h.botRetreat && h.hp > h.maxHp * 0.85) h.botRetreat = false
     if (h.botRetreat) {
@@ -5390,13 +5411,14 @@ function botBossDuty(state, h, dt) {
     botAttack(state, h, dt)
     return
   }
-  // ② 파도 요격: 행군 중인 붉은 병사 — 가장 가까운 무리부터. 성곽(적 우물) 근처까진 안 쫓는다.
-  const rn = state.map.NEXUS_POS.red
+  // ② 파도 요격: 전선 가까이(50) 들어온 파도만 상대한다 — 성곽 앞까지 마중 나가면
+  //    전선이 비고, 적진에서 소모돼 귀환·복귀를 반복하는 사이 타워가 갈린다.
+  //    파도는 타워 사거리와 함께 초크에서 받아친다(전투→회복→바로 복귀의 리듬).
   let mob = null
-  let md = 90 * 90
+  let md = Infinity
   for (const m of state.minions) {
     if (m.team !== 'red') continue
-    if (dist2(m, rn) < 34 * 34) continue // 갓 소환된 병사를 성곽 안까지 마중가지 않는다
+    if (dist2(m, front) > 50 * 50) continue // 아직 먼 파도는 오게 둔다
     const d = dist2(h, m)
     if (d < md) { md = d; mob = m }
   }
