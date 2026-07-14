@@ -5071,7 +5071,7 @@ function bossShadow(state, h, foe, siege) {
       // 습격의 칼날은 반 박자 늦게 떨어진다 — 표식(예고)을 보고 몸을 빼면 산다.
       // 분노하면 형태가 바뀐다: 연격(도주로 예측) → 참수 난무(여럿 동시 표식)
       pushBossZone(state, h, {
-        x: weakest.x, z: weakest.z, r: 4.2, delay: 1.0, dmg: skillDmg(h, 250, 5.0),
+        x: weakest.x, z: weakest.z, r: 4.2, delay: 1.0, dmg: skillDmg(h, 200, 4.0),
         vfx: 'shadowexec', hue: 'shadow', aim: true,
       })
       if (p === 2) {
@@ -5079,7 +5079,7 @@ function bossShadow(state, h, foe, siege) {
         const px = weakest.x + (weakest.mx || 0) * 6
         const pz = weakest.z + (weakest.mz || 0) * 6
         pushBossZone(state, h, {
-          x: px, z: pz, r: 4.2, delay: 1.4, dmg: skillDmg(h, 200, 4.0),
+          x: px, z: pz, r: 4.2, delay: 1.4, dmg: skillDmg(h, 170, 3.4),
           vfx: 'shadowexec', hue: 'shadow', aim: true,
         })
       } else if (p === 3) {
@@ -5091,7 +5091,7 @@ function bossShadow(state, h, foe, siege) {
           if (!isHeroVisible(state, e, h.team) || dist(h, e) > 24) continue
           marks++
           pushBossZone(state, h, {
-            x: e.x, z: e.z, r: 4.2, delay: 1.2 + marks * 0.15, dmg: skillDmg(h, 200, 4.0),
+            x: e.x, z: e.z, r: 4.2, delay: 1.2 + marks * 0.15, dmg: skillDmg(h, 170, 3.4),
             vfx: 'shadowexec', hue: 'shadow', aim: true,
           })
         }
@@ -5402,7 +5402,11 @@ function stepBots(state, dt) {
         if (towerD < TOWER_RANGE + 3) {
           dive = foe.hp < foe.maxHp * 0.4 && h.botKillT < 1.3 && h.botLifeT > h.botKillT * 1.6
         }
-        if (winning && dive) {
+        // 보스 상대 원거리 봇은 '유리' 판정 없이도 접근한다 — 카이팅 태세(botWin=false 고정)
+        // 때문에 부활·정비 복귀 봇이 사거리 밖 전투를 타워 뒤에서 구경만 하던 문제.
+        // 접근은 사거리 끝(카이팅 밴드)까지만. 근접 직업은 제외 — 포효(공포)+처형 표식
+        // 콤보 사거리로 제 발로 걸어 들어가 연쇄 전멸한다(시뮬 12판 전패 확인).
+        if ((winning || (state.mode === 'boss' && foe.isBoss && !losing && CLASSES[h.cls].range >= 8)) && dive) {
           steerToward(state, h, foe) // 옆걸음 없이 전속 직진으로 따라붙는다
           botAttack(state, h, dt)
           botCombatSkills(state, h, foe, d, nearCount)
