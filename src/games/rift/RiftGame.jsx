@@ -252,6 +252,19 @@ function BossRaidBar({ hud }) {
   )
 }
 
+// 보스전 인트로 타이틀 카드 — 카운트다운 동안 카메라가 보스를 비추는 사이 중앙에 뜬다
+function BossIntroCard({ hud }) {
+  const boss = hud.heroes?.find((h) => h.cls?.startsWith('boss_'))
+  if (!boss) return null
+  return (
+    <div className="boss-intro">
+      <div className="boss-intro__type">{BOSS_FACE[boss.cls] || '👹'} {t(CLASSES[boss.cls]?.name || '보스')}</div>
+      <div className="boss-intro__name">{boss.name}</div>
+      <div className="boss-intro__sub">{t('쓰러뜨리면 승리 — 수호석을 지켜라')}</div>
+    </div>
+  )
+}
+
 // 양 팀 현황판(팀 킬 스코어 + 영웅별 K/D/A·레벨·아이템). 두 팀 카드를 나란히 반환한다 —
 // 감싸는 래퍼(.rift__dead-board / .rift-result / .rift-board__panel)는 호출부가 정한다.
 // 사망 화면·설정 팝업·결과창에서 공용으로 쓴다.
@@ -479,6 +492,7 @@ function RiftPlay({
 
       <div className="rift__hud">
         {hud.mode === 'boss' && !finished && <BossRaidBar hud={hud} />}
+        {hud.mode === 'boss' && hud.status === 'countdown' && <BossIntroCard hud={hud} />}
         <div className="ladder__topbar rift__topbar">
           {/* 우상단(설정 옆): 개인 전적 — 킬/데스/어시 · 골드 · 진행 시간 */}
           <div className="topbar__right">

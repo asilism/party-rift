@@ -3383,3 +3383,31 @@ body {
   .boss-bar__title { font-size: 11px; }
   .boss-bar__track { height: 11px; }
 }
+
+/* ── 보스전 인트로 타이틀 카드 ── */
+.boss-intro {
+  position: absolute; top: 13%; left: 50%; transform: translateX(-50%);
+  text-align: center; pointer-events: none; z-index: 6;
+  animation: bossIntroIn 0.9s ease-out both;
+}
+.boss-intro__type {
+  color: #c9a8ff; font-size: 17px; font-weight: 700; letter-spacing: 0.24em;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
+}
+.boss-intro__name {
+  margin-top: 2px; color: #fff; font-size: 46px; font-weight: 900; letter-spacing: 0.12em;
+  font-family: 'Black Han Sans', sans-serif;
+  text-shadow: 0 0 22px rgba(178, 102, 255, 0.55), 0 3px 10px rgba(0, 0, 0, 0.9);
+}
+.boss-intro__sub {
+  margin-top: 6px; color: rgba(255, 255, 255, 0.72); font-size: 13px; letter-spacing: 0.08em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+@keyframes bossIntroIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(14px) scale(0.94); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+@media (max-width: 640px) {
+  .boss-intro__name { font-size: 32px; }
+  .boss-intro__type { font-size: 13px; }
+}
