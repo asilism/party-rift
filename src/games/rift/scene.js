@@ -4330,6 +4330,28 @@ function buildBossZone(z) {
     safe.position.y = 0.26
     g.add(safe)
   }
+  // 조준 표식(aim): '네가 서 있던 자리를 노린다' — 흰 조준 틱 4개가 조여들며 돌고 중심점이 고동친다
+  let aimTicks = null
+  let aimDot = null
+  if (z.aim) {
+    aimTicks = new THREE.Group()
+    for (let i = 0; i < 4; i++) {
+      const arc = new THREE.Mesh(
+        new THREE.RingGeometry(z.r * 1.02, z.r * 1.16, 10, 1, (i / 4) * Math.PI * 2 + 0.18, Math.PI * 0.22),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false })
+      )
+      aimTicks.add(arc)
+    }
+    aimTicks.rotation.x = -Math.PI / 2
+    aimTicks.position.y = 0.32
+    aimDot = new THREE.Mesh(
+      new THREE.CircleGeometry(0.7, 16),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false })
+    )
+    aimDot.rotation.x = -Math.PI / 2
+    aimDot.position.y = 0.3
+    g.add(aimTicks, aimDot)
+  }
   // 도는 내곽 링(부챗살 3개) — "차오르는" 긴장감
   const spin = new THREE.Group()
   for (let i = 0; i < 3; i++) {
@@ -4353,9 +4375,16 @@ function buildBossZone(z) {
       disc.material.opacity = 0.1 + 0.3 * f + 0.08 * Math.sin(zz.t * 14)
       spin.rotation.z = zz.t * 2.4
       spin.scale.setScalar(0.6 + 0.4 * f)
+      if (aimTicks) {
+        aimTicks.visible = aimDot.visible = true
+        aimTicks.rotation.z = -zz.t * 3.2 // 링과 반대로 돌아 '조준'이 또렷이 구분된다
+        aimTicks.scale.setScalar(1.4 - 0.4 * f) // 조여들며 확정되는 조준
+        aimDot.scale.setScalar(1 + 0.35 * Math.sin(zz.t * 16)) // 다급한 고동
+      }
     } else {
-      // 잔류 장판: 웅덩이 — 사라지기 0.5초 전부터 페이드
+      // 잔류 장판: 웅덩이 — 사라지기 0.5초 전부터 페이드. 조준 표식은 폭발과 함께 걷는다
       mark.visible = spin.visible = false
+      if (aimTicks) aimTicks.visible = aimDot.visible = false
       const left = (zz.life || 0) - (zz.t - delay)
       const fade = Math.max(0, Math.min(1, left / 0.5))
       disc.material.color.setHex(hue.pool)
