@@ -4531,7 +4531,7 @@ function bossThink(state, h, dt) {
   }
   if (!h.bossAwake) {
     h.bossAwake = true
-    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name}이(가) 깨어나 어둠의 병력을 소환한다 — 파도를 막아라! (소환 페이즈)`)
+    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name}이(가) 깨어나 어둠의 병력을 소환한다 — 파도를 막아라!`)
   }
   // 광폭화(엔레이지): 진군 후 11분이 지나면 CC를 무시하고 피해가 1.5배 — 무한 대치 방지
   if (!h.bossEnraged && state.time > BOSS_MARCH_AT + 660) {
@@ -4558,8 +4558,8 @@ function bossThink(state, h, dt) {
       vfx: 'quake', hue: BOSS_HUE[h.cls] || 'lava',
     })
     pushFeed(state, 'obj', wantPhase === 2
-      ? `💢 ${h.name}의 분노가 끓어오른다 — 공격이 거세진다! (2페이즈)`
-      : `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다, 몰아쳐라! (3페이즈)`)
+      ? `💢 ${h.name}의 분노가 끓어오른다 — 공격이 거세진다!`
+      : `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다, 몰아쳐라!`)
   }
   if (h.stunT > 0 || h.pullT > 0 || h.airT > 0 || h.fearT > 0 || h.knockT > 0) {
     h.mx = 0
@@ -4572,7 +4572,7 @@ function bossThink(state, h, dt) {
   if (stage !== 'mass' && !h.bossAddsDone) {
     h.bossAddsDone = true
     bossSummonAdds(state, h)
-    pushFeed(state, 'obj', `⚔️ ${h.name}이(가) 정예 그림자 영웅들을 불러냈다 — 진군 전에 쓰러뜨려라! (정예 페이즈)`)
+    pushFeed(state, 'obj', `⚔️ ${h.name}이(가) 정예 그림자 영웅들을 불러냈다 — 진군 전에 쓰러뜨려라!`)
   }
   // 병사 소환 — 스킬과 독립으로 돈다(포효 중에도 병력은 밀려온다).
   // 대량 소환 페이즈엔 10마리 파도가 세 갈래로, 이후엔 6마리가 미드로. 페이즈가 오를수록 잦아진다.
@@ -4768,20 +4768,48 @@ function bossSummonAdds(state, h) {
   pushFx(state, 'summon', h.x, h.z, 9, 'red', 1.2)
 }
 
-// 전사형 — 대지 강타(예고→광역 기절+용암 장판) / 격돌 돌진(들이받아 띄움) / 회전 격노(지속 광역)
-//  페이즈업: 강타 균열이 넓어지고(9→10.5→12) 2페이즈부턴 용암이 남으며, 회전 격노가 길어진다(3초→4.5초)
+// 전사형 — 대지 강타(예고→광역 기절) / 격돌 돌진(들이받아 띄움) / 회전 격노(지속 광역)
+//  강타는 분노할수록 형태가 바뀐다: 단일 균열 → 파생 균열(적 발밑)+용암 → 3중 파문(안→밖 연쇄).
+//  회전 격노는 필사 국면에 길어진다(3초→4.5초)
 function bossColossus(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1]
   if (h.bossCd.a <= 0 && foe && dist(h, foe) < 8) {
     h.bossCd.a = CLASSES[h.cls].skill.cd * cdMul
-    const qr = p === 3 ? 12 : p === 2 ? 10.5 : 9
     pushFx(state, 'rocksplash', h.x, h.z, 4, h.team) // 땅을 파고드는 예열
-    pushBossZone(state, h, {
-      x: h.x, z: h.z, r: qr, delay: 1.1, dmg: skillDmg(h, 60, 1.2), stun: 1.0,
-      vfx: 'quake', hue: 'lava',
-      ...(p >= 2 ? { life: 3.5, dps: skillDmg(h, 10, 0.15) } : null), // 분노한 대지는 용암을 남긴다
-    })
+    if (p === 1) {
+      // 진군: 발밑 단일 균열
+      pushBossZone(state, h, {
+        x: h.x, z: h.z, r: 9, delay: 1.1, dmg: skillDmg(h, 60, 1.2), stun: 1.0,
+        vfx: 'quake', hue: 'lava',
+      })
+    } else if (p === 2) {
+      // 분노: 균열이 넓어지고 용암이 남으며, 파생 균열이 적의 발밑까지 뻗는다
+      pushBossZone(state, h, {
+        x: h.x, z: h.z, r: 10.5, delay: 1.1, dmg: skillDmg(h, 60, 1.2), stun: 1.0,
+        vfx: 'quake', hue: 'lava', life: 3.5, dps: skillDmg(h, 10, 0.15),
+      })
+      let forks = 0
+      for (const e of state.heroes) {
+        if (forks >= 2) break
+        if (e.team === h.team || e.respawnT > 0 || !isHeroVisible(state, e, h.team)) continue
+        if (dist(h, e) > 20) continue
+        forks++
+        pushBossZone(state, h, {
+          x: e.x, z: e.z, r: 5, delay: 1.45, dmg: skillDmg(h, 45, 0.9), stun: 0.6,
+          vfx: 'quake', hue: 'lava',
+        })
+      }
+    } else {
+      // 필사: 3중 파문 — 안쪽부터 바깥으로 차례로 터진다. 파문 사이 틈을 읽고 빠져나가야 한다
+      for (let i = 0; i < 3; i++) {
+        pushBossZone(state, h, {
+          x: h.x, z: h.z, r: 6 + i * 4, delay: 0.9 + i * 0.5, dmg: skillDmg(h, 42, 0.85), stun: 0.8,
+          vfx: 'quake', hue: 'lava',
+          ...(i === 0 ? { life: 3.5, dps: skillDmg(h, 10, 0.15) } : null), // 중심엔 용암이 고인다
+        })
+      }
+    }
   }
   if (h.bossCd.b <= 0 && foe) {
     const d = dist(h, foe)
@@ -4812,8 +4840,9 @@ function bossColossus(state, h, foe) {
   }
 }
 
-// 마법사형 — 연쇄 뇌격 / 혹한 폭풍(광역 빙결) / 멸망의 운석(영웅들 머리 위 낙하)
-//  페이즈업: 뇌격 연쇄가 늘고(5→6→7) 운석이 더 많은 영웅을 노린다(3→4→5)
+// 마법사형 — 연쇄 뇌격 / 혹한 폭풍(예고→광역 빙결) / 멸망의 운석(영웅들 머리 위 낙하)
+//  폭풍은 분노할수록 형태가 바뀐다: 단일 폭풍 → 서리밭+위성 폭풍(가장 먼 적) → 눈보라 융단(십자 4방).
+//  뇌격 연쇄가 늘고(5→6→7) 운석이 더 많은 영웅을 노린다(3→4)
 function bossArchmage(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1]
@@ -4841,12 +4870,47 @@ function bossArchmage(state, h, foe) {
   }
   if (h.bossCd.b <= 0 && foe && dist(h, foe) < 9) {
     h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
-    // 혹한 폭풍: 냉기가 모여드는 예고 → 폭발 빙결. 2페이즈부턴 서리밭이 남아 밟으면 얼어붙는다.
-    pushBossZone(state, h, {
-      x: h.x, z: h.z, r: 10, delay: 1.2, dmg: skillDmg(h, 30, 0.5), freeze: 2.0,
-      vfx: 'abszero', hue: 'frost',
-      ...(p >= 2 ? { life: 3.0, dps: skillDmg(h, 6, 0.1), slow: 0.5 } : null),
-    })
+    // 혹한 폭풍: 냉기가 모여드는 예고 → 폭발 빙결. 분노하면 형태가 바뀐다.
+    if (p === 1) {
+      // 진군: 자기 중심 단일 폭풍
+      pushBossZone(state, h, {
+        x: h.x, z: h.z, r: 10, delay: 1.2, dmg: skillDmg(h, 30, 0.5), freeze: 2.0,
+        vfx: 'abszero', hue: 'frost',
+      })
+    } else if (p === 2) {
+      // 분노: 서리밭이 남고, 가장 먼 적의 발밑에도 위성 폭풍이 하나 더
+      pushBossZone(state, h, {
+        x: h.x, z: h.z, r: 10, delay: 1.2, dmg: skillDmg(h, 30, 0.5), freeze: 2.0,
+        vfx: 'abszero', hue: 'frost', life: 3.0, dps: skillDmg(h, 6, 0.1), slow: 0.5,
+      })
+      let far = null
+      let fd = 0
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || !isHeroVisible(state, e, h.team)) continue
+        const d = dist2(h, e)
+        if (d > fd && d < 26 * 26) { fd = d; far = e }
+      }
+      if (far) {
+        pushBossZone(state, h, {
+          x: far.x, z: far.z, r: 7, delay: 1.4, dmg: skillDmg(h, 26, 0.45), freeze: 1.6,
+          vfx: 'abszero', hue: 'frost', life: 3.0, dps: skillDmg(h, 6, 0.1), slow: 0.5,
+        })
+      }
+    } else {
+      // 필사: 눈보라 융단 — 중심 + 십자 4방이 시차를 두고 얼어붙는다. 설 자리가 사라진다
+      pushBossZone(state, h, {
+        x: h.x, z: h.z, r: 10, delay: 1.2, dmg: skillDmg(h, 30, 0.5), freeze: 2.0,
+        vfx: 'abszero', hue: 'frost', life: 3.0, dps: skillDmg(h, 6, 0.1), slow: 0.5,
+      })
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + Math.PI / 4
+        pushBossZone(state, h, {
+          x: h.x + Math.cos(a) * 9.5, z: h.z + Math.sin(a) * 9.5, r: 7,
+          delay: 1.35 + i * 0.15, dmg: skillDmg(h, 24, 0.4), freeze: 1.4,
+          vfx: 'abszero', hue: 'frost', life: 2.6, dps: skillDmg(h, 6, 0.1), slow: 0.5,
+        })
+      }
+    }
   }
   if (h.bossCd.c <= 0 && foe) {
     h.bossCd.c = CLASSES[h.cls].ult.cd * cdMul
@@ -4860,8 +4924,9 @@ function bossArchmage(state, h, foe) {
   }
 }
 
-// 암살자형 — 그림자 습격(최저 체력 적 급습) / 공포의 포효 / 어둠걸음(은신+가속)
-//  페이즈업: 포효가 넓어지고(11→12.5→14) 3페이즈엔 혼자만 있어도 포효하며, 습격 후 가속을 얻는다
+// 암살자형 — 그림자 습격(순간이동→예고 칼날) / 공포의 포효(예고→광역 공포) / 어둠걸음(은신+가속)
+//  습격은 분노할수록 형태가 바뀐다: 단일 칼날 → 연격(도주로 예측 2연타) → 참수 난무(여럿 동시 표식).
+//  포효는 넓어지고(11→12.5→14) 필사 국면엔 혼자만 있어도 내지르며, 습격 후 가속을 얻는다
 function bossShadow(state, h, foe, siege) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1]
@@ -4882,11 +4947,34 @@ function bossShadow(state, h, foe, siege) {
       h.dir = Math.atan2(weakest.z - h.z, weakest.x - h.x)
       state.map.resolveTerrain(h, 2.2, colliders(state))
       pushFx(state, 'blink', h.x, h.z, 3, h.team)
-      // 습격의 칼날은 반 박자 늦게 떨어진다 — 표식(예고)을 보고 몸을 빼면 산다
+      // 습격의 칼날은 반 박자 늦게 떨어진다 — 표식(예고)을 보고 몸을 빼면 산다.
+      // 분노하면 형태가 바뀐다: 연격(도주로 예측) → 참수 난무(여럿 동시 표식)
       pushBossZone(state, h, {
         x: weakest.x, z: weakest.z, r: 4.2, delay: 0.75, dmg: skillDmg(h, 48, 1.05),
         vfx: 'shadowexec', hue: 'shadow',
       })
+      if (p === 2) {
+        // 연격: 도망갈 방향을 읽고 두 번째 칼날을 심는다
+        const px = weakest.x + (weakest.mx || 0) * 6
+        const pz = weakest.z + (weakest.mz || 0) * 6
+        pushBossZone(state, h, {
+          x: px, z: pz, r: 4.2, delay: 1.15, dmg: skillDmg(h, 38, 0.85),
+          vfx: 'shadowexec', hue: 'shadow',
+        })
+      } else if (p === 3) {
+        // 참수 난무: 보이는 다른 적들에게도 칼날 표식 — 모두가 발밑을 살펴야 한다
+        let marks = 0
+        for (const e of state.heroes) {
+          if (marks >= 2) break
+          if (e === weakest || e.team === h.team || e.respawnT > 0) continue
+          if (!isHeroVisible(state, e, h.team) || dist(h, e) > 24) continue
+          marks++
+          pushBossZone(state, h, {
+            x: e.x, z: e.z, r: 4.2, delay: 0.9 + marks * 0.15, dmg: skillDmg(h, 40, 0.9),
+            vfx: 'shadowexec', hue: 'shadow',
+          })
+        }
+      }
       if (p >= 2) h.hasteT = Math.max(h.hasteT, 1.5) // 분노한 그림자는 습격 뒤 더 빨라진다
     }
   }
