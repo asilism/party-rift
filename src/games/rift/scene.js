@@ -4297,6 +4297,64 @@ function buildMeteorZone(z) {
   return g
 }
 
+// 보스 예고 장판 — 경고(닫혀 들어오는 링 + 고동치는 원판 + 도는 내곽 링) → 폭발(fx가 그림)
+//  → 잔류 장판(용암/서리/어둠 웅덩이, 사라지기 전 페이드). hue로 색조를 정한다.
+const BOSSZONE_HUES = {
+  lava: { ring: 0xff7a2e, fill: 0xff5a1e, pool: 0xff6a30 },
+  frost: { ring: 0x8fd8ff, fill: 0x6db8e8, pool: 0x9fe4ff },
+  shadow: { ring: 0xb266ff, fill: 0x8a5cff, pool: 0x9a6cff },
+}
+function buildBossZone(z) {
+  const hue = BOSSZONE_HUES[z.hue] || BOSSZONE_HUES.lava
+  const g = new THREE.Group()
+  g.position.set(z.x, 0, z.z)
+  const mark = new THREE.Mesh(
+    new THREE.RingGeometry(z.r * 0.9, z.r, 44),
+    new THREE.MeshBasicMaterial({ color: hue.ring, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })
+  )
+  mark.rotation.x = -Math.PI / 2
+  mark.position.y = 0.3
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(z.r, 36),
+    new THREE.MeshBasicMaterial({ color: hue.fill, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })
+  )
+  disc.rotation.x = -Math.PI / 2
+  disc.position.y = 0.22
+  // 도는 내곽 링(부챗살 3개) — "차오르는" 긴장감
+  const spin = new THREE.Group()
+  for (let i = 0; i < 3; i++) {
+    const arc = new THREE.Mesh(
+      new THREE.RingGeometry(z.r * 0.55, z.r * 0.66, 20, 1, (i / 3) * Math.PI * 2, Math.PI * 0.44),
+      new THREE.MeshBasicMaterial({ color: hue.ring, transparent: true, opacity: 0.6, side: THREE.DoubleSide, depthWrite: false })
+    )
+    spin.add(arc)
+  }
+  spin.rotation.x = -Math.PI / 2
+  spin.position.y = 0.26
+  g.add(mark, disc, spin)
+  g.userData.update = (zz) => {
+    const delay = zz.delay || 1
+    if (zz.t < delay) {
+      // 경고: 바깥에서 조여 들어오는 링 + 점점 짙어지는 원판
+      const f = Math.max(0, Math.min(1, zz.t / delay))
+      mark.visible = spin.visible = true
+      mark.material.opacity = 0.5 + 0.4 * f
+      mark.scale.setScalar(1 + (1 - f) * 0.5)
+      disc.material.opacity = 0.1 + 0.3 * f + 0.08 * Math.sin(zz.t * 14)
+      spin.rotation.z = zz.t * 2.4
+      spin.scale.setScalar(0.6 + 0.4 * f)
+    } else {
+      // 잔류 장판: 웅덩이 — 사라지기 0.5초 전부터 페이드
+      mark.visible = spin.visible = false
+      const left = (zz.life || 0) - (zz.t - delay)
+      const fade = Math.max(0, Math.min(1, left / 0.5))
+      disc.material.color.setHex(hue.pool)
+      disc.material.opacity = (0.34 + 0.08 * Math.sin(zz.t * 6)) * fade
+    }
+  }
+  return g
+}
+
 // 오브젝트의 geometry/material/texture를 정리 (풀에서 빠질 때 GPU 메모리 회수)
 function disposeObject(obj) {
   obj.traverse?.((o) => {
@@ -5583,7 +5641,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     // 지면 범위 장판 (운석 조준+낙하 / 이무기 독 웅덩이)
     syncPool(
       scene, zonePool, view.zones || [],
-      (z) => (z.kind === 'venom' ? buildVenomZone(z) : buildMeteorZone(z)),
+      (z) => (z.kind === 'venom' ? buildVenomZone(z) : z.kind === 'bosszone' ? buildBossZone(z) : buildMeteorZone(z)),
       (obj, z) => {
         obj.visible = inVision(z.x, z.z) // 안개 속 장판은 숨긴다
         obj.userData.update?.(z)

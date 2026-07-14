@@ -214,7 +214,7 @@ export const CLASSES = {
   boss_colossus: {
     boss: true, name: '파멸의 거인', icon: '👹',
     desc: '대지를 부수는 전사형 보스 — 강타와 돌진, 회전 격노',
-    hp: 11000, hpLvl: 700, atk: 100, atkLvl: 8, range: 5.2, atkCd: 1.0, speed: 7.0, def: 0.35,
+    hp: 11800, hpLvl: 720, atk: 100, atkLvl: 8, range: 5.2, atkCd: 1.0, speed: 7.0, def: 0.35,
     skill: { name: '대지 강타', icon: '💥', cd: 9, desc: '주변 땅을 내리쳐 큰 피해 + 기절' },
     skill2: { name: '격돌 돌진', icon: '🌋', cd: 16, desc: '적에게 돌진해 들이받아 띄운다' },
     ult: { name: '회전 격노', icon: '🌪️', cd: 30, desc: '팽이처럼 돌며 주변을 계속 후린다' },
@@ -222,7 +222,7 @@ export const CLASSES = {
   boss_archmage: {
     boss: true, name: '대마도사', icon: '🧙',
     desc: '운석과 번개의 마법사형 보스 — 넓게 태우고 얼린다',
-    hp: 10500, hpLvl: 680, atk: 80, atkLvl: 6, range: 11, atkCd: 1.1, speed: 7.0, def: 0.42,
+    hp: 11200, hpLvl: 700, atk: 82, atkLvl: 6, range: 11, atkCd: 1.1, speed: 7.0, def: 0.42,
     skill: { name: '연쇄 뇌격', icon: '⚡', cd: 8, desc: '번개가 최대 5명을 타고 흐른다' },
     skill2: { name: '혹한 폭풍', icon: '❄️', cd: 14, desc: '주변을 얼려 빙결 + 피해' },
     ult: { name: '멸망의 운석', icon: '☄️', cd: 26, desc: '영웅들 머리 위로 운석을 떨어뜨린다' },
@@ -230,7 +230,7 @@ export const CLASSES = {
   boss_shadow: {
     boss: true, name: '그림자 군주', icon: '👺',
     desc: '어둠을 가르는 암살자형 보스 — 습격과 공포',
-    hp: 9000, hpLvl: 600, atk: 92, atkLvl: 8, range: 4.6, atkCd: 0.7, speed: 8.2, def: 0.36,
+    hp: 10800, hpLvl: 680, atk: 104, atkLvl: 8, range: 4.6, atkCd: 0.7, speed: 8.8, def: 0.36,
     skill: { name: '그림자 습격', icon: '🌀', cd: 9, desc: '가장 약한 적 뒤로 순간이동해 벤다' },
     skill2: { name: '공포의 포효', icon: '😱', cd: 16, desc: '주변 모두에게 공포 — 통제를 잃는다' },
     ult: { name: '어둠걸음', icon: '🌫️', cd: 26, desc: '어둠에 스며 모습을 감추고 빨라진다' },
@@ -3704,6 +3704,42 @@ function stepZones(state, dt) {
       if (z.t >= z.life) remove.add(z.id)
       continue
     }
+    // 보스 예고 장판: 경고(delay 동안 바닥 표식) → 폭발(피해+상태이상) → (선택) 잔류 장판.
+    // "경고를 보고 피한다"가 보스전의 기본 카운터플레이 — 즉발이 아니라 읽고 반응하는 스킬.
+    if (z.kind === 'bosszone') {
+      if (z.t >= z.delay && !z.exploded) {
+        z.exploded = true
+        const owner = state.heroes.find((o) => o.id === z.owner) || { team: z.team }
+        const r2 = z.r * z.r
+        for (const e of state.heroes) {
+          if (e.team === z.team || e.respawnT > 0) continue
+          if ((e.x - z.x) ** 2 + (e.z - z.z) ** 2 > r2) continue
+          damageHero(state, e, z.dmg, owner.id ? owner : null)
+          if (z.stun) e.stunT = Math.max(e.stunT, z.stun)
+          if (z.freeze) e.freezeT = Math.max(e.freezeT, z.freeze)
+          if (z.fear) applyFear(state, e, z.fear)
+        }
+        pushFx(state, z.vfx || 'quake', z.x, z.z, z.r, z.team, 1.0)
+        if (!z.life) { remove.add(z.id); continue }
+      }
+      if (z.exploded) {
+        // 잔류 장판(용암/서리): 밟고 있으면 도트 + 둔화
+        z.tickT -= dt
+        if (z.tickT <= 0) {
+          z.tickT += 0.5
+          const owner = state.heroes.find((o) => o.id === z.owner) || { team: z.team }
+          const r2 = z.r * z.r
+          for (const e of state.heroes) {
+            if (e.team === z.team || e.respawnT > 0) continue
+            if ((e.x - z.x) ** 2 + (e.z - z.z) ** 2 > r2) continue
+            if (z.dps) damageHero(state, e, z.dps * 0.5, owner.id ? owner : null)
+            if (z.slow) e.freezeT = Math.max(e.freezeT, z.slow)
+          }
+        }
+        if (z.t >= z.delay + z.life) remove.add(z.id)
+      }
+      continue
+    }
     // 이무기 독 웅덩이: 중립 위험 지대 — life 동안 그 안의 모든 영웅이 도트 피해를 받는다
     if (z.kind === 'venom') {
       z.tickT -= dt
@@ -4434,9 +4470,23 @@ export const BOSS_PHASE_HP = [0.7, 0.4] // 2·3페이즈 진입 체력비 — UI
 const bossPhaseOf = (h) => (h.hp / h.maxHp > BOSS_PHASE_HP[0] ? 1 : h.hp / h.maxHp > BOSS_PHASE_HP[1] ? 2 : 3)
 const BOSS_PHASE_CD = [1, 0.85, 0.7] // 페이즈별 스킬 쿨타임 배율
 const BOSS_PHASE_SUMMON = [1, 0.78, 0.6] // 페이즈별 병사 소환 주기 배율
-const BOSS_PHASE_DMG = [1, 1.08, 1.16] // 페이즈별 영웅 피해 배율
+const BOSS_PHASE_DMG = [1, 1.1, 1.2] // 페이즈별 영웅 피해 배율
+const BOSS_HUE = { boss_colossus: 'lava', boss_archmage: 'frost', boss_shadow: 'shadow' } // 예고 장판 색조
 const BOSS_AGGRO = 16 // 이 거리 안의 영웅을 상대한다(그 밖이면 진군)
 const BOSS_LEASH = 18 // 진군 축(공성 목표)에서 이 이상 벗어난 적은 쫓지 않는다 — 술래잡기 방지
+
+// 보스 예고 장판 생성 — stepZones('bosszone')가 경고→폭발→잔류를 처리한다.
+//  hue: 클라 표식 색조(lava 주황/frost 청/shadow 보라)
+function pushBossZone(state, h, opts) {
+  state.zones.push({
+    id: state.nextId++, kind: 'bosszone', team: h.team, owner: h.id,
+    x: opts.x, z: opts.z, r: opts.r, t: 0, tickT: 0,
+    delay: opts.delay ?? 1.2, dmg: opts.dmg,
+    stun: opts.stun || 0, freeze: opts.freeze || 0, fear: opts.fear || 0,
+    life: opts.life || 0, dps: opts.dps || 0, slow: opts.slow || 0,
+    vfx: opts.vfx || 'quake', hue: opts.hue || 'lava', exploded: false,
+  })
+}
 
 function bossThink(state, h, dt) {
   if (!h.bossIntro) {
@@ -4501,9 +4551,12 @@ function bossThink(state, h, dt) {
     h.bossPhase = wantPhase
     h.bossRoarT = Math.max(h.bossRoarT || 0, 2.2)
     h.stunT = 0; h.freezeT = 0; h.fearT = 0; h.airT = 0; h.rootT = 0; h.pullT = 0 // 포효가 CC를 털어낸다
-    pushFx(state, 'quake', h.x, h.z, 11, h.team, 1.0)
     pushFx(state, 'berserk', h.x, h.z, 6, h.team, 1.0)
-    aoeDamage(state, h, h.x, h.z, 11, skillDmg(h, 30, 0.5), 0.8) // 전환 충격파 — 붙어 있으면 아프다
+    // 전환 충격파 — 예고 후 폭발: 경고를 보고 빠지면 안 맞는다
+    pushBossZone(state, h, {
+      x: h.x, z: h.z, r: 11, delay: 1.2, dmg: skillDmg(h, 30, 0.5), stun: 0.8,
+      vfx: 'quake', hue: BOSS_HUE[h.cls] || 'lava',
+    })
     pushFeed(state, 'obj', wantPhase === 2
       ? `💢 ${h.name}의 분노가 끓어오른다 — 공격이 거세진다! (2페이즈)`
       : `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다, 몰아쳐라! (3페이즈)`)
@@ -4526,7 +4579,7 @@ function bossThink(state, h, dt) {
   if (h.bossCd.summon <= 0) {
     if (stage === 'mass') {
       h.bossCd.summon = BOSS_MASS_EVERY
-      bossSummon(state, h, { count: 10, hpMul: 1.0, spread: true })
+      bossSummon(state, h, { count: 10, hpMul: 1.0 })
     } else {
       h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
       bossSummon(state, h)
@@ -4656,12 +4709,11 @@ function bossThink(state, h, dt) {
   h.mz = dir.z
 }
 
-// 보스 병사 소환: 절반 근접 + 절반 원거리 — 보스 곁에서 튀어나와 레인을 민다.
-// 기본은 전부 미드(진군로 — 병력이 흩어지면 압박이 안 읽힌다).
-// spread(대량 소환 페이즈): 웨이브 단위로 세 갈래에 파도를 보낸다(40% 미드/30% 탑/30% 봇).
-function bossSummon(state, h, { count = 6, hpMul = 1.3, spread = false } = {}) {
-  const roll = state.rng()
-  const lane = spread ? (roll < 0.4 ? 'mid' : roll < 0.7 ? 'top' : 'bot') : 'mid'
+// 보스 병사 소환: 절반 근접 + 절반 원거리 — 보스 곁에서 튀어나와 전부 미드(진군로)를 민다.
+// 전선은 미드 하나뿐이다: 측면 길엔 타워가 없어 파도를 보내면 "순서대로 무너지는 방어선"
+// 이라는 게임의 시계가 깨진다(수호석 직행). 측면 길은 파밍·우회 이동용으로만 남긴다.
+function bossSummon(state, h, { count = 6, hpMul = 1.3 } = {}) {
+  const lane = 'mid'
   const grow = MINION_HP_GROWTH * (state.time / 60) * 2
   for (let i = 0; i < count; i++) {
     const ranged = i >= count / 2
@@ -4716,17 +4768,20 @@ function bossSummonAdds(state, h) {
   pushFx(state, 'summon', h.x, h.z, 9, 'red', 1.2)
 }
 
-// 전사형 — 대지 강타(광역 기절) / 격돌 돌진(들이받아 띄움) / 회전 격노(지속 광역)
-//  페이즈업: 강타 균열이 넓어지고(9→10.5→12) 회전 격노가 길어진다(3초→4.5초)
+// 전사형 — 대지 강타(예고→광역 기절+용암 장판) / 격돌 돌진(들이받아 띄움) / 회전 격노(지속 광역)
+//  페이즈업: 강타 균열이 넓어지고(9→10.5→12) 2페이즈부턴 용암이 남으며, 회전 격노가 길어진다(3초→4.5초)
 function bossColossus(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1]
   if (h.bossCd.a <= 0 && foe && dist(h, foe) < 8) {
     h.bossCd.a = CLASSES[h.cls].skill.cd * cdMul
     const qr = p === 3 ? 12 : p === 2 ? 10.5 : 9
-    aoeDamage(state, h, h.x, h.z, qr, skillDmg(h, 60, 1.2), 1.0)
-    pushFx(state, 'quake', h.x, h.z, qr, h.team, 1.0)
-    pushFx(state, 'rocksplash', h.x, h.z, 6, h.team)
+    pushFx(state, 'rocksplash', h.x, h.z, 4, h.team) // 땅을 파고드는 예열
+    pushBossZone(state, h, {
+      x: h.x, z: h.z, r: qr, delay: 1.1, dmg: skillDmg(h, 60, 1.2), stun: 1.0,
+      vfx: 'quake', hue: 'lava',
+      ...(p >= 2 ? { life: 3.5, dps: skillDmg(h, 10, 0.15) } : null), // 분노한 대지는 용암을 남긴다
+    })
   }
   if (h.bossCd.b <= 0 && foe) {
     const d = dist(h, foe)
@@ -4786,8 +4841,12 @@ function bossArchmage(state, h, foe) {
   }
   if (h.bossCd.b <= 0 && foe && dist(h, foe) < 9) {
     h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
-    aoeDamage(state, h, h.x, h.z, 10, skillDmg(h, 30, 0.5), 0, 2.2)
-    pushFx(state, 'abszero', h.x, h.z, 10, h.team, 1.2)
+    // 혹한 폭풍: 냉기가 모여드는 예고 → 폭발 빙결. 2페이즈부턴 서리밭이 남아 밟으면 얼어붙는다.
+    pushBossZone(state, h, {
+      x: h.x, z: h.z, r: 10, delay: 1.2, dmg: skillDmg(h, 30, 0.5), freeze: 2.0,
+      vfx: 'abszero', hue: 'frost',
+      ...(p >= 2 ? { life: 3.0, dps: skillDmg(h, 6, 0.1), slow: 0.5 } : null),
+    })
   }
   if (h.bossCd.c <= 0 && foe) {
     h.bossCd.c = CLASSES[h.cls].ult.cd * cdMul
@@ -4823,8 +4882,11 @@ function bossShadow(state, h, foe, siege) {
       h.dir = Math.atan2(weakest.z - h.z, weakest.x - h.x)
       state.map.resolveTerrain(h, 2.2, colliders(state))
       pushFx(state, 'blink', h.x, h.z, 3, h.team)
-      pushFx(state, 'shadowexec', weakest.x, weakest.z, 3.5, h.team, 1.0)
-      damageHero(state, weakest, skillDmg(h, 40, 1.0), h)
+      // 습격의 칼날은 반 박자 늦게 떨어진다 — 표식(예고)을 보고 몸을 빼면 산다
+      pushBossZone(state, h, {
+        x: weakest.x, z: weakest.z, r: 4.2, delay: 0.75, dmg: skillDmg(h, 48, 1.05),
+        vfx: 'shadowexec', hue: 'shadow',
+      })
       if (p >= 2) h.hasteT = Math.max(h.hasteT, 1.5) // 분노한 그림자는 습격 뒤 더 빨라진다
     }
   }
@@ -4836,12 +4898,11 @@ function bossShadow(state, h, foe, siege) {
     }
     if (near >= (p === 3 ? 1 : 2)) {
       h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
-      pushFx(state, 'shriek', h.x, h.z, roarR, h.team, 1.0)
-      for (const e of state.heroes) {
-        if (e.team === h.team || e.respawnT > 0 || dist(h, e) >= roarR) continue
-        damageHero(state, e, skillDmg(h, 24, 0.4), h)
-        applyFear(state, e, 1.6)
-      }
+      // 공포의 포효: 숨을 들이켜는 예고 → 폭발 공포
+      pushBossZone(state, h, {
+        x: h.x, z: h.z, r: roarR, delay: 0.9, dmg: skillDmg(h, 24, 0.4), fear: 1.6,
+        vfx: 'shriek', hue: 'shadow',
+      })
     }
   }
   if (h.bossCd.c <= 0 && foe && h.hp < h.maxHp * 0.65) {
@@ -5193,25 +5254,78 @@ function stepBots(state, dt) {
     if (h.cls === 'archer' && h.skill2Cd <= 0 && h.lvl >= SKILL2_LEVEL && state.rng() < 0.006) {
       castSkill2(state, h.id)
     }
+    // 보스전 아군 전용 룰셋: 수성 > 파도 요격 > 정글 > 전선 대기.
+    // 범용 정글러 역할은 "위협보다 파밍"을 골라 방어선이 갈리는 걸 구경한다 — 여기선 수성이 항상 먼저다.
+    if (state.mode === 'boss' && h.team === 'blue') {
+      botBossDuty(state, h, dt)
+      continue
+    }
     // 정글러: 캠프/오브젝트를 돌다 근처 교전에 합류(갱킹). 할 일이 없으면 레인 합류.
     if (h.role === 'jungle') {
       if (botJungleRole(state, h, dt)) continue
     }
     if (h.botSeekT > 0 ? false : botJungleMove(state, h)) continue
-    // 보스전 아군: 밀 레인이 없다(레드 수호석은 무적, 옥좌는 우물 레이저 안) —
-    // 놀게 되면 다음 방어선(보스의 공성 목표) 앞에서 전열을 갖추고 보스를 기다린다.
-    if (state.mode === 'boss' && h.team === 'blue') {
-      let line = null
-      let bestX = -Infinity
-      for (const t of state.towers) {
-        if (!t.alive || t.team !== 'blue' || t.lane !== 'mid') continue
-        if (t.x > bestX) { bestX = t.x; line = t }
-      }
-      botHoldOutside(state, h, line || state.map.NEXUS_POS.blue, 12)
-      continue
-    }
     botLaneMove(state, h, dt)
   }
+}
+
+// ── 보스전 아군 봇 전용 룰셋 ──
+// 우선순위: ① 전선(다음 방어선)이 위협받으면 수성 집결 ② 밀려오는 파도 요격(골드+저지)
+//           ③ 위협이 없을 때만 정글 파밍 ④ 그마저 없으면 전선 앞 대기.
+// 교전 자체(추격/스킬/후퇴)는 파이프라인 앞단의 공용 전투 로직이 잡는다 — 여기선 "어디에 있을까"만 정한다.
+function botBossDuty(state, h, dt) {
+  // 전선 = 다음에 무너질 우리 방어선(살아있는 미드 타워 중 가장 동쪽, 없으면 수호석)
+  let front = null
+  let bx = -Infinity
+  for (const t of state.towers) {
+    if (!t.alive || t.team !== 'blue' || t.lane !== 'mid') continue
+    if (t.x > bx) { bx = t.x; front = t }
+  }
+  const nb = state.map.NEXUS_POS.blue
+  front ||= { x: nb.x, z: nb.z }
+  // ① 위협 판정: 전선 근처의 붉은 병력. 보스는 더 먼 거리(진군 중)부터 위협으로 세어
+  //    도착 전에 전열을 갖춘다. 병사는 3마리부터(한두 마리는 파도 요격이 처리).
+  let threat = 0
+  for (const e of state.heroes) {
+    if (e.team !== 'red' || e.respawnT > 0) continue
+    if (!isHeroVisible(state, e, 'blue')) continue
+    if (dist2(e, front) < (e.isBoss ? 70 * 70 : 44 * 44)) threat += 3
+  }
+  let mobNearFront = 0
+  for (const m of state.minions) {
+    if (m.team === 'red' && dist2(m, front) < 38 * 38) mobNearFront++
+  }
+  if (threat >= 3 || mobNearFront >= 3) {
+    // 수성: 전선으로 집결 — 도착하면 공용 교전 로직이 싸움을 잡는다
+    if (dist(h, front) > 15) steerToward(state, h, front)
+    else botHoldOutside(state, h, front, 9)
+    botAttack(state, h, dt)
+    return
+  }
+  // ② 파도 요격: 행군 중인 붉은 병사 — 가장 가까운 무리부터. 성곽(적 우물) 근처까진 안 쫓는다.
+  const rn = state.map.NEXUS_POS.red
+  let mob = null
+  let md = 90 * 90
+  for (const m of state.minions) {
+    if (m.team !== 'red') continue
+    if (dist2(m, rn) < 34 * 34) continue // 갓 소환된 병사를 성곽 안까지 마중가지 않는다
+    const d = dist2(h, m)
+    if (d < md) { md = d; mob = m }
+  }
+  if (mob) {
+    if (dist(h, mob) > CLASSES[h.cls].range - 1) steerToward(state, h, mob)
+    else {
+      h.mx = 0
+      h.mz = 0
+    }
+    botAttack(state, h, dt)
+    botFarmSkills(state, h)
+    return
+  }
+  // ③ 정글: 파도가 없을 때만 캠프를 돈다 (거리 무제한 — 전장 전체가 아군 농장)
+  if (botJungleMove(state, h)) return
+  // ④ 대기: 전선 앞에서 전열을 갖춘다
+  botHoldOutside(state, h, front, 11)
 }
 
 // 정글러 봇: ① 갱킹 — 가까운 레인에서 적과 싸우는 아군이 있으면 달려가 합류
@@ -5772,10 +5886,11 @@ export function makeView(state) {
     reveals: state.reveals.map((rv) => ({ team: rv.team, x: r1(rv.x), z: r1(rv.z), r: rv.r })),
     // 예고 범위는 운석(조준점)만 클라에 보낸다 — 대지균열 파는 거의 즉발이라 fx로만 보인다
     stoneWalls: state.tempWalls.map((w) => ({ id: w.id, x: r1(w.x), z: r1(w.z), t: r2d(w.t), life: w.life })),
-    zones: state.zones.filter((z) => z.kind === 'meteor' || z.kind === 'venom').map((z) => ({
+    zones: state.zones.filter((z) => z.kind === 'meteor' || z.kind === 'venom' || z.kind === 'bosszone').map((z) => ({
       id: z.id, kind: z.kind, team: z.team, x: r1(z.x), z: r1(z.z),
       r: z.r, t: r2d(z.t), delay: z.delay,
-      ...(z.life != null ? { life: z.life } : null), // 지속 장판(독 웅덩이)의 사라짐 페이드용
+      ...(z.life != null ? { life: z.life } : null), // 지속 장판(독 웅덩이/용암·서리)의 사라짐 페이드용
+      ...(z.kind === 'bosszone' ? { hue: z.hue } : null), // 보스 장판 색조(lava/frost/shadow)
     })),
     fx: state.fx.map((n) => ({
       id: n.id, kind: n.kind, x: r1(n.x), z: r1(n.z), r: n.r, t: r2d(n.t), team: n.team,
