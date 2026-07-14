@@ -5579,8 +5579,10 @@ function botBossDuty(state, h, dt) {
   }
   const nb = state.map.NEXUS_POS.blue
   front ||= { x: nb.x, z: nb.z }
-  // ① 위협 판정: 전선 근처의 붉은 병력. 보스는 더 먼 거리(진군 중)부터 위협으로 세어
-  //    도착 전에 전열을 갖춘다. 병사는 3마리부터(한두 마리는 파도 요격이 처리).
+  // ① 위협 판정: 붉은 "영웅"(보스/그림자)이 전선을 위협할 때만 집결·대기한다.
+  //    보스는 더 먼 거리(진군 중)부터 세어 도착 전에 전열을 갖춘다.
+  //    병사 무리는 여기서 세지 않는다 — 대기 모드가 가로채면 타워 옆에서 사거리 밖
+  //    무리를 구경만 하게 된다. 파도 정리는 ②(요격: 붙어서 때린다)의 일이다.
   let threat = 0
   for (const e of state.heroes) {
     if (e.team !== 'red' || e.respawnT > 0) continue
@@ -5589,11 +5591,7 @@ function botBossDuty(state, h, dt) {
     if (!isHeroVisible(state, e, 'blue')) continue
     if (dist2(e, front) < (e.isBoss ? 70 * 70 : 44 * 44)) threat += 3
   }
-  let mobNearFront = 0
-  for (const m of state.minions) {
-    if (m.team === 'red' && dist2(m, front) < 38 * 38) mobNearFront++
-  }
-  if (threat >= 3 || mobNearFront >= 3) {
+  if (threat >= 3) {
     // 수성: 전선으로 집결 — 도착하면 공용 교전 로직이 싸움을 잡는다
     if (dist(h, front) > 15) steerToward(state, h, front)
     else botHoldOutside(state, h, front, 9)
