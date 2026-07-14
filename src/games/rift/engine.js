@@ -2474,6 +2474,7 @@ function healHero(h, amount) {
 //  redirected=true 는 결속 리다이렉트로 수호기사가 대신 맞는 호출(무한 연쇄 방지 플래그).
 function damageHero(state, victim, amount, attacker, redirected = false) {
   if (victim.respawnT > 0 || state.status !== 'playing') return
+  if (victim.isBoss && victim.bossShieldT > 0) return // 각성 휴지기: 어둠의 보호막 — 무적
   // 봇 난이도: 봇 영웅이 주는 피해(평타·스킬 공통)를 난이도 배율로. 리다이렉트(결속 대납)엔
   // 원 피해에서 이미 적용됐으므로 다시 곱하지 않는다.
   if (!redirected && attacker?.isBot) amount *= BOT_LEVELS[state.botLevel]?.dmg ?? 1
@@ -3058,8 +3059,10 @@ function stepHero(state, h, dt) {
     if (team === h.team) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * FOUNTAIN_HEAL * dt)
     else damageHero(state, h, FOUNTAIN_DMG * dt, null)
   }
-  // 자연 회복 (전투 이탈 시) + 이무기 버프 회복
-  if (state.time - h.lastHurt > REGEN_DELAY) {
+  // 자연 회복 (전투 이탈 시) + 이무기 버프 회복.
+  // 보스는 제외 — 전용 재생(bossThink, 0.5%/s)만 쓴다. 공통 회복(1.5%/s)까지 겹치면
+  // 각성 휴지기(무적 30초)마다 반피를 되채우는 참사가 난다.
+  if (state.time - h.lastHurt > REGEN_DELAY && !h.isBoss) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * REGEN_RATE * dt)
   }
   if (h.baronT > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.02 * dt)
@@ -4476,6 +4479,7 @@ const BOSS_PHASE_CD = [1, 0.85, 0.7] // 페이즈별 스킬 쿨타임 배율
 const BOSS_PHASE_SUMMON = [1, 0.78, 0.6] // 페이즈별 병사 소환 주기 배율
 const BOSS_PHASE_DMG = [1, 1.1, 1.2] // 페이즈별 영웅 피해 배율
 const BOSS_HUE = { boss_colossus: 'lava', boss_archmage: 'frost', boss_shadow: 'shadow' } // 예고 장판 색조
+const BOSS_AWAKEN_T = 30 // 국면 전환 각성 휴지기(초) — 무적·정지, 아군의 재정비/파밍 시간
 const BOSS_AGGRO = 16 // 이 거리 안의 영웅을 상대한다(그 밖이면 진군)
 const BOSS_LEASH = 18 // 진군 축(공성 목표)에서 이 이상 벗어난 적은 쫓지 않는다 — 술래잡기 방지
 
@@ -4497,8 +4501,9 @@ function bossThink(state, h, dt) {
     h.bossIntro = true
     pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name} ${h.name} 등장! 힘을 합쳐 쓰러뜨리세요!`)
   }
-  // 시간 성장: 성장분만큼 회복하며 레벨업(전투 중 체력비 유지)
-  const wantLvl = Math.min(MAX_LEVEL, 1 + Math.floor(state.time / BOSS_LEVEL_EVERY))
+  // 시간 성장: 성장분만큼 회복하며 레벨업(전투 중 체력비 유지).
+  // 각성 휴지기(보호막)에 멈춰 있던 시간은 성장에서 뺀다 — 휴지기가 보스의 이득이면 안 된다.
+  const wantLvl = Math.min(MAX_LEVEL, 1 + Math.floor((state.time - (h.bossShieldTotal || 0)) / BOSS_LEVEL_EVERY))
   while (h.lvl < wantLvl) {
     h.lvl++
     const before = h.maxHp
@@ -4516,8 +4521,9 @@ function bossThink(state, h, dt) {
       a.hp = Math.min(a.maxHp, a.hp + (a.maxHp - before))
     }
   }
-  // 재생: 8초간 무피해면 초당 최대체력 0.5% 회복 — 치고 빠지기만 반복하면 못 잡는다
-  if (state.time - h.lastHurt > 8 && h.hp < h.maxHp) {
+  // 재생: 8초간 무피해면 초당 최대체력 0.5% 회복 — 치고 빠지기만 반복하면 못 잡는다.
+  // 각성 휴지기(보호막) 중엔 재생하지 않는다 — 깎아 둔 체력이 되돌아가면 김이 샌다.
+  if (state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.005 * dt)
   }
   h.bossCd ||= { a: 5, b: 9, c: 14, summon: 8 }
@@ -4538,7 +4544,7 @@ function bossThink(state, h, dt) {
     pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name}이(가) 깨어나 어둠의 병력을 소환한다 — 파도를 막아라!`)
   }
   // 광폭화(엔레이지): 진군 후 11분이 지나면 CC를 무시하고 피해가 1.5배 — 무한 대치 방지
-  if (!h.bossEnraged && state.time > BOSS_MARCH_AT + 660) {
+  if (!h.bossEnraged && state.time - (h.bossShieldTotal || 0) > BOSS_MARCH_AT + 660) {
     h.bossEnraged = true
     pushFeed(state, 'obj', '🔥 보스가 광폭화했다! 더는 버틸 수 없다 — 지금 끝내야 한다!')
   }
@@ -4553,7 +4559,9 @@ function bossThink(state, h, dt) {
   const wantPhase = bossPhaseOf(h)
   if (h.bossPhase < wantPhase) {
     h.bossPhase = wantPhase
-    h.bossRoarT = Math.max(h.bossRoarT || 0, 2.2)
+    // 각성 휴지기: 어둠의 보호막에 감싸여 30초 무적·정지 — 게임의 시계가 잠시 멈추고,
+    // 아군은 재정비·회복·짤막한 파밍(병사 소환은 계속 돈다)으로 다음 국면을 준비한다.
+    h.bossShieldT = BOSS_AWAKEN_T
     h.stunT = 0; h.freezeT = 0; h.fearT = 0; h.airT = 0; h.rootT = 0; h.pullT = 0 // 포효가 CC를 털어낸다
     pushFx(state, 'berserk', h.x, h.z, 6, h.team, 1.0)
     // 전환 충격파 — 예고 후 폭발: 경고를 보고 빠지면 안 맞는다
@@ -4564,6 +4572,21 @@ function bossThink(state, h, dt) {
     pushFeed(state, 'obj', wantPhase === 2
       ? `💢 ${h.name}의 분노가 끓어오른다 — 공격이 거세진다!`
       : `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다, 몰아쳐라!`)
+    pushFeed(state, 'obj', `🛡️ ${h.name}이(가) 어둠의 보호막에 감싸여 힘을 모은다(${BOSS_AWAKEN_T}초 무적) — 정비하고 맞을 준비를 하라!`)
+  }
+  // 각성 휴지기 소화: 무적·정지 상태로 서서 힘을 모은다 — 소환·공성·성장이 전부 멈춘
+  // 진짜 휴지기다(아군은 이 틈에 회복·보급·정글 파밍). 끝나는 순간 더 크고 붉어져 다시 움직인다.
+  if (h.bossShieldT > 0) {
+    h.bossShieldT -= dt
+    h.bossShieldTotal = (h.bossShieldTotal || 0) + dt // 성장·광폭화 시계도 이만큼 늦춘다
+    h.stunT = 0; h.freezeT = 0; h.fearT = 0; h.airT = 0; h.rootT = 0; h.pullT = 0
+    h.mx = 0
+    h.mz = 0
+    if (h.bossShieldT <= 0) {
+      pushFx(state, 'berserk', h.x, h.z, 9, h.team, 1.2)
+      pushFeed(state, 'obj', `💥 보호막이 깨졌다 — 더 크고 사나워진 ${h.name}이(가) 다시 움직인다!`)
+    }
+    return
   }
   if (h.stunT > 0 || h.pullT > 0 || h.airT > 0 || h.fearT > 0 || h.knockT > 0) {
     h.mx = 0
@@ -5191,6 +5214,7 @@ function stepBots(state, dt) {
     let foe = h.botFoeId ? findFoeById(h.botFoeId) : null
     if (foe && (
       !isHeroVisible(state, foe, h.team) || inOwnFountainSafety(state, foe) ||
+      (foe.isBoss && foe.bossShieldT > 0) || // 각성 보호막(무적)이 켜지면 표적을 놓는다
       dist2(h, foe) > BOT_SIGHT * BOT_SIGHT
     )) foe = null
     if (h.botFoeId && !foe) {
@@ -5209,6 +5233,7 @@ function stepBots(state, dt) {
       const consider = (e) => {
         if (!isHeroVisible(state, e, h.team)) return
         if (inOwnFountainSafety(state, e)) return // 우물로 살아 들어간 적은 놓아준다(다이브 금지)
+        if (e.isBoss && e.bossShieldT > 0) return // 각성 보호막(무적) — 때려봐야 헛심, 파밍이 이득
         const d2v = dist2(h, e)
         if (d2v < 9 * 9) near++
         if (d2v < bd) {
@@ -5397,6 +5422,8 @@ function botBossDuty(state, h, dt) {
   let threat = 0
   for (const e of state.heroes) {
     if (e.team !== 'red' || e.respawnT > 0) continue
+    if (e.isBoss && e.bossShieldT > 6) continue // 각성 휴지기의 보스는 위협이 아니다 — 파밍 시간.
+    // 단 보호막이 깨지기 직전(6초)엔 위협으로 세어 미리 전선에 재집결한다 — 흩어진 채 맞으면 각개격파당한다
     if (!isHeroVisible(state, e, 'blue')) continue
     if (dist2(e, front) < (e.isBoss ? 70 * 70 : 44 * 44)) threat += 3
   }
@@ -5910,8 +5937,8 @@ export function makeView(state) {
       respawnT: r2d(h.respawnT),
       bushI: h.bushI,
       revealT: r2d(h.revealT),
-      // 보스전: 현재 페이즈(1~3) — 위협 링 색·연출용. 재생으로 체력이 돌아와도 유지되므로 뷰로 전달
-      ...(h.isBoss ? { bossPhase: h.bossPhase || 1 } : null),
+      // 보스전: 현재 국면(1~3)과 각성 보호막 잔여 — 위협 링 색·보호막 구체 연출용
+      ...(h.isBoss ? { bossPhase: h.bossPhase || 1, bossShieldT: r2d(h.bossShieldT || 0) } : null),
       dragonT: r1(h.dragonT),
       baronT: r1(h.baronT),
       kills: h.kills,
