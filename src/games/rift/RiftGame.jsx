@@ -224,6 +224,34 @@ const CONTROL_SCHEMES = [
   { id: 'xbox', icon: '🎮', label: 'Xbox 컨트롤러', desc: '스틱 이동, A 평타, X/Y/B 스킬, LB·RB 아이템' },
 ]
 
+// 보스전 레이드 체력바 — 화면 상단 중앙 고정. 이름·레벨, 국면 색 채움(빨강→주황→보라),
+// 70%/40% 국면 마커(금색), 각성 휴지기엔 💤 + 보라 광택으로 '무적·정비 시간'을 알린다.
+const BOSS_FACE = { boss_colossus: '👹', boss_archmage: '🧙', boss_shadow: '👺' }
+function BossRaidBar({ hud }) {
+  const boss = hud.heroes?.find((h) => h.cls?.startsWith('boss_'))
+  if (!boss || boss.hp <= 0) return null
+  const frac = Math.max(0, Math.min(1, boss.hp / boss.maxHp))
+  const ph = boss.bossPhase || 1
+  const shielded = (boss.bossShieldT || 0) > 0
+  const phColor = ph === 3 ? '#b266ff' : ph === 2 ? '#ff7d2a' : '#ff4d4d'
+  return (
+    <div className={`boss-bar ${shielded ? 'boss-bar--shield' : ''}`}>
+      <div className="boss-bar__title">
+        <span className="boss-bar__face">{BOSS_FACE[boss.cls] || '👹'}</span>
+        <span className="boss-bar__name">{t(CLASSES[boss.cls]?.name || '보스')} · {boss.name}</span>
+        <span className="boss-bar__lvl">Lv.{boss.lvl}</span>
+        {shielded && <span className="boss-bar__zzz">💤 {Math.ceil(boss.bossShieldT)}s</span>}
+      </div>
+      <div className="boss-bar__track">
+        <div className="boss-bar__fill" style={{ width: `${frac * 100}%`, background: phColor }} />
+        <span className="boss-bar__mark" style={{ left: '70%' }} />
+        <span className="boss-bar__mark" style={{ left: '40%' }} />
+        <span className="boss-bar__pct">{Math.ceil(frac * 100)}%</span>
+      </div>
+    </div>
+  )
+}
+
 // 양 팀 현황판(팀 킬 스코어 + 영웅별 K/D/A·레벨·아이템). 두 팀 카드를 나란히 반환한다 —
 // 감싸는 래퍼(.rift__dead-board / .rift-result / .rift-board__panel)는 호출부가 정한다.
 // 사망 화면·설정 팝업·결과창에서 공용으로 쓴다.
@@ -450,6 +478,7 @@ function RiftPlay({
       )}
 
       <div className="rift__hud">
+        {hud.mode === 'boss' && !finished && <BossRaidBar hud={hud} />}
         <div className="ladder__topbar rift__topbar">
           {/* 우상단(설정 옆): 개인 전적 — 킬/데스/어시 · 골드 · 진행 시간 */}
           <div className="topbar__right">
