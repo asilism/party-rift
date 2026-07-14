@@ -435,3 +435,30 @@ export function saveRiftGfx(q) {
     /* 무시 */
   }
 }
+
+// ── 보스전 토벌 기록 — 보스별 { clears(토벌 횟수), best(최단 클리어 초) } ──
+const BOSS_REC_KEY = 'bgp.rift.bossRecords.v1'
+
+export function loadBossRecords() {
+  try {
+    const v = JSON.parse(localStorage.getItem(BOSS_REC_KEY) || '{}')
+    return v && typeof v === 'object' ? v : {}
+  } catch {
+    return {}
+  }
+}
+
+// 토벌 1건 기록하고 { isFirst(첫 토벌), isBest(최단 갱신), best }를 돌려준다
+export function recordBossClear(bossCls, timeSec) {
+  const all = loadBossRecords()
+  const cur = all[bossCls] || { clears: 0, best: null }
+  const isFirst = cur.clears === 0
+  const isBest = cur.best == null || timeSec < cur.best
+  all[bossCls] = { clears: cur.clears + 1, best: isBest ? Math.round(timeSec) : cur.best }
+  try {
+    localStorage.setItem(BOSS_REC_KEY, JSON.stringify(all))
+  } catch {
+    /* 무시 */
+  }
+  return { isFirst, isBest, best: all[bossCls].best }
+}

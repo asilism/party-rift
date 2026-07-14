@@ -3433,3 +3433,7 @@ body {
   70% { transform: translate(3px, 2px); }
   85% { transform: translate(-2px, 1px); }
 }
+
+/* 모드 카드의 보스 토벌 전적 줄 */
+.mode-card__rec { margin-top: 4px; font-size: 11.5px; color: #ffd34d; opacity: 0.95; }
+.win-banner__bossrec { color: #cfe0ff; }
