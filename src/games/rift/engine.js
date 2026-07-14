@@ -2470,6 +2470,7 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   // 원 피해에서 이미 적용됐으므로 다시 곱하지 않는다.
   if (!redirected && attacker?.isBot) amount *= BOT_LEVELS[state.botLevel]?.dmg ?? 1
   if (attacker?.bossEnraged) amount *= 1.5 // 보스 광폭화
+  if (attacker?.isBoss && attacker.bossPhase > 1) amount *= BOSS_PHASE_DMG[attacker.bossPhase - 1] // 페이즈 분노
   // 수호기사 결속: 묶인 아군이 받을 피해를 수호기사가 "대신" 받는다(50%+10%×인원, 최대 90% 감소).
   //  아군 자신은 피해를 전혀 받지 않는다. 리다이렉트된 피해엔 수호기사의 방어/보호막이 다시 적용된다.
   if (!redirected && amount > 0 && victim.bindT > 0) {
@@ -4398,12 +4399,20 @@ function botSupportLane(state, h) {
 // 돌리고, 주기적으로 병사를 소환해 라인을 민다. 영웅들은 정글몹·소환 병사로 성장해
 // 아이템·스킬 연계로 보스를 잡는다. CC 저항(BOSS_CC_RESIST)은 stepHero에서.
 const BOSS_CC_RESIST = 2.5 // CC 잔여시간 추가 소진 배율 — 연계 CC 영구기절 방지
-const BOSS_LEVEL_EVERY = 70 // n초마다 자동 레벨업 — 시간은 보스 편(오래 끌수록 불리)
+const BOSS_LEVEL_EVERY = 80 // n초마다 자동 레벨업 — 시간은 보스 편(오래 끌수록 불리)
 const BOSS_SUMMON_CD = 18 // 병사 소환 주기
 const BOSS_WAKE = 90 // 이 시간까지 성곽(옥좌)에서 잠들어 있다 — 초반은 파밍 타임
 const BOSS_FOCUS_AFTER = 40 // 한 방어선 앞에서 이만큼 지나면 '공성 집중' — 교착을 끊는다
 const BOSS_FOCUS_NEAR = 40 // 공성 집중 타이머는 방어선 이 거리 안에서만 차오른다(행군은 무관)
 const BOSS_REGROUP = 20 // 방어선을 부수면 이만큼 포효·재정비 — 반격(버스트)의 창이 열린다
+// ── 보스 페이즈: 체력이 깎일수록 사나워진다 (한 번 오르면 안 내려간다 — 재생으로 되돌아가도 유지) ──
+//  1페이즈 "진군"(100~70%): 기본 로테이션 · 2페이즈 "분노"(70~40%): 스킬/소환 가속 + 피해 ↑
+//  3페이즈 "필사"(40%~): 더 빠른 가속 + 타입별 강화(균열 확대/연쇄 증가/포효 광역화)
+export const BOSS_PHASE_HP = [0.7, 0.4] // 2·3페이즈 진입 체력비 — UI(체력바 마커)와 공유
+const bossPhaseOf = (h) => (h.hp / h.maxHp > BOSS_PHASE_HP[0] ? 1 : h.hp / h.maxHp > BOSS_PHASE_HP[1] ? 2 : 3)
+const BOSS_PHASE_CD = [1, 0.85, 0.7] // 페이즈별 스킬 쿨타임 배율
+const BOSS_PHASE_SUMMON = [1, 0.78, 0.6] // 페이즈별 병사 소환 주기 배율
+const BOSS_PHASE_DMG = [1, 1.08, 1.16] // 페이즈별 영웅 피해 배율
 const BOSS_AGGRO = 16 // 이 거리 안의 영웅을 상대한다(그 밖이면 진군)
 const BOSS_LEASH = 18 // 진군 축(공성 목표)에서 이 이상 벗어난 적은 쫓지 않는다 — 술래잡기 방지
 
@@ -4455,14 +4464,30 @@ function bossThink(state, h, dt) {
     h.stunT = 0; h.freezeT = 0; h.fearT = 0; h.airT = 0; h.rootT = 0; h.pullT = 0
     pushFx(state, 'berserk', h.x, h.z, 4, h.team, 0.4)
   }
+  // ── 페이즈 전환: 체력 70%/40%를 깎이면 국면이 바뀐다 ──
+  //  포효(잠깐 멈춤 — 위치 재정비 기회)와 충격파(밀착 응징)로 전환을 온몸으로 알린 뒤,
+  //  스킬·소환이 빨라지고 피해가 오른다. 재생으로 체력이 돌아와도 페이즈는 유지된다.
+  h.bossPhase ||= 1
+  const wantPhase = bossPhaseOf(h)
+  if (h.bossPhase < wantPhase) {
+    h.bossPhase = wantPhase
+    h.bossRoarT = Math.max(h.bossRoarT || 0, 2.2)
+    h.stunT = 0; h.freezeT = 0; h.fearT = 0; h.airT = 0; h.rootT = 0; h.pullT = 0 // 포효가 CC를 털어낸다
+    pushFx(state, 'quake', h.x, h.z, 11, h.team, 1.0)
+    pushFx(state, 'berserk', h.x, h.z, 6, h.team, 1.0)
+    aoeDamage(state, h, h.x, h.z, 11, skillDmg(h, 30, 0.5), 0.8) // 전환 충격파 — 붙어 있으면 아프다
+    pushFeed(state, 'obj', wantPhase === 2
+      ? `💢 ${h.name}의 분노가 끓어오른다 — 공격이 거세진다! (2페이즈)`
+      : `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다, 몰아쳐라! (3페이즈)`)
+  }
   if (h.stunT > 0 || h.pullT > 0 || h.airT > 0 || h.fearT > 0 || h.knockT > 0) {
     h.mx = 0
     h.mz = 0
     return
   }
-  // 병사 소환 — 스킬과 독립으로 돈다(포효 중에도 병력은 밀려온다)
+  // 병사 소환 — 스킬과 독립으로 돈다(포효 중에도 병력은 밀려온다). 페이즈가 오를수록 잦아진다.
   if (h.bossCd.summon <= 0) {
-    h.bossCd.summon = BOSS_SUMMON_CD
+    h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
     bossSummon(state, h)
   }
   // 공성 목표: 미드 라인의 다음 방어선을 순서대로 — 외곽 타워 → 내곽 → 최후 포탑 → 수호석.
@@ -4579,17 +4604,21 @@ function bossSummon(state, h) {
 }
 
 // 전사형 — 대지 강타(광역 기절) / 격돌 돌진(들이받아 띄움) / 회전 격노(지속 광역)
+//  페이즈업: 강타 균열이 넓어지고(9→10.5→12) 회전 격노가 길어진다(3초→4.5초)
 function bossColossus(state, h, foe) {
+  const p = h.bossPhase || 1
+  const cdMul = BOSS_PHASE_CD[p - 1]
   if (h.bossCd.a <= 0 && foe && dist(h, foe) < 8) {
-    h.bossCd.a = CLASSES[h.cls].skill.cd
-    aoeDamage(state, h, h.x, h.z, 9, skillDmg(h, 60, 1.2), 1.0)
-    pushFx(state, 'quake', h.x, h.z, 9, h.team, 1.0)
+    h.bossCd.a = CLASSES[h.cls].skill.cd * cdMul
+    const qr = p === 3 ? 12 : p === 2 ? 10.5 : 9
+    aoeDamage(state, h, h.x, h.z, qr, skillDmg(h, 60, 1.2), 1.0)
+    pushFx(state, 'quake', h.x, h.z, qr, h.team, 1.0)
     pushFx(state, 'rocksplash', h.x, h.z, 6, h.team)
   }
   if (h.bossCd.b <= 0 && foe) {
     const d = dist(h, foe)
     if (d > 8 && d < 30) {
-      h.bossCd.b = CLASSES[h.cls].skill2.cd
+      h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
       const dir = Math.atan2(foe.z - h.z, foe.x - h.x)
       pushFxDir(state, 'dash', h.x, h.z, d, dir, h.team)
       h.x = foe.x - Math.cos(dir) * 2.5
@@ -4608,21 +4637,24 @@ function bossColossus(state, h, foe) {
     }
   }
   if (h.bossCd.c <= 0 && foe && dist(h, foe) < 7) {
-    h.bossCd.c = CLASSES[h.cls].ult.cd
-    h.whirlT = 3.0 // 기존 회전베기 시스템 재사용 — 매 틱 광역 타격 + 몸이 팽이처럼 돈다
+    h.bossCd.c = CLASSES[h.cls].ult.cd * cdMul
+    h.whirlT = p === 3 ? 4.5 : 3.0 // 기존 회전베기 시스템 재사용 — 매 틱 광역 타격 + 몸이 팽이처럼 돈다
     h.whirlTickT = 0
     pushFx(state, 'berserk', h.x, h.z, 5, h.team)
   }
 }
 
 // 마법사형 — 연쇄 뇌격 / 혹한 폭풍(광역 빙결) / 멸망의 운석(영웅들 머리 위 낙하)
+//  페이즈업: 뇌격 연쇄가 늘고(5→6→7) 운석이 더 많은 영웅을 노린다(3→4→5)
 function bossArchmage(state, h, foe) {
+  const p = h.bossPhase || 1
+  const cdMul = BOSS_PHASE_CD[p - 1]
   if (h.bossCd.a <= 0 && foe) {
-    h.bossCd.a = CLASSES[h.cls].skill.cd
+    h.bossCd.a = CLASSES[h.cls].skill.cd * cdMul
     const hit = new Set()
     let from = { x: h.x, z: h.z }
     let dmg = skillDmg(h, 32, 0.5)
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 4 + p; i++) {
       let best = null
       let bd2 = (i === 0 ? 14 : 9) ** 2
       for (const e of state.heroes) {
@@ -4640,13 +4672,13 @@ function bossArchmage(state, h, foe) {
     }
   }
   if (h.bossCd.b <= 0 && foe && dist(h, foe) < 9) {
-    h.bossCd.b = CLASSES[h.cls].skill2.cd
+    h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
     aoeDamage(state, h, h.x, h.z, 10, skillDmg(h, 30, 0.5), 0, 2.2)
     pushFx(state, 'abszero', h.x, h.z, 10, h.team, 1.2)
   }
   if (h.bossCd.c <= 0 && foe) {
-    h.bossCd.c = CLASSES[h.cls].ult.cd
-    const targets = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && isHeroVisible(state, e, h.team)).slice(0, 3)
+    h.bossCd.c = CLASSES[h.cls].ult.cd * cdMul
+    const targets = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && isHeroVisible(state, e, h.team)).slice(0, p === 1 ? 3 : 4)
     for (const e of targets) {
       state.zones.push({
         id: state.nextId++, kind: 'meteor', team: h.team, owner: h.id,
@@ -4657,7 +4689,10 @@ function bossArchmage(state, h, foe) {
 }
 
 // 암살자형 — 그림자 습격(최저 체력 적 급습) / 공포의 포효 / 어둠걸음(은신+가속)
+//  페이즈업: 포효가 넓어지고(11→12.5→14) 3페이즈엔 혼자만 있어도 포효하며, 습격 후 가속을 얻는다
 function bossShadow(state, h, foe, siege) {
+  const p = h.bossPhase || 1
+  const cdMul = BOSS_PHASE_CD[p - 1]
   if (h.bossCd.a <= 0) {
     let weakest = null
     for (const e of state.heroes) {
@@ -4667,7 +4702,7 @@ function bossShadow(state, h, foe, siege) {
       if (!weakest || e.hp / e.maxHp < weakest.hp / weakest.maxHp) weakest = e
     }
     if (weakest) {
-      h.bossCd.a = CLASSES[h.cls].skill.cd
+      h.bossCd.a = CLASSES[h.cls].skill.cd * cdMul
       pushFx(state, 'blink', h.x, h.z, 3, h.team)
       const dir = Math.atan2(weakest.z - h.z, weakest.x - h.x)
       h.x = weakest.x + Math.cos(dir) * 2.2 // 등 뒤로 파고든다
@@ -4677,25 +4712,27 @@ function bossShadow(state, h, foe, siege) {
       pushFx(state, 'blink', h.x, h.z, 3, h.team)
       pushFx(state, 'shadowexec', weakest.x, weakest.z, 3.5, h.team, 1.0)
       damageHero(state, weakest, skillDmg(h, 40, 1.0), h)
+      if (p >= 2) h.hasteT = Math.max(h.hasteT, 1.5) // 분노한 그림자는 습격 뒤 더 빨라진다
     }
   }
   if (h.bossCd.b <= 0) {
+    const roarR = p === 3 ? 14 : p === 2 ? 12.5 : 11
     let near = 0
     for (const e of state.heroes) {
-      if (e.team !== h.team && e.respawnT <= 0 && dist(h, e) < 11) near++
+      if (e.team !== h.team && e.respawnT <= 0 && dist(h, e) < roarR) near++
     }
-    if (near >= 2) {
-      h.bossCd.b = CLASSES[h.cls].skill2.cd
-      pushFx(state, 'shriek', h.x, h.z, 11, h.team, 1.0)
+    if (near >= (p === 3 ? 1 : 2)) {
+      h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
+      pushFx(state, 'shriek', h.x, h.z, roarR, h.team, 1.0)
       for (const e of state.heroes) {
-        if (e.team === h.team || e.respawnT > 0 || dist(h, e) >= 11) continue
+        if (e.team === h.team || e.respawnT > 0 || dist(h, e) >= roarR) continue
         damageHero(state, e, skillDmg(h, 24, 0.4), h)
         applyFear(state, e, 1.6)
       }
     }
   }
   if (h.bossCd.c <= 0 && foe && h.hp < h.maxHp * 0.65) {
-    h.bossCd.c = CLASSES[h.cls].ult.cd
+    h.bossCd.c = CLASSES[h.cls].ult.cd * cdMul
     pushFx(state, 'poof', h.x, h.z, 5, h.team)
     h.stealthT = 2.5 // 렌더러가 적 시점에서 모습을 감춘다 — 5명이 두리번거리는 공포
     h.hasteT = 2.5
@@ -5536,6 +5573,8 @@ export function makeView(state) {
       respawnT: r2d(h.respawnT),
       bushI: h.bushI,
       revealT: r2d(h.revealT),
+      // 보스전: 현재 페이즈(1~3) — 위협 링 색·연출용. 재생으로 체력이 돌아와도 유지되므로 뷰로 전달
+      ...(h.isBoss ? { bossPhase: h.bossPhase || 1 } : null),
       dragonT: r1(h.dragonT),
       baronT: r1(h.baronT),
       kills: h.kills,

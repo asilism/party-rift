@@ -8,7 +8,7 @@ import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import {
   NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, RESPAWN_ARC_HALF, buildMap,
 } from './map.js'
-import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE } from './engine.js'
+import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP } from './engine.js'
 import { ZODIAC_FACES } from './zodiacFaces.js'
 
 // ── 그래픽 품질 프리셋 ──
@@ -2970,15 +2970,28 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   ring.rotation.x = -Math.PI / 2
   ring.position.y = 0.06
   ring.visible = !!mine
-  // 보스: 발밑에 붉은 위협 링 — 거체 + 링으로 "이건 다른 놈이다"가 한눈에 읽힌다
+  // 보스: 발밑에 붉은 위협 링 — 거체 + 링으로 "이건 다른 놈이다"가 한눈에 읽힌다.
+  //  페이즈가 오르면 링 색이 변한다(1: 빨강 → 2: 주황 → 3: 보라+맥동) — 업데이트 루프에서 갱신.
+  let threat = null
   if (CLASSES[h.cls]?.boss) {
-    const threat = new THREE.Mesh(
+    threat = new THREE.Mesh(
       new THREE.RingGeometry(2.0 * s, 2.5 * s, 32),
       new THREE.MeshBasicMaterial({ color: 0xff4444, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
     )
     threat.rotation.x = -Math.PI / 2
     threat.position.y = 0.08
     g.add(threat)
+    // 체력바 페이즈 마커 — 70%/40% 지점의 금색 눈금: "여기까지 깎으면 국면이 바뀐다"
+    const bw = bar.userData.width
+    for (const frac of BOSS_PHASE_HP) {
+      const mark = new THREE.Sprite(
+        new THREE.SpriteMaterial({ color: 0xffd34d, opacity: 0.95, transparent: true, depthWrite: false })
+      )
+      mark.center.set(0.5, 0.5)
+      mark.scale.set(0.09, 0.34, 1)
+      mark.position.set(bar.userData.fgLeft + frac * bw, 0, 0.03)
+      bar.add(mark)
+    }
   }
   // 버프 링 (용=주황 / 이무기=보라)
   const buff = new THREE.Mesh(
@@ -3100,7 +3113,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
     costume, // 옷 — FX(fxUpdate) 애니메이션용 참조
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, threat, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
@@ -5253,6 +5266,12 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
         setHpBar(u.bar, h.hp / h.maxHp)
         setHpBarSegments(u.bar, h.maxHp) // 100단위 칸 — 최대 체력이 큰 캐릭터는 칸이 많다
+        // 보스 위협 링: 페이즈 색 (1: 빨강 → 2: 주황 → 3: 보라 + 다급한 맥동)
+        if (u.threat) {
+          const ph = h.bossPhase || 1
+          u.threat.material.color.setHex(ph === 3 ? 0xb266ff : ph === 2 ? 0xff7d2a : 0xff4444)
+          u.threat.material.opacity = ph === 3 ? 0.5 + Math.sin(view.time * 6) * 0.25 : 0.55
+        }
         // ── 타격감: 체력이 줄면 데미지 숫자 + 피격 섬광/움찔, 내 영웅이면 화면 흔들림 ──
         const dHp = (u.lastHp == null ? h.hp : u.lastHp) - h.hp
         u.lastHp = h.hp
