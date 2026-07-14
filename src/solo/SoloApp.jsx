@@ -11,6 +11,7 @@ import {
   loadEquippedHat, saveEquippedHat, loadOwnedHats, addOwnedHat,
   loadEquippedCostume, saveEquippedCostume, loadOwnedCostumes, addOwnedCostume,
   loadEquippedWeapon, saveEquippedWeapon, loadOwnedWeapons, addOwnedWeapon,
+  loadBossRecords, recordBossClear,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
@@ -119,7 +120,16 @@ export default function SoloApp() {
           firstWin = true
         }
         addCoins(earn)
-        setCoinMsg({ earn, firstWin })
+        // 보스전 토벌 기록 — 클리어 타임·최단 기록·토벌 횟수 (승리 시에만)
+        let bossRec = null
+        if (view.mode === 'boss' && win) {
+          const bossHero = view.heroes?.find((h) => h.cls?.startsWith('boss_'))
+          if (bossHero) {
+            const time = view.timePlayed || 0
+            bossRec = { ...recordBossClear(bossHero.cls, time), time }
+          }
+        }
+        setCoinMsg({ earn, firstWin, bossRec })
         // 일일 미션 진행도 누적 (판수/승리/킬/어시/정글몹)
         recordMissionProgress({ win, kills: me.kills, assists: me.assists, jungle: me.jungleKills })
       },
@@ -200,6 +210,12 @@ export default function SoloApp() {
             <>
               🪙 +{coinMsg.earn}{coinMsg.firstWin ? ` (${t('오늘 첫 승리!')})` : ''}
               {coinMsg.doubled && <span className="win-banner__doubled"> ×2!</span>}
+              {coinMsg.bossRec && (
+                <span className="win-banner__bossrec">
+                  {' · '}⏱ {fmtClearTime(coinMsg.bossRec.time)}
+                  {coinMsg.bossRec.isFirst ? ` 🏅 ${t('첫 토벌!')}` : coinMsg.bossRec.isBest ? ` 🏆 ${t('최단 기록!')}` : ''}
+                </span>
+              )}
             </>
           ) : null}
           adButton={coinMsg && !coinMsg.doubled && adsAvailable() ? (
@@ -497,6 +513,16 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
           // 유료 모드(보스전): 코인으로 1회 해금 — 해금 전엔 자물쇠와 가격을 보여준다.
           // 개발자 모드(HAT_DEV: dev 서버/?devhat)에서는 꾸미기처럼 바로 열린다.
           const locked = m.price && !HAT_DEV && !modeUnlocks.includes(`mode:${m.id}`)
+          // 보스전 토벌 전적 — 보스별 합산(토벌 횟수 + 전체 최단 기록)
+          let recLine = null
+          if (m.id === 'boss' && !locked) {
+            const recs = Object.values(loadBossRecords())
+            const clears = recs.reduce((a, r) => a + (r.clears || 0), 0)
+            if (clears > 0) {
+              const best = Math.min(...recs.filter((r) => r.best != null).map((r) => r.best))
+              recLine = `🏅 ${t('토벌')} ${clears} · ⏱ ${fmtClearTime(best)}`
+            }
+          }
           return (
             <button
               key={m.id}
@@ -509,6 +535,7 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
               <span className="mode-card__desc">
                 {locked ? `🪙 ${m.price} — ${t('코인으로 해금')}` : t(m.desc)}
               </span>
+              {recLine && <span className="mode-card__rec">{recLine}</span>}
             </button>
           )
         })}
@@ -774,6 +801,9 @@ const WEAPONS = [
   { id: 'frostblade', name: '서리검', price: 1200, fx: true },
   { id: 'excalibur', name: '성검', price: 1500, fx: true },
 ]
+
+// 보스전 클리어 타임 표기 (m:ss)
+const fmtClearTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
 // 개발자 모드 — 웹 테스트(vite dev 서버 또는 주소에 ?devhat)에서는 모든 꾸미기를 코인 없이
 // 바로 장착해 본다. 앱(Capacitor)과 일반 빌드에서는 꺼져 있어 코인 경제에 영향 없음.
