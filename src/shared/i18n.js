@@ -81,7 +81,7 @@ const DICT = {
   '전사': 'Warrior', '궁수': 'Archer', '마법사': 'Mage', '힐러': 'Healer', '암살자': 'Assassin',
   '탱커': 'Tank', '한빙술사': 'Cryomancer', '검투사': 'Gladiator', '주술사': 'Warlock',
   '수호기사': 'Guardian', '검성': 'Sword Saint', '사슬잡이': 'Chaincatcher', '야수조련사': 'Beastmaster',
-  '엔지니어': 'Engineer', '넝쿨사냥꾼': 'Vinehunter', '돌풍술사': 'Windcaller', '시간술사': 'Chronomancer',
+  '엔지니어': 'Engineer', '넝쿨사냥꾼': 'Vinehunter', '돌풍술사': 'Windcaller', '시간여행자': 'Time Traveler',
   '공포술사': 'Fearmonger', '환영무희': 'Mirage Dancer', '대지술사': 'Terramancer',
 
   // 직업 소개
