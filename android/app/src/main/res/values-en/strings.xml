@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- 영어권 기기 표시 이름 오버라이드 — 기본(한글)은 values/strings.xml.
+     package_name·custom_url_scheme은 기술 식별자라 번역하지 않고 기본값으로 폴백된다. -->
+<resources>
+    <string name="app_name">Zodiac Blitz</string>
+    <string name="title_activity_main">Zodiac Blitz</string>
+</resources>
