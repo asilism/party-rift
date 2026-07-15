@@ -3758,6 +3758,7 @@ function stepZones(state, dt) {
           if (z.stun) e.stunT = Math.max(e.stunT, z.stun)
           if (z.freeze) e.freezeT = Math.max(e.freezeT, z.freeze)
           if (z.fear) applyFear(state, e, z.fear)
+          if (z.knock) applyKnockback(state, e, z.x, z.z, z.knock, z.knockStun) // 중심에서 바깥으로 밀어낸다
         }
         pushFx(state, z.vfx || 'quake', z.x, z.z, z.r, z.team, 1.0)
         if (!z.life) { remove.add(z.id); continue }
@@ -4555,6 +4556,7 @@ function pushBossZone(state, h, opts) {
     oz: opts.from ? opts.from.z : null,
     delay: opts.delay ?? 1.2, dmg: opts.dmg,
     stun: opts.stun || 0, freeze: opts.freeze || 0, fear: opts.fear || 0,
+    knock: opts.knock || 0, knockStun: opts.knockStun || 0, // >0이면 폭발 시 중심에서 바깥으로 밀어낸다
     life: opts.life || 0, dps: opts.dps || 0, slow: opts.slow || 0,
     vfx: opts.vfx || 'quake', hue: opts.hue || 'lava', exploded: false,
     // 소환 장판: delay가 끝나면 피해 대신 이 정예를 하늘빛과 함께 강림시킨다
@@ -5027,11 +5029,28 @@ function bossColossus(state, h, foe) {
   }
 }
 
-// 마법사형 — 형태 3종: 원형(밀려오는 한파) / 두꺼운 직선(빙결의 격류) / 타겟 장판(빙성 낙하).
+// 마법사형 — 형태 3종: 원형(밀려오는 한파) / 두꺼운 직선(빙결의 격류) / 타겟 장판(빙성 낙하)
+//  + 근접 견제기 '염력 폭발'(2페이즈부터).
 //  격류는 필사에 V자 두 줄기로 갈라지고, 낙하는 국면당 표적이 는다(4→5→6)
 function bossArchmage(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1]
+  // 근접 견제 '염력 폭발'(2페이즈+): 몸에 붙은 적이 있으면 강력한 염력을 방출해
+  //  자기 중심에서 바깥으로 크게 밀쳐낸다 — 근접이 달라붙어 순삭하던 걸 끊는다.
+  //  예고 0.8초(모여드는 냉기 링)를 보고 미리 빠지면 안 밀리고 안 맞는다.
+  if (p >= 2 && h.bossCd.c <= 0) {
+    let near = 0
+    for (const e of state.heroes) {
+      if (e.team !== h.team && e.respawnT <= 0 && dist(h, e) < 9) near++
+    }
+    if (near >= 1) {
+      h.bossCd.c = 9 * cdMul
+      pushBossZone(state, h, {
+        x: h.x, z: h.z, r: 12, delay: 0.8, dmg: skillDmg(h, 70, 1.2),
+        knock: 13, knockStun: 0.5, freeze: 0.6, vfx: 'repulse', hue: 'frost',
+      })
+    }
+  }
   // 타겟 장판 '빙성 낙하'(처형): 보이는 적 영웅 "각자의 발밑"에 얼음 낙석 표식 —
   // 서 있던 자리가 위험해진다. 예고 1.3초 안에 모두가 제자리를 버려야 한다(산개 강제).
   if (h.bossCd.a <= 0 && foe) {
