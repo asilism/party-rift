@@ -3437,3 +3437,17 @@ body {
 /* 모드 카드의 보스 토벌 전적 줄 */
 .mode-card__rec { margin-top: 4px; font-size: 11.5px; color: #ffd34d; opacity: 0.95; }
 .win-banner__bossrec { color: #cfe0ff; }
+
+/* 전적 화면 — 보스 토벌 섹션 */
+.records-card--boss { margin-top: 10px; }
+.records-card__sub { margin: 0 0 8px; font-size: clamp(13px, 2.6vh, 16px); color: var(--ink); font-weight: 800; }
+.boss-rec-row {
+  display: flex; align-items: center; gap: 8px; padding: 7px 4px;
+  border-bottom: 1px dashed rgba(60, 40, 20, 0.14); font-size: clamp(12px, 2.3vh, 15px);
+}
+.boss-rec-row:last-child { border-bottom: none; }
+.boss-rec-row__name { flex: 1; color: var(--ink); font-weight: 700; }
+.boss-rec-row__best { color: var(--toy-blue-d, #2f6bd6); font-weight: 800; font-variant-numeric: tabular-nums; }
+.boss-rec-row__clears { color: var(--toy-green-d); font-weight: 700; }
+.boss-rec-row__none { color: rgba(60, 40, 20, 0.4); }
+.boss-rec-row--locked .boss-rec-row__name { opacity: 0.5; }

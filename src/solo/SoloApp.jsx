@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { CLASSES, CLASS_IDS, TEAM_SIZES } from '../games/rift/engine.js'
+import { CLASSES, CLASS_IDS, TEAM_SIZES, BOSS_IDS } from '../games/rift/engine.js'
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
 import { riftNet } from '../games/rift/netgame.js'
 import { createLocalNet } from '../net/localNet.js'
@@ -512,17 +512,8 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
         {MODE_OPTS.map((m, i) => {
           // 유료 모드(보스전): 코인으로 1회 해금 — 해금 전엔 자물쇠와 가격을 보여준다.
           // 개발자 모드(HAT_DEV: dev 서버/?devhat)에서는 꾸미기처럼 바로 열린다.
+          // (보스별 토벌 타임은 여기가 아니라 📊 전적 화면에서 본다)
           const locked = m.price && !HAT_DEV && !modeUnlocks.includes(`mode:${m.id}`)
-          // 보스전 토벌 전적 — 보스별 합산(토벌 횟수 + 전체 최단 기록)
-          let recLine = null
-          if (m.id === 'boss' && !locked) {
-            const recs = Object.values(loadBossRecords())
-            const clears = recs.reduce((a, r) => a + (r.clears || 0), 0)
-            if (clears > 0) {
-              const best = Math.min(...recs.filter((r) => r.best != null).map((r) => r.best))
-              recLine = `🏅 ${t('토벌')} ${clears} · ⏱ ${fmtClearTime(best)}`
-            }
-          }
           return (
             <button
               key={m.id}
@@ -535,7 +526,6 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
               <span className="mode-card__desc">
                 {locked ? `🪙 ${m.price} — ${t('코인으로 해금')}` : t(m.desc)}
               </span>
-              {recLine && <span className="mode-card__rec">{recLine}</span>}
             </button>
           )
         })}
@@ -706,6 +696,9 @@ function RecordsScreen({ onBack }) {
     (a, id) => ({ games: a.games + records[id].games, wins: a.wins + records[id].wins }),
     { games: 0, wins: 0 }
   )
+  // 보스전 토벌 기록 — 보스별 { clears, best(최단 초) }
+  const bossRecs = loadBossRecords()
+  const bossCleared = BOSS_IDS.some((id) => bossRecs[id]?.clears > 0)
   return (
     <div className="screen records-screen">
       <BackButton onBack={onBack} />
@@ -736,6 +729,33 @@ function RecordsScreen({ onBack }) {
               })}
             </div>
           </>
+        )}
+      </div>
+      {/* 보스전 토벌 기록 — 보스별 최단 클리어 타임과 토벌 횟수 */}
+      <div className="toy-card records-card records-card--boss">
+        <h3 className="records-card__sub">{t('👑 보스 토벌')}</h3>
+        {!bossCleared ? (
+          <p className="records-card__empty">{t('아직 토벌한 보스가 없어 — 보스전에 도전해 봐! 👹')}</p>
+        ) : (
+          <div className="records-card__rows">
+            {BOSS_IDS.map((id) => {
+              const r = bossRecs[id]
+              const done = r?.clears > 0
+              return (
+                <div key={id} className={`boss-rec-row ${done ? '' : 'boss-rec-row--locked'}`}>
+                  <span className="boss-rec-row__name">{CLASSES[id].icon} {t(CLASSES[id].name)}</span>
+                  {done ? (
+                    <>
+                      <span className="boss-rec-row__best">⏱ {fmtClearTime(r.best)}</span>
+                      <span className="boss-rec-row__clears">🏅 {t('토벌')} {r.clears}</span>
+                    </>
+                  ) : (
+                    <span className="boss-rec-row__none">— {t('미토벌')}</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
     </div>
