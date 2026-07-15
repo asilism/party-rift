@@ -795,6 +795,9 @@ export function createGame(players, opts = {}) {
   })
   for (const h of heroes) {
     h.isBoss = CLASSES[h.cls].boss === true
+    // 보스는 레벨이 없다 — 대신 개전부터 고정 파워(BOSS_LEVEL 상당)로 계산해 스탯을 못박는다.
+    //  이후 bossThink에서 레벨업하지 않으므로 이 값이 게임 내내 유지된다.
+    if (h.isBoss) h.lvl = BOSS_LEVEL
     h.maxHp = heroMaxHp(h)
     h.hp = h.maxHp
   }
@@ -4494,7 +4497,9 @@ function botSupportLane(state, h) {
 // 돌리고, 주기적으로 병사를 소환해 라인을 민다. 영웅들은 정글몹·소환 병사로 성장해
 // 아이템·스킬 연계로 보스를 잡는다. CC 저항(BOSS_CC_RESIST)은 stepHero에서.
 const BOSS_CC_RESIST = 2.5 // CC 잔여시간 추가 소진 배율 — 연계 CC 영구기절 방지
-const BOSS_LEVEL_EVERY = 80 // n초마다 자동 레벨업 — 시간은 보스 편(오래 끌수록 불리)
+// 보스 고정 파워 등급 — 레벨 개념 없이, 이 등급 상당의 스탯으로 개전부터 못박는다
+// (예전 시간 자동 레벨업으로 얻던 성장분을 여기에 녹여 넣었다). 위협 상승은 국면이 담당.
+const BOSS_LEVEL = 6
 const BOSS_SUMMON_CD = 13 // 병사 소환 주기
 // ── 보스 타임라인(시간 스테이지): 잠 → 대량 소환 → 정예 소환 → 진군 ──
 //  바로 진군하지 않는다 — 소환 페이즈 동안 병력의 파도를 막으며 성장하고,
@@ -4573,30 +4578,12 @@ function bossThink(state, h, dt) {
     h.bossIntro = true
     pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name} ${h.name} 등장! 힘을 합쳐 쓰러뜨리세요!`)
   }
-  // 시간 성장: 성장분만큼 회복하며 레벨업(전투 중 체력비 유지).
-  // 각성 휴지기(보호막)에 멈춰 있던 시간은 성장에서 뺀다 — 휴지기가 보스의 이득이면 안 된다.
-  const wantLvl = Math.min(MAX_LEVEL, 1 + Math.floor((state.time - (h.bossShieldTotal || 0)) / BOSS_LEVEL_EVERY))
-  while (h.lvl < wantLvl) {
-    h.lvl++
-    const before = h.maxHp
-    h.maxHp = heroMaxHp(h)
-    h.hp = Math.min(h.maxHp, h.hp + (h.maxHp - before))
-    pushFx(state, 'level', h.x, h.z, 7, h.team)
-  }
-  // 그림자 영웅(정예 소환수)도 보스와 함께 자동 성장 — 파밍 없이도 위협이 유지된다
-  for (const a of state.heroes) {
-    if (!a.isBossAdd || a.respawnT > 0) continue
-    while (a.lvl < wantLvl) {
-      a.lvl++
-      const before = a.maxHp
-      a.maxHp = heroMaxHp(a)
-      a.hp = Math.min(a.maxHp, a.hp + (a.maxHp - before))
-    }
-  }
-  // 재생: 8초간 무피해면 초당 최대체력 0.5% 회복 — 치고 빠지기만 반복하면 못 잡는다.
+  // 보스는 레벨 개념이 없다 — 시간 자동 레벨업 없음(위협은 국면 전환으로 강해진다).
+  //  체력바가 최대치와 함께 훅 오르던 혼란을 없앤다. 스탯은 개전부터 고정(BOSS_LEVEL로 고정 계산).
+  // 재생: 8초간 무피해면 초당 최대체력 0.4% 회복 — 치고 빠지기만 반복하면 못 잡는다.
   // 각성 휴지기(보호막) 중엔 재생하지 않는다 — 깎아 둔 체력이 되돌아가면 김이 샌다.
   if (state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
-    h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.005 * dt)
+    h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.004 * dt)
   }
   h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8 }
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
