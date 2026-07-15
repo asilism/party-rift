@@ -41,7 +41,7 @@ const BOT_LEVEL_OPTS = [
 const MODE_OPTS = [
   { id: '3v3', emoji: '⚔️', name: '3 대 3', desc: '작은 맵 · 빠른 한판', tag: '기본' },
   { id: '5v5', emoji: '🐉', name: '5 대 5', desc: '넓은 맵 · 정글 대격전', tag: '큰판' },
-  { id: 'boss', emoji: '👹', name: '보스전', desc: '5명이 거대 보스에 도전 — 잡으면 승리', tag: '도전', price: 800 },
+  { id: 'boss', emoji: '👹', name: '보스전', desc: '5명이 거대 보스에 도전 — 잡으면 승리', tag: '도전', price: 300 },
 ]
 
 export default function SoloApp() {
@@ -445,6 +445,7 @@ function MissionWidget() {
 // ── 2. 메인 메뉴 ──
 function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings, onHats }) {
   const z = getZodiac(profile)
+  const coins = loadCoins() // 메뉴 진입 때마다 최신 잔액을 읽는다(경기·꾸미기 후 갱신)
   const records = loadRiftRecords()
   const total = Object.values(records).reduce(
     (a, r) => ({ games: a.games + r.games, wins: a.wins + r.wins }),
@@ -455,18 +456,25 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings, o
       <div className="menu-screen__logo">
         <h1 className="toy-logo__en toy-logo__en--small">ZODIAC<span className="toy-logo__bolt">⚡</span>BLITZ</h1>
       </div>
-      <button className="profile-chip" onClick={onProfile} title={t('수호 지신 바꾸기')}>
-        <span className="profile-chip__emoji">{z?.emoji}</span>
-        <span className="profile-chip__info">
-          <b>{z?.name}</b>
-          <small>{total.games > 0 ? `${total.wins}${t('승')} ${total.games - total.wins}${t('패')}` : t('첫 출전 대기')}</small>
-        </span>
-      </button>
+      <div className="menu-topright">
+        <button className="profile-chip" onClick={onProfile} title={t('수호 지신 바꾸기')}>
+          <span className="profile-chip__emoji">{z?.emoji}</span>
+          <span className="profile-chip__info">
+            <b>{z?.name}</b>
+            <small>{total.games > 0 ? `${total.wins}${t('승')} ${total.games - total.wins}${t('패')}` : t('첫 출전 대기')}</small>
+          </span>
+        </button>
+        {/* 소유 코인 — 꾸미기 외 메인 메뉴에서도 상시 노출 */}
+        <div className="menu-coins" title={t('조디악 코인')}>
+          <span className="menu-coins__icon">🪙</span>
+          <b className="menu-coins__amt">{coins}</b>
+        </div>
+      </div>
       <nav className="menu-screen__list">
-        <button className="toy-btn toy-btn--yellow toy-btn--big" onClick={onPlay}>{t('⚔️ 게임 시작')}</button>
-        {/* 온라인은 멀티 재개방 때까지 비활성 (웹 온라인 플로우는 ?solo 없는 주소로 여전히 접근 가능) */}
+        <button className="toy-btn toy-btn--yellow toy-btn--big" onClick={onPlay}>{t('⚔️ 혼자 플레이')}</button>
+        {/* 온라인(같이 플레이)은 멀티 재개방 때까지 비활성 (웹 온라인 플로우는 ?solo 없는 주소로 여전히 접근 가능) */}
         <button className="toy-btn toy-btn--blue is-soon" disabled>
-          {t('🌐 온라인')} <span className="toy-btn__badge">{t('준비 중')}</span>
+          {t('🌐 같이 플레이')} <span className="toy-btn__badge">{t('준비 중')}</span>
         </button>
         <button className="toy-btn toy-btn--green" onClick={onRecords}>{t('📊 전적')}</button>
         <button className="toy-btn toy-btn--pink" onClick={onHats}>{t('🎩 꾸미기')}</button>
