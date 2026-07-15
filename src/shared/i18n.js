@@ -281,6 +281,8 @@ const DICT = {
   '🔁 새 매치 찾기': '🔁 Find New Match',
   'Lv5 해금': 'Unlock at Lv5',
   '언어를 바꾸면 화면이 새로고침돼요': 'Changing language reloads the screen',
+  '그래픽은 다음 전투부터 적용돼요': 'Graphics apply from the next battle',
+  '상': 'High', '중': 'Med', '하': 'Low',
   'Lv3 해금': 'Unlock at Lv3',
 
   // 12지신

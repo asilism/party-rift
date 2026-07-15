@@ -11,7 +11,7 @@ import {
   loadEquippedHat, saveEquippedHat, loadOwnedHats, addOwnedHat,
   loadEquippedCostume, saveEquippedCostume, loadOwnedCostumes, addOwnedCostume,
   loadEquippedWeapon, saveEquippedWeapon, loadOwnedWeapons, addOwnedWeapon,
-  loadBossRecords, recordBossClear,
+  loadBossRecords, recordBossClear, loadRiftGfx, saveRiftGfx,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
@@ -978,8 +978,16 @@ function HatScreen({ profile, onBack }) {
 }
 
 // ── 4.4. 설정 — 언어·사운드 (게임 전역, 인게임 설정과 같은 저장소) ──
+// 그래픽 품질 3단(인게임 설정과 동일 값) — 메뉴 설정에서도 미리 바꿀 수 있다
+const GFX_OPTS = [
+  { id: 'high', label: '상' },
+  { id: 'med', label: '중' },
+  { id: 'low', label: '하' },
+]
+
 function SettingsScreen({ onBack, onLicenses }) {
   const [soundOn, setSoundOn] = useState(loadSoundOn)
+  const [gfx, setGfx] = useState(loadRiftGfx)
   const lang = getLang()
   function toggleSound() {
     const n = !soundOn
@@ -987,6 +995,10 @@ function SettingsScreen({ onBack, onLicenses }) {
     saveSoundOn(n)
     sound.setEnabled(n)
     if (n) { sound.unlock(); sound.step() }
+  }
+  function pickGfx(id) {
+    setGfx(id)
+    saveRiftGfx(id)
   }
   return (
     <div className="screen settings-screen">
@@ -1017,8 +1029,22 @@ function SettingsScreen({ onBack, onLicenses }) {
             <button className={`toy-pill ${!soundOn ? 'is-on' : ''}`} onClick={() => { if (soundOn) toggleSound() }}>{t('꺼짐')}</button>
           </div>
         </div>
+        <div className="settings-row">
+          <span className="settings-row__label">🎨 {t('그래픽')}</span>
+          <div className="settings-row__seg">
+            {GFX_OPTS.map((o) => (
+              <button
+                key={o.id}
+                className={`toy-pill ${gfx === o.id ? 'is-on' : ''}`}
+                onClick={() => pickGfx(o.id)}
+              >
+                {t(o.label)}
+              </button>
+            ))}
+          </div>
+        </div>
         <button className="settings-link" onClick={onLicenses}>{t('ⓘ 오픈소스 라이선스')} ›</button>
-        <p className="settings-note">{t('언어를 바꾸면 화면이 새로고침돼요')}</p>
+        <p className="settings-note">{t('언어를 바꾸면 화면이 새로고침돼요')} · {t('그래픽은 다음 전투부터 적용돼요')}</p>
       </div>
     </div>
   )
