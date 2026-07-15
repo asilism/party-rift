@@ -11,7 +11,7 @@
 ## 등록 정보 초안 (Google Play 기준)
 
 - **앱 이름 (30자)**: 조디악 블리츠: 12지신 대난투
-- **짧은 설명 (80자)**: 12지신 동물들의 3분 스피드 MOBA! 스킬 콤보로 적진을 부수고 수호석을 지켜라
+- **짧은 설명 (80자)**: 12지신 동물들의 3분 스피드 MOBA! 3:3·5:5·보스 레이드, 스킬 콤보로 적진을 부수고 수호석을 지켜라
 - **자세한 설명 (초안)**:
 
   > ⚡ 조디악 블리츠 (ZODIAC BLITZ)
@@ -21,9 +21,11 @@
   >
   > 🐯 이런 게임이에요
   > - 한 판 3~5분, 가볍게 즐기는 3:3 / 5:5 전투
-  > - 전사·마법사·암살자 등 17종의 개성 있는 직업
+  > - 5명이 힘을 합쳐 각성한 거대 보스에 도전하는 보스 레이드
+  > - 전사·마법사·암살자 등 20종의 개성 있는 직업
   > - 배후일섬, 그림자처형, 시간 되감기… 직업마다 고유 스킬 3종
   > - 병사·정글 괴물·용·이무기까지, MOBA의 재미를 압축
+  > - 왕관·천사날개·성검… 모자·의상·무기로 내 영웅 꾸미기
   > - 승리할 때마다 새 직업 해금
   >
   > 🎮 조작
@@ -34,8 +36,8 @@
 
 - **카테고리**: 게임 > 액션 (또는 전략)
 - **콘텐츠 등급 설문 가이드**: 만화적/판타지 폭력(캐릭터가 쓰러지면 파티클로 분해, 유혈 없음) → 예상 등급: 만 7세+ (IARC), 폭력성 외 항목(선정성·도박·약물·욕설) 전부 "없음", 사용자 간 상호작용 "없음"(오프라인), 위치 공유 "없음", 디지털 구매 "없음"
-- **개인정보처리방침 URL**: https://github.com/asilism/party-rift/blob/main/PRIVACY.md
-  (Play Console은 URL 필수 — 저장소가 비공개면 GitHub Pages 등 공개 호스팅으로 옮길 것)
+- **개인정보처리방침 URL**: https://asilism.github.io/zodiacblitz/
+  (별도 공개 저장소 `asilism/zodiacblitz`의 GitHub Pages에서 호스팅 — 코드 저장소 party-rift를 비공개로 돌려도 유지됨. 원본은 PRIVACY.md, 수정 시 함께 갱신)
 
 ## 수익화 체크리스트 (보상형 광고 + 광고 제거 IAP)
 
@@ -45,7 +47,7 @@
 - [x] **AdMob 실계정** 반영(2026-07-14): 앱 ID `…~3734985001`, 보상형 단위 "2배보상" `…/8280166455`
   - ⚠️ 기기 테스트 전에 AdMob 콘솔 > 설정 > 테스트 기기에 본인 폰 등록(실광고 반복 시청은 계정 정지 위험)
   - 신규 앱은 광고 게재 활성화까지 몇 시간~며칠 걸릴 수 있음 · 스토어 게시 후 앱↔리스팅 연결
-- [ ] UMP 동의 UI(유럽 대응): `AdMob.requestConsentInfo` 연동
+- [x] UMP 동의 UI(유럽 대응): `AdMob.requestConsentInfo` + `showConsentForm` 연동 완료(`src/shared/ads.js`) — AdMob 콘솔에서 GDPR 메시지 생성은 별도 필요
 - [ ] **광고 제거 IAP**: Play Console에 관리 상품(remove_ads, ₩3,300~5,500) 등록 → Play Billing 연동(@capacitor 계열 또는 RevenueCat) → 성공 시 `bgp.rift.noads.v1='on'` 세팅(코드는 이 플래그 기준으로 이미 동작: 광고 없이 상시 2배)
 - [ ] Play 데이터 안전 섹션: "광고 ID 수집(광고 목적, AdMob)" 반영 — PRIVACY.md는 개정 완료
 
@@ -53,11 +55,11 @@
 
 ### Google Play
 - [x] 오픈소스 고지 (THIRD_PARTY_NOTICES.md — 앱 내 메뉴에서 열람 가능)
-- [x] 개인정보처리방침 (PRIVACY.md — 공개 URL 필요)
+- [x] 개인정보처리방침 공개 URL: https://asilism.github.io/zodiacblitz/ (별도 공개 저장소 호스팅 — party-rift 비공개와 무관)
 - [x] 릴리즈 서명 설정 (`android/keystore.properties` — keystore.properties.example 참고)
-- [ ] 서명 키 생성 (keytool, 사용자 작업)
-- [ ] `npm run aab` → `android/app/build/outputs/bundle/release/app-release.aab` 업로드
-- [ ] 스토어 그래픽: 아이콘 512×512(있음: assets/icon.png), 피처 그래픽 1024×500, 스크린샷 폰/태블릿 각 2장+ (Electron `--win-size` 캡처 활용 가능)
+- [x] 서명 키 생성 (keytool — 2026-07-15 완료, CN=Lee Sungjun/C=KR로 서명 검증됨)
+- [x] `npm run aab` → `android/app/build/outputs/bundle/release/app-release.aab`(9.2MB, 릴리즈 서명 검증 완료) — 남은 건 Play Console 업로드
+- [x] 스토어 그래픽: 아이콘 512×512(assets/icon.png), 피처 그래픽 1024×500, 폰 스크린샷 6장(보스전 phone-06-boss.png 포함) — 태블릿은 동일 비율 재사용 가능
 - [ ] 버전 관리: 업로드마다 android/app/build.gradle의 versionCode +1
 
 ### Steam (Electron)
