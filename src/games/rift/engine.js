@@ -214,7 +214,7 @@ export const CLASSES = {
   boss_colossus: {
     boss: true, name: '파멸의 거인', icon: '👹',
     desc: '대지를 부수는 전사형 보스 — 강타와 돌진, 회전 격노',
-    hp: 11800, hpLvl: 720, atk: 104, atkLvl: 8, range: 13.2, atkCd: 1.0, speed: 7.0, def: 0.48,
+    hp: 21000, hpLvl: 720, atk: 104, atkLvl: 8, range: 13.2, atkCd: 1.0, speed: 7.0, def: 0.48,
     skill: { name: '대지 강타', icon: '💥', cd: 9, desc: '주변 땅을 내리쳐 큰 피해 + 기절' },
     skill2: { name: '격돌 돌진', icon: '🌋', cd: 16, desc: '적에게 돌진해 들이받아 띄운다' },
     ult: { name: '회전 격노', icon: '🌪️', cd: 30, desc: '팽이처럼 돌며 주변을 계속 후린다' },
@@ -222,7 +222,7 @@ export const CLASSES = {
   boss_archmage: {
     boss: true, name: '대마도사', icon: '🧙',
     desc: '운석과 번개의 마법사형 보스 — 넓게 태우고 얼린다',
-    hp: 11200, hpLvl: 700, atk: 64, atkLvl: 6, range: 15.5, atkCd: 1.1, speed: 7.0, def: 0.62,
+    hp: 20000, hpLvl: 700, atk: 64, atkLvl: 6, range: 15.5, atkCd: 1.1, speed: 7.0, def: 0.62,
     skill: { name: '연쇄 뇌격', icon: '⚡', cd: 8, desc: '번개가 최대 5명을 타고 흐른다' },
     skill2: { name: '혹한 폭풍', icon: '❄️', cd: 14, desc: '주변을 얼려 빙결 + 피해' },
     ult: { name: '멸망의 운석', icon: '☄️', cd: 26, desc: '영웅들 머리 위로 운석을 떨어뜨린다' },
@@ -230,7 +230,7 @@ export const CLASSES = {
   boss_shadow: {
     boss: true, name: '그림자 군주', icon: '👺',
     desc: '어둠을 가르는 암살자형 보스 — 습격과 공포',
-    hp: 10800, hpLvl: 680, atk: 100, atkLvl: 8, range: 13.5, atkCd: 0.7, speed: 8.8, def: 0.52,
+    hp: 22000, hpLvl: 680, atk: 100, atkLvl: 8, range: 13.5, atkCd: 0.7, speed: 8.8, def: 0.52,
     skill: { name: '그림자 습격', icon: '🌀', cd: 9, desc: '가장 약한 적 뒤로 순간이동해 벤다' },
     skill2: { name: '공포의 포효', icon: '😱', cd: 16, desc: '주변 모두에게 공포 — 통제를 잃는다' },
     ult: { name: '어둠걸음', icon: '🌫️', cd: 26, desc: '어둠에 스며 모습을 감추고 빨라진다' },
@@ -2765,6 +2765,9 @@ function awardXp(state, team, at, amount, killer) {
 
 function giveXp(state, h, amount) {
   if (h.respawnT > 0) return // 죽어 있는 동안엔 경험치를 받지 못한다
+  // 보스는 레벨 개념이 없다 — 경험치를 받지 않는다. (예전엔 처치 XP로 레벨업하며
+  //  레벨업 보너스 15%를 회복해, 영웅을 잡을 때마다 체력이 훅 차오르는 것처럼 보였다.)
+  if (h.isBoss) return
   if (h.lvl >= MAX_LEVEL) return
   if (state.mode === 'boss' && h.team === 'blue' && !h.isBoss) amount *= 2.0 // 보스전: 파밍원이 적어 성장 가속
   h.xp += amount
@@ -3074,7 +3077,8 @@ function stepHero(state, h, dt) {
   // 리스폰 존(수호석 뒤편 회복 지대): 우리 편이면 회복, 적이면 따끔!
   for (const team of ['blue', 'red']) {
     if (dist2(h, state.map.FOUNTAIN_POS[team]) > FOUNTAIN_RADIUS * FOUNTAIN_RADIUS) continue
-    if (team === h.team) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * FOUNTAIN_HEAL * dt)
+    // 보스는 옥좌(자기 우물) 위에서도 우물 회복을 받지 않는다 — 전용 재생만 쓴다
+    if (team === h.team) { if (!h.isBoss) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * FOUNTAIN_HEAL * dt) }
     else damageHero(state, h, FOUNTAIN_DMG * dt, null)
   }
   // 자연 회복 (전투 이탈 시) + 이무기 버프 회복.
@@ -4706,10 +4710,10 @@ function bossThink(state, h, dt) {
       h.bossCd.summon = BOSS_MASS_EVERY
       bossSummon(state, h, { count: BOSS_MASS_COUNT, hpMul: 1.0 })
     } else {
-      // 진군 호위 파도: 카르곤(전사형)은 살짝 적게(10) — 나머지는 14
-      const marchCount = h.cls === 'boss_colossus' ? 10 : 14
+      // 진군 호위 파도는 전 보스 공통 10마리 — 한번 밀리기 시작하면 14마리씩 쌓여
+      // 걷잡을 수 없던 문제를 완화한다. (초반 대량 소환 국면은 위에서 14 유지)
       h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
-      bossSummon(state, h, { count: stage === 'elite' ? 10 : marchCount, ...(stage === 'elite' ? { hpMul: 1.0 } : null) })
+      bossSummon(state, h, { count: 10, ...(stage === 'elite' ? { hpMul: 1.0 } : null) })
     }
   }
   // 소환 페이즈 동안 보스는 진군하지 않는다 — 옥좌를 지키며 성곽 안까지 덤벼드는 적만 상대한다.
