@@ -343,34 +343,59 @@ export function saveSoloPick(pick) {
   }
 }
 
-// ── 솔로(오프라인 봇전) 직업별 전적 — { [cls]: { games, wins, kills, deaths, assists } } ──
+// ── 솔로(오프라인 봇전) 직업별 전적 — 모드별로 나눠 저장 ──
+//  { [mode]: { [cls]: { games, wins, kills, deaths, assists } } }  (mode = '3v3' | '5v5')
+//  보스전은 별도(bossRecords)로 관리 — 여기엔 안 쌓는다.
 const RIFT_RECORDS_KEY = 'bgp.rift.records.v1'
 
-export function loadRiftRecords() {
+// 저장 원본을 읽는다. 레거시(모드 구분 없는 평면 { [cls]: {...} })는 '3v3' 버킷으로 승격한다.
+function loadRecordsRaw() {
   try {
     const v = JSON.parse(localStorage.getItem(RIFT_RECORDS_KEY))
-    if (v && typeof v === 'object') return v
+    if (v && typeof v === 'object') {
+      const legacy = Object.values(v).some((x) => x && typeof x.games === 'number')
+      return legacy ? { '3v3': v } : v // 옛 평면 데이터는 3v3(기본 모드)으로 본다
+    }
   } catch {
     /* 무시 */
   }
   return {}
 }
 
-// 한 판 결과를 직업 전적에 누적하고 전체 전적을 돌려준다 (무승부는 패로 센다)
-export function addRiftRecord(cls, { win, kills = 0, deaths = 0, assists = 0 } = {}) {
-  const all = loadRiftRecords()
-  const r = all[cls] || (all[cls] = { games: 0, wins: 0, kills: 0, deaths: 0, assists: 0 })
+// 모드별 전적 전체 { [mode]: { [cls]: {...} } }
+export function loadRiftRecordsByMode() {
+  return loadRecordsRaw()
+}
+
+// 전 모드 합산 평면 전적 { [cls]: {...} } — 캐릭터 선택 화면 등 기존 사용처 호환용
+export function loadRiftRecords() {
+  const byMode = loadRecordsRaw()
+  const flat = {}
+  for (const mode of Object.keys(byMode)) {
+    for (const [cls, r] of Object.entries(byMode[mode])) {
+      const a = flat[cls] || (flat[cls] = { games: 0, wins: 0, kills: 0, deaths: 0, assists: 0 })
+      a.games += r.games; a.wins += r.wins; a.kills += r.kills; a.deaths += r.deaths; a.assists += r.assists
+    }
+  }
+  return flat
+}
+
+// 한 판 결과를 해당 모드의 직업 전적에 누적한다 (무승부는 패로 센다)
+export function addRiftRecord(cls, { win, kills = 0, deaths = 0, assists = 0, mode = '3v3' } = {}) {
+  const byMode = loadRecordsRaw()
+  const bucket = byMode[mode] || (byMode[mode] = {})
+  const r = bucket[cls] || (bucket[cls] = { games: 0, wins: 0, kills: 0, deaths: 0, assists: 0 })
   r.games += 1
   if (win) r.wins += 1
   r.kills += kills
   r.deaths += deaths
   r.assists += assists
   try {
-    localStorage.setItem(RIFT_RECORDS_KEY, JSON.stringify(all))
+    localStorage.setItem(RIFT_RECORDS_KEY, JSON.stringify(byMode))
   } catch {
     /* 무시 */
   }
-  return all
+  return byMode
 }
 
 // ── 해금 확인 수 — 마지막으로 본 해금 직업 수. 그보다 새로 열린 카드엔 NEW 배지를 띄운다 ──
