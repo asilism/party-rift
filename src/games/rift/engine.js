@@ -5586,9 +5586,9 @@ function stepBots(state, dt) {
   }
 }
 
-// 보스 예고 장판 회피 — '공략을 아는 플레이어'처럼 경고를 읽고 안전지대로 움직인다.
-// 도넛(rIn)은 안쪽(보스 품)으로 파고들고, 원판은 가장 가까운 바깥으로 빠진다.
+// 보스 예고 장판 회피 — '공략을 아는 플레이어'처럼 경고를 읽고 가장 가까운 바깥으로 빠진다.
 // 여러 장판이 겹치면(융단/파문) 가장 먼저 터질 것부터 피한다.
+// (도넛 안전지대 패턴은 전부 폐기됨 — 이제 장판은 전부 '바깥으로 나가면 산다'는 규칙이다)
 function botDodgeBossZone(state, h, dt) {
   let zone = null
   let soonest = Infinity
@@ -5596,7 +5596,6 @@ function botDodgeBossZone(state, h, dt) {
     if (z.kind !== 'bosszone' || z.exploded || z.t >= z.delay) continue
     const d2v = (h.x - z.x) ** 2 + (h.z - z.z) ** 2
     if (d2v > (z.r + 0.8) ** 2) continue
-    if (z.rIn > 0 && d2v < (z.rIn - 0.8) ** 2) continue // 이미 안전지대 안
     const left = z.delay - z.t
     if (left < soonest) { soonest = left; zone = z }
   }
@@ -5604,17 +5603,11 @@ function botDodgeBossZone(state, h, dt) {
   const dx = h.x - zone.x
   const dz = h.z - zone.z
   const d = Math.hypot(dx, dz) || 0.001
-  let tx
-  let tz
-  if (zone.rIn > 3) {
-    // 도넛: 중심(보스 품)으로 파고든다 — 밖으로 달아나면 다음 물결에 잡힌다
-    tx = zone.x + (dx / d) * Math.max(0.5, zone.rIn - 1.5)
-    tz = zone.z + (dz / d) * Math.max(0.5, zone.rIn - 1.5)
-  } else {
-    tx = zone.x + (dx / d) * (zone.r + 2.5)
-    tz = zone.z + (dz / d) * (zone.r + 2.5)
-  }
-  steerToward(state, h, { x: tx, z: tz })
+  // 중심에서 멀어지는 방향으로 반경 밖까지 빠진다
+  steerToward(state, h, {
+    x: zone.x + (dx / d) * (zone.r + 2.5),
+    z: zone.z + (dz / d) * (zone.r + 2.5),
+  })
   botAttack(state, h, dt) // 피하면서도 사거리 안이면 계속 때린다
   return true
 }
