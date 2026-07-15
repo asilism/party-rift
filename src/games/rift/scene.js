@@ -3863,6 +3863,7 @@ const FX_LOOK = {
   plague: { color: 0x7fc24a, ring: true, mode: 'rise', pcolor: 0xbfe88a }, // 주술사 역병안개 — 피어오르는 독 구름
   doom: { color: 0x8a3bd0, ring: true, mode: 'out', pcolor: 0xc89af0, ring2: true }, // 주술사 파멸의 낙인 — 이중 낙인
   summon: { color: 0xffd06a, ring: true, mode: 'rise', pcolor: 0xffe6a8 }, // 야수조련사 소환 — 솟아오르는 마력
+  descend: { color: 0xb266ff, ring: true, mode: 'rise', pcolor: 0xe0c8ff, pillar: true, beam: true }, // 그림자 정예 강림 — 하늘에서 내리는 보랏빛 빛기둥
   deploy: { color: 0x9fb0c4, ring: true, mode: 'out', pcolor: 0xd6e0ec }, // 엔지니어 설치 — 기계 조립 불꽃
   snare: { color: 0x6fbf3a, ring: true, mode: 'out', pcolor: 0xbfe88a, spikes: 0x77c24a }, // 넝쿨사냥꾼 포획망 — 솟는 넝쿨 가시
   vine: { color: 0x5fae33, line: true, mode: 'forward', pcolor: 0xbfe88a, w: 2.4, ground: true }, // 올가미 — 땅에서 솟아 앞으로 뻗는 넝쿨

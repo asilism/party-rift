@@ -3737,6 +3737,12 @@ function stepZones(state, dt) {
     if (z.kind === 'bosszone') {
       if (z.t >= z.delay && !z.exploded) {
         z.exploded = true
+        // 소환 장판: 피해 없이 정예를 강림시킨다(하늘빛 강림 연출은 spawnShadowAdd가 낸다)
+        if (z.spawnAdd) {
+          spawnShadowAdd(state, z.spawnAdd, z.x, z.z)
+          remove.add(z.id)
+          continue
+        }
         const owner = state.heroes.find((o) => o.id === z.owner) || { team: z.team }
         const r2 = z.r * z.r
         const rIn2 = z.rIn * z.rIn
@@ -4542,6 +4548,8 @@ function pushBossZone(state, h, opts) {
     stun: opts.stun || 0, freeze: opts.freeze || 0, fear: opts.fear || 0,
     life: opts.life || 0, dps: opts.dps || 0, slow: opts.slow || 0,
     vfx: opts.vfx || 'quake', hue: opts.hue || 'lava', exploded: false,
+    // 소환 장판: delay가 끝나면 피해 대신 이 정예를 하늘빛과 함께 강림시킨다
+    spawnAdd: opts.spawnAdd || null,
   })
 }
 
@@ -4883,33 +4891,48 @@ const BOSS_ADD_SQUADS = {
   boss_archmage: ['mage', 'cryomancer', 'warlock', 'terramancer', 'chronomancer'],
   boss_shadow: ['assassin', 'illusionist', 'fearmonger', 'snarer', 'catcher'],
 }
+// 정예 소환은 두 박자다: ① 바닥에 예고 장판(강림 자리) → ② delay 뒤 그 자리에서 강림.
+//  · 장판이 흩뿌려져 깔리므로 아군 봇은 '공격 스킬처럼' 인지해 흩어진다(botDodgeBossZone) —
+//    한곳에 응축돼 순간 폭발하던 전열 붕괴를 막는다.
+//  · 5기가 한꺼번이 아니라 위상차(0.18초 간격)를 두고 하나씩 강림한다.
+//  · 강림 좌표를 넓게 흩뿌려(반경 6~13) 다섯이 겹쳐 서지 않게 한다.
 function bossSummonAdds(state, h) {
   const squad = BOSS_ADD_SQUADS[h.cls] || BOSS_ADD_SQUADS.boss_colossus
-  // 레벨은 아군 평균에 맞춘다 — 보스 자동레벨 기준으로 뽑으면 파도 파밍으로 앞서간
-  // 아군(Lv8+)에게 Lv2 정예가 순삭당해 위협이 아니라 골드 셔틀이 된다
+  // 레벨은 아군 평균에 맞춘다 — 앞서간 아군에게 저레벨 정예가 순삭당하면 골드 셔틀이 된다
   const blues = state.heroes.filter((e) => e.team === 'blue')
   const avgLvl = Math.round(blues.reduce((s, e) => s + e.lvl, 0) / Math.max(1, blues.length))
   const addLvl = Math.max(1, Math.max(h.lvl, avgLvl - 4))
   for (let i = 0; i < squad.length; i++) {
     const cls = squad[i]
-    const a = Math.PI - 0.6 + (i / (squad.length - 1)) * 1.2 // 서쪽 관문 방향 부채꼴로 등장
-    const pos = { x: h.x + Math.cos(a) * 7, z: h.z + Math.sin(a) * 7 }
-    const add = makeHeroState(
-      { id: `add${state.nextId++}`, name: `그림자 ${CLASSES[cls].name}`, zodiacId: cls, team: 'red', isBot: true },
-      cls, pos, state.map, state.rng,
-    )
-    add.isBoss = false
-    add.isBossAdd = true // 부활 없음·후퇴 없음(damageHero/stepBots) + 보스와 함께 자동 성장(bossThink)
-    add.role = 'mid'
-    add.lvl = addLvl
-    add.maxHp = heroMaxHp(add)
-    add.hp = add.maxHp
-    add.gold = 0
-    add.dir = Math.PI
-    state.heroes.push(add)
-    pushFx(state, 'summon', pos.x, pos.z, 4, 'red', 1.0)
+    const a = Math.PI - 0.7 + (i / (squad.length - 1)) * 1.4 // 서쪽 관문 방향 부채꼴
+    const rr = 6 + (i % 2) * 4 + state.rng() * 3 // 반경을 엇갈려(6~13) 겹치지 않게 흩뿌린다
+    pushBossZone(state, h, {
+      x: h.x + Math.cos(a) * rr, z: h.z + Math.sin(a) * rr, r: 3.4,
+      delay: 1.0 + i * 0.18, // 1초 예고 + 위상차 0.18초 — 하나씩 강림
+      vfx: 'summon', hue: 'shadow',
+      spawnAdd: { cls, lvl: addLvl },
+    })
   }
-  pushFx(state, 'summon', h.x, h.z, 9, 'red', 1.2)
+  pushFx(state, 'shriek', h.x, h.z, 9, 'red', 1.0) // 소환 신호 — 보스가 어둠을 부른다
+}
+
+// 예고 장판이 터지는 순간 그 자리에 그림자 정예 하나를 강림시킨다(하늘빛 강림 연출 포함).
+function spawnShadowAdd(state, spec, x, z) {
+  const cls = spec.cls
+  const add = makeHeroState(
+    { id: `add${state.nextId++}`, name: `그림자 ${CLASSES[cls].name}`, zodiacId: cls, team: 'red', isBot: true },
+    cls, { x, z }, state.map, state.rng,
+  )
+  add.isBoss = false
+  add.isBossAdd = true // 부활 없음·후퇴 없음(damageHero/stepBots)
+  add.role = 'mid'
+  add.lvl = spec.lvl
+  add.maxHp = heroMaxHp(add)
+  add.hp = add.maxHp
+  add.gold = 0
+  add.dir = Math.PI
+  state.heroes.push(add)
+  pushFx(state, 'descend', x, z, 4, 'red', 1.2) // 하늘에서 빛기둥이 내려와 강림(귀환 모션풍)
 }
 
 // 전사형 — 대지 강타(예고→광역 기절) / 격돌 돌진(들이받아 띄움) / 회전 격노(지속 광역)
