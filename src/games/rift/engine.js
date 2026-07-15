@@ -5086,20 +5086,18 @@ function bossArchmage(state, h, foe) {
       })
     }
   }
-  // 시그니처 '밀려오는 한파': 보스 중심에서 바깥으로 세 겹의 한파가 차례로 얼어붙는다
-  // (안쪽부터 터진다 — 전 보스 공통 파도 문법). 이미 터진 안쪽 밴드를 밟거나,
-  // 시간 안에 바깥(18)으로 걸어 나가면 산다. 국면이 오르면 서리밭이 남는다.
-  if (h.bossCd.d <= 0 && foe && dist(h, foe) < 16) {
+  // 시그니처 '밀려오는 한파': 보스 중심에서 얼음 파동이 크게 터진다 — 중앙(보스 발밑)까지
+  //  전부 얼어붙는다(안전지대 없음: 붙어서 때리던 근접이 그대로 맞는다). 예고 1.5초 안에
+  //  반경 밖으로 걸어 나가면 산다. 국면이 오르면 서리밭이 남는다.
+  //  (예전 3중 도넛 밴드는 중앙이 사실상 안전지대가 돼 근접 순삭을 막지 못했다 — 폐기)
+  if (h.bossCd.d <= 0 && foe && dist(h, foe) < 14) {
     h.bossCd.d = 20 * cdMul
-    const bands = [[0, 6], [6, 12], [12, 18]]
-    for (let i = 0; i < 3; i++) {
-      pushBossZone(state, h, {
-        x: h.x, z: h.z, r: bands[i][1], rIn: bands[i][0], delay: 1.4 + i * 0.7,
-        dmg: skillDmg(h, 220, 4.2), freeze: p >= 2 ? 2.2 : 1.6,
-        vfx: 'abszero', hue: 'frost',
-        ...(p >= 2 ? { life: 2.6, dps: skillDmg(h, 12, 0.2), slow: 0.5 } : null),
-      })
-    }
+    pushBossZone(state, h, {
+      x: h.x, z: h.z, r: 14.5, delay: 1.5, // 반경 18→14.5(≈80%)
+      dmg: skillDmg(h, 253, 4.8), freeze: p >= 2 ? 2.2 : 1.6, // 220→253·4.2→4.8 (+15%)
+      vfx: 'abszero', hue: 'frost',
+      ...(p >= 2 ? { life: 2.6, dps: skillDmg(h, 14, 0.23), slow: 0.5 } : null),
+    })
   }
 }
 
