@@ -5,7 +5,7 @@ import { riftNet } from '../games/rift/netgame.js'
 import { createLocalNet } from '../net/localNet.js'
 import { sound } from '../shared/sound.js'
 import {
-  loadSoloPick, saveSoloPick, loadGuideSeen, saveGuideSeen, loadRiftRecords, addRiftRecord,
+  loadSoloPick, saveSoloPick, loadGuideSeen, saveGuideSeen, loadRiftRecords, loadRiftRecordsByMode, addRiftRecord,
   loadUnlockSeen, saveUnlockSeen, loadProfile, saveProfile, loadSoundOn, saveSoundOn,
   loadCoins, addCoins, claimFirstWinToday, addCoinUnlock, loadCoinUnlocks,
   loadEquippedHat, saveEquippedHat, loadOwnedHats, addOwnedHat,
@@ -108,10 +108,13 @@ export default function SoloApp() {
         const me = view.heroes?.find((h) => h.id === 'solo')
         if (!me) return
         const win = !!view.winner && view.winner === me.team
-        addRiftRecord(me.cls, {
-          win,
-          kills: me.kills, deaths: me.deaths, assists: me.assists,
-        })
+        // 직업 전적은 3v3/5v5만 쌓는다 — 보스전 결과는 아래 토벌 기록으로 따로 남긴다
+        if (view.mode !== 'boss') {
+          addRiftRecord(me.cls, {
+            win, mode: view.mode,
+            kills: me.kills, deaths: me.deaths, assists: me.assists,
+          })
+        }
         // 조디악 코인: 승 30 / 패 10 + 하루 첫 승 보너스 50
         let earn = win ? 30 : 10
         let firstWin = false
@@ -688,76 +691,107 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
   )
 }
 
-// ── 전적 ──
-function RecordsScreen({ onBack }) {
-  const records = loadRiftRecords()
+// ── 전적 — 3대3 / 5대5 / 보스전 탭 ──
+const RECORD_TABS = [
+  { id: '3v3', label: '3 대 3' },
+  { id: '5v5', label: '5 대 5' },
+  { id: 'boss', label: '보스전' },
+]
+
+// 직업 전적 카드(3v3/5v5 공용) — 한 모드의 직업별 승패·KDA
+function ClassRecordCard({ records }) {
   const rows = CLASS_IDS.filter((id) => records[id]?.games > 0)
   const total = rows.reduce(
     (a, id) => ({ games: a.games + records[id].games, wins: a.wins + records[id].wins }),
     { games: 0, wins: 0 }
   )
-  // 보스전 토벌 기록 — 보스별 { clears, best(최단 초) }
+  if (rows.length === 0) {
+    return (
+      <div className="toy-card records-card">
+        <p className="records-card__empty">{t('아직 기록이 없어 — 첫 판을 치르고 오자! ⚔️')}</p>
+      </div>
+    )
+  }
+  return (
+    <div className="toy-card records-card">
+      <p className="records-card__total">
+        {t('🏆 통산')} <b>{total.wins}{t('승')} {total.games - total.wins}{t('패')}</b> · {t('승률')} {Math.round((total.wins / total.games) * 100)}%
+      </p>
+      <div className="records-card__rows">
+        {rows.map((id) => {
+          const r = records[id]
+          const rate = Math.round((r.wins / r.games) * 100)
+          return (
+            <div key={id} className="records-row">
+              <span className="records-row__cls">{CLASSES[id].icon} {t(CLASSES[id].name)}</span>
+              <span className="records-row__wl">{r.wins}{t('승')} {r.games - r.wins}{t('패')}</span>
+              <span className="records-row__bar"><span style={{ width: `${rate}%` }} /></span>
+              <span className="records-row__rate">{rate}%</span>
+              <span className="records-row__kda">
+                ⚔️{(r.kills / r.games).toFixed(1)} 💀{(r.deaths / r.games).toFixed(1)} 🤝{(r.assists / r.games).toFixed(1)}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// 보스 토벌 카드 — 보스별 최단 클리어 타임과 토벌 횟수
+function BossRecordCard({ bossRecs }) {
+  const cleared = BOSS_IDS.some((id) => bossRecs[id]?.clears > 0)
+  return (
+    <div className="toy-card records-card records-card--boss">
+      {!cleared ? (
+        <p className="records-card__empty">{t('아직 토벌한 보스가 없어 — 보스전에 도전해 봐! 👹')}</p>
+      ) : (
+        <div className="records-card__rows">
+          {BOSS_IDS.map((id) => {
+            const r = bossRecs[id]
+            const done = r?.clears > 0
+            return (
+              <div key={id} className={`boss-rec-row ${done ? '' : 'boss-rec-row--locked'}`}>
+                <span className="boss-rec-row__name">{CLASSES[id].icon} {t(CLASSES[id].name)}</span>
+                {done ? (
+                  <>
+                    <span className="boss-rec-row__best">⏱ {fmtClearTime(r.best)}</span>
+                    <span className="boss-rec-row__clears">🏅 {t('토벌')} {r.clears}</span>
+                  </>
+                ) : (
+                  <span className="boss-rec-row__none">— {t('미토벌')}</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RecordsScreen({ onBack }) {
+  const [tab, setTab] = useState('3v3')
+  const byMode = loadRiftRecordsByMode()
   const bossRecs = loadBossRecords()
-  const bossCleared = BOSS_IDS.some((id) => bossRecs[id]?.clears > 0)
   return (
     <div className="screen records-screen">
       <BackButton onBack={onBack} />
       <h2 className="toy-heading toy-heading--screen">{t('전적')}</h2>
-      <div className="toy-card records-card">
-        {rows.length === 0 ? (
-          <p className="records-card__empty">{t('아직 기록이 없어 — 첫 판을 치르고 오자! ⚔️')}</p>
-        ) : (
-          <>
-            <p className="records-card__total">
-              {t('🏆 통산')} <b>{total.wins}{t('승')} {total.games - total.wins}{t('패')}</b> · {t('승률')} {Math.round((total.wins / total.games) * 100)}%
-            </p>
-            <div className="records-card__rows">
-              {rows.map((id) => {
-                const r = records[id]
-                const rate = Math.round((r.wins / r.games) * 100)
-                return (
-                  <div key={id} className="records-row">
-                    <span className="records-row__cls">{CLASSES[id].icon} {t(CLASSES[id].name)}</span>
-                    <span className="records-row__wl">{r.wins}{t('승')} {r.games - r.wins}{t('패')}</span>
-                    <span className="records-row__bar"><span style={{ width: `${rate}%` }} /></span>
-                    <span className="records-row__rate">{rate}%</span>
-                    <span className="records-row__kda">
-                      ⚔️{(r.kills / r.games).toFixed(1)} 💀{(r.deaths / r.games).toFixed(1)} 🤝{(r.assists / r.games).toFixed(1)}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </>
-        )}
+      <div className="records-tabs">
+        {RECORD_TABS.map((tb) => (
+          <button
+            key={tb.id}
+            className={`records-tab ${tab === tb.id ? 'records-tab--on' : ''}`}
+            onClick={() => setTab(tb.id)}
+          >
+            {t(tb.label)}
+          </button>
+        ))}
       </div>
-      {/* 보스전 토벌 기록 — 보스별 최단 클리어 타임과 토벌 횟수 */}
-      <div className="toy-card records-card records-card--boss">
-        <h3 className="records-card__sub">{t('👑 보스 토벌')}</h3>
-        {!bossCleared ? (
-          <p className="records-card__empty">{t('아직 토벌한 보스가 없어 — 보스전에 도전해 봐! 👹')}</p>
-        ) : (
-          <div className="records-card__rows">
-            {BOSS_IDS.map((id) => {
-              const r = bossRecs[id]
-              const done = r?.clears > 0
-              return (
-                <div key={id} className={`boss-rec-row ${done ? '' : 'boss-rec-row--locked'}`}>
-                  <span className="boss-rec-row__name">{CLASSES[id].icon} {t(CLASSES[id].name)}</span>
-                  {done ? (
-                    <>
-                      <span className="boss-rec-row__best">⏱ {fmtClearTime(r.best)}</span>
-                      <span className="boss-rec-row__clears">🏅 {t('토벌')} {r.clears}</span>
-                    </>
-                  ) : (
-                    <span className="boss-rec-row__none">— {t('미토벌')}</span>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
+      {tab === 'boss'
+        ? <BossRecordCard bossRecs={bossRecs} />
+        : <ClassRecordCard records={byMode[tab] || {}} />}
     </div>
   )
 }
