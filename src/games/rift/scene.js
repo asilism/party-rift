@@ -460,9 +460,12 @@ function setNameText(sp, text, color) {
   sp.material.needsUpdate = true
 }
 
-// 머리 위 이름표 문구: "Lv.3 ⚔️호랑이🤖" — 적·아군 모두 레벨이 항상 보인다
+// 머리 위 이름표 문구: "Lv.3 ⚔️호랑이🤖" — 적·아군 모두 레벨이 항상 보인다.
+// 보스는 레벨 개념이 없다(국면으로 강해진다) — Lv 표기 없이 이름만.
 function heroLabel(h) {
-  return `Lv.${h.lvl} ${CLASSES[h.cls]?.icon || ''}${h.name}${h.isBot ? '🤖' : ''}`
+  const icon = CLASSES[h.cls]?.icon || ''
+  if (CLASSES[h.cls]?.boss) return `${icon}${h.name}`
+  return `Lv.${h.lvl} ${icon}${h.name}${h.isBot ? '🤖' : ''}`
 }
 
 // 골드 획득 표시: 떠오르며 사라지는 금색 "+N" 스프라이트 (내 영웅 막타 때만)

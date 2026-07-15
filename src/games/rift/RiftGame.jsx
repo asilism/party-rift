@@ -239,7 +239,6 @@ function BossRaidBar({ hud }) {
       <div className="boss-bar__title">
         <span className="boss-bar__face">{BOSS_FACE[boss.cls] || '👹'}</span>
         <span className="boss-bar__name">{t(CLASSES[boss.cls]?.name || '보스')} · {boss.name}</span>
-        <span className="boss-bar__lvl">Lv.{boss.lvl}</span>
         {shielded && <span className="boss-bar__zzz">💤 {Math.ceil(boss.bossShieldT)}s</span>}
       </div>
       <div className="boss-bar__track">
@@ -289,7 +288,7 @@ function RiftRoster({ hud, crown = null }) {
                 </span>
               )}
             </span>
-            <span className="rift-result__lvl">Lv.{h.lvl}</span>
+            <span className="rift-result__lvl">{h.cls?.startsWith('boss_') ? '👑' : `Lv.${h.lvl}`}</span>
             <span className="rift-result__kda">⚔️{h.kills} 💀{h.deaths} 🤝{h.assists}</span>
             <span className="rift-result__items">
               {(h.items || []).map((it) => getItem(it)?.icon).join('') || '—'}
