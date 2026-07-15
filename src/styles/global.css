@@ -2950,13 +2950,27 @@ body {
 }
 .menu-fab:hover { transform: translateY(-2px) rotate(-4deg); }
 .menu-fab:active { transform: translateY(2px); box-shadow: none; }
+/* 우상단 세로 스택: 수호 지신 칩 + 소유 코인 칩 */
+.menu-topright {
+  position: absolute; top: 14px; right: 14px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+}
 .profile-chip {
-  position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 8px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
   padding: 6px 14px 6px 8px; border-radius: 999px; border: 3px solid var(--ink);
   background: var(--paper); box-shadow: 0 4px 0 rgba(43, 35, 80, 0.4);
   font-family: var(--toy-font); transition: transform 0.08s;
 }
 .profile-chip:hover { transform: translateY(-2px) rotate(1deg); }
+/* 소유 코인 칩 — 프로필 칩과 같은 토이 스킨, 코인은 금빛 */
+.menu-coins {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 14px; border-radius: 999px; border: 3px solid var(--ink);
+  background: var(--paper); box-shadow: 0 4px 0 rgba(43, 35, 80, 0.4);
+  font-family: var(--toy-font);
+}
+.menu-coins__icon { font-size: 17px; line-height: 1; }
+.menu-coins__amt { color: #c8860a; font-size: 15px; font-weight: 800; }
 .profile-chip__emoji { font-size: 26px; }
 .profile-chip__info { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
 .profile-chip__info b { color: var(--ink); font-size: 14px; font-weight: 400; }
@@ -3340,7 +3354,9 @@ body {
 /* ── 보스전 레이드 체력바 — 상단 중앙 고정 ── */
 .boss-bar {
   position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
-  width: min(520px, 68vw); pointer-events: none; z-index: 5;
+  /* 좌측 미니맵(≤252px)·우측 스탯/메뉴와 겹치지 않게, 양옆 ~270px를 비워 둔 폭으로 고정 */
+  width: min(400px, calc(100vw - 540px)); min-width: 220px;
+  pointer-events: none; z-index: 5;
   padding: 6px 10px 8px; border-radius: 12px;
   background: rgba(10, 8, 20, 0.62); border: 1px solid rgba(178, 102, 255, 0.25);
   backdrop-filter: blur(3px);
@@ -3377,9 +3393,9 @@ body {
   0%, 100% { box-shadow: 0 0 6px rgba(178, 102, 255, 0.35); }
   50% { box-shadow: 0 0 16px rgba(178, 102, 255, 0.75); }
 }
-/* 좁은 화면: 바를 컴팩트하게 — 상단 우측 스탯과 겹치지 않게 */
+/* 좁은 화면: 바를 컴팩트하게 — 상단 좌측 미니맵·우측 스탯과 겹치지 않게 */
 @media (max-width: 640px) {
-  .boss-bar { width: min(420px, 58vw); top: 6px; padding: 4px 8px 6px; }
+  .boss-bar { width: min(300px, calc(100vw - 360px)); min-width: 180px; top: 6px; padding: 4px 8px 6px; }
   .boss-bar__title { font-size: 11px; }
   .boss-bar__track { height: 11px; }
 }
