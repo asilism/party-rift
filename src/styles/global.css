@@ -3352,12 +3352,13 @@ body {
 .face-tuner__hint { margin: 0; color: rgba(255, 255, 255, 0.55); font-size: 10.5px; line-height: 1.5; }
 
 /* ── 보스전 레이드 체력바 — 상단 중앙 고정 ── */
-/* 보스 바 슬롯 — 상단바 flex의 첫 항목으로, 좌측(절대배치) 미니맵 폭만큼 왼쪽을
-   비워 두고 남는 공간만 차지한다. flex 분할이라 킬스코어·메뉴와 구조적으로 못 겹친다. */
+/* 보스 바 슬롯 — 상단바 flex의 첫 항목으로, 좌측(절대배치) 미니맵 폭 + 상점 버튼
+   자리(우물/사망 때만 나타나는 .rift-shop-fab, ~105px)만큼 왼쪽을 상시 비워 두고
+   남는 공간만 차지한다. flex 분할이라 킬스코어·메뉴와 구조적으로 못 겹친다. */
 .boss-bar-slot {
   flex: 1 1 auto; min-width: 0;
   display: flex; justify-content: center;
-  margin-left: calc(clamp(150px, 30vh, 240px) + 4px); /* .rift-minimap 폭과 같은 식 */
+  margin-left: calc(clamp(150px, 30vh, 240px) + 116px); /* 미니맵 + 상점 버튼 예약석 */
 }
 /* 한 줄 필: [😈 카르곤 ▬▬▬▬47% 💤] — 킬스코어 행과 같은 높이로 상단 UI를 밀지 않는다 */
 .boss-bar {
