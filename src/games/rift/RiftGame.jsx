@@ -510,9 +510,15 @@ function RiftPlay({
       )}
 
       <div className="rift__hud">
-        {hud.mode === 'boss' && !finished && <BossRaidBar hud={hud} />}
         {hud.mode === 'boss' && hud.status === 'countdown' && <BossIntroCard hud={hud} />}
         <div className="ladder__topbar rift__topbar">
+          {/* 보스 레이드 바 — 좌측 미니맵과 우측 스탯 사이 남는 공간만 차지하는
+              flex 슬롯이라 어떤 화면 폭에서도 다른 HUD를 침범할 수 없다 */}
+          {hud.mode === 'boss' && !finished && (
+            <div className="boss-bar-slot">
+              <BossRaidBar hud={hud} />
+            </div>
+          )}
           {/* 우상단(설정 옆): 개인 전적 — 킬/데스/어시 · 골드 · 진행 시간 */}
           <div className="topbar__right">
             <div className="rift__stats">

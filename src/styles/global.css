@@ -3352,12 +3352,17 @@ body {
 .face-tuner__hint { margin: 0; color: rgba(255, 255, 255, 0.55); font-size: 10.5px; line-height: 1.5; }
 
 /* ── 보스전 레이드 체력바 — 상단 중앙 고정 ── */
+/* 보스 바 슬롯 — 상단바 flex의 첫 항목으로, 좌측(절대배치) 미니맵 폭만큼 왼쪽을
+   비워 두고 남는 공간만 차지한다. flex 분할이라 킬스코어·메뉴와 구조적으로 못 겹친다. */
+.boss-bar-slot {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; justify-content: center;
+  margin-left: calc(clamp(150px, 30vh, 240px) + 4px); /* .rift-minimap 폭과 같은 식 */
+}
 .boss-bar {
-  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
-  /* 좌측 미니맵(≤252px)·우측 스탯/메뉴와 겹치지 않게, 양옆 ~270px를 비워 둔 폭으로 고정 */
-  width: min(400px, calc(100vw - 540px)); min-width: 220px;
-  pointer-events: none; z-index: 5;
-  padding: 6px 10px 8px; border-radius: 12px;
+  width: 100%; max-width: 400px; min-width: 0;
+  pointer-events: none;
+  padding: 4px 10px 6px; border-radius: 12px;
   background: rgba(10, 8, 20, 0.62); border: 1px solid rgba(178, 102, 255, 0.25);
   backdrop-filter: blur(3px);
 }
@@ -3393,9 +3398,9 @@ body {
   0%, 100% { box-shadow: 0 0 6px rgba(178, 102, 255, 0.35); }
   50% { box-shadow: 0 0 16px rgba(178, 102, 255, 0.75); }
 }
-/* 좁은 화면: 바를 컴팩트하게 — 상단 좌측 미니맵·우측 스탯과 겹치지 않게 */
+/* 좁은 화면: 바를 컴팩트하게 (폭은 flex 슬롯이 알아서 줄인다) */
 @media (max-width: 640px) {
-  .boss-bar { width: min(300px, calc(100vw - 360px)); min-width: 180px; top: 6px; padding: 4px 8px 6px; }
+  .boss-bar { padding: 3px 8px 5px; }
   .boss-bar__title { font-size: 11px; }
   .boss-bar__track { height: 11px; }
 }
