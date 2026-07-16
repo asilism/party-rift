@@ -490,14 +490,35 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings, o
   )
 }
 
+// ── 코인 사용 확인 모달 — 실수 방지: 캐릭터·꾸미기·모드 해금 공용 ──
+function BuyConfirm({ title, desc, price, okLabel, onOk, onCancel }) {
+  return (
+    <div className="solo-help" onClick={onCancel}>
+      <div className="toy-card solo-help__card" onClick={(e) => e.stopPropagation()}>
+        <h2 className="toy-heading">{title}</h2>
+        <p className="toy-sub">{desc}</p>
+        <div className="solo-exit__btns">
+          <button className="toy-btn toy-btn--yellow" onClick={onOk}>🪙 {price} {okLabel}</button>
+          <button className="toy-btn toy-btn--blue" onClick={onCancel}>{t('취소')}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── 3. 모드·난이도 ──
 function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
   const [modeUnlocks, setModeUnlocks] = useState(loadCoinUnlocks) // 'mode:boss' 형태로 저장
-  function buyMode(m) {
+  const [buyAsk, setBuyAsk] = useState(null) // 해금 확인 대기 중인 모드 — 실수 차감 방지
+  function askBuyMode(m) {
     if (loadCoins() < m.price) {
       sound.step() // 코인 부족 — 카드의 가격 표시가 안내 역할
       return
     }
+    sound.step()
+    setBuyAsk(m)
+  }
+  function buyMode(m) {
     sound.go()
     addCoins(-m.price)
     addCoinUnlock(`mode:${m.id}`)
@@ -529,18 +550,28 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
             <button
               key={m.id}
               className={`toy-card mode-card mode-card--${i} ${locked ? 'mode-card--locked' : ''}`}
-              onClick={() => (locked ? buyMode(m) : onPick(m.id))}
+              onClick={() => (locked ? askBuyMode(m) : onPick(m.id))}
             >
               <span className="mode-card__tag">{locked ? '🔒' : t(m.tag)}</span>
               <span className="mode-card__emoji">{m.emoji}</span>
               <span className="mode-card__name">{t(m.name)}</span>
               <span className="mode-card__desc">
-                {locked ? `🪙 ${m.price} — ${t('코인으로 해금')}` : t(m.desc)}
+                {locked ? `🪙 ${m.price} — ${t('코인으로 열기')}` : t(m.desc)}
               </span>
             </button>
           )
         })}
       </div>
+      {buyAsk && (
+        <BuyConfirm
+          title={`${buyAsk.emoji} ${t(buyAsk.name)} ${t('열기')}`}
+          desc={`🪙 ${buyAsk.price} ${t('코인을 사용해서 열어줄까요?')}`}
+          price={buyAsk.price}
+          okLabel={t('열기')}
+          onOk={() => { buyMode(buyAsk); setBuyAsk(null) }}
+          onCancel={() => { sound.step(); setBuyAsk(null) }}
+        />
+      )}
     </div>
   )
 }
@@ -549,6 +580,7 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
 function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
   const [coins, setCoins] = useState(loadCoins)
   const [, forceUnlockRefresh] = useState(0)
+  const [buyAsk, setBuyAsk] = useState(null) // 해금 확인 대기 중인 직업 id — 실수 차감 방지
   function buyUnlock(id) {
     if (loadCoins() < UNLOCK_PRICE) return
     sound.go()
@@ -656,7 +688,7 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
         <section className="char-screen__pick">
           {next && (
             <p className="char-screen__unlock">
-              {t('🔓 승리하면')} <b>{CLASSES[next].icon} {t(CLASSES[next].name)}</b> {t('해금!')}
+              {t('🔓 승리하면')} <b>{CLASSES[next].icon} {t(CLASSES[next].name)}</b> {t('열려요!')}
             </p>
           )}
           <div className="char-grid">
@@ -671,10 +703,10 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
                   className={`char-card ${cls === id ? 'is-on' : ''} ${locked ? 'is-locked' : ''}`}
                   disabled={locked && coins < UNLOCK_PRICE}
                   title={locked
-                    ? `${t('승리할 때마다 새 캐릭터가 하나씩 열려요')}${coins >= UNLOCK_PRICE ? ` · ${t('눌러서 코인으로 바로 해금')}` : ''}`
+                    ? `${t('승리할 때마다 새 캐릭터가 하나씩 열려요')}${coins >= UNLOCK_PRICE ? ` · ${t('눌러서 코인으로 바로 열기')}` : ''}`
                     : t(cc.desc)}
                   onClick={() => {
-                    if (locked) { buyUnlock(id); return } // 코인 선행 해금
+                    if (locked) { sound.step(); setBuyAsk(id); return } // 코인 선행 해금 — 확인 후 차감
                     sound.step(); setCls(id); setOpenSkill(null)
                   }}
                 >
@@ -695,6 +727,16 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
           </div>
         </section>
       </div>
+      {buyAsk && CLASSES[buyAsk] && (
+        <BuyConfirm
+          title={`${CLASSES[buyAsk].icon} ${t(CLASSES[buyAsk].name)} ${t('열기')}`}
+          desc={`🪙 ${UNLOCK_PRICE} ${t('코인을 사용해서 열어줄까요?')}`}
+          price={UNLOCK_PRICE}
+          okLabel={t('열기')}
+          onOk={() => { buyUnlock(buyAsk); setBuyAsk(null) }}
+          onCancel={() => { sound.step(); setBuyAsk(null) }}
+        />
+      )}
     </div>
   )
 }
@@ -894,6 +936,7 @@ const WARDROBE_TABS = {
 function HatScreen({ profile, onBack }) {
   const [tab, setTab] = useState('hat')
   const [coins, setCoins] = useState(loadCoins)
+  const [buyAsk, setBuyAsk] = useState(null) // 구매 확인 대기 중인 아이템 — 실수 차감 방지
   const [owned, setOwned] = useState(() => ({ hat: loadOwnedHats(), costume: loadOwnedCostumes(), weapon: loadOwnedWeapons() }))
   const [equipped, setEquipped] = useState(() => ({ hat: loadEquippedHat(), costume: loadEquippedCostume(), weapon: loadEquippedWeapon() }))
   // 미리 입어보기 — 아무거나 눌러 공짜로 걸쳐 본다(저장 안 함). 보유품을 누르면 장착.
@@ -936,7 +979,7 @@ function HatScreen({ profile, onBack }) {
           {!previewOwned && previewDef && (
             coins >= previewDef.price
               ? (
-                <button className="toy-btn toy-btn--yellow hats-buy" onClick={buyPreview}>
+                <button className="toy-btn toy-btn--yellow hats-buy" onClick={() => { sound.step(); setBuyAsk(previewDef) }}>
                   🪙 {previewDef.price} {t('구매·장착')}
                 </button>
               )
@@ -981,6 +1024,16 @@ function HatScreen({ profile, onBack }) {
           </p>
         </div>
       </div>
+      {buyAsk && (
+        <BuyConfirm
+          title={`${t(buyAsk.name)}${buyAsk.fx ? ' ✨' : ''}`}
+          desc={`🪙 ${buyAsk.price} ${t('코인을 사용해서 사고 바로 입어볼까요?')}`}
+          price={buyAsk.price}
+          okLabel={t('구매·장착')}
+          onOk={() => { buyPreview(); setBuyAsk(null) }}
+          onCancel={() => { sound.step(); setBuyAsk(null) }}
+        />
+      )}
     </div>
   )
 }

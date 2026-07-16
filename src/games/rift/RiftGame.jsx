@@ -234,19 +234,18 @@ function BossRaidBar({ hud }) {
   const ph = boss.bossPhase || 1
   const shielded = (boss.bossShieldT || 0) > 0
   const phColor = ph === 3 ? '#b266ff' : ph === 2 ? '#ff7d2a' : '#ff4d4d'
+  // 한 줄 구성(얼굴·이름·게이지·💤) — 킬스코어 행과 높이를 맞춰 상단 UI를 밀어내지 않는다
   return (
     <div className={`boss-bar ${shielded ? 'boss-bar--shield' : ''}`}>
-      <div className="boss-bar__title">
-        <span className="boss-bar__face">{BOSS_FACE[boss.cls] || '👹'}</span>
-        <span className="boss-bar__name">{t(CLASSES[boss.cls]?.name || '보스')} · {boss.name}</span>
-        {shielded && <span className="boss-bar__zzz">💤 {Math.ceil(boss.bossShieldT)}s</span>}
-      </div>
+      <span className="boss-bar__face">{BOSS_FACE[boss.cls] || '👹'}</span>
+      <span className="boss-bar__name">{boss.name}</span>
       <div className="boss-bar__track">
         <div className="boss-bar__fill" style={{ width: `${frac * 100}%`, background: phColor }} />
         <span className="boss-bar__mark" style={{ left: '70%' }} />
         <span className="boss-bar__mark" style={{ left: '40%' }} />
         <span className="boss-bar__pct">{Math.ceil(frac * 100)}%</span>
       </div>
+      {shielded && <span className="boss-bar__zzz">💤{Math.ceil(boss.bossShieldT)}</span>}
     </div>
   )
 }

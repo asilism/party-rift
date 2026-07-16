@@ -3359,24 +3359,25 @@ body {
   display: flex; justify-content: center;
   margin-left: calc(clamp(150px, 30vh, 240px) + 4px); /* .rift-minimap 폭과 같은 식 */
 }
+/* 한 줄 필: [😈 카르곤 ▬▬▬▬47% 💤] — 킬스코어 행과 같은 높이로 상단 UI를 밀지 않는다 */
 .boss-bar {
-  width: 100%; max-width: 400px; min-width: 0;
+  display: flex; align-items: center; gap: 7px;
+  width: 100%; max-width: 380px; min-width: 0;
   pointer-events: none;
-  padding: 4px 10px 6px; border-radius: 12px;
+  padding: 3px 12px; border-radius: 999px;
   background: rgba(10, 8, 20, 0.62); border: 1px solid rgba(178, 102, 255, 0.25);
   backdrop-filter: blur(3px);
 }
-.boss-bar__title {
-  display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px;
-  color: #fff; font-size: 13px; line-height: 1.2; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+.boss-bar__face { font-size: 15px; line-height: 1; flex-shrink: 0; }
+.boss-bar__name {
+  color: #fff; font-weight: 700; font-size: 12.5px; letter-spacing: 0.02em; flex-shrink: 0;
+  max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
-.boss-bar__face { font-size: 16px; }
-.boss-bar__name { font-weight: 700; letter-spacing: 0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.boss-bar__lvl { color: #ffd34d; font-size: 11.5px; }
-.boss-bar__zzz { margin-left: auto; color: #c9a8ff; font-size: 12px; animation: bossZzz 1.6s ease-in-out infinite; }
+.boss-bar__zzz { flex-shrink: 0; color: #c9a8ff; font-size: 12px; animation: bossZzz 1.6s ease-in-out infinite; }
 @keyframes bossZzz { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 .boss-bar__track {
-  position: relative; height: 14px; border-radius: 7px; overflow: hidden;
+  position: relative; flex: 1; min-width: 48px; height: 13px; border-radius: 7px; overflow: hidden;
   background: rgba(16, 22, 38, 0.9); box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 .boss-bar__fill {
@@ -3400,8 +3401,8 @@ body {
 }
 /* 좁은 화면: 바를 컴팩트하게 (폭은 flex 슬롯이 알아서 줄인다) */
 @media (max-width: 640px) {
-  .boss-bar { padding: 3px 8px 5px; }
-  .boss-bar__title { font-size: 11px; }
+  .boss-bar { padding: 2px 9px; gap: 5px; }
+  .boss-bar__name { font-size: 11px; max-width: 72px; }
   .boss-bar__track { height: 11px; }
 }
 
