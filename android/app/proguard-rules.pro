@@ -12,10 +12,10 @@
 #   public *;
 #}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# 크래시 스택트레이스 해독용 — 줄 번호는 남기고 원본 파일명은 숨긴다.
+#  (AAB에 mapping이 자동 동봉되어 Play Console 크래시 뷰가 원래 이름으로 풀어 보여줌)
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# WebView JS 브리지(@JavascriptInterface)와 Capacitor 플러그인 keep 규칙은
+# proguard-android-optimize.txt 기본 규칙 + Capacitor/AdMob의 consumerProguardFiles로 적용됨.
