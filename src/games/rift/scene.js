@@ -6133,6 +6133,7 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume 
   function frame() {
     raf = requestAnimationFrame(frame)
     const now = performance.now()
+    if (now - last < 1000 / 30 - 2) return // 미리보기 무대는 30fps면 충분 — 발열·배터리 절약
     let dt = (now - last) / 1000
     last = now
     if (!(dt > 0) || dt > 0.1) dt = 1 / 60
@@ -6293,6 +6294,7 @@ export function createFaceGallery(canvas, cls = 'warrior') {
   function frame() {
     raf = requestAnimationFrame(frame)
     const now = performance.now()
+    if (now - last < 1000 / 30 - 2) return // 미리보기 무대는 30fps면 충분 — 발열·배터리 절약
     const dt = Math.min(0.1, (now - last) / 1000)
     last = now
     time += dt
