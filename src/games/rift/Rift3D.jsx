@@ -28,10 +28,10 @@ export default function Rift3D({ sample, myId, mode = '3v3', hitFx = true, gfx =
     fit()
 
     let raf
-    // 60fps 상한 — 120Hz 폰에서 rAF를 그대로 따라가면 GPU 일이 2배가 되어
-    // 화질 이득 없이 발열·배터리만 는다. 1.5ms 여유는 vsync 지터로 프레임을
-    // 건너뛰어 40fps로 떨어지는 것을 막는 표준 보정.
-    const FRAME_MS = 1000 / 60 - 1.5
+    // FPS 상한 — 120Hz 폰에서 rAF를 그대로 따라가면 GPU 일이 2배가 되어
+    // 화질 이득 없이 발열·배터리만 는다. 그래픽 티어 연동: 상/중 60, 하 30(발열 최소).
+    // 1.5ms 여유는 vsync 지터로 프레임을 건너뛰어 캡 아래로 떨어지는 것을 막는 표준 보정.
+    const FRAME_MS = 1000 / (gfx === 'low' ? 30 : 60) - 1.5
     let lastT = 0
     const loop = (t) => {
       raf = requestAnimationFrame(loop)
