@@ -390,7 +390,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
         cd={me?.ultCd ?? 0}
         cdMax={cls.ult.cd}
         locked={me?.ultLocked}
-        lockText={t('Lv5 해금')}
+        lockText={t('Lv5부터')}
         onPress={onUlt}
         interactive={mobile}
         pulse={pulses.ult || 0}
@@ -406,7 +406,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
           cd={me?.skill2Cd ?? 0}
           cdMax={cls.skill2.cd}
           locked={me?.skill2Locked}
-          lockText={t('Lv3 해금')}
+          lockText={t('Lv3부터')}
           onPress={onSkill2}
           interactive={mobile}
           pulse={pulses.skill2 || 0}
