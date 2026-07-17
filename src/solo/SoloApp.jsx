@@ -34,17 +34,20 @@ const RiftGame = lazy(() => import('../games/rift/RiftGame.jsx'))
 // 모든 메뉴 화면 뒤에는 봇들이 실제로 싸우는 라이브 전장(MenuStage)이 흐른다.
 // 조디악(수호 지신)은 프로필 — 첫 실행에 한 번 정하고 메뉴에서 변경한다.
 
-const BOT_LEVEL_OPTS = [
-  { id: 'easy', label: '😌 쉬움', desc: '봇이 뜸을 들이고 덜 아파요 — 처음이라면 여기부터' },
-  { id: 'normal', label: '⚔️ 보통', desc: '온라인과 같은 봇' },
-  { id: 'hard', label: '🔥 어려움', desc: '칼같이 반응하고 더 아프게' },
+// 통합 난이도 — 모든 모드 공용, 모드 선택 화면에서 1회 고른다.
+//  3v3/5v5/방어전은 봇 난이도로, 보스전은 티어로 매핑. 보스전 악몽/지옥은 실력 게이트(전 단계 클리어).
+const DIFF_OPTS = [
+  { id: 'easy', icon: '😌', label: '쉬움', botLevel: 'easy', bossTier: 'normal', desc: '편안한 한 판 — 처음이라면 여기부터' },
+  { id: 'nightmare', icon: '💀', label: '악몽', botLevel: 'normal', bossTier: 'hard', desc: '제대로 된 도전 — 온라인 수준 봇' },
+  { id: 'hell', icon: '🔥', label: '지옥', botLevel: 'hard', bossTier: 'nightmare', desc: '최강 — 칼같이 반응하고 더 아프게' },
 ]
 
 // 보스전 난이도 티어 — 해금은 실력 게이트(전 단계 클리어). 코인 보상도 티어를 따라 오른다.
+// 보스전 티어별 보상·표기(승리 배너용) — 선택은 위 DIFF_OPTS(통합 난이도)가 담당한다
 const BOSS_TIER_OPTS = [
-  { id: 'normal', icon: '⚔️', label: '보통', coin: 30, desc: '기본 난이도 — 승리 코인 30' },
-  { id: 'hard', icon: '💀', label: '악몽', coin: 45, desc: '더 세고 빠른 보스 — 승리 코인 45', lockDesc: '보통 난이도를 클리어하면 열려요' },
-  { id: 'nightmare', icon: '🔥', label: '지옥', coin: 60, desc: '최강의 보스 — 승리 코인 60', lockDesc: '악몽 난이도를 클리어하면 열려요' },
+  { id: 'normal', icon: '😌', label: '쉬움', coin: 30 },
+  { id: 'hard', icon: '💀', label: '악몽', coin: 45 },
+  { id: 'nightmare', icon: '🔥', label: '지옥', coin: 60 },
 ]
 const BOSS_TIER_ICON = { hard: '💀', nightmare: '🔥' } // 보통은 배지 없음
 
@@ -73,11 +76,8 @@ export default function SoloApp() {
   }) // title | profile | menu | mode | char | records | settings | play
   const saved = loadSoloPick()
   const [mode, setMode] = useState(TEAM_SIZES[saved?.mode] ? saved.mode : '3v3')
-  const [botLevel, setBotLevel] = useState(
-    BOT_LEVEL_OPTS.some((o) => o.id === saved?.botLevel) ? saved.botLevel : 'easy'
-  )
-  const [bossTier, setBossTier] = useState(
-    BOSS_TIER_OPTS.some((o) => o.id === saved?.bossTier) ? saved.bossTier : 'normal'
+  const [diff, setDiff] = useState(
+    DIFF_OPTS.some((o) => o.id === saved?.diff) ? saved.diff : 'easy'
   )
   const [net, setNet] = useState(null)
   const netRef = useRef(null)
@@ -111,11 +111,12 @@ export default function SoloApp() {
   function startBattle(cls) {
     setCoinMsg(null) // 새 경기 — 지난 보상 라인 지움
     setAdState('idle')
-    const pick = { zodiacId: profile, cls, mode, botLevel, bossTier }
+    const dOpt = DIFF_OPTS.find((o) => o.id === diff) || DIFF_OPTS[0]
+    const pick = { zodiacId: profile, cls, mode, diff, botLevel: dOpt.botLevel, bossTier: dOpt.bossTier }
     saveSoloPick(pick)
     const n = createLocalNet(riftNet, {
       players: [],
-      config: { mode, roster: buildSoloRoster(pick), botLevel, bossTier },
+      config: { mode, roster: buildSoloRoster(pick), botLevel: dOpt.botLevel, bossTier: dOpt.bossTier },
       deviceId: 'solo',
       // 경기가 끝나면 내 직업 전적에 누적 — 중도 이탈(exit)은 기록하지 않는다
       onFinish(view) {
@@ -332,8 +333,8 @@ export default function SoloApp() {
       {screen === 'hats' && <HatScreen profile={profile} onBack={() => go('menu')} />}
       {screen === 'mode' && (
         <ModeScreen
-          botLevel={botLevel}
-          onBotLevel={setBotLevel}
+          diff={diff}
+          onDiff={setDiff}
           onPick={(m) => { setMode(m); go('char') }}
           onBack={() => go('menu')}
         />
@@ -342,9 +343,7 @@ export default function SoloApp() {
         <CharScreen
           profile={profile}
           mode={mode}
-          botLevel={botLevel}
-          bossTier={bossTier}
-          onBossTier={setBossTier}
+          diff={diff}
           onStart={startBattle}
           onBack={() => go('mode')}
           onHelp={() => setHelpOpen(true)}
@@ -553,9 +552,10 @@ function BuyConfirm({ title, desc, price, okLabel, onOk, onCancel }) {
 }
 
 // ── 3. 모드·난이도 ──
-function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
+function ModeScreen({ diff, onDiff, onPick, onBack }) {
   const [modeUnlocks, setModeUnlocks] = useState(loadCoinUnlocks) // 'mode:boss' 형태로 저장
   const [buyAsk, setBuyAsk] = useState(null) // 해금 확인 대기 중인 모드 — 실수 차감 방지
+  const [tierNotice, setTierNotice] = useState(null) // 보스전 티어 실력 게이트 안내
   function askBuyMode(m) {
     if (loadCoins() < m.price) {
       sound.step() // 코인 부족 — 카드의 가격 표시가 안내 역할
@@ -575,14 +575,14 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
       <BackButton onBack={onBack} />
       <h2 className="toy-heading toy-heading--screen">{t('어디서 싸울까?')}</h2>
       <div className="mode-screen__levels">
-        {BOT_LEVEL_OPTS.map((o) => (
+        {DIFF_OPTS.map((o) => (
           <button
             key={o.id}
-            className={`toy-pill ${botLevel === o.id ? 'is-on' : ''}`}
+            className={`toy-pill ${diff === o.id ? 'is-on' : ''}`}
             title={t(o.desc)}
-            onClick={() => { sound.step(); onBotLevel(o.id) }}
+            onClick={() => { sound.step(); onDiff(o.id) }}
           >
-            {t(o.label)}
+            {o.icon} {t(o.label)}
           </button>
         ))}
       </div>
@@ -596,7 +596,21 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
             <button
               key={m.id}
               className={`toy-card mode-card mode-card--${i} ${locked ? 'mode-card--locked' : ''}`}
-              onClick={() => (locked ? askBuyMode(m) : onPick(m.id))}
+              onClick={() => {
+                if (locked) { askBuyMode(m); return }
+                // 보스전 실력 게이트: 악몽/지옥은 전 단계 클리어가 필요하다
+                if (m.id === 'boss') {
+                  const dOpt = DIFF_OPTS.find((o) => o.id === diff)
+                  if (dOpt && !bossTierUnlocked(dOpt.bossTier)) {
+                    sound.step()
+                    setTierNotice(dOpt.bossTier === 'nightmare'
+                      ? t('보스전 지옥은 악몽 난이도를 클리어하면 열려요')
+                      : t('보스전 악몽은 쉬움 난이도를 클리어하면 열려요'))
+                    return
+                  }
+                }
+                onPick(m.id)
+              }}
             >
               <span className="mode-card__tag">{locked ? '🔒' : t(m.tag)}</span>
               <span className="mode-card__emoji">{m.emoji}</span>
@@ -608,6 +622,17 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
           )
         })}
       </div>
+      {tierNotice && (
+        <div className="solo-help" onClick={() => setTierNotice(null)}>
+          <div className="toy-card solo-help__card" onClick={(e) => e.stopPropagation()}>
+            <h2 className="toy-heading">🔒 {t('아직 잠겨 있어요')}</h2>
+            <p className="toy-sub">{tierNotice}</p>
+            <div className="solo-exit__btns">
+              <button className="toy-btn toy-btn--yellow" onClick={() => setTierNotice(null)}>{t('알겠어')}</button>
+            </div>
+          </div>
+        </div>
+      )}
       {buyAsk && (
         <BuyConfirm
           title={`${buyAsk.emoji} ${t(buyAsk.name)} ${t('열기')}`}
@@ -623,7 +648,7 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
 }
 
 // ── 4. 캐릭터 선택 ──
-function CharScreen({ profile, mode, botLevel, bossTier, onBossTier, onStart, onBack, onHelp }) {
+function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
   const [coins, setCoins] = useState(loadCoins)
   const [, forceUnlockRefresh] = useState(0)
   const [buyAsk, setBuyAsk] = useState(null) // 해금 확인 대기 중인 직업 id — 실수 차감 방지
@@ -658,7 +683,7 @@ function CharScreen({ profile, mode, botLevel, bossTier, onBossTier, onStart, on
   const z = getZodiac(profile)
   const c = cls ? CLASSES[cls] : null
   const rec = cls ? records[cls] : null
-  const levelLabel = BOT_LEVEL_OPTS.find((o) => o.id === botLevel)?.label
+  const dOpt = DIFF_OPTS.find((o) => o.id === diff)
 
   return (
     <div className="screen char-screen">
@@ -668,29 +693,10 @@ function CharScreen({ profile, mode, botLevel, bossTier, onBossTier, onStart, on
         <h2 className="toy-heading toy-heading--screen char-screen__heading">{t('누구로 싸울까?')}</h2>
         <span className="char-screen__coins" title={t('조디악 코인')}>🪙 {coins}</span>
         <button className="char-screen__setup" onClick={onBack} title={t('모드·난이도 바꾸기')}>
-          {MODE_OPTS.find((m) => m.id === mode)?.emoji} {mode} · {t(levelLabel)} ✏️
+          {MODE_OPTS.find((m) => m.id === mode)?.emoji} {mode} · {dOpt ? `${dOpt.icon} ${t(dOpt.label)}` : ''} ✏️
         </button>
       </div>
 
-      {/* 보스전 난이도 티어 — 실력 게이트(전 단계 클리어로 해금). 보상도 티어를 따라 오른다 */}
-      {mode === 'boss' && (
-        <div className="char-screen__tiers">
-          {BOSS_TIER_OPTS.map((o) => {
-            const unlocked = bossTierUnlocked(o.id)
-            return (
-              <button
-                key={o.id}
-                className={`toy-pill ${bossTier === o.id ? 'is-on' : ''}`}
-                disabled={!unlocked}
-                title={unlocked ? t(o.desc) : t(o.lockDesc)}
-                onClick={() => { sound.step(); onBossTier(o.id) }}
-              >
-                {o.icon} {t(o.label)}{!unlocked && ' 🔒'}
-              </button>
-            )
-          })}
-        </div>
-      )}
 
       <div className="char-screen__body">
         <aside className="toy-card char-show" style={{ '--z-color': z?.color || '#ffc93c' }}>
