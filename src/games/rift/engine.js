@@ -23,7 +23,7 @@ export const TEAM_SIZES = { '3v3': 3, '5v5': 5, boss: 5, defense: 5, arena: 2 } 
 // ── 콜로세움(아레나) — 준비 30초(반코트 결계·상점) → 전투 3분 → 서든데스(무작위 조각 붕괴) ──
 export const ARENA_SHOP_T = 30
 export const ARENA_FIGHT_T = 180
-const ARENA_HOLE_R = 7 // 붕괴 조각 반경 (경기장 R26의 ~7% 면적)
+const ARENA_HOLE_R = 8 // 붕괴 조각 반경 (경기장 R34 기준)
 const ARENA_HOLE_EVERY = 10 // 서든데스 붕괴 웨이브 간격(초)
 const ARENA_WARN_T = 3 // 경고(장판) → 낙하까지
 // 레이드형 모드(보스전·무한 방어) — 아군 5인이 협곡에서 붉은 파도를 상대한다는 공통 골격.
@@ -2943,7 +2943,7 @@ function arenaFall(state, h) {
 
 // 붕괴 조각 자리 뽑기 — 거부 샘플링: 기존 구멍·경고와 겹치지 않게, 공간이 부족해지면 허용 오차 완화
 function arenaPickHole(state) {
-  const R = 24 // 경기장 반경(26)보다 살짝 안쪽 — 테두리 물기 허용
+  const R = 31 // 경기장 반경(34)보다 살짝 안쪽 — 테두리 물기 허용
   const taken = [...state.holes, ...state.holeWarns]
   for (const relax of [0.8, 0.5, 0]) {
     for (let tries = 0; tries < 20; tries++) {

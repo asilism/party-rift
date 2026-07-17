@@ -4704,6 +4704,24 @@ function createFog(map) {
 // 보스전(boss): "심연" — 검보라 하늘 아래 잿빛 마계 대지, 흑요석 성벽, 마정석 발광,
 //  죽은 숲과 수정 첨탑. 색·오브제를 통째로 갈아 끼워 "다른 세계"로 읽히게 한다.
 const MAP_THEMES = {
+  // 콜로세움 — 노을 진 모래 경기장: 따뜻한 사암 바닥 + 석회암 벽 + 올리브 덤불. 강·수정 없음
+  arena: {
+    sky: 0x35243a, fog: [120, 320],
+    hemi: [0xd8b48a, 0x4a3a30, 0.7], sun: [0xffd9a0, 1.0], fill: [0xa06a5a, 0.3],
+    ground: { base: '#c9a86a', tones: ['#d4b378', '#bd9c5f', '#d9bc85', '#b39355', '#cfae70', '#c2a164'], blade: '#a8894f' },
+    river: false,
+    laneEdge: 0xb69a62, laneFloor: 0xcbab6e, lane: { base: '#cbab6e', tones: ['#c2a164', '#d4b378', '#b99a5c'] },
+    laneStones: [0xb0a58e, 0x9c917c],
+    rock: 0xb0a58e, rockSat: [0xa2977f, 0xbcb198], rockCap: 0x8f7f5c,
+    wall: 0xcfc3a6, wallTop: 0xe0d5b8, merlon: 0xb5a887,
+    bush: [0x5c6b34, 0x6b7d3d], berry: [0xffd34d, 0xff8f5e, 0xffffff],
+    tuft: [0x8a9150, 0xa0a860],
+    flowers: [0xffe066, 0xffb35c, 0xffffff, 0xff8f6e, 0xffd9a0],
+    pebbles: [0xb0a58e, 0x9c917c],
+    treeTrunk: 0x8a6a44, treeLeaf: [0x6b7d3d, 0x7d9147],
+    mote: 0xffe3b0,
+    crystal: 0,
+  },
   default: {
     sky: 0x2b3550, fog: [95, 230],
     hemi: [0x9aa8c4, 0x33402e, 0.62], sun: [0xffe6bf, 0.95], fill: [0x5b6c92, 0.32],
@@ -4743,7 +4761,7 @@ const MAP_THEMES = {
 
 export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') {
   const { WORLD, NEXUS_POS, FOUNTAIN_POS, LANES, ROCKS, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT, WOLF_CAMPS } = map
-  const T = map.mode === 'boss' ? MAP_THEMES.boss : MAP_THEMES.default
+  const T = map.mode === 'boss' ? MAP_THEMES.boss : map.mode === 'arena' ? MAP_THEMES.arena : MAP_THEMES.default
   const Q = QUALITY[quality] || QUALITY.med
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q.antialias })
   renderer.setPixelRatio(Math.min(Q.pixelRatio, window.devicePixelRatio || 1))
@@ -4798,16 +4816,16 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       scene.add(bank)
     }
   }
-  // 레인 길 3갈래 — 어두운 흙 둑 + 그 위 흙길 텍스처
+  // 레인 길 3갈래 — 어두운 흙 둑 + 그 위 흙길 텍스처 (콜로세움은 길 없는 원형 모래판)
   const laneTex = laneTexture(128, T.lane)
-  for (const lane of LANE_IDS) {
+  for (const lane of map.mode === 'arena' ? [] : LANE_IDS) {
     scene.add(buildLane(LANES[lane], 6.6, T.laneEdge, 0.025)) // 가장자리(흙 둑)
     scene.add(buildLane(LANES[lane], 5, T.laneFloor, 0.035, laneTex)) // 길 바닥
   }
   // 길가 돌멩이 — 길 양옆을 따라 작은 돌을 늘어놓아 경계를 또렷하게
   const laneStoneRnd = lcg(606)
   const laneStoneItems = []
-  for (const lane of LANE_IDS) {
+  for (const lane of map.mode === 'arena' ? [] : LANE_IDS) {
     const wps = LANES[lane]
     for (let i = 0; i < wps.length - 1; i++) {
       const a = wps[i]
@@ -5164,6 +5182,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   //  심연 테마: 일부가 거대한 마정석 첨탑으로 바뀐다 — 죽은 숲 사이에서 보랏빛이 새어 나온다.
   const rnd = lcg(20260612)
   for (let i = 0; i < 140; i++) {
+    if (map.mode === 'arena') break // 콜로세움: 외곽 나무·수정 없음 — 경기장이 곧 세계다
     const ang = rnd() * Math.PI * 2
     const rad = 1.05 + rnd() * 0.4
     const x = Math.cos(ang) * (WORLD.maxX + 8 + rnd() * 30)
@@ -5298,7 +5317,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   }
   nexusObjs.blue.position.set(NEXUS_POS.blue.x, 0, NEXUS_POS.blue.z)
   nexusObjs.red.position.set(NEXUS_POS.red.x, 0, NEXUS_POS.red.z)
-  scene.add(nexusObjs.blue, nexusObjs.red)
+  if (map.mode !== 'arena') scene.add(nexusObjs.blue, nexusObjs.red) // 콜로세움: 수호석 없음
 
   const heroPool = new Map()
   const minionPool = new Map()
