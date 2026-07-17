@@ -3209,6 +3209,9 @@ body {
   font-family: var(--toy-font); font-weight: 800; font-size: clamp(13px, 2.6vh, 17px);
   color: #ffd34d; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6); white-space: nowrap;
 }
+/* 결과 배너 업적 달성 줄 — 여러 개면 줄바꿈으로 쌓인다 */
+.win-banner__ach { display: block; margin-top: 4px; font-size: 0.8em; }
+.win-banner__ach-item { display: block; color: #ffe9a8; }
 .win-banner__bonus {
   margin: 6px 0 0; font-weight: 900; font-size: clamp(15px, 3vh, 22px); color: #ffd34d;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);

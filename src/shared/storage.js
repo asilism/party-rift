@@ -148,6 +148,27 @@ export function saveMissionState(state) {
   }
 }
 
+// ── 업적 — 평생 누적 카운터(cnt)와 달성 시각(done). 미션과 달리 리셋되지 않는다 ──
+const ACH_KEY = 'bgp.rift.achievements.v1'
+
+export function loadAchState() {
+  try {
+    const v = JSON.parse(localStorage.getItem(ACH_KEY))
+    if (v && typeof v === 'object') return { done: v.done || {}, cnt: v.cnt || {} }
+  } catch {
+    /* 무시 */
+  }
+  return { done: {}, cnt: {} }
+}
+
+export function saveAchState(state) {
+  try {
+    localStorage.setItem(ACH_KEY, JSON.stringify(state))
+  } catch {
+    /* 무시 */
+  }
+}
+
 // ── 모자 꾸미기 — 보유 목록과 장착 상태 ──
 const HAT_EQUIP_KEY = 'bgp.rift.hat.v1'
 const HATS_OWNED_KEY = 'bgp.rift.hats.v1'
