@@ -4703,6 +4703,18 @@ function bossThink(state, h, dt) {
   h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8 }
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
   // ── 예고된 처형기 집행: 예고가 끝나는 순간 발동한다 (시전 후 취소 없음 — 읽었다면 이미 피했다) ──
+  // 가시갑옷 도발 집행: 예고가 끝나는 순간 링(r9) 안의 적을 도발(강제 평타) + 반사창 개시
+  if (h.thornTauntAt && state.time >= h.thornTauntAt) {
+    h.thornTauntAt = null
+    h.thornArmorT = 6
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
+      if (dist(h, e) > 9) continue
+      e.tauntT = 2.2
+      e.tauntBy = h.id
+    }
+    pushFx(state, 'berserk', h.x, h.z, 6, h.team, 1.0)
+  }
   // 격돌 돌진: 예고해 둔 착지점으로 몸을 날린다(피해·기절은 예고 장판이 처리)
   if (h.bossDash && state.time >= h.bossDash.at) {
     const t = h.bossDash
@@ -5260,14 +5272,15 @@ function bossThorn(state, h, foe) {
       pushFeed(state, 'obj', '💥 가시 낙인이 새겨졌다 — 서로에게서 떨어져라!')
     }
   }
-  // 가시갑옷: 품에 근접이 몰려 붙으면 6초 반사창 — 이 동안 때리면 되받는다(딜 중지 판단 강제)
+  // 가시갑옷(도발형): 0.8초 예고 링 → 못 빠져나간 적을 도발(브램블 강제 평타) + 6초 반사창.
+  //  걸리면 반사갑옷을 제 손으로 두드리게 된다 — "링이 보이면 빠져나와라"가 유일한 해법.
   if (h.bossCd.d <= 0 && p >= 2) {
-    const near = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && dist(h, e) < 8).length
+    const near = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && dist(h, e) < 9).length
     if (near >= 2) {
       h.bossCd.d = 26 * cdMul
-      h.thornArmorT = 6
-      pushFx(state, 'berserk', h.x, h.z, 5, h.team, 0.8)
-      pushFeed(state, 'obj', '🌵 가시갑옷! 지금 때리면 되레 찔린다 — 잠시 물러나라!')
+      h.thornTauntAt = state.time + 0.8 // 집행은 bossThink 펜딩 섹션에서
+      pushBossZone(state, h, { x: h.x, z: h.z, r: 9, delay: 0.8, dmg: 0, vfx: 'quake', hue: 'venom' })
+      pushFeed(state, 'obj', '🌵 브램블이 가시를 곤두세운다 — 링 밖으로! 걸리면 강제로 때리게 된다!')
     }
   }
 }

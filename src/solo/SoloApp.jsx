@@ -43,10 +43,10 @@ const BOT_LEVEL_OPTS = [
 // 보스전 난이도 티어 — 해금은 실력 게이트(전 단계 클리어). 코인 보상도 티어를 따라 오른다.
 const BOSS_TIER_OPTS = [
   { id: 'normal', icon: '⚔️', label: '보통', coin: 30, desc: '기본 난이도 — 승리 코인 30' },
-  { id: 'hard', icon: '🔥', label: '어려움', coin: 45, desc: '더 세고 빠른 보스 — 승리 코인 45', lockDesc: '보통 난이도를 클리어하면 열려요' },
-  { id: 'nightmare', icon: '💀', label: '악몽', coin: 60, desc: '최강의 보스 — 승리 코인 60', lockDesc: '어려움 난이도를 클리어하면 열려요' },
+  { id: 'hard', icon: '💀', label: '악몽', coin: 45, desc: '더 세고 빠른 보스 — 승리 코인 45', lockDesc: '보통 난이도를 클리어하면 열려요' },
+  { id: 'nightmare', icon: '🔥', label: '지옥', coin: 60, desc: '최강의 보스 — 승리 코인 60', lockDesc: '악몽 난이도를 클리어하면 열려요' },
 ]
-const BOSS_TIER_ICON = { hard: '🔥', nightmare: '💀' } // 보통은 배지 없음
+const BOSS_TIER_ICON = { hard: '💀', nightmare: '🔥' } // 보통은 배지 없음
 
 const MODE_OPTS = [
   { id: '3v3', emoji: '⚔️', name: '3 대 3', desc: '작은 맵 · 빠른 한판', tag: '기본' },

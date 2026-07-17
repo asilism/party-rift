@@ -239,9 +239,9 @@ function BossRaidBar({ hud }) {
     <div className={`boss-bar ${shielded ? 'boss-bar--shield' : ''}`}>
       <span className="boss-bar__face">{BOSS_FACE[boss.cls] || '👹'}</span>
       <span className="boss-bar__name">{boss.name}</span>
-      {/* 난이도 배지 — 어려움 🔥 / 악몽 💀 (보통은 없음) */}
+      {/* 난이도 배지 — 악몽 💀 / 지옥 🔥 (보통은 없음) */}
       {(hud.bossTier === 'hard' || hud.bossTier === 'nightmare') && (
-        <span className="boss-bar__tier">{hud.bossTier === 'nightmare' ? '💀' : '🔥'}</span>
+        <span className="boss-bar__tier">{hud.bossTier === 'nightmare' ? '🔥' : '💀'}</span>
       )}
       <div className="boss-bar__track">
         <div className="boss-bar__fill" style={{ width: `${frac * 100}%`, background: phColor }} />

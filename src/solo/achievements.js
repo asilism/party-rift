@@ -34,8 +34,8 @@ export const ACHIEVEMENTS = [
   // ── 보스 ──
   { id: 'boss_first', icon: '👹', name: '토벌 개시', desc: '보스를 처음으로 토벌', get: (c) => c.bossClears || 0, target: 1, reward: 100 },
   { id: 'boss_10', icon: '👹', name: '토벌대장', desc: '보스 누적 10회 토벌', get: (c) => c.bossClears || 0, target: 10, reward: 150 },
-  { id: 'boss_hard', icon: '🔥', name: '더 어두운 곳으로', desc: '어려움 난이도 토벌', get: (c) => c.bossHard || 0, target: 1, reward: 120 },
-  { id: 'boss_nightmare', icon: '💀', name: '악몽 정복', desc: '악몽 난이도 토벌', get: (c) => c.bossNightmare || 0, target: 1, reward: 200, title: '악몽 정복자' },
+  { id: 'boss_hard', icon: '💀', name: '더 어두운 곳으로', desc: '악몽 난이도 토벌', get: (c) => c.bossHard || 0, target: 1, reward: 120 },
+  { id: 'boss_nightmare', icon: '🔥', name: '지옥 정복', desc: '지옥 난이도 토벌', get: (c) => c.bossNightmare || 0, target: 1, reward: 200, title: '지옥 정복자' },
   { id: 'boss_fast', icon: '⚡', name: '번개 토벌', desc: '5분 안에 보스 토벌', get: (c) => c.bossFast || 0, target: 1, reward: 150, title: '번개 사냥꾼' },
   { id: 'boss_nodeath', icon: '🛡️', name: '무결점 토벌', desc: '한 번도 안 죽고 보스 토벌', get: (c) => c.bossNoDeath || 0, target: 1, reward: 150, title: '불사신' },
 
