@@ -148,6 +148,26 @@ export function saveMissionState(state) {
   }
 }
 
+// ── 칭호 — 업적 보상으로 얻고, 장착하면 메뉴 프로필 칩·전투 이름표에 붙는다 ──
+const TITLE_KEY = 'bgp.rift.title.v1'
+
+export function loadEquippedTitle() {
+  try {
+    return localStorage.getItem(TITLE_KEY) || null
+  } catch {
+    return null
+  }
+}
+
+export function saveEquippedTitle(title) {
+  try {
+    if (title) localStorage.setItem(TITLE_KEY, title)
+    else localStorage.removeItem(TITLE_KEY)
+  } catch {
+    /* 무시 */
+  }
+}
+
 // ── 업적 — 평생 누적 카운터(cnt)와 달성 시각(done). 미션과 달리 리셋되지 않는다 ──
 const ACH_KEY = 'bgp.rift.achievements.v1'
 

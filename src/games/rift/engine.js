@@ -661,6 +661,7 @@ function makeHeroState(p, cls, pos, map, rng) {
   return {
     id: p.id,
     name: p.name,
+    title: p.title || null, // 장착 칭호(로스터에서 현지화됨) — 이름표에 함께 그린다
     zodiacId: p.zodiacId,
     color: p.color,
     team: p.team,
@@ -6128,6 +6129,7 @@ export function makeView(state) {
     heroes: state.heroes.map((h) => ({
       id: h.id,
       name: h.name,
+      title: h.title || null, // 장착 칭호 — 이름표 표시용
       zodiacId: h.zodiacId,
       color: h.color,
       team: h.team,

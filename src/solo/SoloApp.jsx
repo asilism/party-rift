@@ -12,6 +12,7 @@ import {
   loadEquippedCostume, saveEquippedCostume, loadOwnedCostumes, addOwnedCostume,
   loadEquippedWeapon, saveEquippedWeapon, loadOwnedWeapons, addOwnedWeapon,
   loadBossRecords, recordBossClear, bossTierUnlocked, loadRiftGfx, saveRiftGfx,
+  loadEquippedTitle, saveEquippedTitle,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
@@ -477,6 +478,7 @@ function MissionWidget() {
 function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings, onHats }) {
   const z = getZodiac(profile)
   const coins = loadCoins() // 메뉴 진입 때마다 최신 잔액을 읽는다(경기·꾸미기 후 갱신)
+  const title = loadEquippedTitle() // 장착 칭호 — 업적 탭에서 달았다면 프로필 칩에 표시
   const records = loadRiftRecords()
   const total = Object.values(records).reduce(
     (a, r) => ({ games: a.games + r.games, wins: a.wins + r.wins }),
@@ -491,7 +493,7 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings, o
         <button className="profile-chip" onClick={onProfile} title={t('수호 지신 바꾸기')}>
           <span className="profile-chip__emoji">{z?.emoji}</span>
           <span className="profile-chip__info">
-            <b>{z?.name}</b>
+            <b>{z?.name}{title && <span className="profile-chip__title"> 🎖{t(title)}</span>}</b>
             <small>{total.games > 0 ? `${total.wins}${t('승')} ${total.games - total.wins}${t('패')}` : t('첫 출전 대기')}</small>
           </span>
         </button>
@@ -905,14 +907,23 @@ function RecordsScreen({ onBack }) {
   )
 }
 
-// ── 업적 탭 — 진행바·달성 여부·보상. 달성한 것이 위로 오지 않게 정의 순서 유지(시리즈가 이어져 보이게) ──
+// ── 업적 탭 — 진행바·달성 여부·보상. 달성한 것이 위로 오지 않게 정의 순서 유지(시리즈가 이어져 보이게).
+//  달성한 칭호 배지는 탭해서 바로 장착/해제 — 얻은 자리에서 바로 다는 게 제일 직관적이다 ──
 function AchievementCard() {
   const rows = achievementRows()
   const doneCount = rows.filter((r) => r.done).length
+  const [equipped, setEquipped] = useState(loadEquippedTitle)
+  function toggleTitle(title) {
+    const next = equipped === title ? null : title
+    saveEquippedTitle(next)
+    setEquipped(next)
+    sound.step()
+  }
   return (
     <div className="toy-card records-card records-card--ach">
       <div className="ach-summary">
         🏆 {doneCount} / {rows.length} {t('달성')}
+        {equipped && <span className="ach-summary__title">🎖 {t(equipped)}</span>}
       </div>
       <div className="ach-list">
         {rows.map((r) => (
@@ -921,7 +932,17 @@ function AchievementCard() {
             <div className="ach-row__body">
               <div className="ach-row__head">
                 <b className="ach-row__name">{t(r.name)}</b>
-                {r.title && <span className="ach-row__title-badge" title={t('칭호')}>🎖 {t(r.title)}</span>}
+                {r.title && (r.done ? (
+                  <button
+                    className={`ach-row__title-badge ach-row__title-badge--btn ${equipped === r.title ? 'is-on' : ''}`}
+                    title={equipped === r.title ? t('칭호 해제') : t('칭호 장착')}
+                    onClick={() => toggleTitle(r.title)}
+                  >
+                    🎖 {t(r.title)}{equipped === r.title ? ' ✓' : ''}
+                  </button>
+                ) : (
+                  <span className="ach-row__title-badge" title={t('칭호')}>🎖 {t(r.title)}</span>
+                ))}
                 <span className="ach-row__reward">{r.done ? '✅' : `🪙 ${r.reward}`}</span>
               </div>
               <div className="ach-row__desc">{t(r.desc)}</div>
