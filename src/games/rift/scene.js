@@ -2979,11 +2979,21 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   //  페이즈가 오르면 링 색이 변한다(1: 빨강 → 2: 주황 → 3: 보라+맥동) — 업데이트 루프에서 갱신.
   let threat = null
   let dormant = null // 각성 휴지기(보호막) 중 💤 — "지금은 웅크려 힘을 모으는 중"이 읽히게
+  // 가시 낙인 ❗ — 낙인이 붙은 영웅 머리 위에서 다급하게 고동친다: "나한테서 떨어져!"
+  const bombMark = emojiSprite('❗', 1.7)
+  bombMark.position.set(0, 7.6 + uiLift, 0)
+  bombMark.visible = false
+  g.add(bombMark)
+  let thornArmor = null // 가시갑옷 💢 — 반사창 동안 "때리지 마" 신호
   if (CLASSES[h.cls]?.boss) {
     dormant = emojiSprite('💤', 2.6)
     dormant.position.set(1.6 * s, 5.9 * s, 0)
     dormant.visible = false
     g.add(dormant)
+    thornArmor = emojiSprite('💢', 2.2)
+    thornArmor.position.set(-1.6 * s, 5.9 * s, 0)
+    thornArmor.visible = false
+    g.add(thornArmor)
   }
   if (CLASSES[h.cls]?.boss) {
     threat = new THREE.Mesh(
@@ -3125,7 +3135,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
     costume, // 옷 — FX(fxUpdate) 애니메이션용 참조
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, threat, dormant, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, threat, dormant, bombMark, thornArmor, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
@@ -4316,6 +4326,7 @@ const BOSSZONE_HUES = {
   lava: { ring: 0xff7a2e, fill: 0xff5a1e, pool: 0xff6a30 },
   frost: { ring: 0x8fd8ff, fill: 0x6db8e8, pool: 0x9fe4ff },
   shadow: { ring: 0xb266ff, fill: 0x8a5cff, pool: 0x9a6cff },
+  venom: { ring: 0x8fe04a, fill: 0x5cba32, pool: 0x74d43e }, // 가시군주 — 독green 덤불
 }
 
 // 보스 장판 질감 — 흰색(재질 색으로 물듦) 패턴을 hue별로 1회 구워 캐시한다.
@@ -4327,10 +4338,36 @@ function bosszoneTexture(hue) {
   c.width = c.height = 256
   const ctx = c.getContext('2d')
   const cx = 128
-  const rnd = lcg(hue === 'lava' ? 11 : hue === 'frost' ? 22 : 33)
+  const rnd = lcg(hue === 'lava' ? 11 : hue === 'frost' ? 22 : hue === 'venom' ? 44 : 33)
   ctx.strokeStyle = '#ffffff'
   ctx.lineCap = 'round'
-  if (hue === 'lava') {
+  if (hue === 'venom') {
+    // 가시덤불: 휘어지는 덩굴 호 + 가시 바늘 — 밟으면 아플 것 같은 질감
+    for (let i = 0; i < 7; i++) {
+      let a = rnd() * Math.PI * 2
+      let r = 18 + rnd() * 30
+      ctx.beginPath()
+      ctx.moveTo(cx + Math.cos(a) * r, cx + Math.sin(a) * r)
+      for (let k = 0; k < 7; k++) {
+        a += 0.35 + rnd() * 0.2 // 한 방향으로 감기는 덩굴
+        r += 8 + rnd() * 8
+        if (r > 118) break
+        ctx.lineWidth = Math.max(1.2, 4.5 * (1 - r / 135))
+        ctx.globalAlpha = 0.8 * (1 - r / 150)
+        ctx.lineTo(cx + Math.cos(a) * r, cx + Math.sin(a) * r)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(cx + Math.cos(a) * r, cx + Math.sin(a) * r)
+        // 가시 바늘: 덩굴에서 짧게 삐져나온다
+        const ta = a + (rnd() > 0.5 ? 1.2 : -1.2)
+        ctx.lineWidth = 1.4
+        ctx.lineTo(cx + Math.cos(a) * r + Math.cos(ta) * 7, cx + Math.sin(a) * r + Math.sin(ta) * 7)
+        ctx.stroke()
+        ctx.beginPath()
+        ctx.moveTo(cx + Math.cos(a) * r, cx + Math.sin(a) * r)
+      }
+    }
+  } else if (hue === 'lava') {
     // 중심에서 뻗는 들쭉날쭉한 균열 + 마그마 얼룩
     for (let i = 0; i < 8; i++) {
       let a = (i / 8) * Math.PI * 2 + rnd() * 0.5
@@ -5629,6 +5666,20 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           u.recall.rotation.z = view.time * 3
           u.recallBeam.rotation.y = view.time * 1.2
           u.recallBeam.material.opacity = 0.22 + Math.abs(Math.sin(view.time * 4)) * 0.22 // 깜빡이는 빛
+        }
+        // 가시 낙인 ❗: 남은 시간이 줄수록 빠르게 고동친다 — 터지기 직전의 다급함
+        if (u.bombMark) {
+          u.bombMark.visible = (h.thornBombT || 0) > 0
+          if (u.bombMark.visible) {
+            const urgency = 1 + Math.max(0, 2.6 - h.thornBombT) * 3
+            u.bombMark.scale.setScalar(1.7 * (1 + 0.25 * Math.abs(Math.sin(view.time * 6 * urgency))))
+          }
+        }
+        // 가시갑옷 💢: 반사창 표시 — "지금은 때리지 마"
+        if (u.thornArmor) {
+          const armored = (h.thornArmorT || 0) > 0
+          u.thornArmor.visible = armored
+          if (armored) u.thornArmor.material.rotation = Math.sin(view.time * 5) * 0.2
         }
         // 탱커 방패막기(파란 막). 보스 각성 휴지기엔 같은 구체를 어둠의 보호막(보라 맥동)으로 쓴다
         const bossShielded = (h.bossShieldT || 0) > 0
