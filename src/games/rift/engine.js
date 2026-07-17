@@ -829,6 +829,7 @@ export function createGame(players, opts = {}) {
       h.items = Array.isArray(carry.items) ? carry.items.map((it) => ({ ...it })) : h.items
       h.maxHp = heroMaxHp(h)
     }
+    if (mode === 'arena') h.gold += 1000 // 콜로세움: 라운드 개시 지원금(이월 골드 위에 지급)
     h.hp = h.maxHp
   }
   // 봇 역할 배정(팀별): 직업이 선호하는 라인을 잡되, 겹치면 남은 자리를 채워 라인 공백을 막는다.
@@ -3308,8 +3309,8 @@ function stepHero(state, h, dt) {
   // 자연 회복 (전투 이탈 시) + 이무기 버프 회복.
   // 보스는 제외 — 전용 재생(bossThink, 0.5%/s)만 쓴다. 공통 회복(1.5%/s)까지 겹치면
   // 각성 휴지기(무적 30초)마다 반피를 되채우는 참사가 난다.
-  if (state.time - h.lastHurt > REGEN_DELAY && !h.isBoss) {
-    h.hp = Math.min(h.maxHp, h.hp + h.maxHp * REGEN_RATE * dt)
+  if (state.time - h.lastHurt > REGEN_DELAY && !h.isBoss && state.mode !== 'arena') {
+    h.hp = Math.min(h.maxHp, h.hp + h.maxHp * REGEN_RATE * dt) // 콜로세움: 자연 재생 없음 — 포킹이 쌓인다
   }
   if (h.baronT > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.02 * dt)
   if (h.rageT > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * RAGE_REGEN * dt) // 검투의 분노: 지속 회복
@@ -5557,6 +5558,11 @@ function stepBots(state, dt) {
       const cf = state.heroes.find((e) => e.id === h.botFoeId)
       if (cf?.isBoss && bossInvuln(state, cf)) { h.botFoeId = null; h.botThinkT = 0 }
     }
+    // 콜로세움: 결투 전용 두뇌 — 패주 귀가·전선 유지 같은 MOBA 습관이 끼기 전에 최상단에서 가로챈다
+    if (state.mode === 'arena') {
+      arenaBotDuty(state, h, dt)
+      continue
+    }
     // 액티브 아이템: 위기에 물병(빈사)·정화의 종(굵직한 CC)을 쓴다 — CC 판정보다 먼저(정화는 기절 중에도)
     for (let i = 0; i < h.items.length; i++) {
       const it = ITEMS_BY_ID[h.items[i]]
@@ -6006,6 +6012,77 @@ function bossFrontThreat(state) {
 // 우선순위: ① 전선(다음 방어선)이 위협받으면 수성 집결 ② 밀려오는 파도 요격(골드+저지)
 //           ③ 위협이 없을 때만 정글 파밍 ④ 그마저 없으면 전선 앞 대기.
 // 교전 자체(추격/스킬/후퇴)는 파이프라인 앞단의 공용 전투 로직이 잡는다 — 여기선 "어디에 있을까"만 정한다.
+// ── 콜로세움 봇 듀티 — 결투 본능: 목표는 언제나 적이다 ──
+//  안개가 없으므로 적의 "위치"는 항상 안다(부쉬 속이면 공격만 불가 — 다가가면 드러난다).
+//  집(스폰 구석)으로 도망가 캠핑하는 습성을 끊고, 붕괴 경고·구멍을 최우선으로 피한다.
+function arenaBotDuty(state, h, dt) {
+  // 준비 페이즈: 1000골드를 아이템에 쓴다(공통 루프보다 먼저 가로챘으므로 여기서 직접)
+  if (state.arenaPhase === 'shop') {
+    botShop(state, h)
+    h.mx = 0
+    h.mz = 0
+    return
+  }
+  // ⓪ 붕괴 회피 — 경고 장판 위면 즉시 탈출(공격보다 목숨)
+  for (const w of state.holeWarns) {
+    const d = Math.hypot(h.x - w.x, h.z - w.z)
+    if (d < w.r + 1.5) {
+      const dx = (h.x - w.x) / (d || 0.001)
+      const dz = (h.z - w.z) / (d || 0.001)
+      steerToward(state, h, { x: w.x + dx * (w.r + 3), z: w.z + dz * (w.r + 3) })
+      botAttack(state, h, dt)
+      return
+    }
+  }
+  // ① 표적: 가장 가까운 생존 적(진짜 위치 — 노포그)
+  let foe = null
+  let bd = 1e9
+  for (const e of state.heroes) {
+    if (e.team === h.team || e.respawnT > 0 || e.hp <= 0) continue
+    const d = dist2(h, e)
+    if (d < bd) { bd = d; foe = e }
+  }
+  if (!foe) { h.mx = 0; h.mz = 0; return }
+  h.botFoeId = foe.id
+  const d = Math.sqrt(bd)
+  const range = CLASSES[h.cls].range
+  // ② 스탠스: 체력이 밀리면 사거리 끝 카이팅, 아니면 압박 — 단 구석 캠핑은 없다
+  const losing = h.hp < h.maxHp * 0.35 && foe.hp > foe.maxHp * 0.5
+  let goal
+  if (losing && d < range * 0.9) {
+    // 뒤로 빠지되 구멍은 밟지 않는다
+    const dx = (h.x - foe.x) / (d || 0.001)
+    const dz = (h.z - foe.z) / (d || 0.001)
+    goal = { x: h.x + dx * 6, z: h.z + dz * 6 }
+  } else if (d > range * 0.85) {
+    goal = { x: foe.x, z: foe.z } // 접근 — 부쉬 속이어도 위치는 안다
+  } else {
+    goal = null // 사거리 안: 제자리 공방(스킬은 공통 루프가 쏜다)
+  }
+  if (goal) {
+    // 확정 구멍 관통 방지: 목표 직전 위치가 구멍 위면 접선 방향으로 우회
+    for (const o of state.holes) {
+      const gd = Math.hypot(goal.x - o.x, goal.z - o.z)
+      if (gd < o.r + 1.2) {
+        const px = -(goal.z - o.z) / (gd || 0.001)
+        const pz = (goal.x - o.x) / (gd || 0.001)
+        goal = { x: o.x + (goal.x - o.x) / (gd || 0.001) * (o.r + 2) + px * 3, z: o.z + (goal.z - o.z) / (gd || 0.001) * (o.r + 2) + pz * 3 }
+        break
+      }
+    }
+    steerToward(state, h, goal)
+  } else {
+    h.mx = 0
+    h.mz = 0
+  }
+  // 전투: 평타 + 직업 스킬(보이는 표적에만 — 부쉬 속은 위치만 알 뿐 조준 불가)
+  botAttack(state, h, dt)
+  if (isHeroVisible(state, foe, h.team) && d < range + 6) {
+    const nearCount = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && dist(h, e) < 12).length
+    botCombatSkills(state, h, foe, d, nearCount)
+  }
+}
+
 function botBossDuty(state, h, dt) {
   // 전선 = 다음에 무너질 우리 방어선(살아있는 미드 타워 중 가장 동쪽, 없으면 수호석)
   let front = null
