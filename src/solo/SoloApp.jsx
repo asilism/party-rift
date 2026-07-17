@@ -11,7 +11,7 @@ import {
   loadEquippedHat, saveEquippedHat, loadOwnedHats, addOwnedHat,
   loadEquippedCostume, saveEquippedCostume, loadOwnedCostumes, addOwnedCostume,
   loadEquippedWeapon, saveEquippedWeapon, loadOwnedWeapons, addOwnedWeapon,
-  loadBossRecords, recordBossClear, loadRiftGfx, saveRiftGfx,
+  loadBossRecords, recordBossClear, bossTierUnlocked, loadRiftGfx, saveRiftGfx,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
@@ -37,6 +37,14 @@ const BOT_LEVEL_OPTS = [
   { id: 'normal', label: '⚔️ 보통', desc: '온라인과 같은 봇' },
   { id: 'hard', label: '🔥 어려움', desc: '칼같이 반응하고 더 아프게' },
 ]
+
+// 보스전 난이도 티어 — 해금은 실력 게이트(전 단계 클리어). 코인 보상도 티어를 따라 오른다.
+const BOSS_TIER_OPTS = [
+  { id: 'normal', icon: '⚔️', label: '보통', coin: 30, desc: '기본 난이도 — 승리 코인 30' },
+  { id: 'hard', icon: '🔥', label: '어려움', coin: 45, desc: '더 세고 빠른 보스 — 승리 코인 45', lockDesc: '보통 난이도를 클리어하면 열려요' },
+  { id: 'nightmare', icon: '💀', label: '악몽', coin: 60, desc: '최강의 보스 — 승리 코인 60', lockDesc: '어려움 난이도를 클리어하면 열려요' },
+]
+const BOSS_TIER_ICON = { hard: '🔥', nightmare: '💀' } // 보통은 배지 없음
 
 const MODE_OPTS = [
   { id: '3v3', emoji: '⚔️', name: '3 대 3', desc: '작은 맵 · 빠른 한판', tag: '기본' },
@@ -64,6 +72,9 @@ export default function SoloApp() {
   const [mode, setMode] = useState(TEAM_SIZES[saved?.mode] ? saved.mode : '3v3')
   const [botLevel, setBotLevel] = useState(
     BOT_LEVEL_OPTS.some((o) => o.id === saved?.botLevel) ? saved.botLevel : 'easy'
+  )
+  const [bossTier, setBossTier] = useState(
+    BOSS_TIER_OPTS.some((o) => o.id === saved?.bossTier) ? saved.bossTier : 'normal'
   )
   const [net, setNet] = useState(null)
   const netRef = useRef(null)
@@ -97,11 +108,11 @@ export default function SoloApp() {
   function startBattle(cls) {
     setCoinMsg(null) // 새 경기 — 지난 보상 라인 지움
     setAdState('idle')
-    const pick = { zodiacId: profile, cls, mode, botLevel }
+    const pick = { zodiacId: profile, cls, mode, botLevel, bossTier }
     saveSoloPick(pick)
     const n = createLocalNet(riftNet, {
       players: [],
-      config: { mode, roster: buildSoloRoster(pick), botLevel },
+      config: { mode, roster: buildSoloRoster(pick), botLevel, bossTier },
       deviceId: 'solo',
       // 경기가 끝나면 내 직업 전적에 누적 — 중도 이탈(exit)은 기록하지 않는다
       onFinish(view) {
@@ -115,23 +126,27 @@ export default function SoloApp() {
             kills: me.kills, deaths: me.deaths, assists: me.assists,
           })
         }
-        // 조디악 코인: 승 30 / 패 10 + 하루 첫 승 보너스 50
-        let earn = win ? 30 : 10
+        // 조디악 코인: 승 30 / 패 10 + 하루 첫 승 보너스 50.
+        //  보스전은 티어별 승리 코인(보통 30/어려움 45/악몽 60) + 보스·티어 첫 토벌 +100.
+        const tier = view.mode === 'boss' ? (view.bossTier || 'normal') : null
+        const tierOpt = tier && BOSS_TIER_OPTS.find((o) => o.id === tier)
+        let earn = win ? (tierOpt?.coin || 30) : 10
         let firstWin = false
         if (win && claimFirstWinToday()) {
           earn += 50
           firstWin = true
         }
-        addCoins(earn)
-        // 보스전 토벌 기록 — 클리어 타임·최단 기록·토벌 횟수 (승리 시에만)
+        // 보스전 토벌 기록 — 클리어 타임·최단 기록·토벌 횟수 (승리 시에만, 티어별)
         let bossRec = null
         if (view.mode === 'boss' && win) {
           const bossHero = view.heroes?.find((h) => h.cls?.startsWith('boss_'))
           if (bossHero) {
             const time = view.timePlayed || 0
-            bossRec = { ...recordBossClear(bossHero.cls, time), time }
+            bossRec = { ...recordBossClear(bossHero.cls, time, tier), time, tier }
+            if (bossRec.isFirst) earn += 100 // 이 보스·이 티어 첫 토벌 보너스
           }
         }
+        addCoins(earn)
         setCoinMsg({ earn, firstWin, bossRec })
         // 일일 미션 진행도 누적 (판수/승리/킬/어시/정글몹)
         recordMissionProgress({ win, kills: me.kills, assists: me.assists, jungle: me.jungleKills })
@@ -215,8 +230,10 @@ export default function SoloApp() {
               {coinMsg.doubled && <span className="win-banner__doubled"> ×2!</span>}
               {coinMsg.bossRec && (
                 <span className="win-banner__bossrec">
-                  {' · '}⏱ {fmtClearTime(coinMsg.bossRec.time)}
-                  {coinMsg.bossRec.isFirst ? ` 🏅 ${t('첫 토벌!')}` : coinMsg.bossRec.isBest ? ` 🏆 ${t('최단 기록!')}` : ''}
+                  {' · '}
+                  {BOSS_TIER_ICON[coinMsg.bossRec.tier] && `${BOSS_TIER_ICON[coinMsg.bossRec.tier]} ${t(BOSS_TIER_OPTS.find((o) => o.id === coinMsg.bossRec.tier)?.label || '')} `}
+                  ⏱ {fmtClearTime(coinMsg.bossRec.time)}
+                  {coinMsg.bossRec.isFirst ? ` 🏅 ${t('첫 토벌!')} +100` : coinMsg.bossRec.isBest ? ` 🏆 ${t('최단 기록!')}` : ''}
                 </span>
               )}
             </>
@@ -300,6 +317,8 @@ export default function SoloApp() {
           profile={profile}
           mode={mode}
           botLevel={botLevel}
+          bossTier={bossTier}
+          onBossTier={setBossTier}
           onStart={startBattle}
           onBack={() => go('mode')}
           onHelp={() => setHelpOpen(true)}
@@ -577,7 +596,7 @@ function ModeScreen({ botLevel, onBotLevel, onPick, onBack }) {
 }
 
 // ── 4. 캐릭터 선택 ──
-function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
+function CharScreen({ profile, mode, botLevel, bossTier, onBossTier, onStart, onBack, onHelp }) {
   const [coins, setCoins] = useState(loadCoins)
   const [, forceUnlockRefresh] = useState(0)
   const [buyAsk, setBuyAsk] = useState(null) // 해금 확인 대기 중인 직업 id — 실수 차감 방지
@@ -625,6 +644,26 @@ function CharScreen({ profile, mode, botLevel, onStart, onBack, onHelp }) {
           {MODE_OPTS.find((m) => m.id === mode)?.emoji} {mode} · {t(levelLabel)} ✏️
         </button>
       </div>
+
+      {/* 보스전 난이도 티어 — 실력 게이트(전 단계 클리어로 해금). 보상도 티어를 따라 오른다 */}
+      {mode === 'boss' && (
+        <div className="char-screen__tiers">
+          {BOSS_TIER_OPTS.map((o) => {
+            const unlocked = bossTierUnlocked(o.id)
+            return (
+              <button
+                key={o.id}
+                className={`toy-pill ${bossTier === o.id ? 'is-on' : ''}`}
+                disabled={!unlocked}
+                title={unlocked ? t(o.desc) : t(o.lockDesc)}
+                onClick={() => { sound.step(); onBossTier(o.id) }}
+              >
+                {o.icon} {t(o.label)}{!unlocked && ' 🔒'}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <div className="char-screen__body">
         <aside className="toy-card char-show" style={{ '--z-color': z?.color || '#ffc93c' }}>
@@ -790,7 +829,8 @@ function ClassRecordCard({ records }) {
 
 // 보스 토벌 카드 — 보스별 최단 클리어 타임과 토벌 횟수
 function BossRecordCard({ bossRecs }) {
-  const cleared = BOSS_IDS.some((id) => bossRecs[id]?.clears > 0)
+  // v2: 보스별 × 티어별 기록 — 한 보스 행 안에 티어 칩 3개(보통/어려움/악몽)
+  const cleared = BOSS_IDS.some((id) => BOSS_TIER_OPTS.some((o) => bossRecs[id]?.[o.id]?.clears > 0))
   return (
     <div className="toy-card records-card records-card--boss">
       {!cleared ? (
@@ -798,16 +838,20 @@ function BossRecordCard({ bossRecs }) {
       ) : (
         <div className="records-card__rows">
           {BOSS_IDS.map((id) => {
-            const r = bossRecs[id]
-            const done = r?.clears > 0
+            const byTier = bossRecs[id] || {}
+            const done = BOSS_TIER_OPTS.some((o) => byTier[o.id]?.clears > 0)
             return (
               <div key={id} className={`boss-rec-row ${done ? '' : 'boss-rec-row--locked'}`}>
                 <span className="boss-rec-row__name">{CLASSES[id].icon} {t(CLASSES[id].name)}</span>
                 {done ? (
-                  <>
-                    <span className="boss-rec-row__best">⏱ {fmtClearTime(r.best)}</span>
-                    <span className="boss-rec-row__clears">🏅 {t('토벌')} {r.clears}</span>
-                  </>
+                  BOSS_TIER_OPTS.map((o) => {
+                    const r = byTier[o.id]
+                    return (
+                      <span key={o.id} className={`boss-rec-row__tier ${r?.clears > 0 ? '' : 'is-empty'}`} title={t(o.label)}>
+                        {o.icon} {r?.clears > 0 ? `${fmtClearTime(r.best)} ×${r.clears}` : '—'}
+                      </span>
+                    )
+                  })
                 ) : (
                   <span className="boss-rec-row__none">— {t('미토벌')}</span>
                 )}

@@ -3375,6 +3375,7 @@ body {
   max-width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
+.boss-bar__tier { flex-shrink: 0; font-size: 12px; line-height: 1; }
 .boss-bar__zzz { flex-shrink: 0; color: #c9a8ff; font-size: 12px; animation: bossZzz 1.6s ease-in-out infinite; }
 @keyframes bossZzz { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 .boss-bar__track {
@@ -3474,6 +3475,13 @@ body {
 .boss-rec-row__clears { color: var(--toy-green-d); font-weight: 700; }
 .boss-rec-row__none { color: rgba(60, 40, 20, 0.4); }
 .boss-rec-row--locked .boss-rec-row__name { opacity: 0.5; }
+/* 티어 칩(보통/어려움/악몽) — 미클리어 티어는 흐리게 */
+.boss-rec-row__tier { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.boss-rec-row__tier.is-empty { opacity: 0.35; font-weight: 500; }
+
+/* 보스전 난이도 티어 선택(캐릭터 화면) — 잠긴 티어는 자물쇠와 함께 비활성 */
+.char-screen__tiers { display: flex; gap: 8px; justify-content: center; margin: 2px 0 6px; }
+.char-screen__tiers .toy-pill:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 
 /* 전적 화면 — 모드 탭 */
 .records-tabs { display: flex; gap: 8px; margin: 0 auto 12px; max-width: 640px; width: 100%; }
