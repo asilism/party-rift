@@ -26,7 +26,7 @@ export const riftNet = {
         isBot: !!p.isBot,
         deviceId: p.deviceId,
       }))
-      return { players: list, opts: { mode, botLevel: config?.botLevel } }
+      return { players: list, opts: { mode, botLevel: config?.botLevel, bossTier: config?.bossTier } }
     }
 
     const teams = config?.teams || {}
@@ -53,10 +53,10 @@ export const riftNet = {
         })
       }
     }
-    return { players: [...humans, ...bots], opts: { mode, botLevel: config?.botLevel } }
+    return { players: [...humans, ...bots], opts: { mode, botLevel: config?.botLevel, bossTier: config?.bossTier } }
   },
   createGame: (players, opts) =>
-    createGame(players, { mode: opts?.mode, botLevel: opts?.botLevel, rng: Math.random }),
+    createGame(players, { mode: opts?.mode, botLevel: opts?.botLevel, bossTier: opts?.bossTier, rng: Math.random }),
   setInput,
   applyAction(state, action, pid) {
     if (action.type === 'cast') {

@@ -462,28 +462,50 @@ export function saveRiftGfx(q) {
 }
 
 // ── 보스전 토벌 기록 — 보스별 { clears(토벌 횟수), best(최단 클리어 초) } ──
-const BOSS_REC_KEY = 'bgp.rift.bossRecords.v1'
+// v2: 난이도 티어별 기록 { [bossCls]: { [tier]: { clears, best } } } — v1(티어 없음)은 '보통'으로 이관
+const BOSS_REC_KEY = 'bgp.rift.bossRecords.v2'
+const BOSS_REC_KEY_V1 = 'bgp.rift.bossRecords.v1'
 
 export function loadBossRecords() {
   try {
-    const v = JSON.parse(localStorage.getItem(BOSS_REC_KEY) || '{}')
-    return v && typeof v === 'object' ? v : {}
-  } catch {
-    return {}
-  }
+    const v2 = JSON.parse(localStorage.getItem(BOSS_REC_KEY))
+    if (v2 && typeof v2 === 'object') return v2
+  } catch { /* 무시 */ }
+  // v1 → v2 마이그레이션: 티어 개념이 없던 기록은 전부 '보통' 클리어였다
+  try {
+    const v1 = JSON.parse(localStorage.getItem(BOSS_REC_KEY_V1) || '{}')
+    if (v1 && typeof v1 === 'object' && Object.keys(v1).length) {
+      const out = {}
+      for (const [cls, rec] of Object.entries(v1)) out[cls] = { normal: rec }
+      localStorage.setItem(BOSS_REC_KEY, JSON.stringify(out))
+      return out
+    }
+  } catch { /* 무시 */ }
+  return {}
 }
 
-// 토벌 1건 기록하고 { isFirst(첫 토벌), isBest(최단 갱신), best }를 돌려준다
-export function recordBossClear(bossCls, timeSec) {
+// 토벌 1건 기록하고 { isFirst(이 보스·티어 첫 토벌), isBest(최단 갱신), best }를 돌려준다
+export function recordBossClear(bossCls, timeSec, tier = 'normal') {
   const all = loadBossRecords()
-  const cur = all[bossCls] || { clears: 0, best: null }
+  const byTier = all[bossCls] || {}
+  const cur = byTier[tier] || { clears: 0, best: null }
   const isFirst = cur.clears === 0
   const isBest = cur.best == null || timeSec < cur.best
-  all[bossCls] = { clears: cur.clears + 1, best: isBest ? Math.round(timeSec) : cur.best }
+  byTier[tier] = { clears: cur.clears + 1, best: isBest ? Math.round(timeSec) : cur.best }
+  all[bossCls] = byTier
   try {
     localStorage.setItem(BOSS_REC_KEY, JSON.stringify(all))
   } catch {
     /* 무시 */
   }
-  return { isFirst, isBest, best: all[bossCls].best }
+  return { isFirst, isBest, best: byTier[tier].best }
+}
+
+// 티어 해금 — 실력 게이트: 보통은 항상, 어려움은 아무 보스든 보통 클리어, 악몽은 어려움 클리어.
+// (도전 보스가 무작위 배정이라 보스별이 아닌 전역 게이트가 자연스럽다)
+export function bossTierUnlocked(tier) {
+  if (tier === 'normal') return true
+  const prev = tier === 'hard' ? 'normal' : 'hard'
+  const all = loadBossRecords()
+  return Object.values(all).some((byTier) => (byTier?.[prev]?.clears || 0) > 0)
 }

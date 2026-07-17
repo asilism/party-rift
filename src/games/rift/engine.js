@@ -6111,6 +6111,7 @@ export function makeView(state) {
     phase: 'play',
     status: state.status,
     mode: state.mode, // 렌더러/미니맵이 맞는 크기의 맵을 만들 수 있게
+    bossTier: state.bossTier, // 보스전 난이도(레이드 바 배지·종료 보상 산정)
     nexusPos: state.map.NEXUS_POS, // 시야(inSight) 계산용
     time: r2d(state.time),
     countdown: Math.ceil(state.countdown),
