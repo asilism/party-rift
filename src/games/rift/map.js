@@ -105,6 +105,7 @@ const MODE_SCALE = {
   '5v5': { x: 1.3, z: 1.32 },
   boss: { x: 1, z: 1 },
   defense: { x: 1, z: 1 }, // 무한 방어 — 보스의 협곡 재사용
+  arena: { x: 1, z: 1 }, // 콜로세움 — 전용 원형 경기장
 }
 
 // 호(弧)를 짧은 벽 선분들로 근사한다 — 보스 성곽(둥지)용. 각도는 도(°), z=+가 남쪽.
@@ -131,6 +132,40 @@ function arcWallLines(cx, cz, R, a0, a1) {
 //  보스 소환 병사의 측면 압박을 막는 자리다. 정글 캠프는 전부 아군(블루) 농장:
 //  좌우 대칭일 필요가 없어 협곡 곳곳에 흩어 놓았다.
 const BOSS_LAIR = { x: 96, z: 0, r: 24 } // 성곽 중심(=레드 수호석/옥좌)과 반지름
+// ── 콜로세움(아레나 12인 토너먼트) — 원형 경기장, 탈출 불가 벽, 부쉬 3곳, 안개 없음 ──
+//  테두리 원벽은 buildMap의 arena 분기에서 arcWallLines로 생성한다(BASE는 리터럴 유지).
+const ARENA_R = 26 // 경기장 반경 — 낙사 조각(반경 7)이 5~6개 들어가는 크기
+const ARENA_BASE = {
+  WORLD: { minX: -34, maxX: 34, minZ: -34, maxZ: 34 },
+  // 넥서스/우물: 스폰 지점(양끝). 아레나엔 수호석 개념이 없어 넥서스는 벽 밖에 감춘다.
+  NEXUS_POS: { blue: { x: -46, z: 0 }, red: { x: 46, z: 0 } },
+  LANES: {
+    top: [{ x: -22, z: 0 }, { x: 22, z: 0 }],
+    mid: [{ x: -22, z: 0 }, { x: 0, z: 0 }, { x: 22, z: 0 }],
+    bot: [{ x: -22, z: 0 }, { x: 22, z: 0 }],
+  },
+  TOWER_SPOTS: [],
+  WALL_LINES: [
+    // 소형 엄폐벽 4개 — 스킬샷을 끊고 추격전을 만드는 기둥들(회전 대칭)
+    { x1: -9, z1: -12, x2: -2, z2: -9 },
+    { x1: 2, z1: 9, x2: 9, z2: 12 },
+    { x1: 8, z1: -8, x2: 13, z2: -3 },
+    { x1: -13, z1: 3, x2: -8, z2: 8 },
+  ],
+  ROCKS: [
+    { x: 0, z: -20, r: 2.2 }, { x: 0, z: 20, r: 2.2 },
+  ],
+  BUSHES: [
+    // 부쉬 3곳 — 숨으면 공격당하지 않지만(위치는 들킨다), 매복·주도권 싸움의 축
+    { x: -14, z: -14, r: 4.2 },
+    { x: 14, z: 14, r: 4.2 },
+    { x: 0, z: 0, r: 3.6 },
+  ],
+  WOLF_CAMPS: [],
+  DRAGON_PIT: { x: 0, z: 60 }, // 사용 안 함 — 벽 밖
+  BARON_PIT: { x: 0, z: -60 },
+}
+
 const BOSS_BASE = {
   WORLD: { minX: -112, maxX: 126, minZ: -72, maxZ: 72 },
   NEXUS_POS: { blue: { x: -100, z: 0 }, red: { x: BOSS_LAIR.x, z: BOSS_LAIR.z } },
@@ -524,7 +559,7 @@ function findPathFor(geo, sx, sz, tx, tz) {
 // 모드별 맵 객체를 만든다. 지형 데이터 + 그 지형에 묶인 헬퍼 메서드를 함께 담는다.
 export function buildMap(mode = '3v3') {
   const raid = mode === 'boss' || mode === 'defense' // 방어전도 보스의 협곡 지형을 쓴다
-  const base = raid ? BOSS_BASE : BASE // 보스전·방어전은 전용 지형(보스의 협곡)
+  const base = mode === 'arena' ? ARENA_BASE : raid ? BOSS_BASE : BASE // 모드별 전용 지형
   const s = MODE_SCALE[mode] || MODE_SCALE['3v3']
   const WORLD = {
     minX: base.WORLD.minX * s.x, maxX: base.WORLD.maxX * s.x,
@@ -537,7 +572,11 @@ export function buildMap(mode = '3v3') {
   // 리스폰(회복) 존 — 수호석 뒤편(맵 중앙 반대쪽)으로 한 수호석만큼 떨어뜨린다.
   //  부활·귀환·HP리필이 여기서만 일어나므로, 수호석에 붙어 무한 회복하며 버티지 못한다.
   //  보스전의 레드 우물은 옥좌 바로 뒤 — 보스는 성곽 안에서 잠들고, 우물 레이저가 러시를 응징.
-  const FOUNTAIN_POS = {
+  const FOUNTAIN_POS = mode === 'arena' ? {
+    // 아레나: 스폰 = 경기장 안 양끝(벽 안쪽 2.5) — 우물 회복은 엔진에서 아레나 제외
+    blue: { x: -(ARENA_R - 4), z: 0 },
+    red: { x: ARENA_R - 4, z: 0 },
+  } : {
     blue: { x: NEXUS_POS.blue.x - RESPAWN_BACK, z: NEXUS_POS.blue.z },
     red: raid
       ? { x: NEXUS_POS.red.x + 10, z: NEXUS_POS.red.z }
@@ -567,8 +606,14 @@ export function buildMap(mode = '3v3') {
   const WALLS = wallCircles(WALL_LINES)
   // 리스폰 존 뒤쪽 절반을 감싸는 반호 성벽을 물리 장벽으로 등록 (블루 -x / 레드 +x 절반).
   //  보스전의 레드 우물은 성곽(둥지) 돌담이 대신 지키므로 반호를 두지 않는다.
-  WALLS.push(...respawnArcCircles(FOUNTAIN_POS.blue.x, FOUNTAIN_POS.blue.z, -1))
-  if (!raid) {
+  if (mode === 'arena') {
+    // 콜로세움 테두리: 360° 원벽 — 밖으로 나갈 수 없다
+    WALL_LINES.push(...arcWallLines(0, 0, ARENA_R + 1.2, 0, 360))
+    WALLS.length = 0
+    WALLS.push(...wallCircles(WALL_LINES))
+  }
+  if (mode !== 'arena') WALLS.push(...respawnArcCircles(FOUNTAIN_POS.blue.x, FOUNTAIN_POS.blue.z, -1))
+  if (!raid && mode !== 'arena') {
     WALLS.push(...respawnArcCircles(FOUNTAIN_POS.red.x, FOUNTAIN_POS.red.z, 1))
   }
 

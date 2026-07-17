@@ -19,7 +19,13 @@ export const ULT_LEVEL = 5 // 궁극기가 열리는 레벨 (Lv5)
 export const SKILL2_LEVEL = 3 // 보조 스킬이 열리는 레벨 (Lv3)
 export const TEAM_SIZE = 3 // 기본(3:3) 팀 인원 — 하위호환용 별칭
 // 모드별 팀 인원. 5:5는 탑/미드/봇 + 봇을 지원하는 힐러 + 정글러 구성.
-export const TEAM_SIZES = { '3v3': 3, '5v5': 5, boss: 5, defense: 5 } // boss = 보스전(아군 5 대 보스 1) · defense = 무한 방어(아군 5 vs 파도)
+export const TEAM_SIZES = { '3v3': 3, '5v5': 5, boss: 5, defense: 5, arena: 2 } // arena = 콜로세움(2v2 결투)
+// ── 콜로세움(아레나) — 준비 30초(반코트 결계·상점) → 전투 3분 → 서든데스(무작위 조각 붕괴) ──
+export const ARENA_SHOP_T = 30
+export const ARENA_FIGHT_T = 180
+const ARENA_HOLE_R = 7 // 붕괴 조각 반경 (경기장 R26의 ~7% 면적)
+const ARENA_HOLE_EVERY = 10 // 서든데스 붕괴 웨이브 간격(초)
+const ARENA_WARN_T = 3 // 경고(장판) → 낙하까지
 // 레이드형 모드(보스전·무한 방어) — 아군 5인이 협곡에서 붉은 파도를 상대한다는 공통 골격.
 //  전용 봇 룰(수성 우선·원격 보급·짧은 부활)과 성장 보정을 함께 상속한다.
 export const isRaidMode = (m) => m === 'boss' || m === 'defense'
@@ -815,6 +821,14 @@ export function createGame(players, opts = {}) {
     h.maxHp = heroMaxHp(h)
     // 난이도 티어: 보스 체력만 생성 시 1회 가중(공격은 damageHero에서, 템포는 쿨다운에서)
     if (h.isBoss) h.maxHp = Math.round(h.maxHp * (BOSS_TIERS[o.bossTier]?.hp || 1))
+    // 콜로세움 이월: 라운드 사이 레벨·골드·아이템을 들고 온다(체력·쿨은 리셋)
+    const carry = o.carry?.[h.id]
+    if (carry) {
+      h.lvl = Math.min(MAX_LEVEL, carry.lvl || h.lvl)
+      h.gold = carry.gold ?? h.gold
+      h.items = Array.isArray(carry.items) ? carry.items.map((it) => ({ ...it })) : h.items
+      h.maxHp = heroMaxHp(h)
+    }
     h.hp = h.maxHp
   }
   // 봇 역할 배정(팀별): 직업이 선호하는 라인을 잡되, 겹치면 남은 자리를 채워 라인 공백을 막는다.
@@ -829,6 +843,9 @@ export function createGame(players, opts = {}) {
   }
   // 보스전: 아군 봇은 전원 정글러 — 라인 병사가 없으니 캠프를 돌며 성장하고,
   // 타워가 공격받거나 아군이 싸우면 합류한다(수비 콜/갱킹 로직이 그대로 동작).
+  if (mode === 'arena') {
+    for (const h of heroes) h.role = null // 콜로세움: 라인/정글 없음 — 결투뿐
+  }
   if (isRaidMode(mode)) {
     for (const h of heroes) {
       if (h.isBoss) h.role = null
@@ -846,11 +863,11 @@ export function createGame(players, opts = {}) {
     }),
     {
       id: 'dragon', kind: 'dragon', camp: map.DRAGON_PIT, x: map.DRAGON_PIT.x, z: map.DRAGON_PIT.z,
-      hp: DRAGON.hp, maxHp: DRAGON.hp, alive: false, respawnT: DRAGON.spawn, aggro: null,
+      hp: DRAGON.hp, maxHp: DRAGON.hp, alive: false, respawnT: mode === 'arena' ? 1e9 : DRAGON.spawn, aggro: null,
     },
     {
       id: 'baron', kind: 'baron', camp: map.BARON_PIT, x: map.BARON_PIT.x, z: map.BARON_PIT.z,
-      hp: BARON.hp, maxHp: BARON.hp, alive: false, respawnT: BARON.spawn, aggro: null,
+      hp: BARON.hp, maxHp: BARON.hp, alive: false, respawnT: mode === 'arena' ? 1e9 : BARON.spawn, aggro: null,
     },
   ]
   return {
@@ -859,6 +876,11 @@ export function createGame(players, opts = {}) {
     teamSize,
     botLevel: BOT_LEVELS[o.botLevel] ? o.botLevel : 'normal', // 봇 난이도(솔로 모드) — 온라인은 항상 normal
     bossTier: BOSS_TIERS[o.bossTier] ? o.bossTier : 'normal', // 보스전 난이도 티어(보통/어려움/악몽)
+    arenaPhase: mode === 'arena' ? 'shop' : null, // 콜로세움: shop → fight → sudden
+    arenaT: mode === 'arena' ? ARENA_SHOP_T : 0, // 현재 페이즈 남은 시간
+    arenaWave: 0, // 서든데스 붕괴 웨이브 번호
+    holes: [], // 붕괴 구멍 {x,z,r} — 밟으면 추락
+    holeWarns: [], // 붕괴 경고 {x,z,r,at} — at에 낙하
     wave: 0, // 무한 방어: 현재 파도 번호(기록 = 버틴 파도 수)
     defWaveT: DEFENSE_FIRST_WAVE, // 무한 방어: 다음 파도까지 남은 시간
     map,
@@ -1358,6 +1380,7 @@ function applyItems(h) {
 // 아이템 구매: (우물 안 또는 사망 중) + 빈 칸 + 골드 충분해야 한다 (호스트 권위로 검증).
 export function buyItem(state, id, itemId) {
   if (state.status !== 'playing') return state
+  if (state.mode === 'arena' && state.arenaPhase !== 'shop') return state // 콜로세움: 준비 30초에만 구매
   const h = getHero(state, id)
   // 보스전 아군 봇은 원격 구매 허용 — 방어전이 끊이지 않아 우물에 돌아갈 틈이 없다
   const remoteOk = isRaidMode(state.mode) && h?.isBot && h.team === 'blue'
@@ -2502,6 +2525,7 @@ function healHero(h, amount) {
 //  redirected=true 는 결속 리다이렉트로 수호기사가 대신 맞는 호출(무한 연쇄 방지 플래그).
 function damageHero(state, victim, amount, attacker, redirected = false) {
   if (victim.respawnT > 0 || state.status !== 'playing') return
+  if (state.mode === 'arena' && state.arenaPhase === 'shop' && attacker) return // 준비 결계: 전투 불가
   if (victim.isBoss && bossInvuln(state, victim)) return // 무적(각성 휴지기 보호막 / 기상 전 수면)
   // 봇 난이도: 봇 영웅이 주는 피해(평타·스킬 공통)를 난이도 배율로. 리다이렉트(결속 대납)엔
   // 원 피해에서 이미 적용됐으므로 다시 곱하지 않는다.
@@ -2578,6 +2602,7 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   // 보스전 부활: 짧게(상한 18초) — 죽음이 리셋이 아니라 잠깐의 공백이어야 레이드가 굴러간다.
   // 그림자 영웅(정예 소환수)은 부활하지 않는다.
   victim.respawnT = victim.isBossAdd ? 1e9
+    : state.mode === 'arena' ? 1e9 // 콜로세움: 한 번 죽으면 이 라운드는 끝
     : isRaidMode(state.mode) && !victim.isBoss ? Math.min(respawnTime(victim.lvl), 18)
     : respawnTime(victim.lvl)
   victim.stunT = 0
@@ -2830,6 +2855,7 @@ export function step(state, dt) {
   if (state.status === 'finished') return state
 
   stepWaves(state, dt)
+  stepArena(state, dt)
   stepBots(state, dt)
   for (const h of state.heroes) stepHero(state, h, dt)
   stepAutoAttack(state) // 사람 영웅: 갱신된 위치/수풀/쿨다운 기준으로 사거리 안 적 영웅에게 평타 이어치기
@@ -2900,7 +2926,119 @@ function stepDefenseWaves(state, dt) {
 }
 
 // 병사 웨이브: 세 레인마다 근접 3 + 원거리 3
+// ── 콜로세움 진행 — 페이즈 머신 + 무작위 조각 붕괴 + 낙사/전멸 판정 ──
+function arenaAliveCount(state, team) {
+  return state.heroes.filter((h) => h.team === team && h.respawnT <= 0 && h.hp > 0).length
+}
+
+// 낙하 — 보호막 무시 즉사 (추락엔 방패가 없다)
+function arenaFall(state, h) {
+  h.barrierHp = 0
+  h.barrierT = 0
+  h.shieldT = 0
+  pushFx(state, 'death', h.x, h.z, 4, h.team)
+  damageHero(state, h, 1e9, null)
+}
+
+// 붕괴 조각 자리 뽑기 — 거부 샘플링: 기존 구멍·경고와 겹치지 않게, 공간이 부족해지면 허용 오차 완화
+function arenaPickHole(state) {
+  const R = 24 // 경기장 반경(26)보다 살짝 안쪽 — 테두리 물기 허용
+  const taken = [...state.holes, ...state.holeWarns]
+  for (const relax of [0.8, 0.5, 0]) {
+    for (let tries = 0; tries < 20; tries++) {
+      const a = state.rng() * Math.PI * 2
+      const rr = Math.sqrt(state.rng()) * R
+      const x = Math.cos(a) * rr
+      const z = Math.sin(a) * rr
+      if (taken.every((o) => Math.hypot(x - o.x, z - o.z) >= (ARENA_HOLE_R + o.r) * relax)) return { x, z }
+    }
+  }
+  return null // 자리가 완전히 소진 — 이번 조각은 생략
+}
+
+function stepArena(state, dt) {
+  if (state.mode !== 'arena' || state.status !== 'playing') return
+  state.arenaT -= dt
+  if (state.arenaPhase === 'shop') {
+    // 반코트 결계: 자기 진영 반원 밖으로 못 나간다(이동은 자유)
+    for (const h of state.heroes) {
+      if (h.team === 'blue') h.x = Math.min(h.x, -1.5)
+      else h.x = Math.max(h.x, 1.5)
+    }
+    if (state.arenaT <= 0) {
+      state.arenaPhase = 'fight'
+      state.arenaT = ARENA_FIGHT_T
+      // 전투 개시: 쿨다운 전체 초기화(준비 중 헛시전 방지)
+      for (const h of state.heroes) { h.atkCd = 0; h.skillCd = 0; h.skill2Cd = 0; h.ultCd = 0 }
+      pushFeed(state, 'obj', '⚔️ 전투 개시!')
+    }
+    return
+  }
+  if (state.arenaPhase === 'fight' && state.arenaT <= 0) {
+    state.arenaPhase = 'sudden'
+    state.arenaT = 0.01 // 즉시 첫 붕괴 웨이브
+    pushFeed(state, 'obj', '⚠️ 경기장이 무너지기 시작한다 — 발밑을 조심하라!')
+  }
+  if (state.arenaPhase === 'sudden' && state.arenaT <= 0) {
+    state.arenaT = ARENA_HOLE_EVERY
+    state.arenaWave++
+    // 웨이브당 조각 수: 1,1,2,2,3,3… (상한 3) — 갈수록 좁아진다
+    const chunks = Math.min(1 + Math.floor((state.arenaWave - 1) / 2), 3)
+    for (let i = 0; i < chunks; i++) {
+      const p = arenaPickHole(state)
+      if (p) state.holeWarns.push({ x: p.x, z: p.z, r: ARENA_HOLE_R, at: state.time + ARENA_WARN_T })
+    }
+  }
+  // 경고 만료 → 구멍 확정 + 그 위의 영웅 추락 (동시 전멸은 아래 전멸 판정에서 체력→골드→랜덤)
+  if (state.holeWarns.length) {
+    const due = state.holeWarns.filter((w) => state.time >= w.at)
+    if (due.length) {
+      state.holeWarns = state.holeWarns.filter((w) => state.time < w.at)
+      const prefall = { blue: { hp: 0, gold: 0 }, red: { hp: 0, gold: 0 } }
+      const fallen = []
+      for (const w of due) {
+        state.holes.push({ x: w.x, z: w.z, r: w.r })
+        pushFx(state, 'descend', w.x, w.z, w.r, null, 1.5) // 하늘 광선 — 바닥이 뜯겨 나간다
+        for (const h of state.heroes) {
+          if (h.respawnT > 0 || h.hp <= 0 || fallen.includes(h)) continue
+          if (Math.hypot(h.x - w.x, h.z - w.z) < w.r * 0.75) {
+            fallen.push(h)
+            prefall[h.team].hp += h.hp
+            prefall[h.team].gold += h.gold
+          }
+        }
+      }
+      for (const f of fallen) arenaFall(state, f)
+      // 동시 전멸 타이브레이크: 낙하 직전 체력 → 골드 → 랜덤
+      if (arenaAliveCount(state, 'blue') === 0 && arenaAliveCount(state, 'red') === 0) {
+        state.winner = prefall.blue.hp !== prefall.red.hp
+          ? (prefall.blue.hp > prefall.red.hp ? 'blue' : 'red')
+          : prefall.blue.gold !== prefall.red.gold
+            ? (prefall.blue.gold > prefall.red.gold ? 'blue' : 'red')
+            : (state.rng() < 0.5 ? 'blue' : 'red')
+        state.status = 'finished'
+        return
+      }
+    }
+  }
+  // 확정된 구멍: 걸어 들어가거나 밀려 들어가면 추락
+  if (state.holes.length) {
+    for (const h of state.heroes) {
+      if (h.respawnT > 0 || h.hp <= 0) continue
+      if (state.holes.some((o) => Math.hypot(h.x - o.x, h.z - o.z) < o.r * 0.65)) arenaFall(state, h)
+    }
+  }
+  // 전멸 판정(모든 사망 경로 공통) — 한 팀이 비면 종료
+  const ab = arenaAliveCount(state, 'blue')
+  const ar = arenaAliveCount(state, 'red')
+  if (ab === 0 || ar === 0) {
+    state.winner = ab === 0 && ar === 0 ? (state.rng() < 0.5 ? 'blue' : 'red') : ab === 0 ? 'red' : 'blue'
+    state.status = 'finished'
+  }
+}
+
 function stepWaves(state, dt) {
+  if (state.mode === 'arena') return // 콜로세움: 병사 없음
   if (state.mode === 'defense') return stepDefenseWaves(state, dt) // 방어전: 전용 파도 시스템
   if (isRaidMode(state.mode)) return // 레이드: 정규 웨이브 없음 — 보스/파도 소환 병사가 라인을 민다
   state.waveT -= dt
@@ -3161,8 +3299,10 @@ function stepHero(state, h, dt) {
   // 리스폰 존(수호석 뒤편 회복 지대): 우리 편이면 회복, 적이면 따끔!
   for (const team of ['blue', 'red']) {
     if (dist2(h, state.map.FOUNTAIN_POS[team]) > FOUNTAIN_RADIUS * FOUNTAIN_RADIUS) continue
-    // 보스는 옥좌(자기 우물) 위에서도 우물 회복을 받지 않는다 — 전용 재생만 쓴다
-    if (team === h.team) { if (!h.isBoss) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * FOUNTAIN_HEAL * dt) }
+    // 보스는 옥좌(자기 우물) 위에서도 우물 회복을 받지 않는다 — 전용 재생만 쓴다.
+    // 콜로세움은 우물이 스폰 지점일 뿐 — 회복도 레이저도 없다(포션이 유일한 회복 수단)
+    if (state.mode === 'arena') { /* no-op */ }
+    else if (team === h.team) { if (!h.isBoss) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * FOUNTAIN_HEAL * dt) }
     else damageHero(state, h, FOUNTAIN_DMG * dt, null)
   }
   // 자연 회복 (전투 이탈 시) + 이무기 버프 회복.
@@ -6323,6 +6463,10 @@ export function makeView(state) {
     status: state.status,
     mode: state.mode, // 렌더러/미니맵이 맞는 크기의 맵을 만들 수 있게
     bossTier: state.bossTier, // 보스전 난이도(레이드 바 배지·종료 보상 산정)
+    arenaPhase: state.arenaPhase, // 콜로세움: shop/fight/sudden (HUD 페이즈 표시)
+    arenaT: r2d(state.arenaT), // 현재 페이즈 남은 시간
+    holes: state.holes, // 붕괴 구멍(렌더러: 어두운 구덩이)
+    holeWarns: state.holeWarns.map((w) => ({ x: w.x, z: w.z, r: w.r, t: r2d(w.at - state.time) })), // 경고 장판
     wave: state.wave, // 무한 방어: 현재 파도(HUD 카운터·종료 기록)
     defWaveT: r2d(state.defWaveT), // 무한 방어: 다음 파도까지(HUD 타이머)
     nexusPos: state.map.NEXUS_POS, // 시야(inSight) 계산용
