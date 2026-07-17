@@ -4851,7 +4851,9 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   scene.add(makeScatter(
     new THREE.DodecahedronGeometry(0.5),
     new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), laneStoneItems))
-  // 리스폰 존 (회복 지대) 표시 — 수호석 뒤편에 원판 + 빛나는 테두리 + 회복 십자
+  // 리스폰 존 (회복 지대) 표시 — 수호석 뒤편에 원판 + 빛나는 테두리 + 회복 십자.
+  //  콜로세움은 "스타팅 원"으로만 쓴다: 회복 십자 없음, 경기 시작 후엔 숨긴다(렌더 루프에서 토글)
+  const fountainPads = new THREE.Group()
   for (const team of ['blue', 'red']) {
     const fp = FOUNTAIN_POS[team]
     const pad = new THREE.Mesh(
@@ -4866,13 +4868,16 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     )
     rim.rotation.x = -Math.PI / 2
     rim.position.set(fp.x, 0.05, fp.z)
-    // 회복 십자(+) — 여기가 부활·치유 지점임을 알린다
-    const crossMat = new THREE.MeshBasicMaterial({ color: 0x8affc0, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
-    const bar1 = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.9), crossMat)
-    const bar2 = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 3.2), crossMat)
-    for (const b of [bar1, bar2]) { b.rotation.x = -Math.PI / 2; b.position.set(fp.x, 0.06, fp.z) }
-    scene.add(pad, rim, bar1, bar2)
+    fountainPads.add(pad, rim)
+    if (map.mode !== 'arena') {
+      const crossMat = new THREE.MeshBasicMaterial({ color: 0x8affc0, transparent: true, opacity: 0.7, side: THREE.DoubleSide })
+      const bar1 = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 0.9), crossMat)
+      const bar2 = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 3.2), crossMat)
+      for (const b of [bar1, bar2]) { b.rotation.x = -Math.PI / 2; b.position.set(fp.x, 0.06, fp.z) }
+      fountainPads.add(bar1, bar2)
+    }
   }
+  scene.add(fountainPads)
   // 정적 장식(나무·바위·둥지돌)은 안 움직이므로 셰이딩별 한 덩이로 병합한다 → 드로우콜 대폭 절감.
   //  수풀(은신)·성벽은 병합 대상에서 제외(게임플레이/구조물).
   const staticDecor = makeStaticMerger()
@@ -5327,6 +5332,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const zonePool = new Map()
   const holePool = new Map() // 콜로세움 붕괴 구멍
   const warnPool = new Map() // 붕괴 경고 장판
+  const orbPool = new Map() // 콜로세움 회복 열매
   const stoneWallPool = new Map() // 대지술사 임시 돌벽
   const fxPool = new Map()
   const bindPool = new Map() // 결속 끈: 묶인 아군 id → 수호기사에게 잇는 선
@@ -6010,6 +6016,32 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         obj.userData.ring.scale.setScalar(1.25 - 0.25 * f)
         obj.userData.ring.material.opacity = 0.5 + 0.5 * Math.abs(Math.sin(view.time * (6 + f * 8)))
         obj.userData.disc.material.opacity = 0.1 + 0.35 * f
+      }
+    )
+    // 콜로세움: 스타팅 원은 준비 페이즈에만 보인다
+    if (view.mode === 'arena') fountainPads.visible = view.arenaPhase === 'shop'
+    // 회복 열매 💖 — 두둥실 떠서 반짝인다
+    syncPool(
+      scene, orbPool, view.healOrbs || [],
+      (o) => {
+        const g = new THREE.Group()
+        g.position.set(o.x, 0, o.z)
+        const heart = emojiSprite('💖', 2.4)
+        heart.position.y = 2.2
+        const halo = new THREE.Mesh(
+          new THREE.RingGeometry(1.4, 1.9, 28),
+          new THREE.MeshBasicMaterial({ color: 0x8affc0, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false })
+        )
+        halo.rotation.x = -Math.PI / 2
+        halo.position.y = 0.2
+        g.add(heart, halo)
+        g.userData.heart = heart
+        g.userData.halo = halo
+        return g
+      },
+      (obj) => {
+        obj.userData.heart.position.y = 2.2 + Math.sin(view.time * 2.6 + obj.position.x) * 0.35
+        obj.userData.halo.material.opacity = 0.45 + 0.35 * Math.abs(Math.sin(view.time * 3))
       }
     )
     syncPool(
