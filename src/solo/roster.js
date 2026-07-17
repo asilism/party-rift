@@ -16,7 +16,7 @@ const shuffle = (arr) => {
 // 온라인과 같은 규칙으로 "매치 전체에서 같은 직업은 한 명뿐" — 내가 고른 직업을
 // 적팀 봇이 들고나오는 거울 매치가 생기지 않는다.
 // 보스전 보스 이름 — 타입별 고유 네임드
-const BOSS_NAMES = { boss_colossus: '카르곤', boss_archmage: '아르케인', boss_shadow: '녹스' }
+const BOSS_NAMES = { boss_colossus: '카르곤', boss_archmage: '아르케인', boss_shadow: '녹스', boss_thorn: '브램블' }
 
 export function buildSoloRoster({ zodiacId, cls, mode }) {
   const size = TEAM_SIZES[mode] || TEAM_SIZE

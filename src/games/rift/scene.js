@@ -945,7 +945,7 @@ export const CLS_SCALE = {
   windcaller: 0.92, assassin: 0.9,
   terramancer: 1.15, fearmonger: 0.95, illusionist: 0.9,
   // 보스전 보스 — 3배급 거체. 얼굴·무기·이름표 높이도 이 배율을 따라간다(buildHero)
-  boss_colossus: 2.8, boss_archmage: 2.5, boss_shadow: 2.4,
+  boss_colossus: 2.8, boss_archmage: 2.5, boss_shadow: 2.4, boss_thorn: 2.6,
 }
 
 const ATK_ANIM_T = 0.35 // 공격 모션 길이 (초)
@@ -3068,7 +3068,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   // 직업 무기 — 오른팔(손)에 쥐게 한다. 팔 그룹은 어깨가 피벗이라 걸을 때 앞뒤로 흔들린다.
   // 무기 스킨(꾸미기)을 장착했으면 직업 무기를 대체한다.
   // 보스는 타입별 기본 무기를 차용(전사 검/마법사 지팡이/암살자 단검)해 거체에 맞게 키운다
-  const BOSS_WEAPON = { boss_colossus: 'warrior', boss_archmage: 'mage', boss_shadow: 'assassin' }
+  const BOSS_WEAPON = { boss_colossus: 'warrior', boss_archmage: 'mage', boss_shadow: 'assassin', boss_thorn: 'snarer' }
   const weapon = buildWeapon(BOSS_WEAPON[h.cls] || h.cls, weaponSkinId)
   if (s > 1.5) weapon.scale.setScalar(s * 0.8) // 거인의 손엔 거인의 무기
   // 손 위치 = 무기 그룹의 원점(=손잡이). 무기마다 달라서 각자에 맞춰 팔을 뻗는다(고정값이면 어깨에 뜬 것처럼 보인다).
