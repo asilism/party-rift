@@ -12,13 +12,15 @@ import {
   loadEquippedCostume, saveEquippedCostume, loadOwnedCostumes, addOwnedCostume,
   loadEquippedWeapon, saveEquippedWeapon, loadOwnedWeapons, addOwnedWeapon,
   loadBossRecords, recordBossClear, bossTierUnlocked, loadRiftGfx, saveRiftGfx,
-  loadEquippedTitle, saveEquippedTitle, loadDefenseRecords, recordDefenseRun,
+  loadEquippedTitle, saveEquippedTitle, loadDefenseRecords, recordDefenseRun, loadArenaRecords, recordArenaRun,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
 import { missionRows, recordMissionProgress, claimMission, allClearState, claimAllClear, ALL_CLEAR_REWARD } from './missions.js'
 import { recordMatchForAchievements, achievementRows } from './achievements.js'
+import { createTournament, nextRound, resolveRound, userPlacement, arenaLevelFor, ARENA_PLACE_COIN } from './colosseum.js'
+import Fireworks from '../shared/Fireworks.jsx'
 import { adsAvailable, showRewarded } from '../shared/ads.js'
 import MenuStage from './MenuStage.jsx'
 import HeroShowcase from './HeroShowcase.jsx'
@@ -56,6 +58,7 @@ const MODE_OPTS = [
   { id: '5v5', emoji: '🐉', name: '5 대 5', desc: '넓은 맵 · 정글 대격전', tag: '큰판' },
   { id: 'boss', emoji: '👹', name: '보스전', desc: '5명이 거대 보스에 도전 — 잡으면 승리', tag: '도전', price: 300 },
   { id: 'defense', emoji: '🌊', name: '무한 방어', desc: '끝없는 파도에서 수호석을 지켜라 — 기록에 도전!', tag: '생존', price: 300 },
+  { id: 'arena', emoji: '🏟️', name: '콜로세움', desc: '12지신 2대2 토너먼트 — 최후의 팀이 되어라!', tag: '결투', price: 300 },
 ]
 
 export default function SoloApp() {
@@ -84,6 +87,10 @@ export default function SoloApp() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [exitAsk, setExitAsk] = useState(false) // 전투 중 뒤로가기 → "나갈까요?" 확인
   const [coinMsg, setCoinMsg] = useState(null) // 경기 종료 코인 보상 라인(승리 화면에 표시)
+  const [tour, setTour] = useState(null) // 콜로세움 토너먼트 상태
+  const [tourStage, setTourStage] = useState('bracket') // bracket(대진) | result(라운드 결과) | final(최종 순위)
+  const arenaCarryRef = useRef({}) // 라운드 간 유저 팀 이월(레벨·골드·아이템)
+  const arenaViewRef = useRef(null) // 라운드 종료 뷰(결과 보기 버튼 대기)
   const [adState, setAdState] = useState('idle') // 보상형 광고 버튼 상태: idle | loading | fail
   useEffect(() => () => netRef.current?.close(), [])
 
@@ -108,7 +115,105 @@ export default function SoloApp() {
     go('menu')
   }
 
+  // ── 콜로세움 흐름 — 토너먼트 생성 → (라운드: 브래킷 → 경기 → 결과) 반복 → 최종 순위 ──
+  function startColosseum(cls) {
+    const tn = createTournament(profile, cls)
+    arenaCarryRef.current = {}
+    arenaViewRef.current = null
+    nextRound(tn)
+    setTour(tn)
+    setTourStage('bracket')
+    setScreen('colosseum')
+  }
+
+  function startArenaRound() {
+    const cur = tour.current
+    if (!cur?.myPair) return
+    const myTeam = cur.myPair[0].isUser ? cur.myPair[0] : cur.myPair[1]
+    const opp = cur.myPair[0] === myTeam ? cur.myPair[1] : cur.myPair[0]
+    const toRoster = (m, team) => ({
+      id: m.id, name: m.name, zodiacId: m.zodiacId, color: getZodiac(m.zodiacId)?.color,
+      team, cls: m.cls, isBot: m.isBot, deviceId: m.isBot ? undefined : 'solo',
+      title: m.isBot ? null : t(loadEquippedTitle()) || null,
+    })
+    const roster = [...myTeam.members.map((m) => toRoster(m, 'blue')), ...opp.members.map((m) => toRoster(m, 'red'))]
+    const lvl = arenaLevelFor(tour.round)
+    const carry = {}
+    for (const m of myTeam.members) carry[m.id] = arenaCarryRef.current[m.id] || { lvl, gold: 0 }
+    // 상대 봇: 레벨 동기 + 지난 라운드 몫의 골드(이번 준비 페이즈에 몰아서 산다)
+    for (const m of opp.members) carry[m.id] = { lvl, gold: (tour.round - 1) * 1000 }
+    setCoinMsg(null)
+    setAdState('idle')
+    arenaViewRef.current = null
+    const dOpt = DIFF_OPTS.find((o) => o.id === diff) || DIFF_OPTS[0]
+    const n = createLocalNet(riftNet, {
+      players: [],
+      config: { mode: 'arena', roster, carry, botLevel: dOpt.botLevel },
+      deviceId: 'solo',
+      onFinish(view) {
+        arenaViewRef.current = view // 결과 반영은 '결과 보기' 버튼에서 — 경기 결과 모달을 먼저 보게 한다
+        const me = view.heroes?.find((h) => h.id === 'solo')
+        if (me) {
+          const win = !!view.winner && view.winner === 'blue'
+          recordMissionProgress({ win, kills: me.kills, assists: me.assists, jungle: me.jungleKills })
+          recordMatchForAchievements({ view, me, win })
+        }
+      },
+    })
+    netRef.current = n
+    if (typeof window !== 'undefined') window.__soloNet = n
+    setNet(n)
+    setScreen('play')
+  }
+
+  // 라운드 결과 반영(정상 종료·중도 이탈 공통) — 이월 추출 후 판정, 콜로세움 화면으로
+  function finishArenaRound(forfeit = false) {
+    const view = arenaViewRef.current
+    const win = !forfeit && !!view && view.winner === 'blue'
+    const nextLvl = arenaLevelFor(tour.round + 1)
+    if (view) {
+      for (const id of ['solo', 'ally']) {
+        const h = view.heroes?.find((x) => x.id === id)
+        if (h) arenaCarryRef.current[id] = { lvl: Math.max(nextLvl, h.lvl || 0), gold: h.gold || 0, items: h.items || [] }
+      }
+    } else {
+      // 뷰가 없으면(즉시 이탈) 레벨만 승급
+      for (const id of ['solo', 'ally']) {
+        const c = arenaCarryRef.current[id] || { gold: 0, items: [] }
+        arenaCarryRef.current[id] = { ...c, lvl: nextLvl }
+      }
+    }
+    resolveRound(tour, win)
+    setTour({ ...tour })
+    setTourStage('result')
+    arenaViewRef.current = null
+    netRef.current?.close()
+    netRef.current = null
+    setNet(null)
+    setScreen('colosseum')
+  }
+
+  function arenaNextRound() {
+    const me = tour.teams.find((tm) => tm.isUser)
+    if (tour.over || !me.alive) {
+      setTourStage('final')
+      return
+    }
+    nextRound(tour)
+    setTour({ ...tour })
+    setTourStage('bracket')
+  }
+
+  function finishColosseum() {
+    const place = userPlacement(tour) || 6
+    addCoins(ARENA_PLACE_COIN[place] || 10)
+    recordArenaRun(place)
+    setTour(null)
+    go('menu')
+  }
+
   function startBattle(cls) {
+    if (mode === 'arena') return startColosseum(cls)
     setCoinMsg(null) // 새 경기 — 지난 보상 라인 지움
     setAdState('idle')
     const dOpt = DIFF_OPTS.find((o) => o.id === diff) || DIFF_OPTS[0]
@@ -171,6 +276,11 @@ export default function SoloApp() {
   }
 
   function exitBattle() {
+    if (mode === 'arena' && tour) {
+      // 콜로세움: 정상 종료면 결과 반영, 경기 중 이탈이면 그 라운드 몰수패
+      finishArenaRound(!arenaViewRef.current)
+      return
+    }
     netRef.current?.close()
     netRef.current = null
     setNet(null)
@@ -327,6 +437,16 @@ export default function SoloApp() {
           onProfile={() => go('profile')}
           onSettings={() => go('settings')}
           onHats={() => go('hats')}
+        />
+      )}
+      {screen === 'colosseum' && tour && (
+        <ColosseumScreen
+          tour={tour}
+          stage={tourStage}
+          onEnter={startArenaRound}
+          onSkipRound={() => { resolveRound(tour, false); setTour({ ...tour }); setTourStage('result') }}
+          onNextRound={arenaNextRound}
+          onFinish={finishColosseum}
         />
       )}
       {screen === 'settings' && <SettingsScreen onBack={() => go('menu')} onLicenses={() => go('licenses')} />}
@@ -946,6 +1066,133 @@ function RecordsScreen({ onBack }) {
           : tab === 'boss'
             ? <BossRecordCard bossRecs={bossRecs} />
             : <ClassRecordCard records={byMode[tab] || {}} />}
+    </div>
+  )
+}
+
+// ── 콜로세움 화면 — 대진(bracket) / 라운드 결과(result) / 최종 순위(final) ──
+//  라운드 결과는 이 모드의 얼굴: 내 경기 배너 → 다른 경기 → 6팀 포인트 보드 → 다음 예고 순서로 읽힌다.
+function TeamFaces({ team, big }) {
+  return (
+    <span className={`colo-faces ${big ? 'colo-faces--big' : ''}`}>
+      {team.members.map((m) => <span key={m.id} className="colo-face">{m.emoji}</span>)}
+    </span>
+  )
+}
+
+function TeamPts({ team, deducted }) {
+  return (
+    <div className={`colo-pts ${team.alive ? '' : 'colo-pts--dead'}`}>
+      <div className="colo-pts__bar">
+        <div className="colo-pts__fill" style={{ width: `${(team.pts / 10) * 100}%` }} />
+      </div>
+      <b className="colo-pts__num">{team.alive ? team.pts : '💀'}</b>
+      {deducted > 0 && <span className="colo-pts__delta">-{deducted}</span>}
+    </div>
+  )
+}
+
+function ColosseumScreen({ tour, stage, onEnter, onSkipRound, onNextRound, onFinish }) {
+  const cur = tour.current
+  const last = tour.lastResults
+  const meTeam = tour.teams.find((tm) => tm.isUser)
+  // 보드 정렬: 생존(포인트순) → 탈락(늦게 탈락한 순)
+  const board = [...tour.teams].sort((a, b) =>
+    (b.alive ? 1 : 0) - (a.alive ? 1 : 0) || b.pts - a.pts || (b.elimRound || 0) - (a.elimRound || 0))
+  const deductedOf = (tm) => (stage === 'result' && last?.results.some((r) => r.loser === tm) ? last.deduction : 0)
+  const place = userPlacement(tour)
+
+  return (
+    <div className="screen colo-screen">
+      <h2 className="toy-heading toy-heading--screen">🏟️ {t('콜로세움')}</h2>
+
+      {stage === 'bracket' && cur && (
+        <div className="toy-card colo-card">
+          <div className="colo-card__head">
+            <b>{cur.isFinal ? `👑 ${t('결승 데스매치')}` : `${cur.round}${t('라운드')}`}</b>
+            <span className="colo-deduct">{t('패배 시')} -{cur.deduction}</span>
+          </div>
+          <div className="colo-pairs">
+            {cur.pairs.map((p, i) => {
+              const mine = p[0].isUser || p[1].isUser
+              return (
+                <div key={i} className={`colo-pair ${mine ? 'colo-pair--mine' : ''}`}>
+                  <TeamFaces team={p[0]} /><span className="colo-vs">VS</span><TeamFaces team={p[1]} />
+                  {mine && <span className="colo-pair__tag">{t('내 경기')}</span>}
+                </div>
+              )
+            })}
+            {cur.bye && (
+              <div className="colo-pair colo-pair--bye">
+                <TeamFaces team={cur.bye} /><span className="colo-bye">🛋️ {t('휴식')}</span>
+              </div>
+            )}
+          </div>
+          {cur.myPair
+            ? <button className="toy-btn toy-btn--yellow toy-btn--big colo-cta" onClick={onEnter}>⚔️ {t('입장')}</button>
+            : <button className="toy-btn toy-btn--blue colo-cta" onClick={onSkipRound}>🛋️ {t('이번 라운드 휴식 — 결과 보기')}</button>}
+        </div>
+      )}
+
+      {stage === 'result' && last && (
+        <div className="toy-card colo-card">
+          <div className="colo-card__head">
+            <b>{last.round}{t('라운드 결과')}</b>
+            <span className="colo-deduct">-{last.deduction}</span>
+          </div>
+          {/* 내 경기 배너 */}
+          {last.results.filter((r) => r.isMine).map((r, i) => {
+            const iWon = r.winner.isUser
+            return (
+              <div key={i} className={`colo-myresult ${iWon ? 'colo-myresult--win' : 'colo-myresult--lose'}`}>
+                <TeamFaces team={r.a} big /><span className="colo-vs colo-vs--big">VS</span><TeamFaces team={r.b} big />
+                <div className="colo-myresult__text">{iWon ? `🏆 ${t('승리!')}` : `💥 ${t('패배')} (-${last.deduction})`}</div>
+              </div>
+            )
+          })}
+          {/* 다른 경기 — 승자에 ✓ */}
+          <div className="colo-others">
+            {last.results.filter((r) => !r.isMine).map((r, i) => (
+              <div key={i} className="colo-other">
+                <span className={r.winner === r.a ? 'colo-w' : 'colo-l'}><TeamFaces team={r.a} /></span>
+                <span className="colo-vs">vs</span>
+                <span className={r.winner === r.b ? 'colo-w' : 'colo-l'}><TeamFaces team={r.b} /></span>
+                <span className="colo-other__win">{r.winner === r.a ? '◀' : '▶'}</span>
+              </div>
+            ))}
+            {last.bye && <div className="colo-other colo-other--bye"><TeamFaces team={last.bye} /> 🛋️</div>}
+          </div>
+          {/* 포인트 보드 */}
+          <div className="colo-board">
+            {board.map((tm) => (
+              <div key={tm.idx} className={`colo-row ${tm.isUser ? 'colo-row--me' : ''} ${tm.alive ? '' : 'colo-row--dead'}`}>
+                <TeamFaces team={tm} />
+                <span className="colo-row__name">{tm.isUser ? t('우리 팀') : tm.members[0].name}</span>
+                <TeamPts team={tm} deducted={deductedOf(tm)} />
+              </div>
+            ))}
+          </div>
+          {last.eliminated.length > 0 && (
+            <div className="colo-elim">💀 {last.eliminated.map((tm) => tm.members.map((m) => m.emoji).join('')).join(' · ')} {t('탈락!')}</div>
+          )}
+          <button className="toy-btn toy-btn--yellow toy-btn--big colo-cta" onClick={onNextRound}>
+            {tour.over || !meTeam.alive ? `📋 ${t('최종 결과')}` : `▶ ${t('다음 라운드')} (${t('패배 시')} -${3 + tour.round * 2})`}
+          </button>
+        </div>
+      )}
+
+      {stage === 'final' && (
+        <div className="toy-card colo-card colo-card--final">
+          {place === 1 && <Fireworks />}
+          <div className="colo-final__trophy">{place === 1 ? '🏆' : place === 2 ? '🥈' : place === 3 ? '🥉' : '🏟️'}</div>
+          <h3 className="colo-final__place">{place === 1 ? t('우승!') : `${place}${t('위')}`}</h3>
+          <p className="colo-final__sub">
+            {place === 1 ? t('콜로세움의 정상 — 최후의 팀이 되었다!') : t('다음엔 더 높은 곳으로!')}
+          </p>
+          <div className="colo-final__coin">🪙 +{ARENA_PLACE_COIN[place] || 10}</div>
+          <button className="toy-btn toy-btn--yellow toy-btn--big colo-cta" onClick={onFinish}>{t('보상 받기')}</button>
+        </div>
+      )}
     </div>
   )
 }

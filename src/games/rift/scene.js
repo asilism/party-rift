@@ -5306,6 +5306,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const summonPool = new Map()
   const projPool = new Map()
   const zonePool = new Map()
+  const holePool = new Map() // 콜로세움 붕괴 구멍
+  const warnPool = new Map() // 붕괴 경고 장판
   const stoneWallPool = new Map() // 대지술사 임시 돌벽
   const fxPool = new Map()
   const bindPool = new Map() // 결속 끈: 묶인 아군 id → 수호기사에게 잇는 선
@@ -5959,6 +5961,59 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         obj.visible = inVision(z.x, z.z) // 안개 속 장판은 숨긴다
         obj.userData.update?.(z)
       }
+    )
+    // 콜로세움: 붕괴 경고(빨간 링 맥동) → 구멍(암흑 원반 + 테두리) — 아레나는 안개가 없어 항상 보인다
+    syncPool(
+      scene, warnPool, view.holeWarns || [],
+      (w) => {
+        const g = new THREE.Group()
+        g.position.set(w.x, 0, w.z)
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(w.r * 0.88, w.r, 40),
+          new THREE.MeshBasicMaterial({ color: 0xff4d3a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false })
+        )
+        ring.rotation.x = -Math.PI / 2
+        ring.position.y = 0.3
+        const disc = new THREE.Mesh(
+          new THREE.CircleGeometry(w.r, 36),
+          new THREE.MeshBasicMaterial({ color: 0xff5a3a, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })
+        )
+        disc.rotation.x = -Math.PI / 2
+        disc.position.y = 0.22
+        g.add(ring, disc)
+        g.userData.ring = ring
+        g.userData.disc = disc
+        return g
+      },
+      (obj, w) => {
+        // 남은 시간이 줄수록 다급하게 — 링이 조여들고 원판이 짙어진다
+        const f = Math.max(0, Math.min(1, 1 - (w.t || 0) / 3))
+        obj.userData.ring.scale.setScalar(1.25 - 0.25 * f)
+        obj.userData.ring.material.opacity = 0.5 + 0.5 * Math.abs(Math.sin(view.time * (6 + f * 8)))
+        obj.userData.disc.material.opacity = 0.1 + 0.35 * f
+      }
+    )
+    syncPool(
+      scene, holePool, view.holes || [],
+      (o) => {
+        const g = new THREE.Group()
+        g.position.set(o.x, 0, o.z)
+        const pit = new THREE.Mesh(
+          new THREE.CircleGeometry(o.r, 40),
+          new THREE.MeshBasicMaterial({ color: 0x05030c, side: THREE.DoubleSide, depthWrite: false })
+        )
+        pit.rotation.x = -Math.PI / 2
+        pit.position.y = 0.12
+        const rim = new THREE.Mesh(
+          new THREE.RingGeometry(o.r * 0.96, o.r * 1.06, 40),
+          new THREE.MeshBasicMaterial({ color: 0x3a2c58, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false })
+        )
+        rim.rotation.x = -Math.PI / 2
+        rim.position.y = 0.14
+        g.add(pit, rim)
+        return g
+      },
+      () => { /* 정적 — 갱신 불필요 */ }
     )
     // 스킬/이벤트 이펙트 (동심원 링 + 방향성 직선 + 파티클). 골드 표시는 내 막타만.
     const fxList = view.fx.filter((n) => n.kind !== 'gold' || n.owner === myId)
