@@ -1,6 +1,7 @@
 import { t } from '../shared/i18n.js'
 import { CLASS_IDS, BOSS_IDS, CLASSES, TEAM_SIZE, TEAM_SIZES } from '../games/rift/engine.js'
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
+import { loadEquippedTitle } from '../shared/storage.js'
 
 const shuffle = (arr) => {
   const a = [...arr]
@@ -23,7 +24,8 @@ export function buildSoloRoster({ zodiacId, cls, mode }) {
   const freeZ = shuffle(ZODIAC.filter((z) => z.id !== zodiacId))
   const takenCls = new Set([cls]) // 매치 전체 공용 — 팀별이 아니다
   const roster = [
-    { id: 'solo', name: t(me?.name) || t('나'), zodiacId, color: me?.color, team: 'blue', cls, deviceId: 'solo' },
+    // title: 장착 칭호 — 여기서 현지화해 두면 씬(이름표)은 그대로 그리기만 한다
+    { id: 'solo', name: t(me?.name) || t('나'), zodiacId, color: me?.color, team: 'blue', cls, deviceId: 'solo', title: t(loadEquippedTitle()) || null },
   ]
   if (mode === 'boss') {
     // 보스전: 아군 봇 4 + 무작위 타입의 보스 1 (zodiacId=클래스 id → 얼굴/피드 아이콘이 보스 아이콘)

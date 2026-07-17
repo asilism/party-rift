@@ -19,6 +19,7 @@ export const riftNet = {
       const list = config.roster.map((p) => ({
         id: p.id || p.zodiacId,
         name: p.name,
+        title: p.title || null, // 장착 칭호 — 이름표 표시용
         zodiacId: p.zodiacId,
         color: p.color || getZodiac(p.zodiacId)?.color,
         team: p.team || 'blue',

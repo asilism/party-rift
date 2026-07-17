@@ -465,7 +465,9 @@ function setNameText(sp, text, color) {
 function heroLabel(h) {
   const icon = CLASSES[h.cls]?.icon || ''
   if (CLASSES[h.cls]?.boss) return `${icon}${h.name}`
-  return `Lv.${h.lvl} ${icon}${h.name}${h.isBot ? '🤖' : ''}`
+  // 장착 칭호는 이름 뒤에 ⟨⟩로 — 업적 자랑은 전장에서 제일 빛난다
+  const title = h.title ? ` ⟨${h.title}⟩` : ''
+  return `Lv.${h.lvl} ${icon}${h.name}${h.isBot ? '🤖' : ''}${title}`
 }
 
 // 골드 획득 표시: 떠오르며 사라지는 금색 "+N" 스프라이트 (내 영웅 막타 때만)

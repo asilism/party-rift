@@ -275,6 +275,8 @@ const DICT = {
   '업적 달성': 'Achievement unlocked',
   '달성': 'done',
   '칭호': 'Title',
+  '칭호 장착': 'Equip title',
+  '칭호 해제': 'Remove title',
   '업적': 'Achievements',
   '첫 사냥': 'First Blood', '적 영웅을 처음으로 처치': 'Slay your first enemy hero',
   '사냥꾼 Ⅰ': 'Hunter Ⅰ', '누적 50킬': '50 total kills',
