@@ -55,6 +55,11 @@ export const ACHIEVEMENTS = [
   { id: 'games_30', icon: '📅', name: '단골 손님', desc: '30판 출전', get: (c) => c.games || 0, target: 30, reward: 80 },
   { id: 'games_100', icon: '📅', name: '베테랑', desc: '100판 출전', get: (c) => c.games || 0, target: 100, reward: 150 },
   { id: 'games_300', icon: '📅', name: '조디악의 전설', desc: '300판 출전', get: (c) => c.games || 0, target: 300, reward: 300, title: '조디악의 전설' },
+
+  // ── 무한 방어 ──
+  { id: 'defense_10', icon: '🌊', name: '방파제', desc: '한 판에 10번째 파도 도달', get: (c) => c.defenseBestWave || 0, target: 10, reward: 80 },
+  { id: 'defense_20', icon: '🌊', name: '거센 물살을 넘어', desc: '한 판에 20번째 파도 도달', get: (c) => c.defenseBestWave || 0, target: 20, reward: 150 },
+  { id: 'defense_30', icon: '🌊', name: '철벽 수호자', desc: '한 판에 30번째 파도 도달', get: (c) => c.defenseBestWave || 0, target: 30, reward: 250, title: '철벽 수호자' },
 ]
 
 function liveClassCount() {
@@ -91,6 +96,9 @@ export function recordMatchForAchievements({ view, me, win }) {
   c.barons = (c.barons || 0) + (me.baronKills || 0)
   c.bestStreak = Math.max(c.bestStreak || 0, me.bestStreak || 0)
   c.maxKillsGame = Math.max(c.maxKillsGame || 0, me.kills || 0)
+  if (view.mode === 'defense') {
+    c.defenseBestWave = Math.max(c.defenseBestWave || 0, view.wave || 0)
+  }
   if (view.mode === 'boss' && win) {
     c.bossClears = (c.bossClears || 0) + 1
     const tier = view.bossTier || 'normal'

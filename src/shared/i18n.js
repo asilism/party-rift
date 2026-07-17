@@ -325,6 +325,9 @@ const DICT = {
   '베테랑': 'Veteran', '100판 출전': 'Play 100 matches',
   '조디악의 전설': 'Zodiac Legend', '300판 출전': 'Play 300 matches',
   // 칭호(업적 보상 — 이름과 다른 것만)
+  '방파제': 'Breakwater', '한 판에 10번째 파도 도달': 'Reach wave 10 in one run',
+  '거센 물살을 넘어': 'Against the Current', '한 판에 20번째 파도 도달': 'Reach wave 20 in one run',
+  '철벽 수호자': 'Iron Bulwark', '한 판에 30번째 파도 도달': 'Reach wave 30 in one run',
   '전장의 지배자': 'Battlefield Ruler',
   '전장의 폭풍': 'Storm of War',
   '역전의 용사': 'Comeback Hero',
