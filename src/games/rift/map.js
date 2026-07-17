@@ -134,9 +134,9 @@ function arcWallLines(cx, cz, R, a0, a1) {
 const BOSS_LAIR = { x: 96, z: 0, r: 24 } // 성곽 중심(=레드 수호석/옥좌)과 반지름
 // ── 콜로세움(아레나 12인 토너먼트) — 원형 경기장, 탈출 불가 벽, 부쉬 3곳, 안개 없음 ──
 //  테두리 원벽은 buildMap의 arena 분기에서 arcWallLines로 생성한다(BASE는 리터럴 유지).
-const ARENA_R = 34 // 경기장 반경 — 낙사 조각(반경 8)이 여유 있게 들어가는 크기
+const ARENA_R = 40 // 경기장 반경 — 낙사 조각(반경 8)·스타팅 원(반경 11)이 여유 있게 들어가는 크기
 const ARENA_BASE = {
-  WORLD: { minX: -44, maxX: 44, minZ: -44, maxZ: 44 },
+  WORLD: { minX: -50, maxX: 50, minZ: -50, maxZ: 50 },
   // 넥서스/우물: 스폰 지점(양끝). 아레나엔 수호석 개념이 없어 넥서스는 벽 밖에 감춘다(씬도 그리지 않음).
   NEXUS_POS: { blue: { x: -58, z: 0 }, red: { x: 58, z: 0 } },
   LANES: {
@@ -574,9 +574,9 @@ export function buildMap(mode = '3v3') {
   //  부활·귀환·HP리필이 여기서만 일어나므로, 수호석에 붙어 무한 회복하며 버티지 못한다.
   //  보스전의 레드 우물은 옥좌 바로 뒤 — 보스는 성곽 안에서 잠들고, 우물 레이저가 러시를 응징.
   const FOUNTAIN_POS = mode === 'arena' ? {
-    // 아레나: 스폰 = 경기장 안 양끝(벽 안쪽 2.5) — 우물 회복은 엔진에서 아레나 제외
-    blue: { x: -(ARENA_R - 4), z: 0 },
-    red: { x: ARENA_R - 4, z: 0 },
+    // 아레나: 스타팅 원(반경 FOUNTAIN_RADIUS)이 경기장 벽 안에 완전히 들어오게 — 중심 ±(R-13)
+    blue: { x: -(ARENA_R - 13), z: 0 },
+    red: { x: ARENA_R - 13, z: 0 },
   } : {
     blue: { x: NEXUS_POS.blue.x - RESPAWN_BACK, z: NEXUS_POS.blue.z },
     red: raid

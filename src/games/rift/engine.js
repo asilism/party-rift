@@ -26,6 +26,9 @@ export const ARENA_FIGHT_T = 180
 const ARENA_HOLE_R = 8 // 붕괴 조각 반경 (경기장 R34 기준)
 const ARENA_HOLE_EVERY = 10 // 서든데스 붕괴 웨이브 간격(초)
 const ARENA_WARN_T = 3 // 경고(장판) → 낙하까지
+const ARENA_ORB_EVERY = 9 // 회복 열매 낙하 간격(초)
+const ARENA_ORB_HEAL = 0.28 // 습득 시 최대 체력 대비 회복량
+const ARENA_ORB_LIFE = 20 // 방치 시 소멸(초)
 // 레이드형 모드(보스전·무한 방어) — 아군 5인이 협곡에서 붉은 파도를 상대한다는 공통 골격.
 //  전용 봇 룰(수성 우선·원격 보급·짧은 부활)과 성장 보정을 함께 상속한다.
 export const isRaidMode = (m) => m === 'boss' || m === 'defense'
@@ -826,7 +829,9 @@ export function createGame(players, opts = {}) {
     if (carry) {
       h.lvl = Math.min(MAX_LEVEL, carry.lvl || h.lvl)
       h.gold = carry.gold ?? h.gold
-      h.items = Array.isArray(carry.items) ? carry.items.map((it) => ({ ...it })) : h.items
+      // 아이템은 id 문자열 배열 — 얕은 복사면 충분(스프레드로 문자열을 부수면 증발한다)
+      if (Array.isArray(carry.items)) h.items = [...carry.items]
+      h.bonus = sumStats(h.items) // 이월 아이템의 능력치 반영
       h.maxHp = heroMaxHp(h)
     }
     if (mode === 'arena') h.gold += 1000 // 콜로세움: 라운드 개시 지원금(이월 골드 위에 지급)
@@ -880,6 +885,8 @@ export function createGame(players, opts = {}) {
     arenaPhase: mode === 'arena' ? 'shop' : null, // 콜로세움: shop → fight → sudden
     arenaT: mode === 'arena' ? ARENA_SHOP_T : 0, // 현재 페이즈 남은 시간
     arenaWave: 0, // 서든데스 붕괴 웨이브 번호
+    healOrbs: [], // 콜로세움 회복 열매 {id,x,z,t} — 먹으면 체력 회복
+    orbT: 6, // 다음 열매 낙하까지(전투 개시 후)
     holes: [], // 붕괴 구멍 {x,z,r} — 밟으면 추락
     holeWarns: [], // 붕괴 경고 {x,z,r,at} — at에 낙하
     wave: 0, // 무한 방어: 현재 파도 번호(기록 = 버틴 파도 수)
@@ -2943,7 +2950,7 @@ function arenaFall(state, h) {
 
 // 붕괴 조각 자리 뽑기 — 거부 샘플링: 기존 구멍·경고와 겹치지 않게, 공간이 부족해지면 허용 오차 완화
 function arenaPickHole(state) {
-  const R = 31 // 경기장 반경(34)보다 살짝 안쪽 — 테두리 물기 허용
+  const R = 36 // 경기장 반경(40)보다 살짝 안쪽 — 테두리 물기 허용
   const taken = [...state.holes, ...state.holeWarns]
   for (const relax of [0.8, 0.5, 0]) {
     for (let tries = 0; tries < 20; tries++) {
@@ -2961,10 +2968,17 @@ function stepArena(state, dt) {
   if (state.mode !== 'arena' || state.status !== 'playing') return
   state.arenaT -= dt
   if (state.arenaPhase === 'shop') {
-    // 반코트 결계: 자기 진영 반원 밖으로 못 나간다(이동은 자유)
+    // 준비 결계: 스타팅 원(우물 반경) 밖으로 못 나간다 — 원 안에서만 몸 풀기
     for (const h of state.heroes) {
-      if (h.team === 'blue') h.x = Math.min(h.x, -1.5)
-      else h.x = Math.max(h.x, 1.5)
+      const fp = state.map.FOUNTAIN_POS[h.team]
+      const dx = h.x - fp.x
+      const dz = h.z - fp.z
+      const d = Math.hypot(dx, dz)
+      const lim = FOUNTAIN_RADIUS - 0.6
+      if (d > lim) {
+        h.x = fp.x + (dx / d) * lim
+        h.z = fp.z + (dz / d) * lim
+      }
     }
     if (state.arenaT <= 0) {
       state.arenaPhase = 'fight'
@@ -2979,6 +2993,39 @@ function stepArena(state, dt) {
     state.arenaPhase = 'sudden'
     state.arenaT = 0.01 // 즉시 첫 붕괴 웨이브
     pushFeed(state, 'obj', '⚠️ 경기장이 무너지기 시작한다 — 발밑을 조심하라!')
+  }
+  // ── 회복 열매: 하늘에서 떨어져 바닥에 남는다 — 전투의 리듬을 만드는 자원 싸움 ──
+  if (state.arenaPhase !== 'shop') {
+    state.orbT -= dt
+    if (state.orbT <= 0 && state.healOrbs.length < 2) {
+      state.orbT = ARENA_ORB_EVERY
+      // 구멍·경고·기존 열매를 피해 안쪽(R×0.85)에 떨어뜨린다
+      const taken = [...state.holes, ...state.holeWarns, ...state.healOrbs.map((o) => ({ ...o, r: 4 }))]
+      for (let tries = 0; tries < 24; tries++) {
+        const a = state.rng() * Math.PI * 2
+        const rr = Math.sqrt(state.rng()) * 27
+        const x = Math.cos(a) * rr
+        const z = Math.sin(a) * rr
+        if (!taken.every((o) => Math.hypot(x - o.x, z - o.z) >= (o.r || 4) + 4)) continue
+        state.healOrbs.push({ id: state.nextId++, x, z, t: 0 })
+        pushFx(state, 'descend', x, z, 2.2, null, 1.0) // 하늘 광선 — 열매 강림
+        break
+      }
+    }
+    for (let i = state.healOrbs.length - 1; i >= 0; i--) {
+      const o = state.healOrbs[i]
+      o.t += dt
+      if (o.t > ARENA_ORB_LIFE) { state.healOrbs.splice(i, 1); continue }
+      // 습득: 살아 있는 영웅이 밟으면 회복 — 먼저 밟는 쪽이 임자
+      for (const h of state.heroes) {
+        if (h.respawnT > 0 || h.hp <= 0) continue
+        if (Math.hypot(h.x - o.x, h.z - o.z) > 2.2) continue
+        h.hp = Math.min(h.maxHp, h.hp + h.maxHp * ARENA_ORB_HEAL)
+        pushFx(state, 'heal', h.x, h.z, 3, h.team, 1.0)
+        state.healOrbs.splice(i, 1)
+        break
+      }
+    }
   }
   if (state.arenaPhase === 'sudden' && state.arenaT <= 0) {
     state.arenaT = ARENA_HOLE_EVERY
@@ -6046,6 +6093,30 @@ function arenaBotDuty(state, h, dt) {
   h.botFoeId = foe.id
   const d = Math.sqrt(bd)
   const range = CLASSES[h.cls].range
+  // 회복 열매 판단 — 전투를 계속할지, 빠져서 회복할지, 회복하러 가는 적을 끊을지
+  let orb = null
+  let orbD = 1e9
+  for (const o of state.healOrbs) {
+    const od = Math.hypot(h.x - o.x, h.z - o.z)
+    if (od < orbD) { orbD = od; orb = o }
+  }
+  if (orb) {
+    const foeOrbD = Math.hypot(foe.x - orb.x, foe.z - orb.z)
+    const myNeed = 1 - h.hp / h.maxHp
+    const foeNeed = 1 - foe.hp / foe.maxHp
+    // 회복 러시: 다쳤고(35%+) 경합에서 유리하거나(내가 더 가까움) 빈사(60%+)면 달린다 — 가는 길에도 때린다
+    if (myNeed >= 0.35 && orbD < 32 && (orbD < foeOrbD - 1 || myNeed >= 0.6)) {
+      steerToward(state, h, orb)
+      botAttack(state, h, dt)
+      return
+    }
+    // 컷 플레이: 나는 건강한데 다친 적이 열매로 향하면 열매 앞을 선점해 끊는다
+    if (myNeed <= 0.2 && foeNeed >= 0.4 && foeOrbD < 12 && orbD < foeOrbD + 8) {
+      steerToward(state, h, orb)
+      botAttack(state, h, dt)
+      return
+    }
+  }
   // ② 스탠스: 체력이 밀리면 사거리 끝 카이팅, 아니면 압박 — 단 구석 캠핑은 없다
   const losing = h.hp < h.maxHp * 0.35 && foe.hp > foe.maxHp * 0.5
   let goal
@@ -6542,6 +6613,7 @@ export function makeView(state) {
     bossTier: state.bossTier, // 보스전 난이도(레이드 바 배지·종료 보상 산정)
     arenaPhase: state.arenaPhase, // 콜로세움: shop/fight/sudden (HUD 페이즈 표시)
     arenaT: r2d(state.arenaT), // 현재 페이즈 남은 시간
+    healOrbs: state.healOrbs.map((o) => ({ id: o.id, x: o.x, z: o.z })), // 회복 열매(💖 렌더)
     holes: state.holes, // 붕괴 구멍(렌더러: 어두운 구덩이)
     holeWarns: state.holeWarns.map((w) => ({ id: w.id, x: w.x, z: w.z, r: w.r, t: r2d(w.at - state.time) })), // 경고 장판
     wave: state.wave, // 무한 방어: 현재 파도(HUD 카운터·종료 기록)
