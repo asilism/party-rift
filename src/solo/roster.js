@@ -43,6 +43,17 @@ export function buildSoloRoster({ zodiacId, cls, mode }) {
     })
     return roster
   }
+  if (mode === 'defense') {
+    // 무한 방어: 아군 5인뿐 — 레드는 영웅 없이 엔진이 소환하는 파도(병사·그림자 정예)가 전부
+    for (let i = 1; i < size; i++) {
+      const botCls = shuffle(CLASS_IDS.filter((c) => !takenCls.has(c)))[0]
+      const z = freeZ.shift()
+      if (!botCls || !z) break
+      takenCls.add(botCls)
+      roster.push({ id: `bot-${z.id}`, name: `${t(z.name)}${t('봇')}`, zodiacId: z.id, color: z.color, team: 'blue', cls: botCls, isBot: true })
+    }
+    return roster
+  }
   for (const team of ['blue', 'red']) {
     for (let i = team === 'blue' ? 1 : 0; i < size; i++) {
       const botCls = shuffle(CLASS_IDS.filter((c) => !takenCls.has(c)))[0]

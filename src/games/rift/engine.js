@@ -19,7 +19,10 @@ export const ULT_LEVEL = 5 // 궁극기가 열리는 레벨 (Lv5)
 export const SKILL2_LEVEL = 3 // 보조 스킬이 열리는 레벨 (Lv3)
 export const TEAM_SIZE = 3 // 기본(3:3) 팀 인원 — 하위호환용 별칭
 // 모드별 팀 인원. 5:5는 탑/미드/봇 + 봇을 지원하는 힐러 + 정글러 구성.
-export const TEAM_SIZES = { '3v3': 3, '5v5': 5, boss: 5 } // boss = 보스전(아군 5 대 보스 1)
+export const TEAM_SIZES = { '3v3': 3, '5v5': 5, boss: 5, defense: 5 } // boss = 보스전(아군 5 대 보스 1) · defense = 무한 방어(아군 5 vs 파도)
+// 레이드형 모드(보스전·무한 방어) — 아군 5인이 협곡에서 붉은 파도를 상대한다는 공통 골격.
+//  전용 봇 룰(수성 우선·원격 보급·짧은 부활)과 성장 보정을 함께 상속한다.
+export const isRaidMode = (m) => m === 'boss' || m === 'defense'
 export const GAME_MODES = ['3v3', '5v5']
 // 봇 역할 배정 우선순위(인원이 모자라면 앞에서부터 채운다).
 //  · support = 봇 레인에서 원거리 딜러를 지원(힐러 성향)
@@ -818,7 +821,7 @@ export function createGame(players, opts = {}) {
   }
   // 보스전: 아군 봇은 전원 정글러 — 라인 병사가 없으니 캠프를 돌며 성장하고,
   // 타워가 공격받거나 아군이 싸우면 합류한다(수비 콜/갱킹 로직이 그대로 동작).
-  if (mode === 'boss') {
+  if (isRaidMode(mode)) {
     for (const h of heroes) {
       if (h.isBoss) h.role = null
       else if (h.isBot) h.role = 'jungle'
@@ -848,6 +851,8 @@ export function createGame(players, opts = {}) {
     teamSize,
     botLevel: BOT_LEVELS[o.botLevel] ? o.botLevel : 'normal', // 봇 난이도(솔로 모드) — 온라인은 항상 normal
     bossTier: BOSS_TIERS[o.bossTier] ? o.bossTier : 'normal', // 보스전 난이도 티어(보통/어려움/악몽)
+    wave: 0, // 무한 방어: 현재 파도 번호(기록 = 버틴 파도 수)
+    defWaveT: DEFENSE_FIRST_WAVE, // 무한 방어: 다음 파도까지 남은 시간
     map,
     time: 0,
     countdown: COUNTDOWN_TIME,
@@ -1347,7 +1352,7 @@ export function buyItem(state, id, itemId) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
   // 보스전 아군 봇은 원격 구매 허용 — 방어전이 끊이지 않아 우물에 돌아갈 틈이 없다
-  const remoteOk = state.mode === 'boss' && h?.isBot && h.team === 'blue'
+  const remoteOk = isRaidMode(state.mode) && h?.isBot && h.team === 'blue'
   if (!h || (!canShop(h) && !remoteOk)) return state
   const item = ITEMS_BY_ID[itemId]
   if (!item) return state
@@ -2561,7 +2566,7 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   // 보스전 부활: 짧게(상한 18초) — 죽음이 리셋이 아니라 잠깐의 공백이어야 레이드가 굴러간다.
   // 그림자 영웅(정예 소환수)은 부활하지 않는다.
   victim.respawnT = victim.isBossAdd ? 1e9
-    : state.mode === 'boss' && !victim.isBoss ? Math.min(respawnTime(victim.lvl), 18)
+    : isRaidMode(state.mode) && !victim.isBoss ? Math.min(respawnTime(victim.lvl), 18)
     : respawnTime(victim.lvl)
   victim.stunT = 0
   victim.freezeT = 0
@@ -2698,7 +2703,9 @@ function damageTower(state, t, amount, attacker) {
   // 파도를 치우는 것이 곧 수성이고, 그동안 보스는 영웅을 사냥하러 온다.
   if (attacker?.isBoss) amount *= 0.1
   if (attacker?.isBossAdd) amount *= 0.05
-  else if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
+  else if (state.mode === 'defense' && attacker?.team === 'red') {
+    amount *= 0.6 // 방어전: 파도가 유일한 압박 — 쌓이면 방어선이 실제로 무너진다
+  } else if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
     amount *= state.time < BOSS_MARCH_AT ? 0.3 : 0.7
   }
   if (!t.alive || !towerVulnerable(state, t)) return
@@ -2725,7 +2732,9 @@ function damageNexus(state, team, amount, attacker) {
   if (!nexusVulnerable(state, team)) return
   if (attacker?.isBoss) amount *= 0.1 // 보스전 역할 분리: 건물 철거는 병사의 일
   if (attacker?.isBossAdd) amount *= 0.05 // 그림자 영웅은 처형자 — 건물에 관심이 없다
-  else if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
+  else if (state.mode === 'defense' && attacker?.team === 'red') {
+    amount *= 0.6 // 방어전: 파도가 유일한 압박 — 쌓이면 방어선이 실제로 무너진다
+  } else if (state.mode === 'boss' && attacker && !attacker.isBoss && attacker.team === 'red') {
     amount *= state.time < BOSS_MARCH_AT ? 0.3 : 0.7
   }
   const nx = state.nexus[team]
@@ -2780,7 +2789,7 @@ function giveXp(state, h, amount) {
   //  레벨업 보너스 15%를 회복해, 영웅을 잡을 때마다 체력이 훅 차오르는 것처럼 보였다.)
   if (h.isBoss) return
   if (h.lvl >= MAX_LEVEL) return
-  if (state.mode === 'boss' && h.team === 'blue' && !h.isBoss) amount *= 2.0 // 보스전: 파밍원이 적어 성장 가속
+  if (isRaidMode(state.mode) && h.team === 'blue' && !h.isBoss) amount *= 2.0 // 레이드: 파밍원이 적어 성장 가속
   h.xp += amount
   let up = false
   while (h.lvl < MAX_LEVEL && h.xp >= xpNeed(h.lvl)) {
@@ -2842,9 +2851,46 @@ export function step(state, dt) {
   return state
 }
 
+// ── 무한 방어 웨이브 — 붉은 관문에서 파도가 밀려온다. 갈수록 많고 단단해지며,
+//  5의 배수엔 그림자 정예가 합류(10웨이브마다 1명씩 증가), 10의 배수 뒤엔 10초 숨돌리기.
+//  승리는 없다 — 몇 번째 파도까지 버티는가가 기록이다.
+export const DEFENSE_FIRST_WAVE = 8 // 카운트다운 후 첫 파도까지(초)
+function stepDefenseWaves(state, dt) {
+  if (state.mode !== 'defense' || state.status !== 'playing') return
+  state.defWaveT -= dt
+  if (state.defWaveT > 0) return
+  state.wave = (state.wave || 0) + 1
+  const w = state.wave
+  // 간격 22s → 10s로 점감 + 10의 배수 뒤엔 10초 휴식(분수 정비 타임)
+  state.defWaveT = Math.max(10, 22 - w * 0.6) + (w % 10 === 0 ? 10 : 0)
+  const nx = state.map.NEXUS_POS.red
+  const gate = { team: 'red', x: nx.x - 6, z: nx.z }
+  // 물량 상한: 살아있는 붉은 병사 45 초과분은 안 뽑는다(모바일 성능·프레임 보호)
+  const alive = state.minions.filter((m) => m.team === 'red').length
+  const count = Math.max(0, Math.min(Math.min(16, 6 + Math.ceil(w * 0.7)), 45 - alive))
+  if (count > 0) bossSummon(state, gate, { count, hpMul: 1 + 0.12 * w })
+  if (w % 5 === 0) {
+    // 그림자 정예 합류 — 5파도마다 1명씩 증가(부활 없음 — 잡으면 성장 연료), 진짜 시계는 이쪽
+    const pool = ['warrior', 'mage', 'assassin', 'tank', 'archer', 'gladiator', 'cryomancer', 'warlock']
+    const blues = state.heroes.filter((e) => e.team === 'blue')
+    const avg = Math.round(blues.reduce((sum, e) => sum + e.lvl, 0) / Math.max(1, blues.length))
+    const n = 1 + Math.floor(w / 4)
+    for (let i = 0; i < n; i++) {
+      const cls = pool[Math.floor(state.rng() * pool.length)]
+      spawnShadowAdd(state, { cls, lvl: Math.max(1, avg - 1) }, gate.x + (state.rng() - 0.5) * 6, gate.z + (state.rng() - 0.5) * 6)
+    }
+    pushFeed(state, 'obj', `⚔️ ${w}번째 파도 — 그림자 정예 ${n}기가 함께 몰려온다!`)
+  } else if (w === 1) {
+    pushFeed(state, 'obj', '🌊 첫 파도가 밀려온다 — 수호석을 지켜라!')
+  } else if (w % 10 === 1 && w > 1) {
+    pushFeed(state, 'obj', `🌊 ${w}번째 파도 — 파도가 더 거세진다!`)
+  }
+}
+
 // 병사 웨이브: 세 레인마다 근접 3 + 원거리 3
 function stepWaves(state, dt) {
-  if (state.mode === 'boss') return // 보스전: 정규 웨이브 없음 — 보스가 소환하는 병사가 라인을 민다
+  if (state.mode === 'defense') return stepDefenseWaves(state, dt) // 방어전: 전용 파도 시스템
+  if (isRaidMode(state.mode)) return // 레이드: 정규 웨이브 없음 — 보스/파도 소환 병사가 라인을 민다
   state.waveT -= dt
   if (state.waveT > 0) return
   state.waveT += WAVE_PERIOD
@@ -3257,7 +3303,7 @@ function stepMinions(state, dt) {
           // 상대가 병사이면 피해를 깎아 라인 교전이 천천히 풀리게 한다
           let out = tgt.ref.tk === 'minion' ? spec.dmg * MINION_VS_MINION : spec.dmg
           // 보스전 역할 분리: 병사의 일은 건물 철거 — 영웅에겐 잽 수준. 영웅 사냥은 보스의 몫
-          if (state.mode === 'boss' && m.team === 'red' && tgt.ref.tk === 'hero') out *= 0.55
+          if (isRaidMode(state.mode) && m.team === 'red' && tgt.ref.tk === 'hero') out *= state.mode === 'defense' ? 0.75 : 0.55
           if (m.ranged) {
             // 원거리 병사는 작은 화살을 쏜다 ('mbolt' — 영웅 탄과 구분되는 작은 투사체)
             state.projectiles.push({
@@ -3506,7 +3552,7 @@ function stepTowers(state, dt) {
       } else {
         // 보스전: 타워가 병사를 더 아프게 때린다 — 광역기 없는 조합도 파도 국면에서
         // 타워 화력의 도움으로 초크를 지킬 수 있게(조합 복불복으로 2분대 붕괴 방지)
-        dmg = TOWER_DMG_MINION * (state.mode === 'boss' && t.team === 'blue' && state.time < 240 ? 1.7 : 1)
+        dmg = TOWER_DMG_MINION * (t.team === 'blue' && (state.mode === 'defense' || (state.mode === 'boss' && state.time < 240)) ? 1.7 : 1)
       }
       state.projectiles.push({
         id: state.nextId++, kind: 'towerbolt', team: t.team,
@@ -4165,7 +4211,7 @@ const BOT_BUILD = {
 function botShop(state, h) {
   if (h.items.length >= ITEM_SLOTS) return
   // 보스전 아군 봇은 어디서든 보급(buyItem도 허용) — 아니면 골드를 쥔 채 맨몸으로 싸운다
-  if (!inFountain(h) && !(state.mode === 'boss' && h.team === 'blue')) return
+  if (!inFountain(h) && !(isRaidMode(state.mode) && h.team === 'blue')) return
   const upgraded = new Set()
   for (const id of h.items) for (const c of ITEMS_BY_ID[id]?.from || []) upgraded.add(c)
   for (const itemId of BOT_BUILD[h.cls] || []) {
@@ -5284,7 +5330,7 @@ function stepBots(state, dt) {
     }
     // 우물에 있을 때 장비 보충. 보스전 아군 봇은 원격 보급 — 보스가 본진에 닿으면
     // 봇은 전투에서 벗어날 틈이 없어, 우물 조건을 걸면 골드를 쥔 채 맨몸으로 싸운다.
-    if (inFountain(h) || (state.mode === 'boss' && h.team === 'blue')) botShop(state, h)
+    if (inFountain(h) || (isRaidMode(state.mode) && h.team === 'blue')) botShop(state, h)
     const cls = CLASSES[h.cls]
     // 적 리스폰 존은 금지 구역 — 우물 피해를 맞으며 회복하는 적을 쫓는 건 자살이다.
     // 들어갔다면 존 중심 반대 방향(바깥)으로 즉시 빠져나오고, 이번 틱은 그걸로 끝.
@@ -5303,7 +5349,7 @@ function stepBots(state, dt) {
       }
     }
     // 보스 예고 장판 위 = 만사 제치고 이탈 (보스전 아군 — '공략' 반사신경)
-    if (state.mode === 'boss' && h.team === 'blue' && botDodgeBossZone(state, h, dt)) continue
+    if (isRaidMode(state.mode) && h.team === 'blue' && botDodgeBossZone(state, h, dt)) continue
     // 도발당한 봇: 후퇴/임무보다 우선 — 도발한 탱커에게 끌려가 평타친다
     if (h.tauntT > 0) {
       const tk = state.heroes.find((o) => o.id === h.tauntBy && o.team !== h.team && o.respawnT <= 0)
@@ -5441,7 +5487,7 @@ function stepBots(state, dt) {
         const healthy = h.hp > h.maxHp * 0.38
         h.botWin = healthy && sc.allies >= sc.foes && sc.killT <= sc.lifeT * 1.33
         h.botLose = !healthy || sc.allies < sc.foes || sc.lifeT < sc.killT * 0.65
-        if (state.mode === 'boss') {
+        if (isRaidMode(state.mode)) {
           if (foe.isBoss) {
             // 체력이 넉넉한 동안(60%+)은 사거리 끝 트레이드, 그 아래는 일찍 빠져 회복 —
             // 치명 패턴 메타에선 히트앤런 사이클이 정답이다(늦게 빠지면 패턴 한 방에 죽는다)
@@ -5494,7 +5540,7 @@ function stepBots(state, dt) {
         // 때문에 부활·정비 복귀 봇이 사거리 밖 전투를 타워 뒤에서 구경만 하던 문제.
         // 접근은 사거리 끝(카이팅 밴드)까지만. 근접 직업은 제외 — 포효(공포)+처형 표식
         // 콤보 사거리로 제 발로 걸어 들어가 연쇄 전멸한다(시뮬 12판 전패 확인).
-        if ((winning || (state.mode === 'boss' && foe.isBoss && !losing && CLASSES[h.cls].range >= 8)) && dive) {
+        if ((winning || (isRaidMode(state.mode) && foe.isBoss && !losing && CLASSES[h.cls].range >= 8)) && dive) {
           steerToward(state, h, foe) // 옆걸음 없이 전속 직진으로 따라붙는다
           botAttack(state, h, dt)
           botCombatSkills(state, h, foe, d, nearCount)
@@ -5591,7 +5637,7 @@ function stepBots(state, dt) {
     }
     // 보스전 아군 전용 룰셋: 수성 > 파도 요격 > 정글 > 전선 대기.
     // 범용 정글러 역할은 "위협보다 파밍"을 골라 방어선이 갈리는 걸 구경한다 — 여기선 수성이 항상 먼저다.
-    if (state.mode === 'boss' && h.team === 'blue') {
+    if (isRaidMode(state.mode) && h.team === 'blue') {
       botBossDuty(state, h, dt)
       continue
     }
@@ -5904,7 +5950,7 @@ function botJungleMove(state, h) {
   // 가까운 늑대 캠프 (멀리 돌아가진 않는다).
   // 보스전 아군: 라인 병사가 없어 정글이 유일한 농장 — 거리 불문 가장 가까운 캠프로.
   let camp = null
-  let bd = state.mode === 'boss' && h.team === 'blue' ? Infinity : 16 * 16
+  let bd = isRaidMode(state.mode) && h.team === 'blue' ? Infinity : 16 * 16
   for (const m of state.monsters) {
     if (!m.alive || !CAMP_MOBS[m.kind]) continue
     const d = dist2(h, m)
@@ -6119,6 +6165,8 @@ export function makeView(state) {
     status: state.status,
     mode: state.mode, // 렌더러/미니맵이 맞는 크기의 맵을 만들 수 있게
     bossTier: state.bossTier, // 보스전 난이도(레이드 바 배지·종료 보상 산정)
+    wave: state.wave, // 무한 방어: 현재 파도(HUD 카운터·종료 기록)
+    defWaveT: r2d(state.defWaveT), // 무한 방어: 다음 파도까지(HUD 타이머)
     nexusPos: state.map.NEXUS_POS, // 시야(inSight) 계산용
     time: r2d(state.time),
     countdown: Math.ceil(state.countdown),
