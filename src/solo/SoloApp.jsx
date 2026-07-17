@@ -22,7 +22,7 @@ import { recordMatchForAchievements, achievementRows, evaluateAchievements } fro
 import { createTournament, nextRound, resolveRound, userPlacement, arenaLevelFor, ARENA_PLACE_COIN } from './colosseum.js'
 import Fireworks from '../shared/Fireworks.jsx'
 import { adsAvailable, showRewarded } from '../shared/ads.js'
-import MenuStage from './MenuStage.jsx'
+import MenuStage, { ArenaStage } from './MenuStage.jsx'
 import HeroShowcase from './HeroShowcase.jsx'
 import HatPreview from './HatPreview.jsx'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
@@ -424,7 +424,7 @@ export default function SoloApp() {
 
   return (
     <div className="shell">
-      <MenuStage />
+      {screen === 'colosseum' ? <ArenaStage /> : <MenuStage />}
       {screen === 'title' && <TitleScreen onEnter={enterFromTitle} />}
       {screen === 'profile' && (
         <ProfileScreen current={profile} onPick={pickProfile} onBack={profile ? () => go('menu') : null} />
