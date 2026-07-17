@@ -274,6 +274,18 @@ const DICT = {
   // 업적 이름·설명·칭호
   '업적 달성': 'Achievement unlocked',
   '달성': 'done',
+  // 무한 방어
+  '무한 방어': 'Endless Defense',
+  '끝없는 파도에서 수호석을 지켜라 — 기록에 도전!': 'Guard the stone against endless waves — chase the record!',
+  '생존': 'Survive',
+  '번째 파도': ' waves', // "12번째 파도" → "12 waves"
+  '번째 파도까지 버텼다!': ' waves survived!',
+  '파도 대기': 'Wave incoming',
+  '방어전': 'Defense',
+  '최고 기록': 'Best',
+  '누적': 'Total',
+  '판': ' runs',
+  '아직 파도를 막아본 적이 없어 — 무한 방어에 도전해 봐! 🌊': 'No waves held yet — try Endless Defense! 🌊',
   '칭호': 'Title',
   '칭호 장착': 'Equip title',
   '칭호 해제': 'Remove title',

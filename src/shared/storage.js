@@ -148,6 +148,28 @@ export function saveMissionState(state) {
   }
 }
 
+// ── 무한 방어 기록 — 최고 도달 파도·누적 파도·출전 수 ──
+const DEFENSE_REC_KEY = 'bgp.rift.defenseRecords.v1'
+
+export function loadDefenseRecords() {
+  try {
+    const v = JSON.parse(localStorage.getItem(DEFENSE_REC_KEY))
+    if (v && typeof v === 'object') return { bestWave: v.bestWave || 0, runs: v.runs || 0, totalWaves: v.totalWaves || 0 }
+  } catch { /* 무시 */ }
+  return { bestWave: 0, runs: 0, totalWaves: 0 }
+}
+
+// 방어 1판 기록 — { isBest(최고 기록 갱신), bestWave } 반환
+export function recordDefenseRun(wave) {
+  const rec = loadDefenseRecords()
+  const isBest = wave > rec.bestWave
+  const next = { bestWave: Math.max(rec.bestWave, wave), runs: rec.runs + 1, totalWaves: rec.totalWaves + wave }
+  try {
+    localStorage.setItem(DEFENSE_REC_KEY, JSON.stringify(next))
+  } catch { /* 무시 */ }
+  return { isBest, bestWave: next.bestWave }
+}
+
 // ── 칭호 — 업적 보상으로 얻고, 장착하면 메뉴 프로필 칩·전투 이름표에 붙는다 ──
 const TITLE_KEY = 'bgp.rift.title.v1'
 

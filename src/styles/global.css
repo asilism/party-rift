@@ -3482,6 +3482,17 @@ body {
 .boss-rec-row__tier { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .boss-rec-row__tier.is-empty { opacity: 0.35; font-weight: 500; }
 
+/* 방어전 HUD 바 — 파도 번호 + 다음 파도 타이머 */
+.defense-bar { border-color: rgba(79, 195, 255, 0.35); }
+.defense-bar .boss-bar__name { max-width: none; }
+.defense-bar__next { margin-left: auto; flex-shrink: 0; color: #9fdcff; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* 방어전 전적 카드 */
+.defense-rec { text-align: center; padding: 10px 0; }
+.defense-rec__best { font-size: 18px; font-weight: 900; color: var(--ink); }
+.defense-rec__best b { color: #1e88d0; font-size: 24px; }
+.defense-rec__sub { margin-top: 6px; color: #7a7198; font-size: 13px; }
+
 /* ── 업적 탭 — 시리즈 순서 유지 목록, 진행바는 미달성만 ── */
 .records-card--ach { max-height: min(62vh, 480px); display: flex; flex-direction: column; }
 .ach-summary { font-weight: 900; font-size: 15px; color: var(--ink); padding-bottom: 8px; border-bottom: 2px dashed rgba(43, 35, 80, 0.15); }

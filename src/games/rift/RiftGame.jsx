@@ -474,11 +474,13 @@ function RiftPlay({
   const finished = hud.status === 'finished'
   const myTeam = me?.team
   // 승리 메시지를 한 글자씩 나타나게 — "파랑팀 승리"를 글자 단위로 쪼갠다(공백은 자리만 차지).
-  // 보스전은 토벌 서사로: "카르곤 토벌!" / "토벌 실패..."
+  // 보스전은 토벌 서사로: "카르곤 토벌!" / "토벌 실패...", 방어전은 도달 파도가 곧 성적표.
   const raidBoss = hud.mode === 'boss' ? hud.heroes?.find((h) => h.cls?.startsWith('boss_')) : null
-  const winText = raidBoss
-    ? hud.winner === 'blue' ? `${raidBoss.name} ${t('토벌!')}` : t('토벌 실패...')
-    : hud.winner === 'blue' ? t('파랑팀 승리') : hud.winner === 'red' ? t('빨강팀 승리') : t('무승부')
+  const winText = hud.mode === 'defense'
+    ? `${hud.wave || 0}${t('번째 파도까지 버텼다!')}`
+    : raidBoss
+      ? hud.winner === 'blue' ? `${raidBoss.name} ${t('토벌!')}` : t('토벌 실패...')
+      : hud.winner === 'blue' ? t('파랑팀 승리') : hud.winner === 'red' ? t('빨강팀 승리') : t('무승부')
   let winBeat = 0
   const winChars = [...winText].map((ch, i) => ({
     ch, key: i, space: ch === ' ', delay: ch === ' ' ? 0 : winBeat++ * 0.16,
@@ -520,6 +522,16 @@ function RiftPlay({
           {hud.mode === 'boss' && !finished && (
             <div className="boss-bar-slot">
               <BossRaidBar hud={hud} />
+            </div>
+          )}
+          {/* 무한 방어: 파도 카운터 + 다음 파도 타이머 (같은 슬롯) */}
+          {hud.mode === 'defense' && !finished && (
+            <div className="boss-bar-slot">
+              <div className="boss-bar defense-bar">
+                <span className="boss-bar__face">🌊</span>
+                <span className="boss-bar__name">{hud.wave > 0 ? `${hud.wave}${t('번째 파도')}` : t('파도 대기')}</span>
+                <span className="defense-bar__next">⏳ {Math.max(0, Math.ceil(hud.defWaveT || 0))}s</span>
+              </div>
             </div>
           )}
           {/* 우상단(설정 옆): 개인 전적 — 킬/데스/어시 · 골드 · 진행 시간 */}
@@ -690,11 +702,11 @@ function RiftPlay({
       )}
 
       {finished && showWin && (
-        <div className="win-modal" style={{ '--z-color': hud.winner === 'red' ? '#ff6b6b' : '#4f8cff' }}>
-          {(!myTeam || hud.winner === myTeam) && <Fireworks />}
+        <div className="win-modal" style={{ '--z-color': hud.mode === 'defense' ? '#4fc3ff' : hud.winner === 'red' ? '#ff6b6b' : '#4f8cff' }}>
+          {(hud.mode === 'defense' ? (hud.wave || 0) >= 20 : (!myTeam || hud.winner === myTeam)) && <Fireworks />}
           {/* 위쪽: 트로피 + 한 글자씩 나타나는 승리 메시지 */}
           <div className="win-banner">
-            <div className="win-banner__trophy">{raidBoss && hud.winner === 'blue' ? '👑' : hud.winner ? '🏆' : '🤝'}</div>
+            <div className="win-banner__trophy">{hud.mode === 'defense' ? '🌊' : raidBoss && hud.winner === 'blue' ? '👑' : hud.winner ? '🏆' : '🤝'}</div>
             <h2 className="win-banner__title" aria-label={winText}>
               {winChars.map((c) =>
                 c.space

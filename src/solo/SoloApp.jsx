@@ -12,7 +12,7 @@ import {
   loadEquippedCostume, saveEquippedCostume, loadOwnedCostumes, addOwnedCostume,
   loadEquippedWeapon, saveEquippedWeapon, loadOwnedWeapons, addOwnedWeapon,
   loadBossRecords, recordBossClear, bossTierUnlocked, loadRiftGfx, saveRiftGfx,
-  loadEquippedTitle, saveEquippedTitle,
+  loadEquippedTitle, saveEquippedTitle, loadDefenseRecords, recordDefenseRun,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
@@ -52,6 +52,7 @@ const MODE_OPTS = [
   { id: '3v3', emoji: '⚔️', name: '3 대 3', desc: '작은 맵 · 빠른 한판', tag: '기본' },
   { id: '5v5', emoji: '🐉', name: '5 대 5', desc: '넓은 맵 · 정글 대격전', tag: '큰판' },
   { id: 'boss', emoji: '👹', name: '보스전', desc: '5명이 거대 보스에 도전 — 잡으면 승리', tag: '도전', price: 300 },
+  { id: 'defense', emoji: '🌊', name: '무한 방어', desc: '끝없는 파도에서 수호석을 지켜라 — 기록에 도전!', tag: '생존', price: 300 },
 ]
 
 export default function SoloApp() {
@@ -121,8 +122,8 @@ export default function SoloApp() {
         const me = view.heroes?.find((h) => h.id === 'solo')
         if (!me) return
         const win = !!view.winner && view.winner === me.team
-        // 직업 전적은 3v3/5v5만 쌓는다 — 보스전 결과는 아래 토벌 기록으로 따로 남긴다
-        if (view.mode !== 'boss') {
+        // 직업 전적은 3v3/5v5만 쌓는다 — 보스전·방어전 결과는 전용 기록으로 따로 남긴다
+        if (view.mode !== 'boss' && view.mode !== 'defense') {
           addRiftRecord(me.cls, {
             win, mode: view.mode,
             kills: me.kills, deaths: me.deaths, assists: me.assists,
@@ -130,9 +131,10 @@ export default function SoloApp() {
         }
         // 조디악 코인: 승 30 / 패 10 + 하루 첫 승 보너스 50.
         //  보스전은 티어별 승리 코인(보통 30/어려움 45/악몽 60) + 보스·티어 첫 토벌 +100.
+        //  방어전은 승패가 없다 — 버틴 파도만큼 번다(5 + 파도×2).
         const tier = view.mode === 'boss' ? (view.bossTier || 'normal') : null
         const tierOpt = tier && BOSS_TIER_OPTS.find((o) => o.id === tier)
-        let earn = win ? (tierOpt?.coin || 30) : 10
+        let earn = view.mode === 'defense' ? 5 + (view.wave || 0) * 2 : win ? (tierOpt?.coin || 30) : 10
         let firstWin = false
         if (win && claimFirstWinToday()) {
           earn += 50
@@ -148,12 +150,17 @@ export default function SoloApp() {
             if (bossRec.isFirst) earn += 100 // 이 보스·이 티어 첫 토벌 보너스
           }
         }
+        // 방어전 기록 — 도달 파도·최고 기록
+        let defRec = null
+        if (view.mode === 'defense') {
+          defRec = { ...recordDefenseRun(view.wave || 0), wave: view.wave || 0 }
+        }
         addCoins(earn)
         // 일일 미션 진행도 누적 (판수/승리/킬/어시/정글몹)
         recordMissionProgress({ win, kills: me.kills, assists: me.assists, jungle: me.jungleKills })
         // 업적 누적·판정 — 새로 달성한 업적은 결과 화면 배너로(보상 코인은 즉시 지급됨)
         const achNew = recordMatchForAchievements({ view, me, win })
-        setCoinMsg({ earn, firstWin, bossRec, achNew })
+        setCoinMsg({ earn, firstWin, bossRec, defRec, achNew })
       },
     })
     netRef.current = n
@@ -238,6 +245,12 @@ export default function SoloApp() {
                   {BOSS_TIER_ICON[coinMsg.bossRec.tier] && `${BOSS_TIER_ICON[coinMsg.bossRec.tier]} ${t(BOSS_TIER_OPTS.find((o) => o.id === coinMsg.bossRec.tier)?.label || '')} `}
                   ⏱ {fmtClearTime(coinMsg.bossRec.time)}
                   {coinMsg.bossRec.isFirst ? ` 🏅 ${t('첫 토벌!')} +100` : coinMsg.bossRec.isBest ? ` 🏆 ${t('최단 기록!')}` : ''}
+                </span>
+              )}
+              {coinMsg.defRec && (
+                <span className="win-banner__bossrec">
+                  {' · '}🌊 {coinMsg.defRec.wave}{t('번째 파도')}
+                  {coinMsg.defRec.isBest && coinMsg.defRec.wave > 0 ? ` 🏆 ${t('최고 기록!')}` : ''}
                 </span>
               )}
               {coinMsg.achNew?.length > 0 && (
@@ -799,6 +812,7 @@ const RECORD_TABS = [
   { id: '3v3', label: '3 대 3' },
   { id: '5v5', label: '5 대 5' },
   { id: 'boss', label: '보스전' },
+  { id: 'defense', label: '방어전' },
   { id: 'ach', label: '업적' },
 ]
 
@@ -900,9 +914,28 @@ function RecordsScreen({ onBack }) {
       </div>
       {tab === 'ach'
         ? <AchievementCard />
-        : tab === 'boss'
-          ? <BossRecordCard bossRecs={bossRecs} />
-          : <ClassRecordCard records={byMode[tab] || {}} />}
+        : tab === 'defense'
+          ? <DefenseRecordCard />
+          : tab === 'boss'
+            ? <BossRecordCard bossRecs={bossRecs} />
+            : <ClassRecordCard records={byMode[tab] || {}} />}
+    </div>
+  )
+}
+
+// ── 방어전 탭 — 최고 기록·출전·누적 파도 ──
+function DefenseRecordCard() {
+  const rec = loadDefenseRecords()
+  return (
+    <div className="toy-card records-card records-card--defense">
+      {rec.runs === 0 ? (
+        <p className="records-card__empty">{t('아직 파도를 막아본 적이 없어 — 무한 방어에 도전해 봐! 🌊')}</p>
+      ) : (
+        <div className="defense-rec">
+          <div className="defense-rec__best">🏆 {t('최고 기록')} <b>{rec.bestWave}</b>{t('번째 파도')}</div>
+          <div className="defense-rec__sub">🌊 {t('누적')} {rec.totalWaves} · 🎮 {rec.runs}{t('판')}</div>
+        </div>
+      )}
     </div>
   )
 }
