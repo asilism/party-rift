@@ -2978,10 +2978,34 @@ body {
 
 /* ── 모드·난이도 ── */
 .mode-screen__levels { display: flex; gap: 10px; margin-top: clamp(10px, 2.6vh, 20px); }
-.mode-screen__cards { flex: 1; display: flex; align-items: center; gap: clamp(14px, 3vw, 30px); padding-bottom: 4vh; }
+/* 모드 카드 횡스크롤 — 4개 모드가 한 화면에 다 안 들어온다. 스크롤 가능함을 세 겹으로 알린다:
+   ① 마지막 카드가 화면 끝에 반쯤 걸치게(자연 어포던스) ② 엣지 페이드 ③ 맥동하는 › 화살표 */
+.mode-screen__scrollwrap { position: relative; align-self: stretch; flex: 1; display: flex; min-width: 0; }
+.mode-screen__cards {
+  flex: 1; display: flex; align-items: center; gap: clamp(14px, 3vw, 30px);
+  padding: 12px clamp(16px, 4vw, 40px) 4vh;
+  overflow-x: auto; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.mode-screen__cards::-webkit-scrollbar { display: none; }
+.mode-scroll-fade {
+  position: absolute; top: 0; bottom: 0; width: 56px; pointer-events: none; z-index: 2;
+}
+.mode-scroll-fade--right { right: 0; background: linear-gradient(to left, rgba(20, 16, 40, 0.55), transparent); }
+.mode-scroll-fade--left { left: 0; background: linear-gradient(to right, rgba(20, 16, 40, 0.55), transparent); }
+.mode-scroll-hint {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  z-index: 3; pointer-events: none;
+  font-size: 34px; font-weight: 900; color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+  animation: modeHintNudge 1.2s ease-in-out infinite;
+}
+.mode-scroll-hint--right { right: 8px; }
+.mode-scroll-hint--left { left: 8px; transform: translateY(-50%) scaleX(-1); }
+@keyframes modeHintNudge { 0%, 100% { margin-right: 0; opacity: 0.65; } 50% { margin-right: 6px; opacity: 1; } }
 .mode-card {
   display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer;
-  width: clamp(190px, 26vw, 260px); padding: clamp(14px, 3.4vh, 26px) 12px;
+  flex: 0 0 clamp(190px, 26vw, 260px); scroll-snap-align: center; padding: clamp(14px, 3.4vh, 26px) 12px;
   transition: transform 0.1s, box-shadow 0.1s; position: relative;
 }
 .mode-card--0 { transform: rotate(-2deg); }
@@ -3306,7 +3330,8 @@ body {
   .char-show__emoji { font-size: 28px; }
   .char-show__mid, .char-show__desc { display: none; }
   .char-show__start { margin: 0 0 0 auto; width: auto; min-width: 150px; }
-  .mode-screen__cards { flex-direction: column; gap: 12px; overflow-y: auto; }
+  .mode-screen__cards { flex-direction: column; gap: 12px; overflow-y: auto; overflow-x: hidden; }
+  .mode-scroll-fade, .mode-scroll-hint { display: none; }
   .profile-card__grid { grid-template-columns: repeat(4, 1fr); }
   .menu-screen__logo { display: none; }
 }

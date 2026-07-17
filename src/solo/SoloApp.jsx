@@ -556,6 +556,23 @@ function ModeScreen({ diff, onDiff, onPick, onBack }) {
   const [modeUnlocks, setModeUnlocks] = useState(loadCoinUnlocks) // 'mode:boss' 형태로 저장
   const [buyAsk, setBuyAsk] = useState(null) // 해금 확인 대기 중인 모드 — 실수 차감 방지
   const [tierNotice, setTierNotice] = useState(null) // 보스전 티어 실력 게이트 안내
+  // 횡스크롤 어포던스 — 양 끝 도달 여부에 따라 페이드·화살표를 켜고 끈다
+  const cardsRef = useRef(null)
+  const [scrollHint, setScrollHint] = useState({ left: false, right: false })
+  function refreshScrollHint() {
+    const el = cardsRef.current
+    if (!el) return
+    setScrollHint({
+      left: el.scrollLeft > 8,
+      right: el.scrollLeft < el.scrollWidth - el.clientWidth - 8,
+    })
+  }
+  useEffect(() => {
+    refreshScrollHint() // 첫 진입: 오른쪽에 더 있음을 알린다
+    const onResize = () => refreshScrollHint()
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   function askBuyMode(m) {
     if (loadCoins() < m.price) {
       sound.step() // 코인 부족 — 카드의 가격 표시가 안내 역할
@@ -586,7 +603,10 @@ function ModeScreen({ diff, onDiff, onPick, onBack }) {
           </button>
         ))}
       </div>
-      <div className="mode-screen__cards">
+      <div className="mode-screen__scrollwrap">
+        {scrollHint.left && <><div className="mode-scroll-fade mode-scroll-fade--left" /><span className="mode-scroll-hint mode-scroll-hint--left">›</span></>}
+        {scrollHint.right && <><div className="mode-scroll-fade mode-scroll-fade--right" /><span className="mode-scroll-hint mode-scroll-hint--right">›</span></>}
+        <div className="mode-screen__cards" ref={cardsRef} onScroll={refreshScrollHint}>
         {MODE_OPTS.map((m, i) => {
           // 유료 모드(보스전): 코인으로 1회 해금 — 해금 전엔 자물쇠와 가격을 보여준다.
           // 개발자 모드(HAT_DEV: dev 서버/?devhat)에서는 꾸미기처럼 바로 열린다.
@@ -621,6 +641,7 @@ function ModeScreen({ diff, onDiff, onPick, onBack }) {
             </button>
           )
         })}
+        </div>
       </div>
       {tierNotice && (
         <div className="solo-help" onClick={() => setTierNotice(null)}>
