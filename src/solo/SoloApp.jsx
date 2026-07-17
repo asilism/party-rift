@@ -17,6 +17,7 @@ import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
 import { missionRows, recordMissionProgress, claimMission, allClearState, claimAllClear, ALL_CLEAR_REWARD } from './missions.js'
+import { recordMatchForAchievements } from './achievements.js'
 import { adsAvailable, showRewarded } from '../shared/ads.js'
 import MenuStage from './MenuStage.jsx'
 import HeroShowcase from './HeroShowcase.jsx'
@@ -147,9 +148,11 @@ export default function SoloApp() {
           }
         }
         addCoins(earn)
-        setCoinMsg({ earn, firstWin, bossRec })
         // 일일 미션 진행도 누적 (판수/승리/킬/어시/정글몹)
         recordMissionProgress({ win, kills: me.kills, assists: me.assists, jungle: me.jungleKills })
+        // 업적 누적·판정 — 새로 달성한 업적은 결과 화면 배너로(보상 코인은 즉시 지급됨)
+        const achNew = recordMatchForAchievements({ view, me, win })
+        setCoinMsg({ earn, firstWin, bossRec, achNew })
       },
     })
     netRef.current = n
@@ -234,6 +237,15 @@ export default function SoloApp() {
                   {BOSS_TIER_ICON[coinMsg.bossRec.tier] && `${BOSS_TIER_ICON[coinMsg.bossRec.tier]} ${t(BOSS_TIER_OPTS.find((o) => o.id === coinMsg.bossRec.tier)?.label || '')} `}
                   ⏱ {fmtClearTime(coinMsg.bossRec.time)}
                   {coinMsg.bossRec.isFirst ? ` 🏅 ${t('첫 토벌!')} +100` : coinMsg.bossRec.isBest ? ` 🏆 ${t('최단 기록!')}` : ''}
+                </span>
+              )}
+              {coinMsg.achNew?.length > 0 && (
+                <span className="win-banner__ach">
+                  {coinMsg.achNew.map((a) => (
+                    <span key={a.id} className="win-banner__ach-item">
+                      🏆 {t('업적 달성')}: {a.icon} <b>{t(a.name)}</b> +{a.reward}🪙
+                    </span>
+                  ))}
                 </span>
               )}
             </>
