@@ -104,6 +104,7 @@ const MODE_SCALE = {
   '3v3': { x: 1, z: 1 },
   '5v5': { x: 1.3, z: 1.32 },
   boss: { x: 1, z: 1 },
+  defense: { x: 1, z: 1 }, // 무한 방어 — 보스의 협곡 재사용
 }
 
 // 호(弧)를 짧은 벽 선분들로 근사한다 — 보스 성곽(둥지)용. 각도는 도(°), z=+가 남쪽.
@@ -522,7 +523,8 @@ function findPathFor(geo, sx, sz, tx, tz) {
 
 // 모드별 맵 객체를 만든다. 지형 데이터 + 그 지형에 묶인 헬퍼 메서드를 함께 담는다.
 export function buildMap(mode = '3v3') {
-  const base = mode === 'boss' ? BOSS_BASE : BASE // 보스전은 전용 지형(보스의 협곡)
+  const raid = mode === 'boss' || mode === 'defense' // 방어전도 보스의 협곡 지형을 쓴다
+  const base = raid ? BOSS_BASE : BASE // 보스전·방어전은 전용 지형(보스의 협곡)
   const s = MODE_SCALE[mode] || MODE_SCALE['3v3']
   const WORLD = {
     minX: base.WORLD.minX * s.x, maxX: base.WORLD.maxX * s.x,
@@ -537,7 +539,7 @@ export function buildMap(mode = '3v3') {
   //  보스전의 레드 우물은 옥좌 바로 뒤 — 보스는 성곽 안에서 잠들고, 우물 레이저가 러시를 응징.
   const FOUNTAIN_POS = {
     blue: { x: NEXUS_POS.blue.x - RESPAWN_BACK, z: NEXUS_POS.blue.z },
-    red: mode === 'boss'
+    red: raid
       ? { x: NEXUS_POS.red.x + 10, z: NEXUS_POS.red.z }
       : { x: NEXUS_POS.red.x + RESPAWN_BACK, z: NEXUS_POS.red.z },
   }
@@ -552,7 +554,7 @@ export function buildMap(mode = '3v3') {
   }
   let TOWER_SPOTS = base.TOWER_SPOTS.map((t) => ({ ...t, x: t.x * s.x, z: t.z * s.z }))
   // 보스전: 레드 진영은 보스 하나뿐 — 타워 없이 보스 소환 병사만 라인을 민다
-  if (mode === 'boss') TOWER_SPOTS = TOWER_SPOTS.filter((t) => t.team === 'blue')
+  if (raid) TOWER_SPOTS = TOWER_SPOTS.filter((t) => t.team === 'blue')
   const WALL_LINES = base.WALL_LINES.map((w) => ({
     x1: w.x1 * s.x, z1: w.z1 * s.z, x2: w.x2 * s.x, z2: w.z2 * s.z,
   }))
@@ -566,7 +568,7 @@ export function buildMap(mode = '3v3') {
   // 리스폰 존 뒤쪽 절반을 감싸는 반호 성벽을 물리 장벽으로 등록 (블루 -x / 레드 +x 절반).
   //  보스전의 레드 우물은 성곽(둥지) 돌담이 대신 지키므로 반호를 두지 않는다.
   WALLS.push(...respawnArcCircles(FOUNTAIN_POS.blue.x, FOUNTAIN_POS.blue.z, -1))
-  if (mode !== 'boss') {
+  if (!raid) {
     WALLS.push(...respawnArcCircles(FOUNTAIN_POS.red.x, FOUNTAIN_POS.red.z, 1))
   }
 
