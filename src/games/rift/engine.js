@@ -799,6 +799,8 @@ export function createGame(players, opts = {}) {
     //  이후 bossThink에서 레벨업하지 않으므로 이 값이 게임 내내 유지된다.
     if (h.isBoss) h.lvl = BOSS_LEVEL
     h.maxHp = heroMaxHp(h)
+    // 난이도 티어: 보스 체력만 생성 시 1회 가중(공격은 damageHero에서, 템포는 쿨다운에서)
+    if (h.isBoss) h.maxHp = Math.round(h.maxHp * (BOSS_TIERS[o.bossTier]?.hp || 1))
     h.hp = h.maxHp
   }
   // 봇 역할 배정(팀별): 직업이 선호하는 라인을 잡되, 겹치면 남은 자리를 채워 라인 공백을 막는다.
@@ -842,6 +844,7 @@ export function createGame(players, opts = {}) {
     mode,
     teamSize,
     botLevel: BOT_LEVELS[o.botLevel] ? o.botLevel : 'normal', // 봇 난이도(솔로 모드) — 온라인은 항상 normal
+    bossTier: BOSS_TIERS[o.bossTier] ? o.bossTier : 'normal', // 보스전 난이도 티어(보통/어려움/악몽)
     map,
     time: 0,
     countdown: COUNTDOWN_TIME,
@@ -2489,6 +2492,7 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   if (!redirected && attacker?.isBot) amount *= BOT_LEVELS[state.botLevel]?.dmg ?? 1
   if (attacker?.bossEnraged) amount *= 1.5 // 보스 광폭화
   if (attacker?.isBoss && attacker.bossPhase > 1) amount *= BOSS_PHASE_DMG[attacker.bossPhase - 1] // 페이즈 분노
+  if (!redirected && attacker?.isBoss) amount *= bossTierOf(state).atk // 난이도 티어(평타·스킬·장판 공통)
   // 수호기사 결속: 묶인 아군이 받을 피해를 수호기사가 "대신" 받는다(50%+10%×인원, 최대 90% 감소).
   //  아군 자신은 피해를 전혀 받지 않는다. 리다이렉트된 피해엔 수호기사의 방어/보호막이 다시 적용된다.
   if (!redirected && amount > 0 && victim.bindT > 0) {
@@ -4543,6 +4547,17 @@ export function bossInvuln(state, h) {
   return h.isBoss === true && (h.bossShieldT > 0 || state.time < BOSS_SLEEP_END)
 }
 
+// ── 보스전 난이도 티어 ──
+// 보통은 현행 그대로(전부 1.0) — 기존 밸런스(클리어율 30~45% 밴드)를 기준선으로 보존한다.
+// 해금 순서(보통 클리어 → 어려움 → 악몽)는 UI가 강제하고, 엔진은 주어진 티어를 그대로 적용.
+// tele(예고 시간 배율)는 악몽만 줄인다 — "배우면 깬다" 원칙상 어려움까지는 읽기 난도 불변.
+export const BOSS_TIERS = {
+  normal: { hp: 1, atk: 1, cd: 1, adds: 0, wave: 0, tele: 1 },
+  hard: { hp: 1.25, atk: 1.15, cd: 0.85, adds: 1, wave: 1, tele: 1 },
+  nightmare: { hp: 1.55, atk: 1.35, cd: 0.7, adds: 2, wave: 2, tele: 0.85 },
+}
+const bossTierOf = (state) => BOSS_TIERS[state.bossTier] || BOSS_TIERS.normal
+
 // 보스 예고 장판 생성 — stepZones('bosszone')가 경고→폭발→잔류를 처리한다.
 //  hue: 클라 표식 색조(lava 주황/frost 청/shadow 보라)
 function pushBossZone(state, h, opts) {
@@ -4554,7 +4569,8 @@ function pushBossZone(state, h, opts) {
     // 돌진 경로(from): 시전 위치 → 착지점 사이에 진행 방향 화살표(> > >)를 그린다
     ox: opts.from ? opts.from.x : null,
     oz: opts.from ? opts.from.z : null,
-    delay: opts.delay ?? 1.2, dmg: opts.dmg,
+    // 예고 시간: 악몽 티어만 15% 단축(tele 0.85) — 패턴을 아는 숙련자용 압박
+    delay: (opts.delay ?? 1.2) * bossTierOf(state).tele, dmg: opts.dmg,
     stun: opts.stun || 0, freeze: opts.freeze || 0, fear: opts.fear || 0,
     knock: opts.knock || 0, knockStun: opts.knockStun || 0, // >0이면 폭발 시 중심에서 바깥으로 밀어낸다
     life: opts.life || 0, dps: opts.dps || 0, slow: opts.slow || 0,
@@ -4715,7 +4731,7 @@ function bossThink(state, h, dt) {
       // 진군 호위 파도는 전 보스 공통 10마리 — 한번 밀리기 시작하면 14마리씩 쌓여
       // 걷잡을 수 없던 문제를 완화한다. (초반 대량 소환 국면은 위에서 14 유지)
       h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
-      bossSummon(state, h, { count: 10, ...(stage === 'elite' ? { hpMul: 1.0 } : null) })
+      bossSummon(state, h, { count: 10 + bossTierOf(state).wave, ...(stage === 'elite' ? { hpMul: 1.0 } : null) })
     }
   }
   // 소환 페이즈 동안 보스는 진군하지 않는다 — 옥좌를 지키며 성곽 안까지 덤벼드는 적만 상대한다.
@@ -4734,7 +4750,7 @@ function bossThink(state, h, dt) {
     else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
     else bossShadow(state, h, foe, { x: throne.x, z: throne.z })
     if (h.cls === 'boss_colossus' && h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
-      h.bossCd.fan = 6 * BOSS_PHASE_CD[h.bossPhase - 1]
+      h.bossCd.fan = 6 * BOSS_PHASE_CD[h.bossPhase - 1] * bossTierOf(state).cd
       bossFan(state, h, foe) // 성곽 안까지 덤빈 자에겐 삼중격 (카르곤 전용)
     }
     castAttack(state, h.id, null)
@@ -4823,7 +4839,7 @@ function bossThink(state, h, dt) {
   else bossShadow(state, h, foe, siege)
   // 파멸의 삼중격 — 카르곤 전용(전사형의 정체성). 전방 세 갈래 검기, 근거리는 겹쳐 맞는다
   if (h.cls === 'boss_colossus' && h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
-    h.bossCd.fan = 6 * BOSS_PHASE_CD[h.bossPhase - 1]
+    h.bossCd.fan = 6 * BOSS_PHASE_CD[h.bossPhase - 1] * bossTierOf(state).cd
     bossFan(state, h, foe)
   }
   // ── 행동 결심(3초 커밋): '응징'(붙은 적을 팬다)이냐 '공성'(구조물을 부순다)이냐를 정하고
@@ -4916,9 +4932,10 @@ function bossSummonAdds(state, h) {
   const blues = state.heroes.filter((e) => e.team === 'blue')
   const avgLvl = Math.round(blues.reduce((s, e) => s + e.lvl, 0) / Math.max(1, blues.length))
   const addLvl = Math.max(1, Math.max(h.lvl, avgLvl - 4))
-  for (let i = 0; i < squad.length; i++) {
-    const cls = squad[i]
-    const a = Math.PI - 0.7 + (i / (squad.length - 1)) * 1.4 // 서쪽 관문 방향 부채꼴
+  const count = squad.length + bossTierOf(state).adds // 난이도 티어: 어려움 +1, 악몽 +2
+  for (let i = 0; i < count; i++) {
+    const cls = squad[i % squad.length]
+    const a = Math.PI - 0.7 + (i / (count - 1)) * 1.4 // 서쪽 관문 방향 부채꼴
     const rr = 6 + (i % 2) * 4 + state.rng() * 3 // 반경을 엇갈려(6~13) 겹치지 않게 흩뿌린다
     pushBossZone(state, h, {
       x: h.x + Math.cos(a) * rr, z: h.z + Math.sin(a) * rr, r: 3.4,
@@ -4954,7 +4971,7 @@ function spawnShadowAdd(state, spec, x, z) {
 //  회전 격노는 필사 국면에 길어진다(3초→4.5초)
 function bossColossus(state, h, foe) {
   const p = h.bossPhase || 1
-  const cdMul = BOSS_PHASE_CD[p - 1]
+  const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd // 페이즈 가속 × 난이도 티어
   // 평타 사거리가 아군보다 길어진 대신, 자기 중심 스킬은 "품에 들어온 적"이 있어야 나간다
   const nearFoe = foe && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && dist(h, e) < 9)
   if (h.bossCd.a <= 0 && nearFoe) {
@@ -5034,7 +5051,7 @@ function bossColossus(state, h, foe) {
 //  격류는 필사에 V자 두 줄기로 갈라지고, 낙하는 국면당 표적이 는다(4→5→6)
 function bossArchmage(state, h, foe) {
   const p = h.bossPhase || 1
-  const cdMul = BOSS_PHASE_CD[p - 1]
+  const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd // 페이즈 가속 × 난이도 티어
   // 근접 견제 '염력 폭발'(2페이즈+): 몸에 붙은 적이 있으면 강력한 염력을 방출해
   //  자기 중심에서 바깥으로 크게 밀쳐낸다 — 근접이 달라붙어 순삭하던 걸 끊는다.
   //  예고 0.8초(모여드는 냉기 링)를 보고 미리 빠지면 안 밀리고 안 맞는다.
@@ -5106,7 +5123,7 @@ function bossArchmage(state, h, foe) {
 //  포효는 넓어지고(11→12.5→14) 필사 국면엔 혼자만 있어도 내지른다
 function bossShadow(state, h, foe, siege) {
   const p = h.bossPhase || 1
-  const cdMul = BOSS_PHASE_CD[p - 1]
+  const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd // 페이즈 가속 × 난이도 티어
   if (h.bossCd.a <= 0) {
     let weakest = null
     for (const e of state.heroes) {
