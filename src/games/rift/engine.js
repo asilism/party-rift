@@ -752,6 +752,8 @@ function makeHeroState(p, cls, pos, map, rng) {
       deaths: 0,
       assists: 0,
       jungleKills: 0, // 소형 정글몹(늑대/멧돼지/골렘) 처치 수 — 일일 미션 집계용
+      // 업적 집계용 카운터 — 막타 기준 귀속(용/이무기/병사), bestStreak은 한 목숨 최다 연속킬
+      dragonKills: 0, baronKills: 0, soldierKills: 0, bestStreak: 0,
       deathStreak: 0, // 킬/어시 없이 연속으로 죽은 횟수 — 잡힐 때 킬골드를 깎는다(킬/어시 시 0)
       killStreak: 0, // 안 죽고 쌓은 연속 킬 — 잡히면 현상금이 붙는다(죽으면 0)
       damagedBy: {}, // 적영웅 id → 마지막으로 맞은 시각 (어시스트 판정, 사망 시 비움)
@@ -2616,6 +2618,7 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
     killer.kills++
     killer.deathStreak = 0 // 킬을 따면 연속 데스 디버프 해제
     killer.killStreak++ // 안 죽고 이어가면 다음에 잡힐 때 현상금이 붙는다
+    if ((killer.bestStreak || 0) < killer.killStreak) killer.bestStreak = killer.killStreak // 업적: 한 목숨 최다 연속킬
     state.kills[killer.team]++
     awardXp(state, killer.team, victim, 90 + 15 * victim.lvl, killer)
     // 기본값 + 현상금(연속 킬) − 감소(연속 데스). 최저 KILL_BOUNTY_MIN 보장.
@@ -2646,6 +2649,7 @@ function damageMinion(state, m, amount, attacker) {
   if (attacker?.team) awardXp(state, attacker.team, m, MINION_XP, attacker)
   // 막타 골드는 영웅에게만 (병사/타워가 잡으면 없음 — 막타 챙기는 재미)
   if (attacker?.items) awardGold(state, attacker, m.ranged ? GOLD_MINION_RANGED : GOLD_MINION_MELEE, m.x, m.z)
+  if (attacker?.soldierKills != null) attacker.soldierKills++ // 업적: 병사 막타 수
 }
 
 function damageMonster(state, m, amount, attacker) {
@@ -2666,7 +2670,9 @@ function damageMonster(state, m, amount, attacker) {
     if (attacker?.items) awardGold(state, attacker, spec.gold, m.x, m.z)
     if (attacker.jungleKills != null) attacker.jungleKills++
   } else {
-    // 용/이무기: 팀 전체 경험치 + 버프 + 골드
+    // 용/이무기: 팀 전체 경험치 + 버프 + 골드 (막타 영웅에겐 업적 카운트)
+    if (m.kind === 'dragon') { if (attacker.dragonKills != null) attacker.dragonKills++ }
+    else if (attacker.baronKills != null) attacker.baronKills++
     teamGold(state, attacker.team, m.kind === 'dragon' ? GOLD_DRAGON : GOLD_BARON)
     for (const h of state.heroes) {
       if (h.team !== attacker.team) continue
@@ -6196,6 +6202,9 @@ export function makeView(state) {
       assists: h.assists,
       killStreak: h.killStreak, // 현상금 표식용 (안 죽고 쌓은 연속 킬)
       jungleKills: h.jungleKills || 0, // 일일 미션(정글몹 처치) 집계용
+      // 업적 집계용 — 경기 종료 시 onFinish가 읽는다
+      dragonKills: h.dragonKills || 0, baronKills: h.baronKills || 0,
+      soldierKills: h.soldierKills || 0, bestStreak: h.bestStreak || 0,
       mvSpeed: r2d(heroSpeed(h)), // 클라 이동 예측용(현재 이동속도)
     })),
     minions: state.minions.map((m) => ({
