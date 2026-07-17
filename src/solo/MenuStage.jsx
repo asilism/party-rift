@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Rift3D from '../games/rift/Rift3D.jsx'
+import { createRiftScene } from '../games/rift/scene.js'
+import { buildMap } from '../games/rift/map.js'
 import { riftNet } from '../games/rift/netgame.js'
 import { createLocalNet } from '../net/localNet.js'
 import { useRealtimeGame } from '../net/useRealtimeGame.js'
@@ -69,6 +71,52 @@ function StageView({ net, onRematch }) {
       {view?.phase === 'play' && (
         <Rift3D sample={sample} myId={followId} mode="3v3" hitFx={false} gfx="med" />
       )}
+      <div className="menustage__tint" />
+    </div>
+  )
+}
+
+
+// ── 콜로세움 무대 — 빈 경기장을 느린 궤도 카메라로 담는다(브래킷/라운드 결과 배경).
+//  시뮬 없이 씬만 돌린다: 영웅·전투가 없는 "숨 고르는 관중석 뷰"가 결과 화면의 무드를 만든다.
+export function ArenaStage() {
+  const canvasRef = useRef(null)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const scene = createRiftScene(canvas, buildMap('arena'), 'med')
+    const holder = canvas.parentElement
+    const fit = () => scene.resize(holder.clientWidth, holder.clientHeight)
+    const ro = new ResizeObserver(fit)
+    ro.observe(holder)
+    fit()
+    // 씬 render가 요구하는 최소 뷰 — 전부 비어 있고 orbitCam만 켠다
+    const stub = {
+      orbitCam: true, mode: 'arena', status: 'playing', phase: 'play', time: 0, winner: null,
+      heroes: [], minions: [], towers: [], zones: [], projectiles: [], monsters: [], fx: [],
+      holes: [], holeWarns: [], healOrbs: [], feed: [],
+      kills: { blue: 0, red: 0 },
+      nexus: { blue: { hp: 1, maxHp: 1 }, red: { hp: 1, maxHp: 1 } },
+    }
+    let raf
+    let last = 0
+    const t0 = performance.now()
+    const loop = (t) => {
+      raf = requestAnimationFrame(loop)
+      if (t - last < 1000 / 30 - 1.5) return // 배경은 30fps면 충분
+      last = t
+      stub.time = (t - t0) / 1000
+      scene.render(stub, null)
+    }
+    raf = requestAnimationFrame(loop)
+    return () => {
+      cancelAnimationFrame(raf)
+      ro.disconnect()
+      scene.dispose()
+    }
+  }, [])
+  return (
+    <div className="menustage" aria-hidden="true">
+      <canvas ref={canvasRef} className="rift__canvas" />
       <div className="menustage__tint" />
     </div>
   )

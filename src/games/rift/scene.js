@@ -6141,6 +6141,14 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     const want = _want
     let offY = 42
     let offZ = 30
+    // 빈 무대 궤도 카메라 — 콜로세움 로비 배경: 천천히 돌며 경기장을 담는다
+    if (view.orbitCam) {
+      const a = view.time * 0.07
+      camera.position.set(Math.cos(a) * 52, 30 + Math.sin(view.time * 0.19) * 4, Math.sin(a) * 52)
+      camera.lookAt(0, 2, 0)
+      renderer.render(scene, camera)
+      return
+    }
     const endNexus = view.status === 'finished' && loser ? (finaleBoss || NEXUS_POS[loser]) : null
     const introBoss = !endNexus && view.mode === 'boss' && view.status === 'countdown'
       ? view.heroes?.find((h) => h.cls?.startsWith('boss_'))
