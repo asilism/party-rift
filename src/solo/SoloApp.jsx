@@ -17,7 +17,7 @@ import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
 import { missionRows, recordMissionProgress, claimMission, allClearState, claimAllClear, ALL_CLEAR_REWARD } from './missions.js'
-import { recordMatchForAchievements } from './achievements.js'
+import { recordMatchForAchievements, achievementRows } from './achievements.js'
 import { adsAvailable, showRewarded } from '../shared/ads.js'
 import MenuStage from './MenuStage.jsx'
 import HeroShowcase from './HeroShowcase.jsx'
@@ -797,6 +797,7 @@ const RECORD_TABS = [
   { id: '3v3', label: '3 대 3' },
   { id: '5v5', label: '5 대 5' },
   { id: 'boss', label: '보스전' },
+  { id: 'ach', label: '업적' },
 ]
 
 // 직업 전적 카드(3v3/5v5 공용) — 한 모드의 직업별 승패·KDA
@@ -895,9 +896,45 @@ function RecordsScreen({ onBack }) {
           </button>
         ))}
       </div>
-      {tab === 'boss'
-        ? <BossRecordCard bossRecs={bossRecs} />
-        : <ClassRecordCard records={byMode[tab] || {}} />}
+      {tab === 'ach'
+        ? <AchievementCard />
+        : tab === 'boss'
+          ? <BossRecordCard bossRecs={bossRecs} />
+          : <ClassRecordCard records={byMode[tab] || {}} />}
+    </div>
+  )
+}
+
+// ── 업적 탭 — 진행바·달성 여부·보상. 달성한 것이 위로 오지 않게 정의 순서 유지(시리즈가 이어져 보이게) ──
+function AchievementCard() {
+  const rows = achievementRows()
+  const doneCount = rows.filter((r) => r.done).length
+  return (
+    <div className="toy-card records-card records-card--ach">
+      <div className="ach-summary">
+        🏆 {doneCount} / {rows.length} {t('달성')}
+      </div>
+      <div className="ach-list">
+        {rows.map((r) => (
+          <div key={r.id} className={`ach-row ${r.done ? 'ach-row--done' : ''}`}>
+            <span className="ach-row__icon">{r.icon}</span>
+            <div className="ach-row__body">
+              <div className="ach-row__head">
+                <b className="ach-row__name">{t(r.name)}</b>
+                {r.title && <span className="ach-row__title-badge" title={t('칭호')}>🎖 {t(r.title)}</span>}
+                <span className="ach-row__reward">{r.done ? '✅' : `🪙 ${r.reward}`}</span>
+              </div>
+              <div className="ach-row__desc">{t(r.desc)}</div>
+              {!r.done && (
+                <div className="ach-row__track">
+                  <div className="ach-row__fill" style={{ width: `${Math.min(100, (r.cur / r.target) * 100)}%` }} />
+                  <span className="ach-row__num">{r.cur} / {r.target}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
