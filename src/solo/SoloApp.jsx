@@ -18,7 +18,7 @@ import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
 import { missionRows, recordMissionProgress, claimMission, allClearState, claimAllClear, ALL_CLEAR_REWARD } from './missions.js'
-import { recordMatchForAchievements, achievementRows } from './achievements.js'
+import { recordMatchForAchievements, achievementRows, evaluateAchievements } from './achievements.js'
 import { createTournament, nextRound, resolveRound, userPlacement, arenaLevelFor, ARENA_PLACE_COIN } from './colosseum.js'
 import Fireworks from '../shared/Fireworks.jsx'
 import { adsAvailable, showRewarded } from '../shared/ads.js'
@@ -208,6 +208,7 @@ export default function SoloApp() {
     const place = userPlacement(tour) || 6
     addCoins(ARENA_PLACE_COIN[place] || 10)
     recordArenaRun(place)
+    evaluateAchievements() // 완주/우승 업적 즉시 지급(라이브 게터)
     setTour(null)
     go('menu')
   }
@@ -960,6 +961,7 @@ const RECORD_TABS = [
   { id: '5v5', label: '5 대 5' },
   { id: 'boss', label: '보스전' },
   { id: 'defense', label: '방어전' },
+  { id: 'arena', label: '콜로세움' },
   { id: 'ach', label: '업적' },
 ]
 
@@ -1061,8 +1063,10 @@ function RecordsScreen({ onBack }) {
       </div>
       {tab === 'ach'
         ? <AchievementCard />
-        : tab === 'defense'
-          ? <DefenseRecordCard />
+        : tab === 'arena'
+          ? <ArenaRecordCard />
+          : tab === 'defense'
+            ? <DefenseRecordCard />
           : tab === 'boss'
             ? <BossRecordCard bossRecs={bossRecs} />
             : <ClassRecordCard records={byMode[tab] || {}} />}
@@ -1191,6 +1195,23 @@ function ColosseumScreen({ tour, stage, onEnter, onSkipRound, onNextRound, onFin
           </p>
           <div className="colo-final__coin">🪙 +{ARENA_PLACE_COIN[place] || 10}</div>
           <button className="toy-btn toy-btn--yellow toy-btn--big colo-cta" onClick={onFinish}>{t('보상 받기')}</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── 콜로세움 탭 — 우승·최고 순위·완주 ──
+function ArenaRecordCard() {
+  const rec = loadArenaRecords()
+  return (
+    <div className="toy-card records-card records-card--defense">
+      {rec.runs === 0 ? (
+        <p className="records-card__empty">{t('아직 콜로세움에 서 본 적이 없어 — 토너먼트에 도전해 봐! 🏟️')}</p>
+      ) : (
+        <div className="defense-rec">
+          <div className="defense-rec__best">🏆 {t('우승')} <b>{rec.wins}</b>{t('회')}</div>
+          <div className="defense-rec__sub">🥇 {t('최고 순위')} {rec.best}{t('위')} · 🎮 {rec.runs}{t('판')}</div>
         </div>
       )}
     </div>

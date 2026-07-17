@@ -1,4 +1,4 @@
-import { loadAchState, saveAchState, addCoins, loadRiftRecords, loadOwnedHats, loadOwnedCostumes, loadOwnedWeapons } from '../shared/storage.js'
+import { loadAchState, saveAchState, addCoins, loadRiftRecords, loadOwnedHats, loadOwnedCostumes, loadOwnedWeapons, loadArenaRecords } from '../shared/storage.js'
 import { unlockedCount } from './unlocks.js'
 
 // 업적 — 누적 카운터(경기 종료마다 갱신) 기준으로 판정하고, 달성 즉시 코인을 지급한다.
@@ -55,6 +55,11 @@ export const ACHIEVEMENTS = [
   { id: 'games_30', icon: '📅', name: '단골 손님', desc: '30판 출전', get: (c) => c.games || 0, target: 30, reward: 80 },
   { id: 'games_100', icon: '📅', name: '베테랑', desc: '100판 출전', get: (c) => c.games || 0, target: 100, reward: 150 },
   { id: 'games_300', icon: '📅', name: '조디악의 전설', desc: '300판 출전', get: (c) => c.games || 0, target: 300, reward: 300, title: '조디악의 전설' },
+
+  // ── 콜로세움 (라이브 게터 — 토너먼트 완주 기록에서 직접 센다) ──
+  { id: 'arena_first', icon: '🏟️', name: '검투사 데뷔', desc: '콜로세움 토너먼트 완주', get: () => loadArenaRecords().runs, target: 1, reward: 80 },
+  { id: 'arena_final', icon: '🥈', name: '결승의 모래바람', desc: '콜로세움 2위 이내', get: () => (loadArenaRecords().best != null && loadArenaRecords().best <= 2 ? 1 : 0), target: 1, reward: 150 },
+  { id: 'arena_champion', icon: '👑', name: '콜로세움 챔피언', desc: '콜로세움 우승', get: () => loadArenaRecords().wins, target: 1, reward: 250, title: '콜로세움 챔피언' },
 
   // ── 무한 방어 ──
   { id: 'defense_10', icon: '🌊', name: '방파제', desc: '한 판에 10번째 파도 도달', get: (c) => c.defenseBestWave || 0, target: 10, reward: 80 },
@@ -121,6 +126,22 @@ export function recordMatchForAchievements({ view, me, win }) {
     }
   }
   saveAchState(st)
+  return newly
+}
+
+// 카운터 갱신 없이 판정만 — 경기 밖 이벤트(토너먼트 완주 등) 직후 라이브 게터 업적을 즉시 지급
+export function evaluateAchievements() {
+  const st = loadAchState()
+  const newly = []
+  for (const def of ACHIEVEMENTS) {
+    if (st.done[def.id]) continue
+    if (progressOf(def, st.cnt) >= def.target) {
+      st.done[def.id] = Date.now()
+      addCoins(def.reward)
+      newly.push(def)
+    }
+  }
+  if (newly.length) saveAchState(st)
   return newly
 }
 
