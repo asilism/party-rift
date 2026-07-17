@@ -170,6 +170,28 @@ export function recordDefenseRun(wave) {
   return { isBest, bestWave: next.bestWave }
 }
 
+// ── 콜로세움 기록 — 출전·우승·최고 순위 ──
+const ARENA_REC_KEY = 'bgp.rift.arenaRecords.v1'
+
+export function loadArenaRecords() {
+  try {
+    const v = JSON.parse(localStorage.getItem(ARENA_REC_KEY))
+    if (v && typeof v === 'object') return { runs: v.runs || 0, wins: v.wins || 0, best: v.best || null }
+  } catch { /* 무시 */ }
+  return { runs: 0, wins: 0, best: null }
+}
+
+// 토너먼트 1회 완주 기록 — { isBest(최고 순위 갱신), best } 반환
+export function recordArenaRun(place) {
+  const rec = loadArenaRecords()
+  const isBest = rec.best == null || place < rec.best
+  const next = { runs: rec.runs + 1, wins: rec.wins + (place === 1 ? 1 : 0), best: isBest ? place : rec.best }
+  try {
+    localStorage.setItem(ARENA_REC_KEY, JSON.stringify(next))
+  } catch { /* 무시 */ }
+  return { isBest, best: next.best }
+}
+
 // ── 칭호 — 업적 보상으로 얻고, 장착하면 메뉴 프로필 칩·전투 이름표에 붙는다 ──
 const TITLE_KEY = 'bgp.rift.title.v1'
 

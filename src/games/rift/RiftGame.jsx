@@ -96,7 +96,7 @@ export default function RiftGame({ onExit, net, bonus = null, adButton = null })
       onUseItem={useItemSlot}
       rtt={rtt}
       onTogglePause={net.rtPause ? () => net.rtPause(!view.paused) : null}
-      exitLabel={net.local ? t('🔁 다시 하기') : t('🔁 새 매치 찾기')}
+      exitLabel={view.mode === 'arena' ? t('📋 결과 보기') : net.local ? t('🔁 다시 하기') : t('🔁 새 매치 찾기')}
       bonus={bonus}
       adButton={adButton}
       onExit={onExit}
@@ -476,7 +476,9 @@ function RiftPlay({
   // 승리 메시지를 한 글자씩 나타나게 — "파랑팀 승리"를 글자 단위로 쪼갠다(공백은 자리만 차지).
   // 보스전은 토벌 서사로: "카르곤 토벌!" / "토벌 실패...", 방어전은 도달 파도가 곧 성적표.
   const raidBoss = hud.mode === 'boss' ? hud.heroes?.find((h) => h.cls?.startsWith('boss_')) : null
-  const winText = hud.mode === 'defense'
+  const winText = hud.mode === 'arena'
+    ? (hud.winner === (me?.team || 'blue') ? `🏟️ ${t('승리!')}` : `💥 ${t('패배')}...`)
+    : hud.mode === 'defense'
     ? `${hud.wave || 0}${t('번째 파도까지 버텼다!')}`
     : raidBoss
       ? hud.winner === 'blue' ? `${raidBoss.name} ${t('토벌!')}` : t('토벌 실패...')
@@ -522,6 +524,21 @@ function RiftPlay({
           {hud.mode === 'boss' && !finished && (
             <div className="boss-bar-slot">
               <BossRaidBar hud={hud} />
+            </div>
+          )}
+          {/* 콜로세움: 페이즈 필 — 준비/전투 타이머·붕괴 경고 (같은 슬롯) */}
+          {hud.mode === 'arena' && !finished && (
+            <div className="boss-bar-slot">
+              <div className={`boss-bar arena-bar ${hud.arenaPhase === 'sudden' ? 'arena-bar--sudden' : ''}`}>
+                <span className="boss-bar__face">{hud.arenaPhase === 'shop' ? '🛒' : hud.arenaPhase === 'sudden' ? '☄️' : '⚔️'}</span>
+                <span className="boss-bar__name">
+                  {hud.arenaPhase === 'shop'
+                    ? `${t('준비')} ${Math.max(0, Math.ceil(hud.arenaT || 0))}s`
+                    : hud.arenaPhase === 'sudden'
+                      ? t('붕괴 시작!')
+                      : `${Math.floor((hud.arenaT || 0) / 60)}:${String(Math.max(0, Math.floor((hud.arenaT || 0) % 60))).padStart(2, '0')}`}
+                </span>
+              </div>
             </div>
           )}
           {/* 무한 방어: 파도 카운터 + 다음 파도 타이머 (같은 슬롯) */}
@@ -692,7 +709,7 @@ function RiftPlay({
       )}
 
       {/* 우물 안 또는 사망 중에 뜨는 상점 버튼 */}
-      {me && !finished && meCanShop && !shopOpen && (
+      {me && !finished && meCanShop && !shopOpen && (hud.mode !== 'arena' || hud.arenaPhase === 'shop') && (
         <button className="rift-shop-fab" onClick={() => setShopOpen(true)}>
           🛒 <small>{me.respawnT > 0 ? t('상점 (대기중)') : t('상점')}</small>
         </button>

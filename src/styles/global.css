@@ -3507,10 +3507,64 @@ body {
 .boss-rec-row__tier { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .boss-rec-row__tier.is-empty { opacity: 0.35; font-weight: 500; }
 
+/* 콜로세움 HUD 필 — 준비/전투/붕괴 */
+.arena-bar { border-color: rgba(255, 200, 90, 0.4); }
+.arena-bar--sudden { border-color: rgba(255, 90, 60, 0.7); animation: bossShieldGlow 1.2s ease-in-out infinite; }
+
 /* 방어전 HUD 바 — 파도 번호 + 다음 파도 타이머 */
 .defense-bar { border-color: rgba(79, 195, 255, 0.35); }
 .defense-bar .boss-bar__name { max-width: none; }
 .defense-bar__next { margin-left: auto; flex-shrink: 0; color: #9fdcff; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* ── 콜로세움 — 대진·결과·최종 (토이 스킨) ── */
+.colo-screen { justify-content: flex-start; padding-top: 6px; overflow-y: auto; }
+.colo-card { width: min(94vw, 560px); margin: 0 auto; padding: 12px 16px 14px; position: relative; }
+.colo-card__head { display: flex; align-items: baseline; justify-content: space-between; font-size: 16px; color: var(--ink); margin-bottom: 8px; }
+.colo-deduct { font-size: 12px; font-weight: 900; color: #d33; background: rgba(220, 50, 50, 0.1); border-radius: 99px; padding: 2px 10px; }
+.colo-faces { display: inline-flex; gap: 2px; font-size: 20px; line-height: 1; }
+.colo-faces--big { font-size: 34px; gap: 6px; }
+.colo-vs { font-weight: 900; font-size: 12px; color: #9a8fb8; margin: 0 8px; }
+.colo-vs--big { font-size: 18px; margin: 0 14px; }
+.colo-pairs { display: flex; flex-direction: column; gap: 6px; }
+.colo-pair { display: flex; align-items: center; justify-content: center; padding: 7px 10px; border-radius: 12px; background: rgba(43, 35, 80, 0.05); position: relative; }
+.colo-pair--mine { background: rgba(255, 207, 77, 0.18); box-shadow: inset 0 0 0 2px rgba(255, 183, 40, 0.55); }
+.colo-pair__tag { position: absolute; right: 10px; font-size: 11px; font-weight: 900; color: #b8860b; }
+.colo-pair--bye { background: rgba(43, 35, 80, 0.03); opacity: 0.75; }
+.colo-bye { margin-left: 10px; font-size: 12.5px; color: #7a7198; font-weight: 700; }
+.colo-cta { margin-top: 12px; width: 100%; text-align: center; }
+/* 내 경기 결과 배너 */
+.colo-myresult { display: flex; flex-direction: column; align-items: center; padding: 10px 0 8px; border-radius: 14px; margin-bottom: 8px; }
+.colo-myresult--win { background: linear-gradient(180deg, rgba(90, 200, 120, 0.16), transparent); }
+.colo-myresult--lose { background: linear-gradient(180deg, rgba(220, 80, 80, 0.14), transparent); }
+.colo-myresult > :first-child, .colo-myresult .colo-vs--big { display: inline-flex; }
+.colo-myresult { flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; }
+.colo-myresult__text { width: 100%; text-align: center; font-size: 20px; font-weight: 900; color: var(--ink); margin-top: 4px; }
+/* 다른 경기 */
+.colo-others { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-bottom: 8px; }
+.colo-other { display: flex; align-items: center; background: rgba(43, 35, 80, 0.05); border-radius: 99px; padding: 3px 12px; font-size: 13px; }
+.colo-other__win { margin-left: 6px; font-size: 11px; color: #2f9e57; font-weight: 900; }
+.colo-w { filter: none; }
+.colo-l { filter: saturate(0.4); opacity: 0.6; }
+/* 포인트 보드 */
+.colo-board { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+.colo-row { display: flex; align-items: center; gap: 8px; padding: 3px 8px; border-radius: 10px; }
+.colo-row--me { background: rgba(255, 207, 77, 0.16); }
+.colo-row--dead { opacity: 0.45; }
+.colo-row__name { flex: 1; font-size: 12.5px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.colo-pts { display: flex; align-items: center; gap: 6px; width: 150px; }
+.colo-pts__bar { flex: 1; height: 9px; border-radius: 5px; background: rgba(43, 35, 80, 0.12); overflow: hidden; }
+.colo-pts__fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, #ff8a5c, #ffd34d); transition: width 0.5s ease; }
+.colo-pts__num { font-size: 13px; width: 24px; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.colo-pts__delta { font-size: 11px; font-weight: 900; color: #d33; animation: coloDelta 0.9s ease-out; }
+@keyframes coloDelta { 0% { transform: translateY(-8px) scale(1.4); opacity: 0; } 40% { opacity: 1; } 100% { transform: none; } }
+.colo-elim { text-align: center; font-size: 13px; font-weight: 800; color: #b03030; margin: 4px 0 2px; }
+/* 최종 */
+.colo-card--final { text-align: center; padding: 22px 16px; }
+.colo-final__trophy { font-size: 64px; line-height: 1; animation: coloTrophy 0.7s ease-out; }
+@keyframes coloTrophy { 0% { transform: scale(0.2) rotate(-16deg); opacity: 0; } 60% { transform: scale(1.15); } 100% { transform: none; opacity: 1; } }
+.colo-final__place { font-size: 30px; margin: 8px 0 2px; color: var(--ink); }
+.colo-final__sub { color: #7a7198; margin: 0 0 10px; }
+.colo-final__coin { font-size: 22px; font-weight: 900; color: #c8860a; margin-bottom: 6px; }
 
 /* 방어전 전적 카드 */
 .defense-rec { text-align: center; padding: 10px 0; }

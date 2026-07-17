@@ -2987,7 +2987,7 @@ function stepArena(state, dt) {
     const chunks = Math.min(1 + Math.floor((state.arenaWave - 1) / 2), 3)
     for (let i = 0; i < chunks; i++) {
       const p = arenaPickHole(state)
-      if (p) state.holeWarns.push({ x: p.x, z: p.z, r: ARENA_HOLE_R, at: state.time + ARENA_WARN_T })
+      if (p) state.holeWarns.push({ id: state.nextId++, x: p.x, z: p.z, r: ARENA_HOLE_R, at: state.time + ARENA_WARN_T })
     }
   }
   // 경고 만료 → 구멍 확정 + 그 위의 영웅 추락 (동시 전멸은 아래 전멸 판정에서 체력→골드→랜덤)
@@ -2998,7 +2998,7 @@ function stepArena(state, dt) {
       const prefall = { blue: { hp: 0, gold: 0 }, red: { hp: 0, gold: 0 } }
       const fallen = []
       for (const w of due) {
-        state.holes.push({ x: w.x, z: w.z, r: w.r })
+        state.holes.push({ id: w.id, x: w.x, z: w.z, r: w.r })
         pushFx(state, 'descend', w.x, w.z, w.r, null, 1.5) // 하늘 광선 — 바닥이 뜯겨 나간다
         for (const h of state.heroes) {
           if (h.respawnT > 0 || h.hp <= 0 || fallen.includes(h)) continue
@@ -6543,7 +6543,7 @@ export function makeView(state) {
     arenaPhase: state.arenaPhase, // 콜로세움: shop/fight/sudden (HUD 페이즈 표시)
     arenaT: r2d(state.arenaT), // 현재 페이즈 남은 시간
     holes: state.holes, // 붕괴 구멍(렌더러: 어두운 구덩이)
-    holeWarns: state.holeWarns.map((w) => ({ x: w.x, z: w.z, r: w.r, t: r2d(w.at - state.time) })), // 경고 장판
+    holeWarns: state.holeWarns.map((w) => ({ id: w.id, x: w.x, z: w.z, r: w.r, t: r2d(w.at - state.time) })), // 경고 장판
     wave: state.wave, // 무한 방어: 현재 파도(HUD 카운터·종료 기록)
     defWaveT: r2d(state.defWaveT), // 무한 방어: 다음 파도까지(HUD 타이머)
     nexusPos: state.map.NEXUS_POS, // 시야(inSight) 계산용
