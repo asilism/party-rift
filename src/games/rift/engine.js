@@ -238,6 +238,14 @@ export const CLASSES = {
     skill2: { name: '공포의 포효', icon: '😱', cd: 16, desc: '주변 모두에게 공포 — 통제를 잃는다' },
     ult: { name: '어둠걸음', icon: '🌫️', cd: 26, desc: '어둠에 스며 모습을 감추고 빨라진다' },
   },
+  boss_thorn: {
+    boss: true, name: '가시군주', icon: '🌵',
+    desc: '가시와 낙인의 자연형 보스 — 뭉치면 터지고, 무턱대고 때리면 찔린다',
+    hp: 21500, hpLvl: 700, atk: 88, atkLvl: 7, range: 14.0, atkCd: 0.95, speed: 7.2, def: 0.55,
+    skill: { name: '가시 투척', icon: '🌿', cd: 8, desc: '가시덩굴이 직선으로 뻗는다 — 옆으로 비켜라' },
+    skill2: { name: '가시밭', icon: '🥀', cd: 14, desc: '발밑에 가시덤불 — 밟으면 아프고 느려진다' },
+    ult: { name: '가시 낙인', icon: '💥', cd: 20, desc: '영웅들에게 낙인 — 곧 터진다, 흩어져라!' },
+  },
 }
 export const BOSS_IDS = Object.keys(CLASSES).filter((c) => CLASSES[c].boss)
 export const CLASS_IDS = Object.keys(CLASSES).filter((c) => !CLASSES[c].boss)
@@ -2501,6 +2509,10 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   if (attacker?.bossEnraged) amount *= 1.5 // 보스 광폭화
   if (attacker?.isBoss && attacker.bossPhase > 1) amount *= BOSS_PHASE_DMG[attacker.bossPhase - 1] // 페이즈 분노
   if (!redirected && attacker?.isBoss) amount *= bossTierOf(state).atk // 난이도 티어(평타·스킬·장판 공통)
+  // 가시갑옷: 반사창 동안 보스를 때리면 35%를 되받는다(반사 피해는 다시 반사되지 않는다)
+  if (victim.isBoss && victim.thornArmorT > 0 && attacker && !redirected && attacker.hp > 0 && !attacker.isBoss) {
+    damageHero(state, attacker, amount * 0.35, victim, true)
+  }
   // 수호기사 결속: 묶인 아군이 받을 피해를 수호기사가 "대신" 받는다(50%+10%×인원, 최대 90% 감소).
   //  아군 자신은 피해를 전혀 받지 않는다. 리다이렉트된 피해엔 수호기사의 방어/보호막이 다시 적용된다.
   if (!redirected && amount > 0 && victim.bindT > 0) {
@@ -2978,6 +2990,21 @@ function stepHero(state, h, dt) {
   h.stealthT = Math.max(0, h.stealthT - dt)
   h.fearT = Math.max(0, h.fearT - dt)
   h.hasteT = Math.max(0, h.hasteT - dt)
+  if (h.thornArmorT > 0) h.thornArmorT = Math.max(0, h.thornArmorT - dt) // 가시갑옷 반사창
+  // 가시 낙인: 시한이 다하면 낙인자 위치에서 폭발 — 반경 안 아군 전원(본인 포함) 피해
+  if (h.thornBombT > 0) {
+    h.thornBombT -= dt
+    if (h.thornBombT <= 0) {
+      h.thornBombT = 0
+      const from = state.heroes.find((b) => b.id === h.thornBombFrom) || null
+      pushFx(state, 'quake', h.x, h.z, 4.5, 'red', 1.0)
+      for (const o of state.heroes) {
+        if (o.team !== h.team || o.respawnT > 0) continue
+        if (dist(h, o) > 4.5) continue
+        damageHero(state, o, h.thornBombDmg || 0, from)
+      }
+    }
+  }
   if (h.tauntT > 0 && (h.tauntT = Math.max(0, h.tauntT - dt)) === 0) h.tauntBy = null
   h.revealT = Math.max(0, h.revealT - dt)
   h.aggroT = Math.max(0, h.aggroT - dt)
@@ -4590,7 +4617,7 @@ const bossPhaseOf = (h) => (h.hp / h.maxHp > BOSS_PHASE_HP[0] ? 1 : h.hp / h.max
 const BOSS_PHASE_CD = [1, 0.8, 0.45] // 페이즈별 스킬 쿨타임 배율 — 필사(3)는 거의 논스톱 발악
 const BOSS_PHASE_SUMMON = [1, 0.78, 0.55] // 페이즈별 병사 소환 주기 배율
 const BOSS_PHASE_DMG = [1, 1.1, 1.2] // 페이즈별 영웅 피해 배율
-const BOSS_HUE = { boss_colossus: 'lava', boss_archmage: 'frost', boss_shadow: 'shadow' } // 예고 장판 색조
+const BOSS_HUE = { boss_colossus: 'lava', boss_archmage: 'frost', boss_shadow: 'shadow', boss_thorn: 'venom' } // 예고 장판 색조
 const BOSS_AWAKEN_T = 30 // 국면 전환 각성 휴지기(초) — 무적·정지, 아군의 재정비/파밍 시간
 const BOSS_AGGRO = 16 // 이 거리 안의 영웅을 상대한다(그 밖이면 진군)
 const BOSS_LEASH = 18 // 진군 축(공성 목표)에서 이 이상 벗어난 적은 쫓지 않는다 — 술래잡기 방지
@@ -4801,6 +4828,7 @@ function bossThink(state, h, dt) {
     }
     if (h.cls === 'boss_colossus') bossColossus(state, h, foe)
     else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
+    else if (h.cls === 'boss_thorn') bossThorn(state, h, foe)
     else bossShadow(state, h, foe, { x: throne.x, z: throne.z })
     if (h.cls === 'boss_colossus' && h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
       h.bossCd.fan = 6 * BOSS_PHASE_CD[h.bossPhase - 1] * bossTierOf(state).cd
@@ -4889,6 +4917,7 @@ function bossThink(state, h, dt) {
   // 타입별 스킬 로테이션 (siege = 진군 축 — 습격류 스킬이 축을 벗어나지 않게)
   if (h.cls === 'boss_colossus') bossColossus(state, h, foe)
   else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
+  else if (h.cls === 'boss_thorn') bossThorn(state, h, foe)
   else bossShadow(state, h, foe, siege)
   // 파멸의 삼중격 — 카르곤 전용(전사형의 정체성). 전방 세 갈래 검기, 근거리는 겹쳐 맞는다
   if (h.cls === 'boss_colossus' && h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
@@ -4972,6 +5001,7 @@ function bossSummon(state, h, { count = 6, hpMul = 1.3 } = {}) {
 const BOSS_ADD_SQUADS = {
   boss_colossus: ['warrior', 'tank', 'gladiator', 'swordmaster', 'guardian'],
   boss_archmage: ['mage', 'cryomancer', 'warlock', 'terramancer', 'chronomancer'],
+  boss_thorn: ['snarer', 'beastmaster', 'terramancer', 'windcaller', 'catcher'], // 자연군 — 덩굴 정령들
   boss_shadow: ['assassin', 'illusionist', 'fearmonger', 'snarer', 'catcher'],
 }
 // 정예 소환은 두 박자다: ① 바닥에 예고 장판(강림 자리) → ② delay 뒤 그 자리에서 강림.
@@ -5174,6 +5204,74 @@ function bossArchmage(state, h, foe) {
 // 암살자형 — 형태 3종: 원형(공포의 포효) / 두꺼운 직선(신월참 1→2→3줄) / 타겟 표식(그림자 습격).
 //  습격은 분노할수록: 단일 칼날 → 연격(도주로 예측 2연타) → 참수 난무(여럿 동시 표식).
 //  포효는 넓어지고(11→12.5→14) 필사 국면엔 혼자만 있어도 내지른다
+// 자연형 — 가시 투척(직선 읽기) / 가시밭(원거리 자리 장악) / 가시 낙인(마크-폭파: 뭉침 응징)
+//  / 가시갑옷(반사창: '지금은 때리지 마' 판단 강제). 근접이 무지성으로 붙어 패면 찔리고,
+//  원거리가 뭉쳐 쏘면 낙인이 한꺼번에 터진다 — "간격"을 가르치는 보스.
+function bossThorn(state, h, foe) {
+  const p = h.bossPhase || 1
+  const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd // 페이즈 가속 × 난이도 티어
+  // 가시 투척: 표적 방향 직선 예고 — 국면이 오르면 부챗살(1→2→3줄)로 빠질 각이 좁아진다
+  if (h.bossCd.a <= 0 && foe && dist(h, foe) < 20) {
+    h.bossCd.a = CLASSES[h.cls].skill.cd * cdMul
+    const dir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    h.dir = dir
+    const dirs = p === 3 ? [dir - 0.26, dir, dir + 0.26] : p === 2 ? [dir - 0.15, dir + 0.15] : [dir]
+    for (const d of dirs) {
+      pushBossLine(state, h, d, {
+        count: 5, r: 3.8, gap: 3.2, delay: 1.0, dmg: skillDmg(h, 150, 2.8),
+        effect: { slow: 0.4 }, vfx: 'quake', hue: 'venom',
+      })
+    }
+  }
+  // 가시밭: 제일 멀리서 쏘는 적 발밑 — 잔류 덤불(도트+둔화)로 원거리 자리를 갈아엎는다
+  if (h.bossCd.b <= 0) {
+    let far = null
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
+      if (!isHeroVisible(state, e, h.team) || dist(h, e) > 24) continue
+      if (!far || dist(h, e) > dist(h, far)) far = e
+    }
+    if (far) {
+      h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
+      pushBossZone(state, h, {
+        x: far.x, z: far.z, r: 6.5, delay: 1.2, dmg: skillDmg(h, 130, 2.4), aim: true,
+        vfx: 'quake', hue: 'venom', life: 4, dps: skillDmg(h, 16, 0.28), slow: 0.45,
+      })
+    }
+  }
+  // 가시 낙인(시그니처): 보이는 영웅들에게 낙인 — 2.6초 뒤 각자 자리에서 폭발(반경이 겹치면 중첩).
+  //  낙인자는 아군에게서 떨어져야 한다 — "흩어져!"를 가르친다. 국면 2→3→4명.
+  if (h.bossCd.c <= 0) {
+    const want = p === 3 ? 4 : p === 2 ? 3 : 2
+    const marks = []
+    for (const e of state.heroes) {
+      if (marks.length >= want) break
+      if (e.team === h.team || e.respawnT > 0 || e.thornBombT > 0) continue
+      if (!isHeroVisible(state, e, h.team) || dist(h, e) > 26) continue
+      marks.push(e)
+    }
+    if (marks.length >= 2) {
+      h.bossCd.c = 20 * cdMul
+      for (const e of marks) {
+        e.thornBombT = 2.6
+        e.thornBombDmg = skillDmg(h, 180, 3.4)
+        e.thornBombFrom = h.id
+      }
+      pushFeed(state, 'obj', '💥 가시 낙인이 새겨졌다 — 서로에게서 떨어져라!')
+    }
+  }
+  // 가시갑옷: 품에 근접이 몰려 붙으면 6초 반사창 — 이 동안 때리면 되받는다(딜 중지 판단 강제)
+  if (h.bossCd.d <= 0 && p >= 2) {
+    const near = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && dist(h, e) < 8).length
+    if (near >= 2) {
+      h.bossCd.d = 26 * cdMul
+      h.thornArmorT = 6
+      pushFx(state, 'berserk', h.x, h.z, 5, h.team, 0.8)
+      pushFeed(state, 'obj', '🌵 가시갑옷! 지금 때리면 되레 찔린다 — 잠시 물러나라!')
+    }
+  }
+}
+
 function bossShadow(state, h, foe, siege) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd // 페이즈 가속 × 난이도 티어
@@ -5350,6 +5448,7 @@ function stepBots(state, dt) {
     }
     // 보스 예고 장판 위 = 만사 제치고 이탈 (보스전 아군 — '공략' 반사신경)
     if (isRaidMode(state.mode) && h.team === 'blue' && botDodgeBossZone(state, h, dt)) continue
+    if (isRaidMode(state.mode) && h.team === 'blue' && botSpreadBomb(state, h, dt)) continue
     // 도발당한 봇: 후퇴/임무보다 우선 — 도발한 탱커에게 끌려가 평타친다
     if (h.tauntT > 0) {
       const tk = state.heroes.find((o) => o.id === h.tauntBy && o.team !== h.team && o.respawnT <= 0)
@@ -5491,7 +5590,7 @@ function stepBots(state, dt) {
           if (foe.isBoss) {
             // 체력이 넉넉한 동안(60%+)은 사거리 끝 트레이드, 그 아래는 일찍 빠져 회복 —
             // 치명 패턴 메타에선 히트앤런 사이클이 정답이다(늦게 빠지면 패턴 한 방에 죽는다)
-            h.botLose = h.hp < h.maxHp * 0.6
+            h.botLose = h.hp < h.maxHp * 0.6 || foe.thornArmorT > 0 // 가시갑옷 반사창엔 물러난다
           }
           if (h.isBossAdd) {
             h.botWin = true
@@ -5659,6 +5758,26 @@ function stepBots(state, dt) {
 // 보스 예고 장판 회피 — '공략을 아는 플레이어'처럼 경고를 읽고 가장 가까운 바깥으로 빠진다.
 // 여러 장판이 겹치면(융단/파문) 가장 먼저 터질 것부터 피한다.
 // (도넛 안전지대 패턴은 전부 폐기됨 — 이제 장판은 전부 '바깥으로 나가면 산다'는 규칙이다)
+// 가시 낙인 대응: 낙인이 붙으면 제일 가까운 아군에게서 떨어진다 — 겹폭발 방지.
+//  (사람이 배우는 '흩어져!'를 봇도 흉내 — 봇 밴드가 학습 상한을 대변한다)
+function botSpreadBomb(state, h, dt) {
+  if (!(h.thornBombT > 0)) return false
+  let near = null
+  let bd = 6 * 6
+  for (const e of state.heroes) {
+    if (e === h || e.team !== h.team || e.respawnT > 0) continue
+    const d2 = dist2(h, e)
+    if (d2 < bd) { bd = d2; near = e }
+  }
+  if (!near) return false // 이미 홀로 — 그냥 싸운다
+  const dx = h.x - near.x
+  const dz = h.z - near.z
+  const d = Math.hypot(dx, dz) || 0.001
+  steerToward(state, h, { x: h.x + (dx / d) * 7, z: h.z + (dz / d) * 7 })
+  botAttack(state, h, dt) // 떨어지면서도 사거리 안이면 계속 때린다
+  return true
+}
+
 function botDodgeBossZone(state, h, dt) {
   let zone = null
   let soonest = Infinity
@@ -6178,6 +6297,8 @@ export function makeView(state) {
       id: h.id,
       name: h.name,
       title: h.title || null, // 장착 칭호 — 이름표 표시용
+      thornBombT: r2d(h.thornBombT || 0), // 가시 낙인 카운트다운(머리 위 ❗ 표시)
+      thornArmorT: r2d(h.thornArmorT || 0), // 가시갑옷 반사창(💢 표시)
       zodiacId: h.zodiacId,
       color: h.color,
       team: h.team,

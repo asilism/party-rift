@@ -226,7 +226,7 @@ const CONTROL_SCHEMES = [
 
 // 보스전 레이드 체력바 — 화면 상단 중앙 고정. 이름·레벨, 국면 색 채움(빨강→주황→보라),
 // 70%/40% 국면 마커(금색), 각성 휴지기엔 💤 + 보라 광택으로 '무적·정비 시간'을 알린다.
-const BOSS_FACE = { boss_colossus: '👹', boss_archmage: '🧙', boss_shadow: '👺' }
+const BOSS_FACE = { boss_colossus: '👹', boss_archmage: '🧙', boss_shadow: '👺', boss_thorn: '🌵' }
 function BossRaidBar({ hud }) {
   const boss = hud.heroes?.find((h) => h.cls?.startsWith('boss_'))
   if (!boss || boss.hp <= 0) return null

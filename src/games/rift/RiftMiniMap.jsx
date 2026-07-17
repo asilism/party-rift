@@ -163,7 +163,7 @@ export default function RiftMiniMap({ view, myId }) {
             })}
             <circle cx={b.x} cy={b.z} r={6.5} fill={col} stroke="#fff" strokeWidth={1.5} />
             <text x={b.x} y={b.z + 4.5} fontSize={11} textAnchor="middle">
-              {{ boss_colossus: '👹', boss_archmage: '🧙', boss_shadow: '👺' }[b.cls] || '👹'}
+              {{ boss_colossus: '👹', boss_archmage: '🧙', boss_shadow: '👺', boss_thorn: '🌵' }[b.cls] || '👹'}
             </text>
           </g>
         )
