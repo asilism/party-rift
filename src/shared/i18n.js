@@ -381,6 +381,7 @@ const DICT = {
   '결과 보기': 'See results',
   '준비': 'Prep',
   '붕괴 시작!': 'Collapse!',
+  '전투 개시!': 'Fight!',
   '기본 난이도 — 승리 코인 30': 'Base difficulty — 30 coins per win',
   '더 세고 빠른 보스 — 승리 코인 45': 'Stronger, faster boss — 45 coins per win',
   '최강의 보스 — 승리 코인 60': 'The ultimate boss — 60 coins per win',

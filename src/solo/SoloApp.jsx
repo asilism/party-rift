@@ -23,7 +23,6 @@ import { createTournament, nextRound, resolveRound, userPlacement, arenaLevelFor
 import Fireworks from '../shared/Fireworks.jsx'
 import { adsAvailable, showRewarded } from '../shared/ads.js'
 import MenuStage, { ArenaStage } from './MenuStage.jsx'
-import HeroShowcase from './HeroShowcase.jsx'
 import HatPreview from './HatPreview.jsx'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
 // 오픈소스 고지 전문 — 빌드에 원문 그대로 번들되어 웹/데스크톱/안드로이드 배포물 모두에 포함된다
@@ -858,8 +857,7 @@ function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
                 : <p className="char-show__desc">{t('직업을 고르면 스킬을 미리 볼 수 있어 👉')}</p>}
             </div>
           </div>
-          {/* 훈련장: 선택한 직업의 전신 모델이 평타·스킬을 실제로 시전한다 */}
-          {c && <HeroShowcase cls={cls} zodiacId={profile} hat={loadEquippedHat()} costume={loadEquippedCostume()} weapon={loadEquippedWeapon()} />}
+          {/* 시연 무대는 제거 — 스킬 시연이 실제 동작과 달라 오해를 낳았다. 스킬 안내에 공간을 몰아준다 */}
           {/* 가운데(스킬·전적)만 스크롤 — 출전 버튼은 항상 보인다 */}
           <div className="char-show__mid">
             {c && (
