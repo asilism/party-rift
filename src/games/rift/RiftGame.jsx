@@ -472,6 +472,11 @@ function RiftPlay({
   }
 
   const finished = hud.status === 'finished'
+  // 콜로세움: 준비 페이즈가 끝나면 상점을 강제로 닫는다(전투 중 구매 불가)
+  const arenaShopping = hud.mode === 'arena' && hud.arenaPhase === 'shop'
+  useEffect(() => {
+    if (hud.mode === 'arena' && hud.arenaPhase !== 'shop') setShopOpen(false)
+  }, [hud.mode, hud.arenaPhase])
   const myTeam = me?.team
   // 승리 메시지를 한 글자씩 나타나게 — "파랑팀 승리"를 글자 단위로 쪼갠다(공백은 자리만 차지).
   // 보스전은 토벌 서사로: "카르곤 토벌!" / "토벌 실패...", 방어전은 도달 파도가 곧 성적표.
@@ -519,6 +524,13 @@ function RiftPlay({
 
       <div className="rift__hud">
         {hud.mode === 'boss' && hud.status === 'countdown' && <BossIntroCard hud={hud} />}
+        {/* 콜로세움: 준비 종료 3초 전 카운트다운 → 전투 개시! 플래시 */}
+        {hud.mode === 'arena' && !finished && hud.arenaPhase === 'shop' && (hud.arenaT || 0) <= 3.2 && (hud.arenaT || 0) > 0 && (
+          <div className="arena-count" key={Math.ceil(hud.arenaT)}>{Math.max(1, Math.ceil(hud.arenaT))}</div>
+        )}
+        {hud.mode === 'arena' && !finished && hud.arenaPhase === 'fight' && (hud.arenaT || 0) > 178.6 && (
+          <div className="arena-count arena-count--go">⚔️ {t('전투 개시!')}</div>
+        )}
         <div className="ladder__topbar rift__topbar">
           {/* 보스 레이드 바 — 좌측 미니맵과 우측 스탯 사이 남는 공간만 차지하는
               flex 슬롯이라 어떤 화면 폭에서도 다른 HUD를 침범할 수 없다 */}
@@ -613,9 +625,14 @@ function RiftPlay({
           </div>
         )}
 
-        {/* 좌상단: 미니맵 */}
+        {/* 좌상단: 미니맵 + (우물/사망 중) 상점 버튼 — 세로 스택이라 비율 무관 자동 정렬 */}
         <div className="rift__side">
           <RiftMiniMap view={hud} myId={myId} />
+          {me && !finished && meCanShop && !shopOpen && (hud.mode !== 'arena' || hud.arenaPhase === 'shop') && (
+            <button className="rift-shop-fab" onClick={() => setShopOpen(true)}>
+              🛒 <small>{me.respawnT > 0 ? t('상점 (대기중)') : t('상점')}</small>
+            </button>
+          )}
         </div>
 
         {/* 하단 중앙: 내 영웅 명패 — 캐릭터/직업/레벨/HP/경험치 */}
@@ -709,12 +726,6 @@ function RiftPlay({
         </div>
       )}
 
-      {/* 우물 안 또는 사망 중에 뜨는 상점 버튼 */}
-      {me && !finished && meCanShop && !shopOpen && (hud.mode !== 'arena' || hud.arenaPhase === 'shop') && (
-        <button className="rift-shop-fab" onClick={() => setShopOpen(true)}>
-          🛒 <small>{me.respawnT > 0 ? t('상점 (대기중)') : t('상점')}</small>
-        </button>
-      )}
       {shopOpen && me && meCanShop && (
         <RiftShop me={me} onBuy={onBuy} onSell={onSell} onResetShop={onResetShop} onClose={() => setShopOpen(false)} />
       )}

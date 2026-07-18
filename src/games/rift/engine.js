@@ -2997,6 +2997,10 @@ function stepArena(state, dt) {
   if (state.mode !== 'arena' || state.status !== 'playing') return
   state.arenaT -= dt
   if (state.arenaPhase === 'shop') {
+    if (!state.arenaIntroSaid) {
+      state.arenaIntroSaid = true
+      pushFeed(state, 'obj', `⏳ ${Math.round(ARENA_SHOP_T)}초 뒤 전투가 시작됩니다 — 상점에서 전투를 준비하세요!`)
+    }
     // 준비 결계: 스타팅 원(우물 반경) 밖으로 못 나간다 — 원 안에서만 몸 풀기
     for (const h of state.heroes) {
       const fp = state.map.FOUNTAIN_POS[h.team]
@@ -3292,6 +3296,8 @@ function stepHero(state, h, dt) {
         h.z = pos.z
         h.dir = h.team === 'blue' ? 0 : Math.PI
         h.bushI = state.map.bushIndexAt(h.x, h.z)
+        h.mx = 0 // 귀환 직후엔 정지 — 귀환 전 이동 입력이 남아 저절로 걷는 것 방지
+        h.mz = 0
         pushFx(state, 'recall', h.x, h.z, 4, h.team)
       }
     }

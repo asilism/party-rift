@@ -2421,8 +2421,7 @@ body {
 
 /* 수호석 상점 버튼 (우물 안에서만 뜬다) */
 .rift-shop-fab {
-  /* 미니맵(rift__side: top/left 12px, 너비 clamp(150,30vh,240)) 바로 오른쪽에 붙인다 */
-  position: absolute; top: 12px; left: calc(12px + clamp(150px, 30vh, 240px) + 12px);
+  /* 미니맵 아래 세로 스택(.rift__side flex 항목) — 비율 무관 자동 정렬 */
   transform: scale(0.8); transform-origin: top left;
   z-index: 7; pointer-events: auto; cursor: pointer;
   display: flex; flex-direction: column; align-items: center; gap: 1px;
@@ -3075,13 +3074,26 @@ body {
   display: flex; gap: 8px; align-items: flex-start; padding: 5px 8px; border-radius: 12px;
   background: rgba(43, 35, 80, 0.06); border: 2px solid rgba(43, 35, 80, 0.14);
 }
-.char-show__skill-icon { font-size: 16px; line-height: 1.2; }
-.char-show__skill-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.char-show__skill-main b { font-size: 12px; color: var(--ink); font-weight: 400; }
-.char-show__skill-main b small { color: #c47c00; font-size: 9.5px; margin-left: 3px; }
-/* 넉넉한 화면에선 설명을 전부 펼쳐 둔다 — 낮은 화면에선 아래 미디어쿼리가 접는다 */
-.char-show__skill-desc { color: #6b6390; font-size: 10px; line-height: 1.35; }
-.char-show__skill-caret { display: none; }
+.char-show__skills li { cursor: pointer; }
+.char-show__skill-icon { font-size: 20px; line-height: 1.2; }
+.char-show__skill-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.char-show__skill-main b { font-size: 13.5px; color: var(--ink); font-weight: 400; }
+.char-show__skill-main b small { color: #c47c00; font-size: 10.5px; margin-left: 4px; }
+/* 기본은 아이콘·이름만 — 설명은 탭(또는 마우스 호버)해야 펼쳐진다 */
+.char-show__skill-desc {
+  color: #6b6390; font-size: 12px; line-height: 1.4;
+  max-height: 0; opacity: 0; overflow: hidden;
+  transition: max-height 0.2s ease, opacity 0.16s;
+}
+.char-show__skills li.is-open .char-show__skill-desc { max-height: 96px; opacity: 1; }
+@media (hover: hover) {
+  .char-show__skills li:hover .char-show__skill-desc { max-height: 96px; opacity: 1; }
+}
+.char-show__skill-caret {
+  display: inline-block; margin-left: 5px; color: #a99fc7; font-size: 10px;
+  transition: transform 0.15s;
+}
+.char-show__skills li.is-open .char-show__skill-caret { transform: rotate(180deg); }
 .char-show__rec { margin: 0; font-size: clamp(10px, 1.9vh, 12px); color: #6b6390; }
 .char-show__rec b { color: var(--toy-green-d); }
 .char-show__start { width: 100%; flex-shrink: 0; padding: 9px 18px; }
@@ -3300,18 +3312,7 @@ body {
   .toy-heading--screen { margin-top: 6px; }
   .char-screen__heading { font-size: 17px; }
   .char-show__desc { -webkit-line-clamp: 2; }
-  /* 스킬 설명은 접어 두고, 누른 스킬만 살짝 펼친다(아코디언) */
-  .char-show__skills li { padding: 4px 8px; cursor: pointer; }
-  .char-show__skill-caret {
-    display: inline-block; margin-left: 5px; color: #a99fc7; font-size: 9px;
-    transition: transform 0.15s;
-  }
-  .char-show__skills li.is-open .char-show__skill-caret { transform: rotate(180deg); }
-  .char-show__skill-desc {
-    max-height: 0; opacity: 0; overflow: hidden;
-    transition: max-height 0.2s ease, opacity 0.16s;
-  }
-  .char-show__skills li.is-open .char-show__skill-desc { max-height: 76px; opacity: 1; }
+  .char-show__skills li { padding: 4px 8px; }
   .char-card { padding: 6px 3px 5px; }
   .char-card__icon { font-size: 21px; }
   .mode-card { padding: 10px 10px 12px; }
@@ -3386,7 +3387,7 @@ body {
 .boss-bar-slot {
   flex: 1 1 auto; min-width: 0;
   display: flex; justify-content: center;
-  margin-left: calc(clamp(150px, 30vh, 240px) + 116px); /* 미니맵 + 상점 버튼 예약석 */
+  margin-left: calc(clamp(150px, 30vh, 240px) + 8px); /* 미니맵 폭만큼 — 상점 버튼은 미니맵 아래로 이사 */
 }
 /* 한 줄 필: [😈 카르곤 ▬▬▬▬47% 💤] — 킬스코어 행과 같은 높이로 상단 UI를 밀지 않는다 */
 .boss-bar {
@@ -3506,6 +3507,18 @@ body {
 /* 티어 칩(보통/어려움/악몽) — 미클리어 티어는 흐리게 */
 .boss-rec-row__tier { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .boss-rec-row__tier.is-empty { opacity: 0.35; font-weight: 500; }
+
+/* 콜로세움 3-2-1 카운트다운 + 전투 개시 플래시 */
+.arena-count {
+  position: absolute; top: 34%; left: 50%; transform: translate(-50%, -50%);
+  font-size: clamp(56px, 14vh, 96px); font-weight: 900; color: #ffd34d; z-index: 8;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.75), 0 0 34px rgba(255, 211, 77, 0.5);
+  pointer-events: none; animation: arenaCountPop 1s ease-out;
+  font-family: var(--toy-font, inherit);
+}
+.arena-count--go { font-size: clamp(38px, 9vh, 64px); color: #fff; animation: arenaGoPop 1.3s ease-out; }
+@keyframes arenaCountPop { 0% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; } 25% { opacity: 1; } 100% { transform: translate(-50%, -50%) scale(0.92); opacity: 0.9; } }
+@keyframes arenaGoPop { 0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; } 30% { transform: translate(-50%, -50%) scale(1.15); opacity: 1; } 70% { transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; } }
 
 /* 콜로세움 HUD 필 — 준비/전투/붕괴 */
 .arena-bar { border-color: rgba(255, 200, 90, 0.4); }
