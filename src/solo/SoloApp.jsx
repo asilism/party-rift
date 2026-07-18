@@ -1602,6 +1602,25 @@ function SoloHelp({ onClose }) {
         </div>
 
         <div className="solo-help__sec">
+          <h3>{t('🗺️ 모드')}</h3>
+          {en ? (
+            <ul>
+              <li>⚔️ <b>3v3 / 5v5</b> — classic lane battles (the goal above)</li>
+              <li>👹 <b>Boss Raid</b> — 5 vs one giant boss, 3 difficulties</li>
+              <li>🌊 <b>Endless Defense</b> — hold the stone against waves</li>
+              <li>🏟️ <b>Colosseum</b> — 12-zodiac 2v2 tournament</li>
+            </ul>
+          ) : (
+            <ul>
+              <li>⚔️ <b>3대3 / 5대5</b> — 위 목표 그대로의 정통 한판</li>
+              <li>👹 <b>보스전</b> — 5명이 거대 보스에 도전, 난이도 3단계</li>
+              <li>🌊 <b>무한 방어</b> — 끝없는 파도에서 수호석 사수</li>
+              <li>🏟️ <b>콜로세움</b> — 12지신 2대2 토너먼트</li>
+            </ul>
+          )}
+        </div>
+
+        <div className="solo-help__sec">
           <h3>{t('🕹️ 조작')} <small>{t('(게임 중 ⚙️ 설정에서 바꿀 수 있어요)')}</small></h3>
           {en ? (
             <ul>
@@ -1636,8 +1655,8 @@ function SoloHelp({ onClose }) {
         <div className="solo-help__sec">
           <h3>{t('💡 꿀팁')}</h3>
           {en
-            ? <p>🌿 Bushes hide you · 🐉 Dragon / 👹 Imugi grant team buffs · in danger, 🏠 recall!</p>
-            : <p>🌿 수풀에 숨으면 안 보여요 · 🐉 용/👹 이무기는 팀 버프 · 위험하면 🏠 귀환!</p>}
+            ? <p>🌿 Bushes hide you · 🐉 Dragon / 👹 Imugi grant team buffs · in danger, 🏠 recall! · 🏆 Wins & coins unlock new classes — check <b>Records → Achievements</b> for goals & titles</p>
+            : <p>🌿 수풀에 숨으면 안 보여요 · 🐉 용/👹 이무기는 팀 버프 · 위험하면 🏠 귀환! · 🏆 승리·코인으로 새 캐릭터가 열리고, <b>전적 → 업적</b>에서 목표와 칭호를 확인해요</p>}
         </div>
 
         <button className="toy-btn toy-btn--yellow solo-help__ok" onClick={onClose}>{t('알겠어, 가보자!')}</button>

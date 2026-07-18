@@ -347,6 +347,7 @@ const DICT = {
   '보스전 악몽은 쉬움 난이도를 클리어하면 열려요': 'Boss Nightmare unlocks after clearing Easy',
   '보스전 지옥은 악몽 난이도를 클리어하면 열려요': 'Boss Hell unlocks after clearing Nightmare',
   '알겠어': 'Got it',
+  '🗺️ 모드': '🗺️ Modes',
   // 콜로세움
   '콜로세움': 'Colosseum',
   '12지신 2대2 토너먼트 — 최후의 팀이 되어라!': 'A 12-zodiac 2v2 tournament — be the last team standing!',
