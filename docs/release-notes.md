@@ -13,6 +13,7 @@
 • 업적 40종 + 칭호 수집 — 달성하면 이름 옆에 칭호 표시
 • 캐릭터 선택창 개편 — 스킬을 탭하면 자세한 설명
 • 상점 버튼 위치 개선(미니맵 아래), 모든 화면 비율 대응
+• 콜로세움 봇 개선 — 지형에 끼던 문제 수정, 알뜰한 아이템 구매, 직업 밸런스 조정
 • 귀환 후 캐릭터가 저절로 걷던 문제 수정, 발열·성능 개선
 ```
 
@@ -20,12 +21,13 @@
 
 ```
 🏟️ Major content update!
-• 2 new modes — Endless Defense (hold the stone against waves) & Colosseum (12-zodiac 2v2 survival tournament, random arena each round)
+• 2 new modes — Endless Defense (survive the waves) & Colosseum (12-zodiac 2v2 tournament, random arenas)
 • Boss raids: 3 difficulties (Easy/Nightmare/Hell) + new boss "Bramble"
 • 40 achievements + collectible titles shown next to your name
 • Revamped character select — tap a skill for details
-• Shop button moved under the minimap, fits all screen ratios
-• Fixed hero auto-walking after recall; thermal & performance improvements
+• Shop button moved under the minimap
+• Smarter Colosseum bots (no more getting stuck) + class balance pass
+• Fixed auto-walk after recall; thermal & performance improvements
 ```
 
 ## v1.0 (versionCode 3→7) — 2026-07-16, 비공개 테스트 시작
