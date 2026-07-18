@@ -42,6 +42,12 @@ const aliveTeams = (tour) => tour.teams.filter((tm) => tm.alive)
 
 // 다음 라운드 대진 — 스위스식 무작위(생존 팀), 홀수면 최소 부전 팀 휴식.
 //  2팀이면 데스매치 결승. 반환: { round, deduction, pairs, bye, myPair, isFinal }
+export const ARENA_LAYOUT_META = {
+  pit: { icon: '🗿', name: '기둥의 숲', hint: '근접 유리 — 시야가 끊기고 부쉬가 많다' },
+  field: { icon: '🏹', name: '모래벌판', hint: '원거리 유리 — 숨을 곳이 없다' },
+  canyon: { icon: '🌀', name: '술사의 협로', hint: '마법 유리 — 좁은 통로로 싸움이 몰린다' },
+}
+
 export function nextRound(tour, rng = Math.random) {
   tour.round++
   const alive = shuffle(aliveTeams(tour), rng)
@@ -56,7 +62,9 @@ export function nextRound(tour, rng = Math.random) {
   for (let i = 0; i + 1 < alive.length; i += 2) pairs.push([alive[i], alive[i + 1]])
   const isFinal = aliveTeams(tour).length === 2
   const myPair = pairs.find((p) => p[0].isUser || p[1].isUser) || null
-  tour.current = { round: tour.round, deduction: arenaDeduction(tour.round), pairs, bye, myPair, isFinal }
+  const layouts = Object.keys(ARENA_LAYOUT_META)
+  const layout = layouts[Math.floor(rng() * layouts.length)] // 이번 라운드의 경기장 내부 구조
+  tour.current = { round: tour.round, deduction: arenaDeduction(tour.round), pairs, bye, myPair, isFinal, layout }
   return tour.current
 }
 

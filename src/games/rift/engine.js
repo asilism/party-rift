@@ -402,7 +402,13 @@ const GLAD_LIFESTEAL = 0.3 // 영웅 피해의 흡혈 비율
 //  (raw 20→17, 70→38, 150→57, 300→79쯤) 단순 %흡혈이 후반에 사실상 무한 유지력이 되던 문제 완화.
 //  검투사 스킬/평타 흡혈과 아이템 흡혈(흡혈낫·용살자의 대검) 모두에 적용된다.
 const LIFESTEAL_LOG_K = 35
-const lifestealAmount = (raw) => (raw <= 0 ? 0 : LIFESTEAL_LOG_K * Math.log1p(raw / LIFESTEAL_LOG_K))
+// 흡혈 회복량(로그 감쇠). 콜로세움은 ×0.1 — 회복 열매·포션이 유일한 회복 축이어야
+// 하는 모드라, 물리 피흡 브루저가 무한 유지력으로 결투를 지배하는 것을 막는다.
+const lifestealAmount = (raw, state) => {
+  if (raw <= 0) return 0
+  const base = LIFESTEAL_LOG_K * Math.log1p(raw / LIFESTEAL_LOG_K)
+  return state?.mode === 'arena' ? base * 0.1 : base
+}
 const GLAD_BASIC_LIFESTEAL = 0.15 // 검투사 고유: 평타에 붙는 흡혈(딜은 낮아도 계속 흡혈해 버틴다)
 const GLAD_LIFESTEAL_MINION = 0.1 // 병사/정글몹 피해의 흡혈 비율(과회복 방지)
 const GLAD_LIFESTEAL_CAP = 0.3 // 한 번에 최대 (최대체력×이 비율)까지만 흡혈
@@ -803,7 +809,7 @@ export function createGame(players, opts = {}) {
   const rng = o.rng || Math.random
   const mode = TEAM_SIZES[o.mode] ? o.mode : '3v3'
   const teamSize = TEAM_SIZES[mode]
-  const map = buildMap(mode)
+  const map = buildMap(mode, o.arenaLayout)
   const slotCount = { blue: 0, red: 0 }
   const usedCls = { blue: new Set(), red: new Set() }
   const heroes = players.map((p) => {
@@ -882,6 +888,7 @@ export function createGame(players, opts = {}) {
     teamSize,
     botLevel: BOT_LEVELS[o.botLevel] ? o.botLevel : 'normal', // 봇 난이도(솔로 모드) — 온라인은 항상 normal
     bossTier: BOSS_TIERS[o.bossTier] ? o.bossTier : 'normal', // 보스전 난이도 티어(보통/어려움/악몽)
+    arenaLayout: mode === 'arena' ? (o.arenaLayout || null) : null, // 콜로세움 내부 구조(렌더러 동기화용)
     arenaPhase: mode === 'arena' ? 'shop' : null, // 콜로세움: shop → fight → sudden
     arenaT: mode === 'arena' ? ARENA_SHOP_T : 0, // 현재 페이즈 남은 시간
     arenaWave: 0, // 서든데스 붕괴 웨이브 번호
@@ -1678,7 +1685,7 @@ const SKILLS = {
       damageMonster(state, m, base, h)
       heal += base * GLAD_LIFESTEAL_MINION
     }
-    if (heal > 0) healHero(h, Math.min(lifestealAmount(heal), h.maxHp * GLAD_LIFESTEAL_CAP)) // 흡혈(로그 감쇠 + 안티힐 적용)
+    if (heal > 0) healHero(h, Math.min(lifestealAmount(heal, state), h.maxHp * GLAD_LIFESTEAL_CAP)) // 흡혈(로그 감쇠 + 안티힐 적용)
     pushFx(state, 'whirl', h.x, h.z, GLAD_SLASH_RADIUS, h.team)
   },
   // 주술사 저주살: 가까운 적에게 즉시 약한 피해 + 지속피해(중독) 부여 (회복 감소 동반)
@@ -3940,7 +3947,7 @@ function stepProjectiles(state, dt) {
       let ls = p.kind === 'bolt' && owner.items ? itemBonus(owner).lifesteal : 0
       if (p.kind === 'bolt' && owner.cls === 'gladiator') ls += GLAD_BASIC_LIFESTEAL // 검투사 고유 평타 흡혈
       if (ls > 0 && owner.respawnT <= 0 && (p.target.tk === 'hero' || p.target.tk === 'minion' || p.target.tk === 'monster')) {
-        owner.hp = Math.min(owner.maxHp, owner.hp + lifestealAmount(p.dmg * ls)) // 로그 감쇠 적용
+        owner.hp = Math.min(owner.maxHp, owner.hp + lifestealAmount(p.dmg * ls, state)) // 로그 감쇠 적용
       }
       continue
     }
@@ -6611,6 +6618,7 @@ export function makeView(state) {
     status: state.status,
     mode: state.mode, // 렌더러/미니맵이 맞는 크기의 맵을 만들 수 있게
     bossTier: state.bossTier, // 보스전 난이도(레이드 바 배지·종료 보상 산정)
+    arenaLayout: state.arenaLayout, // 콜로세움 내부 구조 — 클라 맵 재구성용
     arenaPhase: state.arenaPhase, // 콜로세움: shop/fight/sudden (HUD 페이즈 표시)
     arenaT: r2d(state.arenaT), // 현재 페이즈 남은 시간
     healOrbs: state.healOrbs.map((o) => ({ id: o.id, x: o.x, z: o.z })), // 회복 열매(💖 렌더)

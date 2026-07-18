@@ -495,7 +495,8 @@ function RiftPlay({
 
   return (
     <div className={`rift ${phaseFx ? 'rift--quake' : ''}`} style={{ '--btn-user': btnScale }} onContextMenu={(e) => e.preventDefault()}>
-      <Rift3D sample={sample} myId={myId} mode={hud.mode || '3v3'} hitFx={hitFx} gfx={gfx} />
+      <Rift3D arenaLayout={hud.arenaLayout || null}
+        sample={sample} myId={myId} mode={hud.mode || '3v3'} hitFx={hitFx} gfx={gfx} />
       {phaseFx && <div key={phaseFx.key} className="boss-flash" style={{ '--fc': phaseFx.color }} />}
 
       {me && !finished && (
