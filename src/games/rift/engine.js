@@ -29,23 +29,27 @@ const ARENA_WARN_T = 3 // 경고(장판) → 낙하까지
 // 콜로세움 직업 보정 — 봇 2v2 4000판 승률 기반(전역 밸런스는 불변, 아레나에서만).
 //  deal: 주는 피해 배율 / take: 받는 피해 배율. 승률 80% 전사부터 16% 힐러까지 밴드 압축용.
 const ARENA_CLASS_MOD = {
-  // 2026-07-18 재보정: 봇 끼임 수정으로 교착이 사라지자 메타 이동 — 4000판 샘플 기준
-  warrior: { deal: 0.56, take: 1.08 },
-  gladiator: { deal: 0.72 },
-  tank: { deal: 0.9, take: 1.32 },
+  // 2026-07-18 재보정 v3: 실제 토너먼트 분포(라운드 1~5, 레벨 5~17, 골드 0~4000)로 측정.
+  //  후반 라운드는 방어 스택(탱커·힐러)이, 초반은 버스트가 유리 — 플랫 배율로는 전체 승률을 맞춘다
+  warrior: { deal: 0.6, take: 1.08 },
+  gladiator: { deal: 0.84 },
+  tank: { deal: 0.62, take: 1.45 },
   illusionist: { deal: 0.68, take: 1.12 },
-  mage: { deal: 0.84 },
+  mage: { deal: 0.88 },
   warlock: { deal: 0.85 },
-  cryomancer: { deal: 1.25 },
-  fearmonger: { deal: 1.32 },
+  cryomancer: { deal: 1.18 },
+  fearmonger: { deal: 1.22 },
   windcaller: { deal: 1.38 },
-  engineer: { deal: 1.22 },
-  archer: { deal: 1.42 },
-  guardian: { deal: 2.1, take: 0.78 },
-  healer: { deal: 2.2, take: 0.65 },
+  engineer: { deal: 1.32 },
+  archer: { deal: 1.7 },
+  guardian: { deal: 2.45, take: 0.78 },
+  healer: { deal: 1.85, take: 0.65 },
   catcher: { deal: 0.88 },
   chronomancer: { deal: 0.9 },
-  assassin: { deal: 1.15 },
+  assassin: { deal: 1.32, take: 0.85 },
+  terramancer: { deal: 0.93 },
+  swordmaster: { deal: 0.88 },
+  beastmaster: { deal: 1.15 },
 }
 const ARENA_ORB_EVERY = 9 // 회복 열매 낙하 간격(초)
 const ARENA_ORB_HEAL = 0.28 // 습득 시 최대 체력 대비 회복량
