@@ -32,25 +32,26 @@ const ARENA_CLASS_MOD = {
   // 2026-07-18 재보정 v3: 실제 토너먼트 분포(라운드 1~5, 레벨 5~17, 골드 0~4000)로 측정.
   //  후반 라운드는 방어 스택(탱커·힐러)이, 초반은 버스트가 유리 — 플랫 배율로는 전체 승률을 맞춘다
   warrior: { deal: 0.6, take: 1.08 },
-  gladiator: { deal: 0.84 },
-  tank: { deal: 0.62, take: 1.45 },
-  illusionist: { deal: 0.68, take: 1.12 },
-  mage: { deal: 0.88 },
-  warlock: { deal: 0.85 },
-  cryomancer: { deal: 1.18 },
+  gladiator: { deal: 0.78 },
+  tank: { deal: 0.75, take: 1.25 },
+  illusionist: { deal: 0.6, take: 1.12 },
+  mage: { deal: 0.92 },
+  warlock: { deal: 0.92 },
+  cryomancer: { deal: 1.24 },
   fearmonger: { deal: 1.22 },
-  windcaller: { deal: 1.38 },
-  engineer: { deal: 1.32 },
+  windcaller: { deal: 1.3 },
+  engineer: { deal: 1.26 },
   archer: { deal: 1.7 },
   guardian: { deal: 2.45, take: 0.78 },
   healer: { deal: 1.85, take: 0.65 },
-  catcher: { deal: 0.88 },
+  catcher: { deal: 0.93 },
   chronomancer: { deal: 0.9 },
-  assassin: { deal: 1.32, take: 0.85 },
+  assassin: { deal: 1.22, take: 0.85 },
   terramancer: { deal: 0.93 },
-  swordmaster: { deal: 0.88 },
-  beastmaster: { deal: 1.15 },
+  swordmaster: { deal: 0.82 },
+  beastmaster: { deal: 1.02 },
 }
+const ARENA_ITEM_DEF_MULT = 0.5 // 아레나 방템 피해감소 효율 감쇠(구조 레버) — 배율 조정은 이다음
 const ARENA_ORB_EVERY = 9 // 회복 열매 낙하 간격(초)
 const ARENA_ORB_HEAL = 0.28 // 습득 시 최대 체력 대비 회복량
 const ARENA_ORB_LIFE = 20 // 방치 시 소멸(초)
@@ -2616,7 +2617,10 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
     }
     amount *= 1 / (1 + 0.2 * Math.max(0, n - 1))
   }
-  amount *= 1 - itemBonus(victim).def // 방어 아이템: 받는 피해 감소
+  // 방어 아이템: 받는 피해 감소 — 콜로세움은 효율 일괄 감쇠(흡혈 ×0.1과 짝):
+  //  방어 스택이 온존하면 후반 라운드 탱커·힐러가 벽이 된다(직업 배율로는 못 잡는 구조 편차)
+  const itemDef = itemBonus(victim).def * (state.mode === 'arena' ? ARENA_ITEM_DEF_MULT : 1)
+  amount *= 1 - itemDef
   if (victim.shieldT > 0) amount *= SHIELD_CUT // 방패막기!
   if (victim.whirlT > 0) amount *= 1 - WHIRL_DR // 전사 회전베기 중 방어 ↑(앞라인 탱킹)
   if (victim.wardT > 0) amount *= WARD_CUT // 수호기사 결속(아군 피해 감소)
