@@ -733,9 +733,8 @@ function makeHeroState(p, cls, pos, map, rng) {
       items: [], // 산 아이템 id (최대 ITEM_SLOTS칸)
       itemCd: {}, // 액티브 아이템 남은 쿨다운 (itemId → 초)
       // 상점 세션(우물/사망 중) 동안의 무료 취소용 — 진입 시점 스냅샷 + 그동안의 순지출
-      shopEntryItems: null, // 세션 진입 시점의 아이템(되돌리기 목표). null이면 세션 아님
-      shopSpent: 0, // 이번 세션의 순지출(구매 +, 판매 -). 되돌리면 이만큼 골드 환원
-      shopChanged: false, // 이번 세션에 변경이 있었나 (취소 버튼 활성화용)
+      shopStack: null, // 이번 세션의 구매/판매 기록 스택 — 되돌리기가 한 스텝씩 역순 취소. null이면 세션 아님
+      shopChanged: false, // 이번 세션에 취소할 변경이 있나 (취소 버튼 활성화용)
       couldShop: false, // 직전 틱의 canShop (세션 시작/종료 감지)
       bonus: sumStats([]), // 아이템 합산 보너스 (heroMaxHp가 참조하므로 먼저)
       hp: 0, // 아래에서 직업 최대치로 채운다
@@ -1434,11 +1433,12 @@ export function buyItem(state, id, itemId) {
   const quote = buildQuote(h.items, itemId)
   if (h.items.length - quote.consumes.length >= ITEM_SLOTS) return state
   if (h.gold < quote.price) return state
+  const consumed = quote.consumes.map((i) => h.items[i]) // 조합에 흡수된 재료 — 되돌리면 복원
   for (const idx of [...quote.consumes].sort((a, b) => b - a)) h.items.splice(idx, 1)
   h.gold -= quote.price
   h.items.push(itemId)
-  h.shopSpent += quote.price // 이번 세션 순지출 — 되돌리기로 환원
-  h.shopChanged = true
+  if (h.shopStack) h.shopStack.push({ t: 'buy', itemId, price: quote.price, consumed })
+  h.shopChanged = !!h.shopStack?.length
   applyItems(h)
   return state
 }
@@ -1485,24 +1485,32 @@ export function sellItem(state, id, slot) {
   const item = ITEMS_BY_ID[itemId]
   if (!item) return state
   h.items.splice(slot, 1)
-  h.gold += Math.floor(item.cost * SELL_REFUND)
-  h.shopSpent -= Math.floor(item.cost * SELL_REFUND)
-  h.shopChanged = true
+  const refund = Math.floor(item.cost * SELL_REFUND)
+  h.gold += refund
+  if (h.shopStack) h.shopStack.push({ t: 'sell', itemId, slot, refund })
+  h.shopChanged = !!h.shopStack?.length
   applyItems(h)
   return state
 }
 
-// 상점 되돌리기: 이번 세션(우물/사망) 진입 시점으로 아이템·골드를 무료 복원.
-//  - 그동안 구매/판매한 골드는 그대로 환원하되, 막타·패시브로 번 골드는 유지된다.
-//  - 세션을 벗어나면(스냅샷이 사라지면) 그 이전 구매는 더 이상 취소할 수 없다.
+// 상점 되돌리기: 이번 세션(우물/사망)의 마지막 구매/판매 "한 건"만 역순으로 취소(무료).
+//  누를 때마다 스택에서 한 스텝씩 되감는다 — LIFO 역재생이라 골드 경로가 정확히 복원된다.
+//  세션을 벗어나면(스택이 사라지면) 그 이전 변경은 더 이상 취소할 수 없다.
 export function resetShop(state, id) {
   if (state.status !== 'playing') return state
   const h = getHero(state, id)
-  if (!h || !canShop(h) || h.shopEntryItems == null) return state
-  h.gold += h.shopSpent // 순지출만큼 환원 (구매분 환불, 판매분 회수)
-  h.items = h.shopEntryItems.slice()
-  h.shopSpent = 0
-  h.shopChanged = false
+  if (!h || !canShop(h) || !h.shopStack?.length) return state
+  const op = h.shopStack.pop()
+  if (op.t === 'buy') {
+    const idx = h.items.lastIndexOf(op.itemId)
+    if (idx >= 0) h.items.splice(idx, 1)
+    h.items.push(...op.consumed) // 조합에 흡수됐던 재료 복원
+    h.gold += op.price
+  } else {
+    h.items.splice(Math.min(op.slot, h.items.length), 0, op.itemId) // 팔았던 자리에 복원
+    h.gold -= op.refund
+  }
+  h.shopChanged = h.shopStack.length > 0
   applyItems(h)
   return state
 }
@@ -3176,12 +3184,10 @@ function stepHero(state, h, dt) {
   //   벗어나면(레인 복귀/부활 후 출발) 스냅샷을 버려 그 이전 구매는 취소 불가가 된다.
   const cs = canShop(h)
   if (cs && !h.couldShop) {
-    h.shopEntryItems = h.items.slice()
-    h.shopSpent = 0
+    h.shopStack = []
     h.shopChanged = false
   } else if (!cs && h.couldShop) {
-    h.shopEntryItems = null
-    h.shopSpent = 0
+    h.shopStack = null
     h.shopChanged = false
   }
   h.couldShop = cs

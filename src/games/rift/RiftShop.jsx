@@ -44,7 +44,7 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
                 className="btn btn--ghost rift-shop__undo"
                 onClick={onResetShop}
                 disabled={!me.shopUndo}
-                title={t('상점에 들어온 시점으로 되돌립니다 (무료). 상점을 벗어나면 그 전 구매는 취소할 수 없어요.')}
+                title={t('마지막 구매/판매를 한 건씩 취소합니다 (무료). 상점을 벗어나면 그 전 변경은 취소할 수 없어요.')}
               >
                 {t('↺ 되돌리기')}
               </button>
@@ -147,7 +147,7 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
         <p className="rift-shop__foot">
           {full ? t('🎒 인벤토리가 꽉 찼어요 — 되팔아 자리를 비우세요.')
             : t('병사·정글몹·타워·적 영웅을 처치해 골드를 모으세요!')}
-          <span className="rift-shop__foot-note">{t(' · ↺ 되돌리기로 이번 구매를 무료 취소(상점을 벗어나기 전까지)')}</span>
+          <span className="rift-shop__foot-note">{t(' · ↺ 되돌리기로 방금 구매부터 한 건씩 무료 취소(상점을 벗어나기 전까지)')}</span>
         </p>
       </div>
     </div>
