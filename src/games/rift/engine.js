@@ -8,7 +8,7 @@ import {
   NEXUS_POS, FOUNTAIN_POS, NEXUS_RADIUS, TOWER_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, enemyOf, buildMap, ARENA_R,
 } from './map.js'
 import { getZodiac } from '../../shared/zodiac.js'
-import { ITEM_SLOTS, SELL_REFUND, ITEMS_BY_ID, sumStats, buildQuote } from './items.js'
+import { ITEM_SLOTS, SELL_REFUND, ITEMS, ITEMS_BY_ID, sumStats, buildQuote } from './items.js'
 
 export { ITEM_SLOTS } from './items.js'
 
@@ -4477,6 +4477,26 @@ function botShop(state, h) {
       return
     }
   }
+  // 목록을 다 소화했는데 칸·골드가 남으면(아레나 고액 이월 등) 같은 계열 최고가로 마저 채운다.
+  //  BOT_BUILD는 상위템을 직접 사면 그 재료가 "흡수됨" 처리로 스킵돼 실질 3~4개로 줄어드는데,
+  //  그대로 두면 부자 봇이 빈 칸에 골드만 쌓는다(콜로세움 후반 라운드에서 두드러짐).
+  if (h.gold < 800) return // 코어템 저축 중엔 발동 금지 — 여윳돈이 확실할 때만
+  const cats = new Set()
+  for (const id of BOT_BUILD[h.cls] || []) {
+    const c = ITEMS_BY_ID[id]?.cat
+    if (c && c !== 'util') cats.add(c)
+  }
+  cats.add('defense')
+  let best = null
+  let bestQ = null
+  for (const it of ITEMS) {
+    if (!cats.has(it.cat)) continue
+    if (it.active && h.items.includes(it.id)) continue // 액티브 중복은 쿨 공유라 낭비
+    const q = buildQuote(h.items, it.id)
+    if (q.price > h.gold) continue
+    if (!best || q.price > bestQ.price) { best = it; bestQ = q }
+  }
+  if (best) buyItem(state, h.id, best.id)
 }
 
 // ── 봇 교전 판단용 점수 헬퍼: "잡을 수 있나 + 살아 돌아올 수 있나"를 수치로 가늠한다 ──
