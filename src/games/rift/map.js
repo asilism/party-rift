@@ -173,7 +173,7 @@ export const ARENA_LAYOUTS = {
   },
 }
 
-const ARENA_R = 40 // 경기장 반경 — 낙사 조각(반경 8)·스타팅 원(반경 11)이 여유 있게 들어가는 크기
+export const ARENA_R = 40 // 경기장 반경 — 낙사 조각(반경 8)·스타팅 원(반경 11)이 여유 있게 들어가는 크기
 const ARENA_BASE = {
   WORLD: { minX: -50, maxX: 50, minZ: -50, maxZ: 50 },
   // 넥서스/우물: 스폰 지점(양끝). 아레나엔 수호석 개념이 없어 넥서스는 벽 밖에 감춘다(씬도 그리지 않음).

@@ -5,7 +5,7 @@
 //  - 수풀 은신 + 전장의 안개: 시야 밖 적은 안 보인다 (봇도 같은 규칙).
 //  - 호스트가 step()을 60Hz로 돌리고 makeView() 스냅샷을 전파한다.
 import {
-  NEXUS_POS, FOUNTAIN_POS, NEXUS_RADIUS, TOWER_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, enemyOf, buildMap,
+  NEXUS_POS, FOUNTAIN_POS, NEXUS_RADIUS, TOWER_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, enemyOf, buildMap, ARENA_R,
 } from './map.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { ITEM_SLOTS, SELL_REFUND, ITEMS_BY_ID, sumStats, buildQuote } from './items.js'
@@ -29,19 +29,23 @@ const ARENA_WARN_T = 3 // 경고(장판) → 낙하까지
 // 콜로세움 직업 보정 — 봇 2v2 4000판 승률 기반(전역 밸런스는 불변, 아레나에서만).
 //  deal: 주는 피해 배율 / take: 받는 피해 배율. 승률 80% 전사부터 16% 힐러까지 밴드 압축용.
 const ARENA_CLASS_MOD = {
-  warrior: { deal: 0.62, take: 1.08 },
+  // 2026-07-18 재보정: 봇 끼임 수정으로 교착이 사라지자 메타 이동 — 4000판 샘플 기준
+  warrior: { deal: 0.56, take: 1.08 },
   gladiator: { deal: 0.72 },
   tank: { deal: 0.9, take: 1.32 },
-  illusionist: { deal: 0.72, take: 1.12 },
-  mage: { deal: 0.92 },
+  illusionist: { deal: 0.68, take: 1.12 },
+  mage: { deal: 0.84 },
   warlock: { deal: 0.85 },
   cryomancer: { deal: 1.25 },
-  fearmonger: { deal: 1.2 },
+  fearmonger: { deal: 1.32 },
   windcaller: { deal: 1.38 },
-  engineer: { deal: 1.1 },
-  archer: { deal: 1.28 },
-  guardian: { deal: 1.85, take: 0.78 },
-  healer: { deal: 2.1, take: 0.65 },
+  engineer: { deal: 1.22 },
+  archer: { deal: 1.42 },
+  guardian: { deal: 2.1, take: 0.78 },
+  healer: { deal: 2.2, take: 0.65 },
+  catcher: { deal: 0.88 },
+  chronomancer: { deal: 0.9 },
+  assassin: { deal: 1.15 },
 }
 const ARENA_ORB_EVERY = 9 // 회복 열매 낙하 간격(초)
 const ARENA_ORB_HEAL = 0.28 // 습득 시 최대 체력 대비 회복량
@@ -6105,13 +6109,56 @@ function arenaBotDuty(state, h, dt) {
     h.mz = 0
     return
   }
+  // ⓪-1 끼임 구제 — 콜로세움엔 공통 루프의 귀환 구제가 닿지 않는다(최상단 가로채기).
+  //  "가려는데"(지난 틱 이동 입력) "싸우지도 못하고" 제자리면 게이지를 올리고,
+  //  차면 병사처럼 목표에서 크게 비껴 옆걸음으로 벽을 빠져나온다. 트리거마다 반대쪽 재시도.
+  {
+    const wanted = Math.hypot(h.mx || 0, h.mz || 0) > 0.12
+    const attacked = h.atkSeq !== (h.botPrevSeq ?? h.atkSeq)
+    const moved = Math.hypot(h.x - (h.botPrevX ?? h.x), h.z - (h.botPrevZ ?? h.z))
+    const held = h.stunT > 0 || h.freezeT > 0 || h.rootT > 0 || h.castT > 0 // CC·시전은 끼임이 아니다
+    if (!held && wanted && !attacked && moved < heroSpeed(h) * dt * 0.25) {
+      h.botStuckT = (h.botStuckT || 0) + dt
+      if (h.botStuckT > 0.6) h.navUntil = 0 // 우선 길부터 다시 찾는다
+    } else {
+      h.botStuckT = Math.max(0, (h.botStuckT || 0) - dt * 2)
+    }
+    h.botPrevX = h.x
+    h.botPrevZ = h.z
+    h.botPrevSeq = h.atkSeq
+    if ((h.botStuckT || 0) > 1.1) {
+      h.botStuckT = 0
+      h.stuckSide = -(h.stuckSide || (state.rng() < 0.5 ? 1 : -1))
+      h.arenaDetourT = 0.8
+    }
+    if ((h.arenaDetourT || 0) > 0) {
+      h.arenaDetourT -= dt
+      const ref = state.heroes.find((e) => e.id === h.botFoeId && e.hp > 0) || { x: 0, z: 0 }
+      const ang = Math.atan2(ref.z - h.z, ref.x - h.x) + (h.stuckSide || 1) * 1.9
+      h.mx = Math.cos(ang)
+      h.mz = Math.sin(ang)
+      botAttack(state, h, dt)
+      return
+    }
+  }
+  // 봇이 스스로 계산한 목표는 경기장 밖(원형 벽 너머)일 수 있다 — 그대로 두면
+  // A*가 길을 못 찾아 벽에 직진하며 박힌다. 항상 벽 안쪽으로 눌러 담는다.
+  const clampArena = (p) => {
+    const r = Math.hypot(p.x, p.z)
+    const m = ARENA_R - 4
+    if (r > m) {
+      p.x *= m / r
+      p.z *= m / r
+    }
+    return p
+  }
   // ⓪ 붕괴 회피 — 경고 장판 위면 즉시 탈출(공격보다 목숨)
   for (const w of state.holeWarns) {
     const d = Math.hypot(h.x - w.x, h.z - w.z)
     if (d < w.r + 1.5) {
       const dx = (h.x - w.x) / (d || 0.001)
       const dz = (h.z - w.z) / (d || 0.001)
-      steerToward(state, h, { x: w.x + dx * (w.r + 3), z: w.z + dz * (w.r + 3) })
+      steerToward(state, h, clampArena({ x: w.x + dx * (w.r + 3), z: w.z + dz * (w.r + 3) }))
       botAttack(state, h, dt)
       return
     }
@@ -6159,7 +6206,7 @@ function arenaBotDuty(state, h, dt) {
     // 뒤로 빠지되 구멍은 밟지 않는다
     const dx = (h.x - foe.x) / (d || 0.001)
     const dz = (h.z - foe.z) / (d || 0.001)
-    goal = { x: h.x + dx * 6, z: h.z + dz * 6 }
+    goal = clampArena({ x: h.x + dx * 6, z: h.z + dz * 6 })
   } else if (d > range * 0.85) {
     goal = { x: foe.x, z: foe.z } // 접근 — 부쉬 속이어도 위치는 안다
   } else if (range >= 9 && d < range * 0.6) {
@@ -6167,7 +6214,11 @@ function arenaBotDuty(state, h, dt) {
     //  개활지(모래벌판)의 지형 이점은 이 한 걸음에서 나온다
     const dx = (h.x - foe.x) / (d || 0.001)
     const dz = (h.z - foe.z) / (d || 0.001)
-    goal = { x: h.x + dx * (range * 0.85 - d), z: h.z + dz * (range * 0.85 - d) }
+    goal = clampArena({ x: h.x + dx * (range * 0.85 - d), z: h.z + dz * (range * 0.85 - d) })
+  } else if (!state.map.lineFree(h.x, h.z, foe.x, foe.z)) {
+    // 사거리 안이어도 벽이 시야선을 막으면 제자리 대치 금지 — 돌아가서 마주 본다.
+    //  (협로 중앙 장벽을 사이에 두고 서로 멀뚱히 서 있던 교착의 주범)
+    goal = { x: foe.x, z: foe.z }
   } else {
     goal = null // 사거리 안: 제자리 공방(스킬은 공통 루프가 쏜다)
   }
