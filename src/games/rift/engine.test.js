@@ -2057,25 +2057,39 @@ test('상점: 우물 안에서만 살 수 있고, 골드가 줄고 능력치가 
   assert.equal(h.bonus.atk, 45) // 30 × 1.5
 })
 
-test('상점 되돌리기: 벗어나기 전엔 이번 구매를 무료 취소, 벗어나면 불가', () => {
+test('상점 되돌리기: 마지막 구매부터 한 건씩 취소, 벗어나면 불가', () => {
   const g = createGame(humans())
   startPlaying(g)
   const h = g.heroes[2] // blue warrior
   toFountain(g, h)
-  h.gold = 1000
-  step(g, STEP) // 우물 진입 → 진입 시점 스냅샷
+  h.gold = 3000
+  step(g, STEP) // 우물 진입 → 되돌리기 스택 시작
   const gold0 = h.gold
   buyItem(g, h.id, 'longsword') // -550
+  const goldAfterFirst = h.gold
   buyItem(g, h.id, 'dagger') // -250
   assert.equal(h.items.length, 2)
-  resetShop(g, h.id)
-  assert.deepEqual(h.items, [], '되돌리면 이번 세션 구매가 사라진다')
-  assert.equal(h.gold, gold0, '쓴 골드를 그대로 환원한다')
-  // 우물을 벗어나면(세션 종료) 그 전 구매는 되돌릴 수 없다
+  resetShop(g, h.id) // 한 스텝: 마지막 구매(dagger)만 취소
+  assert.deepEqual(h.items, ['longsword'], '한 번 누르면 마지막 구매 한 건만 사라진다')
+  assert.equal(h.gold, goldAfterFirst, '그 건의 골드만 환원한다')
+  resetShop(g, h.id) // 두 스텝: longsword까지
+  assert.deepEqual(h.items, [], '두 번 누르면 그 이전 구매도 사라진다')
+  assert.equal(h.gold, gold0)
+  resetShop(g, h.id) // 스택 빈 상태 — 무시
+  assert.equal(h.gold, gold0)
+  // 조합 구매 되돌리기: 흡수된 재료가 돌아온다
   buyItem(g, h.id, 'dagger')
+  const goldPreCombo = h.gold
+  buyItem(g, h.id, 'vampire_scythe') // dagger를 소모하는 조합
+  assert.ok(!h.items.includes('dagger'), '조합이 재료를 소모했다')
+  resetShop(g, h.id)
+  assert.ok(h.items.includes('dagger'), '조합 취소로 재료가 복원된다')
+  assert.ok(!h.items.includes('vampire_scythe'))
+  assert.equal(h.gold, goldPreCombo, '조합 차액이 환원된다')
+  // 우물을 벗어나면(세션 종료) 그 전 변경은 되돌릴 수 없다
   h.x = 0
   h.z = 0 // 우물 밖
-  step(g, STEP) // 세션 종료 → 스냅샷 폐기
+  step(g, STEP) // 세션 종료 → 스택 폐기
   const goldAfter = h.gold
   resetShop(g, h.id) // 우물 밖이라 무시된다
   assert.deepEqual(h.items, ['dagger'], '벗어난 뒤엔 되돌리기 불가')

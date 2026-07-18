@@ -5566,41 +5566,84 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const base = view.arenaPts[loser] || 0
         arenaFinale = { t0: now, loser, base, pops: Math.min(view.arenaDeduct || 0, base) }
       }
+      // 펑 이펙트 세트: 💥 + 회색 연기 퍼프 + 사방으로 튀는 분홍 파편 — 하트 10개여도 차감이 또렷이 보이게
+      const spawnPop = (st, pos, big = false) => {
+        const group = st.hearts[0].parent
+        const boom = emojiSprite('💥', big ? 7 : 3)
+        boom.position.copy(pos)
+        group.add(boom)
+        st.bursts.push({ kind: 'boom', sp: boom, t0: now, dur: big ? 0.6 : 0.45, s0: big ? 7 : 3 })
+        const smoke = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: glowTexture(), color: 0x9a9aa6, transparent: true, opacity: 0.55, depthWrite: false,
+        }))
+        smoke.position.copy(pos)
+        group.add(smoke)
+        st.bursts.push({ kind: 'smoke', sp: smoke, t0: now, dur: big ? 1.1 : 0.75, s0: big ? 4 : 1.6 })
+        for (let k = 0; k < (big ? 12 : 7); k++) {
+          const shard = new THREE.Sprite(new THREE.SpriteMaterial({
+            map: glowTexture(), color: k % 2 ? 0xff7ab0 : 0xffd0e2, transparent: true, depthWrite: false,
+          }))
+          shard.scale.setScalar(big ? 1.1 : 0.7)
+          shard.position.copy(pos)
+          group.add(shard)
+          const a = Math.random() * Math.PI * 2
+          const sp = (big ? 7 : 5) * (0.6 + Math.random() * 0.7)
+          st.bursts.push({
+            kind: 'shard', sp: shard, t0: now, dur: 0.65, s0: big ? 1.1 : 0.7,
+            o: pos.clone(), vel: { x: Math.cos(a) * sp, y: 3 + Math.random() * 3, z: Math.sin(a) * sp },
+          })
+        }
+      }
       for (const team of ['blue', 'red']) {
         const st = arenaHearts[team]
         const isLoser = arenaFinale?.loser === team
+        if (isLoser && !st.aliveArr) st.aliveArr = Array(arenaFinale.base).fill(true)
         // 패배 연출: 1초 숨 고른 뒤 0.5초 간격으로 하나씩 펑
         const popTarget = isLoser
           ? Math.max(0, Math.min(arenaFinale.pops, Math.floor((now - arenaFinale.t0 - 1.0) / 0.5) + 1))
           : 0
         const slots = isLoser ? arenaFinale.base : Math.min(10, view.arenaPts[team] || 0)
-        const alive = isLoser ? arenaFinale.base - popTarget : slots
-        while (st.popped < popTarget) {
-          // 펑! — 터지는 하트 자리에 폭발 스프라이트
-          const idx = arenaFinale.base - 1 - st.popped
-          const h = st.hearts[idx]
-          const b = emojiSprite('💥', 2.4)
-          b.position.copy(h.position)
-          st.hearts[0].parent.add(b)
-          st.bursts.push({ sp: b, t0: now })
-          st.popped++
-        }
+        // 하트 배치를 먼저 — 터질 하트 선정이 "현재 화면 위치" 기준이 되도록
         for (let i = 0; i < st.hearts.length; i++) {
           const h = st.hearts[i]
-          h.visible = i < alive
-          if (h.visible) {
-            const ang = (i / Math.max(1, slots)) * Math.PI * 2 + now * 0.35
-            h.position.set(Math.cos(ang) * 3.6, 5.4 + Math.sin(now * 2 + i * 1.3) * 0.3, Math.sin(ang) * 3.6)
+          h.visible = i < slots && (!isLoser || !!st.aliveArr[i])
+          const ang = (i / Math.max(1, slots)) * Math.PI * 2 + now * 0.35
+          h.position.set(Math.cos(ang) * 3.6, 5.4 + Math.sin(now * 2 + i * 1.3) * 0.3, Math.sin(ang) * 3.6)
+        }
+        while (st.popped < popTarget) {
+          // 경기장 쪽(앞) 하트부터 터진다 — 카메라 정면이라 차감이 잘 읽힌다
+          const frontDir = -Math.sign(nexusObjs[team].position.x) || 1
+          let idx = -1
+          let best = -Infinity
+          for (let i = 0; i < Math.min(slots, st.aliveArr.length); i++) {
+            if (!st.aliveArr[i]) continue
+            const sc = st.hearts[i].position.x * frontDir
+            if (sc > best) { best = sc; idx = i }
           }
+          if (idx < 0) break
+          st.aliveArr[idx] = false
+          st.hearts[idx].visible = false
+          spawnPop(st, st.hearts[idx].position)
+          st.popped++
         }
         for (let i = st.bursts.length - 1; i >= 0; i--) {
           const b = st.bursts[i]
-          const t = (now - b.t0) / 0.45
+          const t = (now - b.t0) / b.dur
           if (t >= 1) {
             b.sp.parent?.remove(b.sp)
             st.bursts.splice(i, 1)
-          } else {
-            b.sp.scale.setScalar(2.4 * (0.6 + t * 1.6))
+            continue
+          }
+          if (b.kind === 'boom') {
+            b.sp.scale.setScalar(b.s0 * (0.6 + t * 1.6))
+            b.sp.material.opacity = 1 - t
+          } else if (b.kind === 'smoke') {
+            b.sp.scale.setScalar(b.s0 * (1 + t * 2.4))
+            b.sp.material.opacity = 0.55 * (1 - t)
+          } else { // shard — 포물선으로 튀어 나가며 사그라든다
+            const e = t * b.dur
+            b.sp.position.set(b.o.x + b.vel.x * e, b.o.y + b.vel.y * e - 9 * e * e, b.o.z + b.vel.z * e)
+            b.sp.scale.setScalar(b.s0 * (1 - t * 0.6))
             b.sp.material.opacity = 1 - t
           }
         }
@@ -5608,10 +5651,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const wipedOut = isLoser && arenaFinale.base - arenaFinale.pops <= 0 && st.popped >= arenaFinale.pops
         if (wipedOut && !st.boomed && now > arenaFinale.t0 + 1.0 + arenaFinale.pops * 0.5 + 0.4) {
           st.boomed = true
-          const boom = emojiSprite('💥', 7)
-          boom.position.set(0, 6, 0)
-          st.hearts[0].parent.add(boom)
-          st.bursts.push({ sp: boom, t0: now })
+          spawnPop(st, new THREE.Vector3(0, 6, 0), true)
         }
         if (st.boomed) {
           const u = nexusObjs[team].userData
@@ -6516,6 +6556,120 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume 
       renderer.dispose()
       // forceContextLoss는 금지 — HatPreview가 같은 canvas를 재사용하므로(이펙트
       // 재실행) 소실된 컨텍스트가 남아 다음 렌더러 생성이 크래시한다
+    },
+  }
+}
+
+// ── 콜로세움 우승 무대 — 우승 듀오가 금빛 단상 위에서 만세(교차 점프)하는 셀레브레이션 ──
+//  카메라는 느린 궤도 + 들숨/날숨 돌리로 단상을 돈다. 색종이가 쉼 없이 내린다.
+export function createChampionStage(canvas, { duo }) {
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
+  renderer.setClearColor(0x35243a) // 콜로세움 노을 하늘
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
+  const scene = new THREE.Scene()
+  scene.fog = new THREE.Fog(0x35243a, 34, 80)
+  const camera = new THREE.PerspectiveCamera(38, 16 / 9, 0.5, 120)
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75))
+  const sun = new THREE.DirectionalLight(0xfff1d6, 1.1)
+  sun.position.set(8, 16, 10)
+  scene.add(sun)
+
+  // 모래 바닥 + 3단 단상(금빛 상단) + 발광 링
+  const sand = new THREE.Mesh(new THREE.CircleGeometry(36, 48), new THREE.MeshLambertMaterial({ color: 0xc9a86a }))
+  sand.rotation.x = -Math.PI / 2
+  scene.add(sand)
+  const stone = new THREE.MeshLambertMaterial({ color: 0xcfc3a6 })
+  const gold = new THREE.MeshLambertMaterial({ color: 0xf3c34b, emissive: 0x64430a, emissiveIntensity: 0.35 })
+  const tier1 = new THREE.Mesh(new THREE.CylinderGeometry(6.4, 7.2, 1.0, 24), stone)
+  tier1.position.y = 0.5
+  const tier2 = new THREE.Mesh(new THREE.CylinderGeometry(4.6, 5.2, 1.1, 24), stone)
+  tier2.position.y = 1.55
+  const podTop = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.8, 1.0, 24), gold)
+  podTop.position.y = 2.6
+  scene.add(tier1, tier2, podTop)
+  const TOP_Y = 3.1
+  const halo = new THREE.Mesh(
+    new THREE.RingGeometry(4.2, 6.4, 44),
+    new THREE.MeshBasicMaterial({ color: 0xffd34d, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false })
+  )
+  halo.rotation.x = -Math.PI / 2
+  halo.position.y = 0.06
+  scene.add(halo)
+
+  // 우승 듀오 — 명패/체력바 없이 모델만, 무기는 하늘로 치켜든 자세
+  const champs = duo.slice(0, 2).map((m, i) => {
+    const g = buildHero(
+      { id: `champ${i}`, cls: m.cls, zodiacId: m.zodiacId, team: 'blue', lvl: 18, atkSeq: 0 },
+      false, '#fff', m.hat || null, m.costume || null, m.weapon || null
+    )
+    const u = g.userData
+    u.name.visible = false
+    u.bar.visible = false
+    u.weapon.userData.pose(0.5)
+    u.weapon.parent.parent.rotation.z = 0.6 // 손목 들어올림 — 만세!
+    const s = CLS_SCALE[m.cls] || 1
+    g.position.set(i === 0 ? -1.7 : 1.7, TOP_Y, 0)
+    scene.add(g)
+    return { g, s, phase: i * Math.PI } // 교차 점프 위상
+  })
+
+  // 색종이 — 하늘에서 흩날리며 끝없이 내린다
+  const CONF_COLORS = [0xff6b81, 0xffd34d, 0x7fd6ff, 0x8dfab4, 0xd9a7ff]
+  const confetti = []
+  for (let i = 0; i < 44; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture(), color: CONF_COLORS[i % CONF_COLORS.length], transparent: true, depthWrite: false,
+    }))
+    sp.scale.setScalar(0.3 + Math.random() * 0.3)
+    const c = { sp, x: (Math.random() - 0.5) * 24, y: 2 + Math.random() * 14, z: (Math.random() - 0.5) * 24, vy: 1.2 + Math.random() * 1.6, sway: Math.random() * Math.PI * 2 }
+    sp.position.set(c.x, c.y, c.z)
+    confetti.push(c)
+    scene.add(sp)
+  }
+
+  let raf
+  let last = performance.now()
+  let time = 0
+  function frame() {
+    raf = requestAnimationFrame(frame)
+    const now = performance.now()
+    if (now - last < 1000 / 30 - 2) return // 셀레브레이션 무대는 30fps면 충분
+    let dt = (now - last) / 1000
+    last = now
+    if (!(dt > 0) || dt > 0.1) dt = 1 / 60
+    time += dt
+    // 만세 점프 — 교차 홉 + 착지 스쿼시 + 몸 흔들기
+    for (const h of champs) {
+      const cyc = Math.sin(time * 3.1 + h.phase)
+      h.g.position.y = TOP_Y + Math.max(0, cyc) * 1.0 * h.s
+      h.g.rotation.z = cyc * 0.07
+      h.g.scale.y = 1 - Math.max(0, -cyc) * 0.07
+    }
+    halo.material.opacity = 0.24 + Math.sin(time * 2.4) * 0.1
+    for (const c of confetti) {
+      c.y -= c.vy * dt
+      if (c.y < 0.3) c.y = 12 + Math.random() * 6
+      c.sp.position.set(c.x + Math.sin(time * 1.7 + c.sway) * 0.9, c.y, c.z + Math.cos(time * 1.3 + c.sway) * 0.5)
+      c.sp.material.opacity = Math.min(1, c.y / 2)
+    }
+    // 카메라 — 느린 궤도 + 돌리 숨쉬기(가까워졌다 멀어졌다)
+    const a = time * 0.14
+    const r = 16.5 + Math.sin(time * 0.09) * 2
+    camera.position.set(Math.sin(a) * r, 7.2 + Math.sin(time * 0.17) * 1.1, Math.cos(a) * r)
+    camera.lookAt(0, 3.1, 0)
+    renderer.render(scene, camera)
+  }
+  raf = requestAnimationFrame(frame)
+
+  return {
+    resize(w, h) {
+      renderer.setSize(w, h, false)
+      camera.aspect = w / Math.max(1, h)
+      camera.updateProjectionMatrix()
+    },
+    dispose() {
+      cancelAnimationFrame(raf)
+      renderer.dispose()
     },
   }
 }

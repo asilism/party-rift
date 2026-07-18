@@ -492,7 +492,7 @@ const DICT = {
   // 상점 UI
   '✕ 닫기': '✕ Close',
   '↺ 되돌리기': '↺ Undo',
-  '상점에 들어온 시점으로 되돌립니다 (무료). 상점을 벗어나면 그 전 구매는 취소할 수 없어요.': 'Reverts to when you entered the shop (free). Purchases made before leaving cannot be undone.',
+  '마지막 구매/판매를 한 건씩 취소합니다 (무료). 상점을 벗어나면 그 전 변경은 취소할 수 없어요.': 'Undo your last purchase/sale one step at a time (free). Leaving the shop locks in earlier changes.',
   '아직 장비가 없어요': 'No items yet',
   '보유중': 'Owned',
   '되팔기': 'Sell',
@@ -504,7 +504,7 @@ const DICT = {
   '사용 효과가 있는 아이템': 'Item with an active effect',
   '🎒 인벤토리가 꽉 찼어요 — 되팔아 자리를 비우세요.': '🎒 Inventory is full — sell something to make room.',
   '병사·정글몹·타워·적 영웅을 처치해 골드를 모으세요!': 'Earn gold by killing soldiers, jungle monsters, towers and enemy heroes!',
-  ' · ↺ 되돌리기로 이번 구매를 무료 취소(상점을 벗어나기 전까지)': " · ↺ Undo cancels this visit's purchases for free (until you leave the shop)",
+  ' · ↺ 되돌리기로 방금 구매부터 한 건씩 무료 취소(상점을 벗어나기 전까지)': " · ↺ Undo cancels your latest purchase one step at a time, free (until you leave the shop)",
 
   // 봇 이름·대기 문구
   '봇': ' Bot',

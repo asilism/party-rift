@@ -22,7 +22,7 @@ import { recordMatchForAchievements, achievementRows, evaluateAchievements } fro
 import { createTournament, nextRound, resolveRound, userPlacement, arenaLevelFor, ARENA_PLACE_COIN, ARENA_LAYOUT_META } from './colosseum.js'
 import Fireworks from '../shared/Fireworks.jsx'
 import { adsAvailable, showRewarded } from '../shared/ads.js'
-import MenuStage, { ArenaStage } from './MenuStage.jsx'
+import MenuStage, { ArenaStage, ChampionStage } from './MenuStage.jsx'
 import HatPreview from './HatPreview.jsx'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
 // 오픈소스 고지 전문 — 빌드에 원문 그대로 번들되어 웹/데스크톱/안드로이드 배포물 모두에 포함된다
@@ -427,7 +427,15 @@ export default function SoloApp() {
 
   return (
     <div className="shell">
-      {screen === 'colosseum' ? <ArenaStage /> : <MenuStage />}
+      {screen === 'colosseum' ? (
+        // 우승 확정 최종 화면: 빈 경기장 대신 우승 듀오의 단상 만세 무대
+        tourStage === 'final' && tour && userPlacement(tour) === 1 ? (
+          <ChampionStage duo={tour.teams.find((tm) => tm.isUser).members.map((m) => (
+            m.isBot ? { cls: m.cls, zodiacId: m.zodiacId }
+              : { cls: m.cls, zodiacId: m.zodiacId, hat: loadEquippedHat(), costume: loadEquippedCostume(), weapon: loadEquippedWeapon() }
+          ))} />
+        ) : <ArenaStage />
+      ) : <MenuStage />}
       {screen === 'title' && <TitleScreen onEnter={enterFromTitle} />}
       {screen === 'profile' && (
         <ProfileScreen current={profile} onPick={pickProfile} onBack={profile ? () => go('menu') : null} />
@@ -1107,6 +1115,13 @@ function ColosseumScreen({ tour, stage, onEnter, onSkipRound, onNextRound, onFin
     (b.alive ? 1 : 0) - (a.alive ? 1 : 0) || b.pts - a.pts || (b.elimRound || 0) - (a.elimRound || 0))
   const deductedOf = (tm) => (stage === 'result' && last?.results.some((r) => r.loser === tm) ? last.deduction : 0)
   const place = userPlacement(tour)
+  // 우승이면 최종 카드를 잠시 미룬다 — 단상 만세 무대(ChampionStage)를 먼저 풀스크린으로
+  const [finalCard, setFinalCard] = useState(false)
+  useEffect(() => {
+    if (stage !== 'final') { setFinalCard(false); return undefined }
+    const t0 = setTimeout(() => setFinalCard(true), place === 1 ? 2800 : 500)
+    return () => clearTimeout(t0)
+  }, [stage, place])
 
   return (
     <div className="screen colo-screen">
@@ -1193,7 +1208,7 @@ function ColosseumScreen({ tour, stage, onEnter, onSkipRound, onNextRound, onFin
         </div>
       )}
 
-      {stage === 'final' && (
+      {stage === 'final' && finalCard && (
         <div className="toy-card colo-card colo-card--final">
           {place === 1 && <Fireworks />}
           <div className="colo-final__trophy">{place === 1 ? '🏆' : place === 2 ? '🥈' : place === 3 ? '🥉' : '🏟️'}</div>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Rift3D from '../games/rift/Rift3D.jsx'
-import { createRiftScene } from '../games/rift/scene.js'
+import { createRiftScene, createChampionStage } from '../games/rift/scene.js'
 import { buildMap } from '../games/rift/map.js'
 import { riftNet } from '../games/rift/netgame.js'
 import { createLocalNet } from '../net/localNet.js'
@@ -114,6 +114,31 @@ export function ArenaStage() {
       scene.dispose()
     }
   }, [])
+  return (
+    <div className="menustage" aria-hidden="true">
+      <canvas ref={canvasRef} className="rift__canvas" />
+      <div className="menustage__tint" />
+    </div>
+  )
+}
+
+// ── 우승 무대 — 콜로세움 우승 시 최종 화면 배경: 듀오가 금빛 단상에서 만세하는 셀레브레이션 ──
+export function ChampionStage({ duo }) {
+  const canvasRef = useRef(null)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const stage = createChampionStage(canvas, { duo })
+    const holder = canvas.parentElement
+    const fit = () => stage.resize(holder.clientWidth, holder.clientHeight)
+    const ro = new ResizeObserver(fit)
+    ro.observe(holder)
+    fit()
+    return () => {
+      ro.disconnect()
+      stage.dispose()
+    }
+    // duo는 우승 확정 시점에 고정된 배열 — 재생성 불필요
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="menustage" aria-hidden="true">
       <canvas ref={canvasRef} className="rift__canvas" />
