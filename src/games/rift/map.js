@@ -134,6 +134,45 @@ function arcWallLines(cx, cz, R, a0, a1) {
 const BOSS_LAIR = { x: 96, z: 0, r: 24 } // 성곽 중심(=레드 수호석/옥좌)과 반지름
 // ── 콜로세움(아레나 12인 토너먼트) — 원형 경기장, 탈출 불가 벽, 부쉬 3곳, 안개 없음 ──
 //  테두리 원벽은 buildMap의 arena 분기에서 arcWallLines로 생성한다(BASE는 리터럴 유지).
+// 콜로세움 내부 구조 3종 — 라운드마다 무작위. 직업 계열별 유불리가 지형으로 갈린다.
+//  pit(기둥의 숲): 시야선 절단 + 접근 부쉬 사다리 = 근접 유리
+//  field(모래벌판): 엄폐 전무 + 도주용 가장자리 부쉬만 = 원거리 유리
+//  canyon(술사의 협로): 중앙 장벽 + 좁은 통로 2개 = 광역 마법 유리
+export const ARENA_LAYOUTS = {
+  pit: {
+    WALL_LINES: [
+      { x1: -14, z1: -18, x2: -7, z2: -14 }, { x1: 7, z1: 14, x2: 14, z2: 18 },
+      { x1: 14, z1: -14, x2: 20, z2: -8 }, { x1: -20, z1: 8, x2: -14, z2: 14 },
+      { x1: -6, z1: -4, x2: -1, z2: 2 }, { x1: 1, z1: -2, x2: 6, z2: 4 },
+      { x1: -4, z1: 20, x2: 4, z2: 23 }, { x1: -4, z1: -23, x2: 4, z2: -20 },
+    ],
+    ROCKS: [{ x: -24, z: -8, r: 2.0 }, { x: 24, z: 8, r: 2.0 }],
+    BUSHES: [
+      { x: -16, z: 4, r: 4.4 }, { x: 16, z: -4, r: 4.4 },
+      { x: -8, z: -12, r: 4.0 }, { x: 8, z: 12, r: 4.0 },
+      { x: 0, z: 0, r: 4.2 },
+    ],
+  },
+  field: {
+    WALL_LINES: [],
+    ROCKS: [{ x: 0, z: -30, r: 2.2 }, { x: 0, z: 30, r: 2.2 }],
+    BUSHES: [{ x: 0, z: -26, r: 4.0 }, { x: 0, z: 26, r: 4.0 }],
+  },
+  canyon: {
+    WALL_LINES: [
+      // 중앙 세로 장벽 — 통로는 z∈[-12,-4]와 [4,12] 두 곳뿐(폭 8): 광역기가 통로를 통째로 덮는다
+      { x1: 0, z1: -34, x2: 0, z2: -12 },
+      { x1: 0, z1: -4, x2: 0, z2: 4 },
+      { x1: 0, z1: 12, x2: 0, z2: 34 },
+    ],
+    ROCKS: [{ x: -20, z: 0, r: 2.0 }, { x: 20, z: 0, r: 2.0 }],
+    BUSHES: [
+      { x: -6, z: -8, r: 3.8 }, { x: 6, z: -8, r: 3.8 },
+      { x: -6, z: 8, r: 3.8 }, { x: 6, z: 8, r: 3.8 },
+    ],
+  },
+}
+
 const ARENA_R = 40 // 경기장 반경 — 낙사 조각(반경 8)·스타팅 원(반경 11)이 여유 있게 들어가는 크기
 const ARENA_BASE = {
   WORLD: { minX: -50, maxX: 50, minZ: -50, maxZ: 50 },
@@ -558,9 +597,13 @@ function findPathFor(geo, sx, sz, tx, tz) {
 }
 
 // 모드별 맵 객체를 만든다. 지형 데이터 + 그 지형에 묶인 헬퍼 메서드를 함께 담는다.
-export function buildMap(mode = '3v3') {
+export function buildMap(mode = '3v3', arenaLayout = null) {
   const raid = mode === 'boss' || mode === 'defense' // 방어전도 보스의 협곡 지형을 쓴다
-  const base = mode === 'arena' ? ARENA_BASE : raid ? BOSS_BASE : BASE // 모드별 전용 지형
+  let base = mode === 'arena' ? ARENA_BASE : raid ? BOSS_BASE : BASE // 모드별 전용 지형
+  // 콜로세움 내부 구조: 레이아웃이 지정되면 엄폐벽·바위·부쉬를 통째로 갈아 끼운다
+  if (mode === 'arena' && ARENA_LAYOUTS[arenaLayout]) {
+    base = { ...ARENA_BASE, ...ARENA_LAYOUTS[arenaLayout] }
+  }
   const s = MODE_SCALE[mode] || MODE_SCALE['3v3']
   const WORLD = {
     minX: base.WORLD.minX * s.x, maxX: base.WORLD.maxX * s.x,

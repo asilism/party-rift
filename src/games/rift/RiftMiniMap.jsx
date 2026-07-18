@@ -47,7 +47,7 @@ function FogOverlay({ view, myTeam, pad, map }) {
 // 우측 상단 미니맵: 3갈래 레인/타워/수호석/수풀 위에 영웅·용·이무기 위치 표시.
 // 내 팀 시야 규칙 그대로 — 안 보이는 적은 미니맵에도 안 찍힌다.
 export default function RiftMiniMap({ view, myId }) {
-  const map = useMemo(() => buildMap(view.mode), [view.mode])
+  const map = useMemo(() => buildMap(view.mode, view.arenaLayout), [view.mode, view.arenaLayout])
   const { WORLD, NEXUS_POS, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT } = map
   const pad = 8
   const vb = `${WORLD.minX - pad} ${WORLD.minZ - pad} ${WORLD.maxX - WORLD.minX + pad * 2} ${WORLD.maxZ - WORLD.minZ + pad * 2}`

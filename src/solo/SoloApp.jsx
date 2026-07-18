@@ -19,7 +19,7 @@ import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRIC
 import { buildSoloRoster } from './roster.js'
 import { missionRows, recordMissionProgress, claimMission, allClearState, claimAllClear, ALL_CLEAR_REWARD } from './missions.js'
 import { recordMatchForAchievements, achievementRows, evaluateAchievements } from './achievements.js'
-import { createTournament, nextRound, resolveRound, userPlacement, arenaLevelFor, ARENA_PLACE_COIN } from './colosseum.js'
+import { createTournament, nextRound, resolveRound, userPlacement, arenaLevelFor, ARENA_PLACE_COIN, ARENA_LAYOUT_META } from './colosseum.js'
 import Fireworks from '../shared/Fireworks.jsx'
 import { adsAvailable, showRewarded } from '../shared/ads.js'
 import MenuStage, { ArenaStage } from './MenuStage.jsx'
@@ -148,7 +148,7 @@ export default function SoloApp() {
     const dOpt = DIFF_OPTS.find((o) => o.id === diff) || DIFF_OPTS[0]
     const n = createLocalNet(riftNet, {
       players: [],
-      config: { mode: 'arena', roster, carry, botLevel: dOpt.botLevel },
+      config: { mode: 'arena', roster, carry, botLevel: dOpt.botLevel, arenaLayout: cur.layout },
       deviceId: 'solo',
       onFinish(view) {
         arenaViewRef.current = view // 결과 반영은 '결과 보기' 버튼에서 — 경기 결과 모달을 먼저 보게 한다
@@ -1116,6 +1116,12 @@ function ColosseumScreen({ tour, stage, onEnter, onSkipRound, onNextRound, onFin
             <b>{cur.isFinal ? `👑 ${t('결승 데스매치')}` : `${cur.round}${t('라운드')}`}</b>
             <span className="colo-deduct">{t('패배 시')} -{cur.deduction}</span>
           </div>
+          {cur.layout && ARENA_LAYOUT_META[cur.layout] && (
+            <div className="colo-layout">
+              {ARENA_LAYOUT_META[cur.layout].icon} <b>{t(ARENA_LAYOUT_META[cur.layout].name)}</b>
+              <span className="colo-layout__hint">{t(ARENA_LAYOUT_META[cur.layout].hint)}</span>
+            </div>
+          )}
           <div className="colo-pairs">
             {cur.pairs.map((p, i) => {
               const mine = p[0].isUser || p[1].isUser
