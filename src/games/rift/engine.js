@@ -26,6 +26,23 @@ export const ARENA_FIGHT_T = 180
 const ARENA_HOLE_R = 8 // 붕괴 조각 반경 (경기장 R34 기준)
 const ARENA_HOLE_EVERY = 10 // 서든데스 붕괴 웨이브 간격(초)
 const ARENA_WARN_T = 3 // 경고(장판) → 낙하까지
+// 콜로세움 직업 보정 — 봇 2v2 4000판 승률 기반(전역 밸런스는 불변, 아레나에서만).
+//  deal: 주는 피해 배율 / take: 받는 피해 배율. 승률 80% 전사부터 16% 힐러까지 밴드 압축용.
+const ARENA_CLASS_MOD = {
+  warrior: { deal: 0.62, take: 1.08 },
+  gladiator: { deal: 0.72 },
+  tank: { deal: 0.9, take: 1.32 },
+  illusionist: { deal: 0.72, take: 1.12 },
+  mage: { deal: 0.92 },
+  warlock: { deal: 0.85 },
+  cryomancer: { deal: 1.25 },
+  fearmonger: { deal: 1.2 },
+  windcaller: { deal: 1.38 },
+  engineer: { deal: 1.1 },
+  archer: { deal: 1.28 },
+  guardian: { deal: 1.85, take: 0.78 },
+  healer: { deal: 2.1, take: 0.65 },
+}
 const ARENA_ORB_EVERY = 9 // 회복 열매 낙하 간격(초)
 const ARENA_ORB_HEAL = 0.28 // 습득 시 최대 체력 대비 회복량
 const ARENA_ORB_LIFE = 20 // 방치 시 소멸(초)
@@ -2548,6 +2565,11 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   if (attacker?.bossEnraged) amount *= 1.5 // 보스 광폭화
   if (attacker?.isBoss && attacker.bossPhase > 1) amount *= BOSS_PHASE_DMG[attacker.bossPhase - 1] // 페이즈 분노
   if (!redirected && attacker?.isBoss) amount *= bossTierOf(state).atk // 난이도 티어(평타·스킬·장판 공통)
+  // 콜로세움 직업 보정(주는/받는 피해)
+  if (state.mode === 'arena' && !redirected) {
+    if (attacker) amount *= ARENA_CLASS_MOD[attacker.cls]?.deal ?? 1
+    amount *= ARENA_CLASS_MOD[victim.cls]?.take ?? 1
+  }
   // 가시갑옷: 반사창 동안 보스를 때리면 35%를 되받는다(반사 피해는 다시 반사되지 않는다)
   if (victim.isBoss && victim.thornArmorT > 0 && attacker && !redirected && attacker.hp > 0 && !attacker.isBoss) {
     damageHero(state, attacker, amount * 0.35, victim, true)
@@ -6134,6 +6156,12 @@ function arenaBotDuty(state, h, dt) {
     goal = { x: h.x + dx * 6, z: h.z + dz * 6 }
   } else if (d > range * 0.85) {
     goal = { x: foe.x, z: foe.z } // 접근 — 부쉬 속이어도 위치는 안다
+  } else if (range >= 9 && d < range * 0.6) {
+    // 원거리 카이팅 마이크로: 너무 붙으면 최대 사거리로 물러난다 — 때리면서 뒷걸음질.
+    //  개활지(모래벌판)의 지형 이점은 이 한 걸음에서 나온다
+    const dx = (h.x - foe.x) / (d || 0.001)
+    const dz = (h.z - foe.z) / (d || 0.001)
+    goal = { x: h.x + dx * (range * 0.85 - d), z: h.z + dz * (range * 0.85 - d) }
   } else {
     goal = null // 사거리 안: 제자리 공방(스킬은 공통 루프가 쏜다)
   }
