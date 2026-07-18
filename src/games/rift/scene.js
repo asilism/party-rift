@@ -513,6 +513,27 @@ function lockLabel() {
   return sp
 }
 
+// 임의 텍스트 배지 스프라이트 — 콜로세움 "탈락" 등 짧은 상태 표시용 (lockLabel과 같은 조형)
+function textBadge(text, fill = '#ffd34d') {
+  const c = document.createElement('canvas')
+  c.width = 256
+  c.height = 64
+  const ctx = c.getContext('2d')
+  ctx.font = '800 30px system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineWidth = 7
+  ctx.strokeStyle = 'rgba(10, 16, 32, 0.9)'
+  ctx.strokeText(text, 128, 34)
+  ctx.fillStyle = fill
+  ctx.fillText(text, 128, 34)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, transparent: true }))
+  sp.scale.set(8, 2, 1)
+  return sp
+}
+
 // 체력바: 검정 배경 + 왼쪽 기준으로 줄어드는 색 막대 (스프라이트라 항상 카메라를 본다)
 function makeHpBar(width = 2.6, color = ALLY_HP) {
   const g = new THREE.Group()
@@ -5322,7 +5343,30 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   }
   nexusObjs.blue.position.set(NEXUS_POS.blue.x, 0, NEXUS_POS.blue.z)
   nexusObjs.red.position.set(NEXUS_POS.red.x, 0, NEXUS_POS.red.z)
-  if (map.mode !== 'arena') scene.add(nexusObjs.blue, nexusObjs.red) // 콜로세움: 수호석 없음
+  scene.add(nexusObjs.blue, nexusObjs.red) // 콜로세움 포함 — 아레나에선 포인트 제단(공격 불가)
+
+  // ── 콜로세움 포인트 하트 — 수호석 주변에 토너먼트 포인트만큼 하트가 떠 있고,
+  //    라운드 패배 시 차감분만큼 한 개씩 펑·펑·펑 터진다. 0이 되면 수호석 파괴 + 탈락. ──
+  const arenaHearts = map.mode === 'arena' ? {} : null
+  if (arenaHearts) {
+    for (const team of ['blue', 'red']) {
+      const g = new THREE.Group()
+      const hearts = []
+      for (let i = 0; i < 10; i++) {
+        const h = emojiSprite('💖', 1.5)
+        hearts.push(h)
+        g.add(h)
+      }
+      const fall = textBadge('💔 탈락', '#ff6b81')
+      fall.position.y = 8.2
+      fall.visible = false
+      g.add(fall)
+      g.position.copy(nexusObjs[team].position)
+      scene.add(g)
+      arenaHearts[team] = { hearts, fall, bursts: [], popped: 0, boomed: false }
+    }
+  }
+  let arenaFinale = null // { t0, loser, pops, base } — 종료 연출 타임라인(실시간 시계)
 
   const heroPool = new Map()
   const minionPool = new Map()
@@ -5508,6 +5552,75 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         nx.hp > 0 && !nx.vuln && (!myTeam || (team !== myTeam && dToNexus < 28))
       const low = nx.hp > 0 && nx.hp < nx.maxHp * 0.35
       u.core.scale.setScalar(low ? 1 + Math.sin(view.time * 10) * 0.06 : 1)
+      if (map.mode === 'arena') {
+        // 아레나 수호석은 포인트 제단 — HP바·공격불가 라벨 대신 하트가 상태를 말한다
+        u.bar.visible = false
+        u.lock.visible = false
+      }
+    }
+    // 콜로세움 포인트 하트 — 실시간 시계 사용(경기 종료 후 view.time이 멈춰도 연출은 흘러야 한다)
+    if (arenaHearts && view.arenaPts) {
+      const now = performance.now() / 1000
+      if (!arenaFinale && view.status === 'finished' && view.winner) {
+        const loser = view.winner === 'blue' ? 'red' : 'blue'
+        const base = view.arenaPts[loser] || 0
+        arenaFinale = { t0: now, loser, base, pops: Math.min(view.arenaDeduct || 0, base) }
+      }
+      for (const team of ['blue', 'red']) {
+        const st = arenaHearts[team]
+        const isLoser = arenaFinale?.loser === team
+        // 패배 연출: 1초 숨 고른 뒤 0.5초 간격으로 하나씩 펑
+        const popTarget = isLoser
+          ? Math.max(0, Math.min(arenaFinale.pops, Math.floor((now - arenaFinale.t0 - 1.0) / 0.5) + 1))
+          : 0
+        const slots = isLoser ? arenaFinale.base : Math.min(10, view.arenaPts[team] || 0)
+        const alive = isLoser ? arenaFinale.base - popTarget : slots
+        while (st.popped < popTarget) {
+          // 펑! — 터지는 하트 자리에 폭발 스프라이트
+          const idx = arenaFinale.base - 1 - st.popped
+          const h = st.hearts[idx]
+          const b = emojiSprite('💥', 2.4)
+          b.position.copy(h.position)
+          st.hearts[0].parent.add(b)
+          st.bursts.push({ sp: b, t0: now })
+          st.popped++
+        }
+        for (let i = 0; i < st.hearts.length; i++) {
+          const h = st.hearts[i]
+          h.visible = i < alive
+          if (h.visible) {
+            const ang = (i / Math.max(1, slots)) * Math.PI * 2 + now * 0.35
+            h.position.set(Math.cos(ang) * 3.6, 5.4 + Math.sin(now * 2 + i * 1.3) * 0.3, Math.sin(ang) * 3.6)
+          }
+        }
+        for (let i = st.bursts.length - 1; i >= 0; i--) {
+          const b = st.bursts[i]
+          const t = (now - b.t0) / 0.45
+          if (t >= 1) {
+            b.sp.parent?.remove(b.sp)
+            st.bursts.splice(i, 1)
+          } else {
+            b.sp.scale.setScalar(2.4 * (0.6 + t * 1.6))
+            b.sp.material.opacity = 1 - t
+          }
+        }
+        // 하트 전멸 → 수호석 최종 파괴 + 탈락 표시
+        const wipedOut = isLoser && arenaFinale.base - arenaFinale.pops <= 0 && st.popped >= arenaFinale.pops
+        if (wipedOut && !st.boomed && now > arenaFinale.t0 + 1.0 + arenaFinale.pops * 0.5 + 0.4) {
+          st.boomed = true
+          const boom = emojiSprite('💥', 7)
+          boom.position.set(0, 6, 0)
+          st.hearts[0].parent.add(boom)
+          st.bursts.push({ sp: boom, t0: now })
+        }
+        if (st.boomed) {
+          const u = nexusObjs[team].userData
+          u.core.visible = false // 파괴된 수호석 — 코어 소멸
+          u.glow.material.opacity = 0.06
+          st.fall.visible = true
+          st.fall.position.y = 8.2 + Math.sin(now * 1.5) * 0.2
+        }
+      }
     }
     // 영웅 — 적은 시야/수풀 규칙에 걸리면 안 보인다
     syncPool(

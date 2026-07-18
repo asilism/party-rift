@@ -8,7 +8,8 @@ import { t } from '../shared/i18n.js'
 //  유저 경기만 실제 시뮬 — 봇팀끼리는 즉시 판정(50/50 랜덤).
 
 export const ARENA_START_PTS = 10
-export const arenaDeduction = (round) => 3 + (round - 1) * 2 // 3, 5, 7, 9…
+// 차감 2, 4, 6, 8… — 3 시작은 중앙값 5라운드로 "생각보다 빨리 끝나" 2로 하향(중앙값 6라운드)
+export const arenaDeduction = (round) => 2 + (round - 1) * 2
 export const ARENA_PLACE_COIN = { 1: 80, 2: 50, 3: 35, 4: 25, 5: 15, 6: 10 }
 
 const shuffle = (arr, rng = Math.random) => {
@@ -50,20 +51,32 @@ export const ARENA_LAYOUT_META = {
 
 export function nextRound(tour, rng = Math.random) {
   tour.round++
-  const alive = shuffle(aliveTeams(tour), rng)
-  let bye = null
-  if (alive.length % 2 === 1) {
-    // 최소 부전 팀이 쉰다(동률이면 셔플 순서상 첫 팀)
-    bye = alive.reduce((a, b) => (b.byes < a.byes ? b : a))
-    bye.byes++
-    alive.splice(alive.indexOf(bye), 1)
+  const pairKey = (a, b) => [a.idx, b.idx].sort((x, y) => x - y).join('-')
+  // 직전 라운드와 동일한 매치가 반복되지 않게 셔플을 재시도한다(최대 40회).
+  //  4팀+ 생존이면 수학적으로 항상 무반복 페어링이 존재. 2팀(결승)은 어차피 강제 재대결.
+  const prev = tour.prevPairs || new Set()
+  let best = null
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const alive = shuffle(aliveTeams(tour), rng)
+    let bye = null
+    if (alive.length % 2 === 1) {
+      // 최소 부전 팀이 쉰다(동률이면 셔플 순서상 첫 팀)
+      bye = alive.reduce((a, b) => (b.byes < a.byes ? b : a))
+      alive.splice(alive.indexOf(bye), 1)
+    }
+    const pairs = []
+    for (let i = 0; i + 1 < alive.length; i += 2) pairs.push([alive[i], alive[i + 1]])
+    const repeats = pairs.filter((p) => prev.has(pairKey(p[0], p[1]))).length
+    if (!best || repeats < best.repeats) best = { pairs, bye, repeats }
+    if (repeats === 0) break
   }
-  const pairs = []
-  for (let i = 0; i + 1 < alive.length; i += 2) pairs.push([alive[i], alive[i + 1]])
+  const { pairs, bye } = best
+  if (bye) bye.byes++
   const isFinal = aliveTeams(tour).length === 2
   const myPair = pairs.find((p) => p[0].isUser || p[1].isUser) || null
   const layouts = Object.keys(ARENA_LAYOUT_META)
   const layout = layouts[Math.floor(rng() * layouts.length)] // 이번 라운드의 경기장 내부 구조
+  tour.prevPairs = new Set(pairs.map((p) => pairKey(p[0], p[1])))
   tour.current = { round: tour.round, deduction: arenaDeduction(tour.round), pairs, bye, myPair, isFinal, layout }
   return tour.current
 }

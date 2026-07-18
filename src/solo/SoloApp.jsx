@@ -147,7 +147,11 @@ export default function SoloApp() {
     const dOpt = DIFF_OPTS.find((o) => o.id === diff) || DIFF_OPTS[0]
     const n = createLocalNet(riftNet, {
       players: [],
-      config: { mode: 'arena', roster, carry, botLevel: dOpt.botLevel, arenaLayout: cur.layout },
+      config: {
+        mode: 'arena', roster, carry, botLevel: dOpt.botLevel, arenaLayout: cur.layout,
+        arenaPts: { blue: myTeam.pts, red: opp.pts }, // 수호석 하트 = 현재 토너먼트 포인트
+        arenaDeduct: cur.deduction, // 패배 시 터질 하트 개수
+      },
       deviceId: 'solo',
       onFinish(view) {
         arenaViewRef.current = view // 결과 반영은 '결과 보기' 버튼에서 — 경기 결과 모달을 먼저 보게 한다

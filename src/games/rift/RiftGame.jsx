@@ -443,7 +443,16 @@ function RiftPlay({
   const [showWin, setShowWin] = useState(false)
   useEffect(() => {
     if (!finishedNow) { setShowWin(false); return undefined }
-    const t = setTimeout(() => setShowWin(true), 1700)
+    let ms = 1700
+    // 콜로세움: 패자 수호석 하트가 펑펑 터지는 연출(1초 숨 + 0.5초/개)이 끝난 뒤에 결과창.
+    //  포인트 전멸이면 수호석 파괴 + 탈락 배지까지 보여 준다.
+    if (hud?.mode === 'arena' && hud.winner && hud.arenaPts) {
+      const loser = hud.winner === 'blue' ? 'red' : 'blue'
+      const pops = Math.min(hud.arenaDeduct || 0, hud.arenaPts[loser] || 0)
+      const wipedOut = (hud.arenaPts[loser] || 0) - pops <= 0
+      ms = 1000 + pops * 500 + (wipedOut ? 2400 : 900)
+    }
+    const t = setTimeout(() => setShowWin(true), ms)
     return () => clearTimeout(t)
   }, [finishedNow])
   // 보스 국면 전환 화면 연출 — 국면이 오르는 순간 국면 색 플래시(비네트) + 화면 흔들림
