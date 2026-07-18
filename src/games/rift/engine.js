@@ -918,6 +918,8 @@ export function createGame(players, opts = {}) {
     arenaPhase: mode === 'arena' ? 'shop' : null, // 콜로세움: shop → fight → sudden
     arenaT: mode === 'arena' ? ARENA_SHOP_T : 0, // 현재 페이즈 남은 시간
     arenaWave: 0, // 서든데스 붕괴 웨이브 번호
+    arenaPts: mode === 'arena' ? { blue: 10, red: 10, ...(o.arenaPts || {}) } : null, // 팀별 토너먼트 포인트(수호석 하트)
+    arenaDeduct: mode === 'arena' ? (o.arenaDeduct ?? 3) : 0, // 이번 라운드 패배 시 차감량(하트 펑 연출용)
     healOrbs: [], // 콜로세움 회복 열매 {id,x,z,t} — 먹으면 체력 회복
     orbT: 6, // 다음 열매 낙하까지(전투 개시 후)
     holes: [], // 붕괴 구멍 {x,z,r} — 밟으면 추락
@@ -6733,6 +6735,8 @@ export function makeView(state) {
     bossTier: state.bossTier, // 보스전 난이도(레이드 바 배지·종료 보상 산정)
     arenaLayout: state.arenaLayout, // 콜로세움 내부 구조 — 클라 맵 재구성용
     arenaPhase: state.arenaPhase, // 콜로세움: shop/fight/sudden (HUD 페이즈 표시)
+    arenaPts: state.arenaPts ? { ...state.arenaPts } : null, // 팀별 토너먼트 포인트 — 복사 필수(델타 코덱이 참조 비교라 원본을 넘기면 변경이 전송 안 됨)
+    arenaDeduct: state.arenaDeduct, // 패배 시 차감량 — 종료 연출에서 하트가 터지는 개수
     arenaT: r2d(state.arenaT), // 현재 페이즈 남은 시간
     healOrbs: state.healOrbs.map((o) => ({ id: o.id, x: o.x, z: o.z })), // 회복 열매(💖 렌더)
     holes: state.holes, // 붕괴 구멍(렌더러: 어두운 구덩이)
