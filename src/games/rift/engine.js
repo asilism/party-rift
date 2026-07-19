@@ -22,7 +22,7 @@ export const TEAM_SIZE = 3 // 기본(3:3) 팀 인원 — 하위호환용 별칭
 export const TEAM_SIZES = { '3v3': 3, '5v5': 5, boss: 5, defense: 5, arena: 2 } // arena = 콜로세움(2v2 결투)
 // ── 콜로세움(아레나) — 준비 30초(반코트 결계·상점) → 전투 3분 → 서든데스(무작위 조각 붕괴) ──
 export const ARENA_SHOP_T = 30
-export const ARENA_FIGHT_T = 180
+export const ARENA_FIGHT_T = 60 // 전투 60초 후 서든데스 붕괴 시작
 const ARENA_HOLE_R = 8 // 붕괴 조각 반경 (경기장 R34 기준)
 const ARENA_HOLE_EVERY = 10 // 서든데스 붕괴 웨이브 간격(초)
 const ARENA_WARN_T = 3 // 경고(장판) → 낙하까지
@@ -819,6 +819,7 @@ function makeHeroState(p, cls, pos, map, rng) {
       botSeekT: 0, // >0이면 타워 앞에서 "딴 일"(합류/정글/지원)을 잠시 유지
       botStuckT: 0, // 제자리에 박혀 못 움직인 누적 시간 (BOT_STUCK_T 넘으면 귀환)
       botRecall: false, // 끼임 구제용 귀환을 스스로 시전 중인지
+      fallT: 0, // 콜로세움 낙하 연출 남은 시간(>0이면 추락 중 — 행동/이동 불가, 생존 판정 제외)
       botReact: -1, // 평타 반응 지연 타이머 (쿨이 돌아온 뒤 사람처럼 잠깐 뜸들이고 친다)
       botBigT: 0, // 이 시각까지 용/이무기 평타 허용 (커밋 없이 지나가다 어그로 끄는 사고 방지)
       botFocus: null, // 공성 집중 표적(타워/수호석) — botLaneMove가 정하고 다음 틱 평타가 쓴다
@@ -1030,7 +1031,7 @@ function trailSampleBack(h, secs) {
   return h.trail[i]
 }
 
-const canAct = (h) => h.respawnT <= 0 && h.stunT <= 0 && h.fearT <= 0 // 공포 중엔 공격/시전 불가(도망만)
+const canAct = (h) => h.respawnT <= 0 && h.stunT <= 0 && h.fearT <= 0 && !(h.fallT > 0) // 공포 중엔 공격/시전 불가(도망만), 낙하 중엔 아무것도 못 한다
 
 // ── 신규 직업 상수 ──
 // 공포술사: 공포 = 통제 불능(새 CC). 도망이 아니라 컨트롤을 잃고 아무 방향으로나 갈팡질팡 내달린다.
@@ -2987,16 +2988,23 @@ function stepDefenseWaves(state, dt) {
 // 병사 웨이브: 세 레인마다 근접 3 + 원거리 3
 // ── 콜로세움 진행 — 페이즈 머신 + 무작위 조각 붕괴 + 낙사/전멸 판정 ──
 function arenaAliveCount(state, team) {
-  return state.heroes.filter((h) => h.team === team && h.respawnT <= 0 && h.hp > 0).length
+  return state.heroes.filter((h) => h.team === team && h.respawnT <= 0 && h.hp > 0 && !(h.fallT > 0)).length
 }
 
-// 낙하 — 보호막 무시 즉사 (추락엔 방패가 없다)
-function arenaFall(state, h) {
+// 낙하 시작 — 0.8초간 구멍 중심으로 빨려 들어가며 추락(연출), 끝나면 사망 확정.
+//  보호막 무시(추락엔 방패가 없다). 낙하 중엔 행동·이동 불가 + 생존 판정에서 제외.
+const ARENA_FALL_T = 0.8
+function arenaFall(state, h, hole = null) {
+  if (h.fallT > 0) return
   h.barrierHp = 0
   h.barrierT = 0
   h.shieldT = 0
+  h.fallT = ARENA_FALL_T
+  h.fallX = hole ? hole.x : h.x
+  h.fallZ = hole ? hole.z : h.z
+  h.mx = 0
+  h.mz = 0
   pushFx(state, 'death', h.x, h.z, 4, h.team)
-  damageHero(state, h, 1e9, null)
 }
 
 // 붕괴 조각 자리 뽑기 — 거부 샘플링: 기존 구멍·경고와 겹치지 않게, 공간이 부족해지면 허용 오차 완화
@@ -3102,16 +3110,34 @@ function stepArena(state, dt) {
       for (const w of due) {
         state.holes.push({ id: w.id, x: w.x, z: w.z, r: w.r })
         pushFx(state, 'descend', w.x, w.z, w.r, null, 1.5) // 하늘 광선 — 바닥이 뜯겨 나간다
+        // 붕괴 반경의 지형은 진짜로 사라진다 — 성벽·수풀·바위의 충돌/은신/경로까지 함께
+        {
+          const mp = state.map
+          const segNear = (l) => {
+            const dx = l.x2 - l.x1
+            const dz = l.z2 - l.z1
+            const len2 = dx * dx + dz * dz || 1e-9
+            let t = ((w.x - l.x1) * dx + (w.z - l.z1) * dz) / len2
+            t = t < 0 ? 0 : t > 1 ? 1 : t
+            return Math.hypot(l.x1 + dx * t - w.x, l.z1 + dz * t - w.z)
+          }
+          mp.WALLS = mp.WALLS.filter((c) => Math.hypot(c.x - w.x, c.z - w.z) > w.r + c.r * 0.5)
+          mp.WALL_LINES = mp.WALL_LINES.filter((l) => segNear(l) > w.r * 0.85)
+          mp.BUSHES = mp.BUSHES.filter((b) => Math.hypot(b.x - w.x, b.z - w.z) > w.r + b.r * 0.4)
+          mp.ROCKS = mp.ROCKS.filter((c) => Math.hypot(c.x - w.x, c.z - w.z) > w.r)
+          mp._nav = null // 내비 격자·정적 원 캐시 무효화 — 다음 findPath 때 뚫린 지형으로 재베이크
+          mp._navCircles = null
+        }
         for (const h of state.heroes) {
-          if (h.respawnT > 0 || h.hp <= 0 || fallen.includes(h)) continue
+          if (h.respawnT > 0 || h.hp <= 0 || h.fallT > 0 || fallen.some(([f]) => f === h)) continue
           if (Math.hypot(h.x - w.x, h.z - w.z) < w.r * 0.75) {
-            fallen.push(h)
+            fallen.push([h, w])
             prefall[h.team].hp += h.hp
             prefall[h.team].gold += h.gold
           }
         }
       }
-      for (const f of fallen) arenaFall(state, f)
+      for (const [f, w] of fallen) arenaFall(state, f, w)
       // 동시 전멸 타이브레이크: 낙하 직전 체력 → 골드 → 랜덤
       if (arenaAliveCount(state, 'blue') === 0 && arenaAliveCount(state, 'red') === 0) {
         state.winner = prefall.blue.hp !== prefall.red.hp
@@ -3127,9 +3153,24 @@ function stepArena(state, dt) {
   // 확정된 구멍: 걸어 들어가거나 밀려 들어가면 추락
   if (state.holes.length) {
     for (const h of state.heroes) {
-      if (h.respawnT > 0 || h.hp <= 0) continue
-      if (state.holes.some((o) => Math.hypot(h.x - o.x, h.z - o.z) < o.r * 0.65)) arenaFall(state, h)
+      if (h.respawnT > 0 || h.hp <= 0 || h.fallT > 0) continue
+      const o = state.holes.find((o) => Math.hypot(h.x - o.x, h.z - o.z) < o.r * 0.65)
+      if (o) arenaFall(state, h, o)
     }
+  }
+  // 낙하 진행 — 구멍 중심으로 빨려 들어가고, 다 떨어지면 사망 확정
+  for (const h of state.heroes) {
+    if (!(h.fallT > 0) || h.hp <= 0 || h.respawnT > 0) continue
+    h.fallT -= dt
+    h.mx = 0
+    h.mz = 0
+    const d = Math.hypot(h.fallX - h.x, h.fallZ - h.z)
+    if (d > 0.1) {
+      const pull = Math.min(d, 6 * dt)
+      h.x += ((h.fallX - h.x) / d) * pull
+      h.z += ((h.fallZ - h.z) / d) * pull
+    }
+    if (h.fallT <= 0) damageHero(state, h, 1e9, null)
   }
   // 전멸 판정(모든 사망 경로 공통) — 한 팀이 비면 종료
   const ab = arenaAliveCount(state, 'blue')
@@ -3380,7 +3421,7 @@ function stepHero(state, h, dt) {
     h.z += Math.sin(h.fearDir) * sp * dt
   }
   // 이동 — 기절·정신집중·귀환 채널·속박·발사준비·넉백·공포 중엔 제자리에 멈춘다(이동 입력 무시)
-  if (h.stunT <= 0 && h.castT <= 0 && h.recallT <= 0 && h.rootT <= 0 && h.hookWindT <= 0 && h.knockT <= 0 && h.fearT <= 0) {
+  if (h.stunT <= 0 && h.castT <= 0 && h.recallT <= 0 && h.rootT <= 0 && h.hookWindT <= 0 && h.knockT <= 0 && h.fearT <= 0 && !(h.fallT > 0)) {
     const len = Math.hypot(h.mx, h.mz)
     if (len > 0.12) {
       // 공격 직후엔 발이 무겁고, 탱커는 방패막기 중 돌진 가속, 빙결 중엔 굼뜨다,
@@ -5680,6 +5721,11 @@ function stepBots(state, dt) {
       const cf = state.heroes.find((e) => e.id === h.botFoeId)
       if (cf?.isBoss && bossInvuln(state, cf)) { h.botFoeId = null; h.botThinkT = 0 }
     }
+    if (h.fallT > 0) { // 추락 중 — 봇 두뇌 정지
+      h.mx = 0
+      h.mz = 0
+      continue
+    }
     // 콜로세움: 결투 전용 두뇌 — 패주 귀가·전선 유지 같은 MOBA 습관이 끼기 전에 최상단에서 가로챈다
     if (state.mode === 'arena') {
       arenaBotDuty(state, h, dt)
@@ -6745,7 +6791,7 @@ export function makeView(state) {
     arenaDeduct: state.arenaDeduct, // 패배 시 차감량 — 종료 연출에서 하트가 터지는 개수
     arenaT: r2d(state.arenaT), // 현재 페이즈 남은 시간
     healOrbs: state.healOrbs.map((o) => ({ id: o.id, x: o.x, z: o.z })), // 회복 열매(💖 렌더)
-    holes: state.holes, // 붕괴 구멍(렌더러: 어두운 구덩이)
+    holes: state.holes.map((o) => ({ id: o.id, x: o.x, z: o.z, r: o.r })), // 붕괴 구멍 — 복사 필수(원본 참조를 넘기면 델타 코덱이 push를 못 본다)
     holeWarns: state.holeWarns.map((w) => ({ id: w.id, x: w.x, z: w.z, r: w.r, t: r2d(w.at - state.time) })), // 경고 장판
     wave: state.wave, // 무한 방어: 현재 파도(HUD 카운터·종료 기록)
     defWaveT: r2d(state.defWaveT), // 무한 방어: 다음 파도까지(HUD 타이머)
@@ -6810,6 +6856,7 @@ export function makeView(state) {
       vulnT: r2d(h.vulnT),
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
+      fallT: r2d(h.fallT), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
       bladeT: r2d(h.bladeT),
       hookWindT: r2d(h.hookWindT),
       pullT: r2d(h.pullT),
