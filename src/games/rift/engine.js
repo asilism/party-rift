@@ -1146,12 +1146,14 @@ export function isHeroVisible(snap, h, team) {
     )
   }
   if (h.revealT > 0) return true
+  if (snap.mode === 'arena') return true // 콜로세움: 노포그 — 수풀·은신 밖은 어디든 다 보인다
   return inSight(snap, h, team)
 }
 
 // 병사 등 일반 유닛: 수풀 규칙 없이 시야 거리만 본다
 export function isUnitVisible(snap, ent, team) {
   if (!team || ent.team === team) return true
+  if (snap.mode === 'arena') return true // 콜로세움: 노포그
   return inSight(snap, ent, team)
 }
 
