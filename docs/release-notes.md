@@ -23,7 +23,7 @@ v26~v33 누적분. 직전 업로드가 v25 이전이면 아래의 "대규모 콘
 ```
 🏟️ Big Colosseum update!
 • Sudden death: after 1 min the arena truly crumbles — floor tears open, walls & bushes fall with it
-• Falling gets a full drop scene with a whistle sound & camera work
+• Falling gets a full drop scene with whistle sound & camera work
 • Bots dodge collapse warnings; sides randomized each round for fairness
 • No-fog rule — all visible except bushes. Desert minimap with collapse markers
 • Nexus hearts show team points and pop on defeat — win it all for a podium ceremony!
