@@ -396,6 +396,7 @@ function avoidDirFor(geo, e, tx, tz, towers, selfR = 1) {
   }
   for (const o of geo.WALLS) consider(o.x, o.z, o.r)
   for (const o of geo.ROCKS) consider(o.x, o.z, o.r)
+  for (const o of geo.HOLES || []) consider(o.x, o.z, o.r) // 붕괴 구멍 국소 회피
   for (const t of towers) if (t.alive) consider(t.x, t.z, TOWER_RADIUS)
   consider(geo.NEXUS_POS.blue.x, geo.NEXUS_POS.blue.z, NEXUS_RADIUS)
   consider(geo.NEXUS_POS.red.x, geo.NEXUS_POS.red.z, NEXUS_RADIUS)
@@ -421,6 +422,7 @@ function navCircles(geo) {
   if (!geo._navCircles) {
     geo._navCircles = [
       ...geo.WALLS, ...geo.ROCKS,
+      ...(geo.HOLES || []), // 붕괴 구멍·경고 — 빠지면 즉사라 경로가 절대 관통하면 안 된다
       { x: geo.NEXUS_POS.blue.x, z: geo.NEXUS_POS.blue.z, r: NEXUS_RADIUS },
       { x: geo.NEXUS_POS.red.x, z: geo.NEXUS_POS.red.z, r: NEXUS_RADIUS },
     ]
@@ -669,6 +671,7 @@ export function buildMap(mode = '3v3', arenaLayout = null) {
     mode, WORLD, NEXUS_POS, FOUNTAIN_POS, LANES, LANE_IDS, TOWER_SPOTS, WALL_LINES, WALLS,
     ROCKS, BUSHES, WOLF_CAMPS, DRAGON_PIT, BARON_PIT,
     NEXUS_RADIUS, FOUNTAIN_RADIUS, TOWER_RADIUS, WALL_RADIUS, enemyOf,
+    HOLES: [], // 콜로세움 붕괴 구멍(+경고) — 봇 경로탐색·조향 전용 가상 장애물(물리 충돌 아님: 밀쳐 떨어뜨리기 허용)
   }
   geo.bushIndexAt = (x, z) => bushIndexAtFor(geo, x, z)
   geo.nearestWp = (lane, x, z) => nearestWpFor(geo, lane, x, z)

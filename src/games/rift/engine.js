@@ -3097,7 +3097,13 @@ function stepArena(state, dt) {
     const chunks = Math.min(1 + Math.floor((state.arenaWave - 1) / 2), 3)
     for (let i = 0; i < chunks; i++) {
       const p = arenaPickHole(state)
-      if (p) state.holeWarns.push({ id: state.nextId++, x: p.x, z: p.z, r: ARENA_HOLE_R, at: state.time + ARENA_WARN_T })
+      if (!p) continue
+      const id = state.nextId++
+      state.holeWarns.push({ id, x: p.x, z: p.z, r: ARENA_HOLE_R, at: state.time + ARENA_WARN_T })
+      // 경고가 깔리는 순간부터 봇 내비의 가상 장애물 — 곧 꺼질 땅으로는 애초에 길을 잡지 않는다
+      state.map.HOLES.push({ id, x: p.x, z: p.z, r: ARENA_HOLE_R * 0.72 })
+      state.map._nav = null
+      state.map._navCircles = null
     }
   }
   // 경고 만료 → 구멍 확정 + 그 위의 영웅 추락 (동시 전멸은 아래 전멸 판정에서 체력→골드→랜덤)
@@ -3125,6 +3131,7 @@ function stepArena(state, dt) {
           mp.WALL_LINES = mp.WALL_LINES.filter((l) => segNear(l) > w.r * 0.85)
           mp.BUSHES = mp.BUSHES.filter((b) => Math.hypot(b.x - w.x, b.z - w.z) > w.r + b.r * 0.4)
           mp.ROCKS = mp.ROCKS.filter((c) => Math.hypot(c.x - w.x, c.z - w.z) > w.r)
+          if (!mp.HOLES.some((c) => c.id === w.id)) mp.HOLES.push({ id: w.id, x: w.x, z: w.z, r: w.r * 0.72 })
           mp._nav = null // 내비 격자·정적 원 캐시 무효화 — 다음 findPath 때 뚫린 지형으로 재베이크
           mp._navCircles = null
         }
@@ -6216,7 +6223,14 @@ function arenaBotDuty(state, h, dt) {
     if ((h.arenaDetourT || 0) > 0) {
       h.arenaDetourT -= dt
       const ref = state.heroes.find((e) => e.id === h.botFoeId && e.hp > 0) || { x: 0, z: 0 }
-      const ang = Math.atan2(ref.z - h.z, ref.x - h.x) + (h.stuckSide || 1) * 1.9
+      let ang = Math.atan2(ref.z - h.z, ref.x - h.x) + (h.stuckSide || 1) * 1.9
+      // 옆걸음 방향 4칸 앞이 구멍이면 반대쪽으로 — 탈출하려다 떨어지면 본전도 없다
+      const ahead = { x: h.x + Math.cos(ang) * 4, z: h.z + Math.sin(ang) * 4 }
+      if (state.holes.some((o) => Math.hypot(ahead.x - o.x, ahead.z - o.z) < o.r + 1) ||
+          state.holeWarns.some((o) => Math.hypot(ahead.x - o.x, ahead.z - o.z) < o.r + 1)) {
+        h.stuckSide = -(h.stuckSide || 1)
+        ang = Math.atan2(ref.z - h.z, ref.x - h.x) + h.stuckSide * 1.9
+      }
       h.mx = Math.cos(ang)
       h.mz = Math.sin(ang)
       botAttack(state, h, dt)
