@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Rift3D from '../games/rift/Rift3D.jsx'
-import { createRiftScene, createChampionStage } from '../games/rift/scene.js'
+import { createRiftScene } from '../games/rift/scene.js'
 import { buildMap } from '../games/rift/map.js'
 import { riftNet } from '../games/rift/netgame.js'
 import { createLocalNet } from '../net/localNet.js'
@@ -122,20 +122,41 @@ export function ArenaStage() {
   )
 }
 
-// ── 우승 무대 — 콜로세움 우승 시 최종 화면 배경: 듀오가 금빛 단상에서 만세하는 셀레브레이션 ──
+// ── 우승 무대 — 콜로세움 우승 시 최종 화면 배경: 실제 경기장 중앙 단상에서 만세하는 듀오를
+//  "외부 원거리 → 성벽 위 활공 → 단상 앞 안착 → 느린 궤도" 카메라로 담는다(championCam).
 export function ChampionStage({ duo }) {
   const canvasRef = useRef(null)
   useEffect(() => {
     const canvas = canvasRef.current
-    const stage = createChampionStage(canvas, { duo })
+    // 내부 구조는 모래벌판(field) — 중앙이 비어 있어 단상이 자연스럽다
+    const scene = createRiftScene(canvas, buildMap('arena', 'field'), 'med')
     const holder = canvas.parentElement
-    const fit = () => stage.resize(holder.clientWidth, holder.clientHeight)
+    const fit = () => scene.resize(holder.clientWidth, holder.clientHeight)
     const ro = new ResizeObserver(fit)
     ro.observe(holder)
     fit()
+    const stub = {
+      championCam: true, champDuo: duo, mode: 'arena', status: 'playing', phase: 'play', time: 0, winner: null,
+      heroes: [], minions: [], towers: [], zones: [], projectiles: [], monsters: [], fx: [],
+      holes: [], holeWarns: [], healOrbs: [], feed: [],
+      kills: { blue: 0, red: 0 },
+      nexus: { blue: { hp: 1, maxHp: 1 }, red: { hp: 1, maxHp: 1 } },
+    }
+    let raf
+    let last = 0
+    const t0 = performance.now()
+    const loop = (t) => {
+      raf = requestAnimationFrame(loop)
+      if (t - last < 1000 / 30 - 1.5) return // 배경은 30fps면 충분
+      last = t
+      stub.time = (t - t0) / 1000
+      scene.render(stub, null)
+    }
+    raf = requestAnimationFrame(loop)
     return () => {
+      cancelAnimationFrame(raf)
       ro.disconnect()
-      stage.dispose()
+      scene.dispose()
     }
     // duo는 우승 확정 시점에 고정된 배열 — 재생성 불필요
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
