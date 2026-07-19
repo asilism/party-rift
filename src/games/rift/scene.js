@@ -4806,12 +4806,34 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   // ── 지형 ──
   const GW = WORLD.maxX - WORLD.minX + 80
   const GH = WORLD.maxZ - WORLD.minZ + 80
-  const groundTex = grassTexture(512, T.ground)
-  groundTex.repeat.set(Math.max(4, Math.round(GW / 60)), Math.max(4, Math.round(GH / 60)))
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(GW, GH),
-    new THREE.MeshLambertMaterial({ map: groundTex })
-  )
+  const collapsibles = [] // 콜로세움: 붕괴 구멍과 겹치면 침몰·소멸할 구조물(성벽·수풀)
+  let groundPunch = null // 콜로세움: 붕괴 구멍을 바닥 텍스처에서 실제로 뚫는 캔버스
+  let ground
+  if (map.mode === 'arena') {
+    // 아레나 바닥은 월드 1:1 캔버스 — 붕괴 시 destination-out으로 구멍을 실제로 뚫는다(알파 컷)
+    const c = document.createElement('canvas')
+    c.width = c.height = 1024
+    const ctx = c.getContext('2d')
+    const src = grassTexture(512, T.ground).image
+    const tile = 256 // 기존 repeat(≈4)과 같은 결
+    for (let ty = 0; ty < c.height; ty += tile) {
+      for (let tx = 0; tx < c.width; tx += tile) ctx.drawImage(src, tx, ty, tile, tile)
+    }
+    const tex = new THREE.CanvasTexture(c)
+    tex.colorSpace = THREE.SRGBColorSpace
+    ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(GW, GH),
+      new THREE.MeshLambertMaterial({ map: tex, transparent: true, alphaTest: 0.4 })
+    )
+    groundPunch = { ctx, tex, done: new Set(), size: 1024 }
+  } else {
+    const groundTex = grassTexture(512, T.ground)
+    groundTex.repeat.set(Math.max(4, Math.round(GW / 60)), Math.max(4, Math.round(GH / 60)))
+    ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(GW, GH),
+      new THREE.MeshLambertMaterial({ map: groundTex })
+    )
+  }
   ground.rotation.x = -Math.PI / 2
   scene.add(ground)
   // 강 (가운데 세로 물길 — 용/이무기 둥지를 잇는다). 흐르는 물 텍스처(render에서 천천히 굴린다)
@@ -5093,6 +5115,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     g.position.set((w.x1 + w.x2) / 2, 0, (w.z1 + w.z2) / 2)
     g.rotation.y = -Math.atan2(w.z2 - w.z1, w.x2 - w.x1)
     scene.add(g)
+    if (map.mode === 'arena') collapsibles.push({ g, kind: 'seg', x1: w.x1, z1: w.z1, x2: w.x2, z2: w.z2 })
   }
 
   // 리스폰 존 뒤쪽 절반을 감싸는 반호(半弧) 성벽 — 부활 지점을 등지고 보호하는 물리 구조물.
@@ -5165,6 +5188,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     }
     g.position.set(b.x, 0, b.z)
     scene.add(g)
+    if (map.mode === 'arena') collapsibles.push({ g, kind: 'pt', x: b.x, z: b.z, r: b.r })
   }
 
   // ── 바닥 디테일: 풀포기 · 들꽃 · 자갈 (인스턴싱으로 가볍게 흩뿌린다) ──
@@ -5672,6 +5696,10 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const u = obj.userData
         // 사망: 그 자리에서 파티클로 분해되어 바닥에 쌓이고 부활까지 남는다
         if (dead) {
+          if (u.fell) { // 추락사 — 구멍 속으로 사라졌다: 지상 파티클 더미를 만들지 않는다
+            obj.visible = false
+            return
+          }
           obj.visible = true // 시체 파티클은 늘 보인다 (쓰러뜨렸음을 알림)
           obj.position.set(h.x, 0, h.z)
           if (!u.dead) {
@@ -5693,6 +5721,18 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         // 돌풍에 띄워지면(airT) 몸이 공중으로 떠오른다 — 띄운 동안 빙글빙글 + 위로 솟았다 내려온다
         const air = h.airT > 0 ? Math.sin(Math.min(1, (1.5 - h.airT) / 1.5 + 0.0) * Math.PI) : 0
         obj.position.set(h.x, air * 3.2, h.z)
+        // 콜로세움 추락 — 빙글 돌며 갱 속으로 가라앉는다(실시간 시계 — 뷰가 멈춰도 끝까지)
+        if (h.fallT > 0 && !u.fellAt) {
+          u.fellAt = performance.now() / 1000
+          u.fell = true
+        }
+        if (u.fellAt) {
+          const fp = Math.min(1, (performance.now() / 1000 - u.fellAt) / 0.85)
+          obj.position.y = -18 * fp * fp
+          obj.rotation.y = fp * 7
+          obj.scale.setScalar(1 - fp * 0.45)
+          if (fp >= 1) obj.visible = false
+        }
         // 회전베기(궁극기) 중엔 팽이처럼 빠르게 돈다, 띄워지면 허우적, 평소엔 바라보는 방향
         u.body.rotation.y = h.whirlT > 0 ? -view.time * 16 : h.airT > 0 ? -view.time * 8 : -h.dir
         // 걷기: 서 있으면 숨쉬기 둥실, 움직이면 통통 튀며 좌우로 뒤뚱(속도에 따라 걸음 빨라짐)
@@ -6201,25 +6241,121 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     syncPool(
       scene, holePool, view.holes || [],
       (o) => {
+        // 진짜 붕괴: 바닥은 groundPunch가 뚫고, 여기는 그 아래의 수직갱(내벽·바닥)과
+        // 부서진 가장자리, 그리고 무너져 내리는 땅 조각(1회성 낙하)을 그린다.
         const g = new THREE.Group()
         g.position.set(o.x, 0, o.z)
-        const pit = new THREE.Mesh(
-          new THREE.CircleGeometry(o.r, 40),
-          new THREE.MeshBasicMaterial({ color: 0x05030c, side: THREE.DoubleSide, depthWrite: false })
+        const DEPTH = 16
+        const shaft = new THREE.Mesh(
+          new THREE.CylinderGeometry(o.r * 0.98, o.r * 0.88, DEPTH, 28, 1, true),
+          new THREE.MeshLambertMaterial({ color: 0x584734, side: THREE.BackSide })
         )
-        pit.rotation.x = -Math.PI / 2
-        pit.position.y = 0.12
-        const rim = new THREE.Mesh(
-          new THREE.RingGeometry(o.r * 0.96, o.r * 1.06, 40),
-          new THREE.MeshBasicMaterial({ color: 0x3a2c58, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false })
+        shaft.position.y = -DEPTH / 2 + 0.02
+        const bottom = new THREE.Mesh(
+          new THREE.CircleGeometry(o.r * 0.9, 28),
+          new THREE.MeshBasicMaterial({ color: 0x07050d })
         )
-        rim.rotation.x = -Math.PI / 2
-        rim.position.y = 0.14
-        g.add(pit, rim)
+        bottom.rotation.x = -Math.PI / 2
+        bottom.position.y = -DEPTH + 0.1
+        g.add(shaft, bottom)
+        for (let i = 0; i < 9; i++) { // 부서진 테두리 바위
+          const a = (i / 9) * Math.PI * 2 + Math.random() * 0.5
+          const rr = 0.5 + Math.random() * 0.7
+          const rock = new THREE.Mesh(
+            new THREE.IcosahedronGeometry(rr, 0),
+            new THREE.MeshLambertMaterial({ color: 0xa8895c, flatShading: true })
+          )
+          rock.position.set(Math.cos(a) * o.r * 1.02, 0.15, Math.sin(a) * o.r * 1.02)
+          rock.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3)
+          g.add(rock)
+        }
+        const debris = []
+        for (let i = 0; i < 10; i++) { // 뜯겨 나간 땅 조각 — 갱 속으로 떨어진다
+          const chunk = new THREE.Mesh(
+            new THREE.IcosahedronGeometry(0.5 + Math.random() * 0.9, 0),
+            new THREE.MeshLambertMaterial({ color: 0xc9a86a, flatShading: true })
+          )
+          const a = Math.random() * Math.PI * 2
+          const rr = Math.sqrt(Math.random()) * o.r * 0.8
+          chunk.position.set(Math.cos(a) * rr, 0.3, Math.sin(a) * rr)
+          debris.push({ m: chunk, vy: -1 - Math.random() * 2.5, rs: Math.random() * 4 - 2 })
+          g.add(chunk)
+        }
+        g.userData = { debris, last: performance.now() / 1000, depth: DEPTH }
         return g
       },
-      () => { /* 정적 — 갱신 불필요 */ }
+      (obj) => {
+        // 파편 낙하 — 실시간 시계 기반(뷰 정지와 무관), 바닥 아래로 사라지면 정리
+        const u = obj.userData
+        if (!u.debris.length) return
+        const now = performance.now() / 1000
+        const dt2 = Math.min(0.1, now - u.last)
+        u.last = now
+        for (let i = u.debris.length - 1; i >= 0; i--) {
+          const d = u.debris[i]
+          d.vy -= 14 * dt2
+          d.m.position.y += d.vy * dt2
+          d.m.rotation.x += d.rs * dt2
+          d.m.rotation.z += d.rs * 0.7 * dt2
+          if (d.m.position.y < -u.depth + 1) {
+            d.m.visible = false
+            u.debris.splice(i, 1)
+          }
+        }
+      }
     )
+    // 붕괴 반영 ①: 바닥에 실제 구멍을 뚫는다(가장자리는 삐뚤빼뚤하게 한 번만)
+    if (groundPunch && view.holes?.length) {
+      const { ctx, tex, done, size } = groundPunch
+      let dirty = false
+      for (const o of view.holes) {
+        if (done.has(o.id)) continue
+        done.add(o.id)
+        dirty = true
+        const px = ((o.x + GW / 2) / GW) * size
+        const py = ((o.z + GH / 2) / GH) * size
+        const pr = (o.r / GW) * size
+        ctx.globalCompositeOperation = 'destination-out'
+        ctx.beginPath()
+        ctx.arc(px, py, pr, 0, Math.PI * 2)
+        ctx.fill()
+        for (let i = 0; i < 7; i++) { // 뜯긴 자국
+          const a = Math.random() * Math.PI * 2
+          ctx.beginPath()
+          ctx.arc(px + Math.cos(a) * pr, py + Math.sin(a) * pr, pr * (0.16 + Math.random() * 0.2), 0, Math.PI * 2)
+          ctx.fill()
+        }
+        ctx.globalCompositeOperation = 'source-over'
+      }
+      if (dirty) tex.needsUpdate = true
+    }
+    // 붕괴 반영 ②: 구멍과 겹친 성벽·수풀은 무너져 내려앉는다(충돌 제거는 엔진 몫)
+    if (map.mode === 'arena' && view.holes?.length) {
+      const nowC = performance.now() / 1000
+      for (const c of collapsibles) {
+        if (c.sink == null) {
+          const hit = view.holes.some((o) => {
+            if (c.kind === 'pt') return Math.hypot(c.x - o.x, c.z - o.z) < o.r + c.r * 0.4
+            const dx = c.x2 - c.x1
+            const dz = c.z2 - c.z1
+            const len2 = dx * dx + dz * dz || 1e-9
+            let t = ((o.x - c.x1) * dx + (o.z - c.z1) * dz) / len2
+            t = t < 0 ? 0 : t > 1 ? 1 : t
+            return Math.hypot(c.x1 + dx * t - o.x, c.z1 + dz * t - o.z) < o.r * 0.85
+          })
+          if (hit) c.sink = nowC
+        }
+        if (c.sink == null || c.done) continue
+        const t = (nowC - c.sink) / 0.6
+        if (t >= 1) {
+          c.g.visible = false
+          c.done = true
+        } else {
+          c.g.position.y = -9 * t * t
+          c.g.rotation.x = (c.kind === 'seg' ? 0.3 : 0.18) * t
+        }
+      }
+    }
     // 스킬/이벤트 이펙트 (동심원 링 + 방향성 직선 + 파티클). 골드 표시는 내 막타만.
     const fxList = view.fx.filter((n) => n.kind !== 'gold' || n.owner === myId)
     syncPool(scene, fxPool, fxList,
