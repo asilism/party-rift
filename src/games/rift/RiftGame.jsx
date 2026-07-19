@@ -140,6 +140,7 @@ function useRiftSounds(hud, myId) {
   const prev = useRef({})
   const fxSeen = useRef(0) // 마지막으로 사운드를 낸 fx의 최대 id
   const fxLast = useRef({}) // 카테고리별 마지막 재생 시각(ms)
+  const fallSoundRef = useRef(new Set()) // 콜로세움 추락 휘슬을 이미 낸 영웅 id
   useEffect(() => {
     if (!hud) return
     const p = prev.current
@@ -182,6 +183,13 @@ function useRiftSounds(hud, myId) {
     ))
     if (nexusAlert && !p.nexusAlert) sound.thunder()
     if (hud.status === 'finished' && p.status && p.status !== 'finished') sound.win()
+    // 콜로세움 추락 휘슬 — fallT가 새로 켜진 영웅마다 한 번(삐유우우우웅)
+    for (const h of hud.heroes || []) {
+      if (h.fallT > 0 && !fallSoundRef.current.has(h.id)) {
+        fallSoundRef.current.add(h.id)
+        sound.fall()
+      }
+    }
     prev.current = {
       countdown: hud.countdown,
       status: hud.status,
@@ -450,7 +458,8 @@ function RiftPlay({
       const loser = hud.winner === 'blue' ? 'red' : 'blue'
       const pops = Math.min(hud.arenaDeduct || 0, hud.arenaPts[loser] || 0)
       const wipedOut = (hud.arenaPts[loser] || 0) - pops <= 0
-      ms = 1000 + pops * 500 + (wipedOut ? 2400 : 900)
+      const fell = hud.heroes?.some((h) => h.fallT > 0) ? 1700 : 0 // 낙하 장면을 다 보여주고
+      ms = fell + 1000 + pops * 500 + (wipedOut ? 2400 : 900)
     }
     const t = setTimeout(() => setShowWin(true), ms)
     return () => clearTimeout(t)

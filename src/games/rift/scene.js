@@ -4821,9 +4821,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     }
     const tex = new THREE.CanvasTexture(c)
     tex.colorSpace = THREE.SRGBColorSpace
+    // alphaTest만 사용(불투명 패스 유지) — transparent:true로 두면 바닥이 투명 정렬에
+    // 끼어들어 그림자·데칼과 순서가 꼬인다(검은 얼룩 아티팩트)
     ground = new THREE.Mesh(
       new THREE.PlaneGeometry(GW, GH),
-      new THREE.MeshLambertMaterial({ map: tex, transparent: true, alphaTest: 0.4 })
+      new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.4 })
     )
     groundPunch = { ctx, tex, done: new Set(), size: 1024 }
   } else {
@@ -5392,6 +5394,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   }
   let arenaFinale = null // { t0, loser, pops, base } — 종료 연출 타임라인(실시간 시계)
   let champSet = null // 우승 무대(단상+듀오+색종이) — championCam 첫 프레임에 조립
+  let fallFocus = null // 콜로세움 추락 장면 카메라 표적 { x, z, t0 }
 
   const heroPool = new Map()
   const minionPool = new Map()
@@ -5589,7 +5592,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       if (!arenaFinale && view.status === 'finished' && view.winner) {
         const loser = view.winner === 'blue' ? 'red' : 'blue'
         const base = view.arenaPts[loser] || 0
-        arenaFinale = { t0: now, loser, base, pops: Math.min(view.arenaDeduct || 0, base) }
+        const fallDelay = view.heroes?.some((h) => h.fallT > 0) ? 1.7 : 0 // 낙하 장면 먼저
+        arenaFinale = { t0: now + fallDelay, loser, base, pops: Math.min(view.arenaDeduct || 0, base) }
       }
       // 펑 이펙트 세트: 💥 + 회색 연기 퍼프 + 사방으로 튀는 분홍 파편 — 하트 10개여도 차감이 또렷이 보이게
       const spawnPop = (st, pos, big = false) => {
@@ -5695,9 +5699,18 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const dead = h.respawnT > 0
         const u = obj.userData
         // 사망: 그 자리에서 파티클로 분해되어 바닥에 쌓이고 부활까지 남는다
+        if (h.fallT > 0 && !u.fellAt) { // 낙하 시작 감지 — 사망 처리보다 먼저
+          u.fellAt = performance.now() / 1000
+          u.fell = true
+          fallFocus = { x: h.x, z: h.z, t0: u.fellAt } // 카메라가 낙하 장면을 따라간다
+        }
         if (dead) {
-          if (u.fell) { // 추락사 — 구멍 속으로 사라졌다: 지상 파티클 더미를 만들지 않는다
-            obj.visible = false
+          if (u.fell) { // 추락사 — 구멍 속으로 가라앉는 연출을 끝까지 보여준다(지상 파티클 없음)
+            const fp = Math.min(1, (performance.now() / 1000 - u.fellAt) / 1.55)
+            obj.visible = fp < 1
+            obj.position.set(h.x, -22 * fp * fp, h.z)
+            obj.rotation.y = fp * 7
+            obj.scale.setScalar(1 - fp * 0.45)
             return
           }
           obj.visible = true // 시체 파티클은 늘 보인다 (쓰러뜨렸음을 알림)
@@ -5722,13 +5735,9 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const air = h.airT > 0 ? Math.sin(Math.min(1, (1.5 - h.airT) / 1.5 + 0.0) * Math.PI) : 0
         obj.position.set(h.x, air * 3.2, h.z)
         // 콜로세움 추락 — 빙글 돌며 갱 속으로 가라앉는다(실시간 시계 — 뷰가 멈춰도 끝까지)
-        if (h.fallT > 0 && !u.fellAt) {
-          u.fellAt = performance.now() / 1000
-          u.fell = true
-        }
         if (u.fellAt) {
-          const fp = Math.min(1, (performance.now() / 1000 - u.fellAt) / 0.85)
-          obj.position.y = -18 * fp * fp
+          const fp = Math.min(1, (performance.now() / 1000 - u.fellAt) / 1.55)
+          obj.position.y = -22 * fp * fp
           obj.rotation.y = fp * 7
           obj.scale.setScalar(1 - fp * 0.45)
           if (fp >= 1) obj.visible = false
@@ -6457,11 +6466,15 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       renderer.render(scene, camera)
       return
     }
-    const endNexus = view.status === 'finished' && loser ? (finaleBoss || NEXUS_POS[loser]) : null
+    // 콜로세움 추락 캠 — 낙하가 진행되는 1.8초 동안은 떨어지는 영웅에게 시선 고정
+    const fallCam = view.mode === 'arena' && fallFocus && performance.now() / 1000 - fallFocus.t0 < 1.8 ? fallFocus : null
+    const endNexus = !fallCam && view.status === 'finished' && loser ? (finaleBoss || NEXUS_POS[loser]) : null
     const introBoss = !endNexus && view.mode === 'boss' && view.status === 'countdown'
       ? view.heroes?.find((h) => h.cls?.startsWith('boss_'))
       : null
-    if (endNexus) {
+    if (fallCam) {
+      want.set(fallCam.x, 0, fallCam.z)
+    } else if (endNexus) {
       want.set(endNexus.x, 0, endNexus.z) // 터진 최종 건물로 시선 집중
       offY = 30
       offZ = 24
