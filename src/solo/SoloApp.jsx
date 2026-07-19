@@ -89,6 +89,7 @@ export default function SoloApp() {
   const [tour, setTour] = useState(null) // 콜로세움 토너먼트 상태
   const [tourStage, setTourStage] = useState('bracket') // bracket(대진) | result(라운드 결과) | final(최종 순위)
   const arenaCarryRef = useRef({}) // 라운드 간 유저 팀 이월(레벨·골드·아이템)
+  const arenaSideRef = useRef('blue') // 이번 라운드 유저 팀 진영 — 지형이 완전 대칭이 아니라 매판 랜덤
   const arenaViewRef = useRef(null) // 라운드 종료 뷰(결과 보기 버튼 대기)
   const [adState, setAdState] = useState('idle') // 보상형 광고 버튼 상태: idle | loading | fail
   useEffect(() => () => netRef.current?.close(), [])
@@ -135,7 +136,11 @@ export default function SoloApp() {
       team, cls: m.cls, isBot: m.isBot, deviceId: m.isBot ? undefined : 'solo',
       title: m.isBot ? null : t(loadEquippedTitle()) || null,
     })
-    const roster = [...myTeam.members.map((m) => toRoster(m, 'blue')), ...opp.members.map((m) => toRoster(m, 'red'))]
+    // 진영 랜덤 배정 — 내부 구조(기둥·협로 배치)가 좌우 완전 대칭이 아니므로 한쪽 고정은 불공평
+    const mySide = Math.random() < 0.5 ? 'blue' : 'red'
+    const oppSide = mySide === 'blue' ? 'red' : 'blue'
+    arenaSideRef.current = mySide
+    const roster = [...myTeam.members.map((m) => toRoster(m, mySide)), ...opp.members.map((m) => toRoster(m, oppSide))]
     const lvl = arenaLevelFor(tour.round)
     const carry = {}
     for (const m of myTeam.members) carry[m.id] = arenaCarryRef.current[m.id] || { lvl, gold: 0 }
@@ -149,7 +154,7 @@ export default function SoloApp() {
       players: [],
       config: {
         mode: 'arena', roster, carry, botLevel: dOpt.botLevel, arenaLayout: cur.layout,
-        arenaPts: { blue: myTeam.pts, red: opp.pts }, // 수호석 하트 = 현재 토너먼트 포인트
+        arenaPts: { [mySide]: myTeam.pts, [oppSide]: opp.pts }, // 수호석 하트 = 현재 토너먼트 포인트(진영 키)
         arenaDeduct: cur.deduction, // 패배 시 터질 하트 개수
       },
       deviceId: 'solo',
@@ -157,7 +162,7 @@ export default function SoloApp() {
         arenaViewRef.current = view // 결과 반영은 '결과 보기' 버튼에서 — 경기 결과 모달을 먼저 보게 한다
         const me = view.heroes?.find((h) => h.id === 'solo')
         if (me) {
-          const win = !!view.winner && view.winner === 'blue'
+          const win = !!view.winner && view.winner === mySide
           recordMissionProgress({ win, kills: me.kills, assists: me.assists, jungle: me.jungleKills })
           recordMatchForAchievements({ view, me, win })
         }
@@ -172,7 +177,7 @@ export default function SoloApp() {
   // 라운드 결과 반영(정상 종료·중도 이탈 공통) — 이월 추출 후 판정, 콜로세움 화면으로
   function finishArenaRound(forfeit = false) {
     const view = arenaViewRef.current
-    const win = !forfeit && !!view && view.winner === 'blue'
+    const win = !forfeit && !!view && view.winner === arenaSideRef.current
     const nextLvl = arenaLevelFor(tour.round + 1)
     if (view) {
       for (const id of ['solo', 'ally']) {
