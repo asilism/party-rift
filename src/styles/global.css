@@ -2829,8 +2829,13 @@ body {
 .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; z-index: 1; }
 .toy-heading { margin: 0; font-family: var(--toy-display); color: var(--ink); font-size: clamp(20px, 4vh, 28px); letter-spacing: 1px; }
 .toy-heading--screen {
-  margin-top: clamp(10px, 3vh, 22px); color: #fff; font-size: clamp(24px, 5.4vh, 38px);
-  text-shadow: 0 3px 0 var(--ink), -2px 0 0 var(--ink), 2px 0 0 var(--ink), 0 -2px 0 var(--ink), 0 8px 18px rgba(0, 0, 0, 0.35);
+  margin-top: clamp(10px, 3vh, 22px); color: #fff; font-size: clamp(26px, 5.4vh, 38px);
+  /* 외곽선: 어긋난 그림자 사본(고정 px) 대신 em 비례 스트로크 + 글자 "뒤"에 칠하기(paint-order).
+     사본 방식은 획 사이 틈을 메워 획수 많은 글자가 뭉개졌고, 고정 px라 작은 화면일수록 심해졌다.
+     스티커 두께 그림자도 하드 카피 대신 살짝 블러 — 세로 스택 글자(울·를)의 가로 틈을 안 메운다. */
+  -webkit-text-stroke: 0.12em var(--ink);
+  paint-order: stroke fill;
+  text-shadow: 0 0.08em 0.06em rgba(42, 36, 64, 0.9), 0 8px 18px rgba(0, 0, 0, 0.35);
   transform: rotate(-1.2deg);
 }
 .toy-sub { margin: 2px 0 0; color: #6b6390; font-size: clamp(12px, 2.2vh, 14px); }
@@ -2891,6 +2896,7 @@ body {
   margin: 0; font-family: var(--toy-display); font-weight: 400; line-height: 0.95;
   font-size: clamp(46px, 15vh, 96px); letter-spacing: 2px; color: var(--toy-yellow);
   -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill; /* 외곽선을 글자 뒤에 — 획 안쪽을 갉아먹지 않는다 */
   text-shadow: 0 5px 0 var(--ink), 0 10px 0 rgba(43, 35, 80, 0.45), 0 16px 30px rgba(0, 0, 0, 0.45);
 }
 .toy-logo__en--small { font-size: clamp(24px, 5vh, 36px); text-shadow: 0 3px 0 var(--ink), 0 8px 16px rgba(0, 0, 0, 0.4); }
