@@ -5504,7 +5504,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     // 안개 밖(아군 시야 없는 곳)인가? — 안개 구멍과 같은 규칙. 관전은 늘 보인다.
     const SIGHT2 = SIGHT_RANGE * SIGHT_RANGE
     const inVision = (x, z) => {
-      if (!myTeam) return true
+      if (!myTeam || view.mode === 'arena') return true // 콜로세움: 노포그 — 이펙트·데칼도 전부 보인다
       for (const a of view.heroes) {
         if (a.team === myTeam && a.respawnT <= 0 && (a.x - x) ** 2 + (a.z - z) ** 2 <= SIGHT2) return true
       }
@@ -6394,7 +6394,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
 
     // 전장의 안개 (관전자는 안개 없음 / 경기가 끝나면 걷어 폭발 연출이 또렷이 보이게)
     // 시야는 천천히 변하므로 품질에 따라 몇 프레임에 한 번만 캔버스를 다시 그려 재업로드 비용을 아낀다.
-    const fogVisible = !!myTeam && view.status !== 'finished'
+    const fogVisible = !!myTeam && view.status !== 'finished' && view.mode !== 'arena' // 콜로세움: 노포그
     if (fogVisible) {
       if (!fog.plane.visible || frameN % Q.fogEvery === 0) fog.update(view, myTeam) // 켜진 첫 프레임엔 즉시 갱신
     }
