@@ -2,7 +2,35 @@
 
 각 언어 500자 제한. 업로드하는 트랙의 "버전 세부정보 > 출시 노트"에 붙여넣기.
 
-## v1.1 (versionCode 33) — 2026-07-19
+## v1.1 콜로세움 개선판 (versionCode 33) — 2026-07-20
+
+v26~v33 누적분. 직전 업로드가 v25 이전이면 아래의 "대규모 콘텐츠 업데이트" 항목도 함께 참고.
+
+### ko-KR
+
+```
+🏟️ 콜로세움 대폭 개선!
+• 서든데스: 전투 1분 뒤 경기장이 진짜로 무너집니다 — 바닥이 뜯겨 나가고 성벽·수풀도 함께 붕괴
+• 추락 연출: 구멍에 빠지는 장면을 끝까지 보여주고, 추락 효과음과 카메라 연출 추가
+• 봇이 붕괴 경고를 미리 피해 다니고, 지형 유불리가 없도록 진영을 라운드마다 랜덤 배정
+• 노포그 규칙 적용 — 수풀 안만 빼고 전장 전체가 훤히 보입니다. 미니맵도 모래 테마+붕괴 표시로 개편
+• 수호석에 팀 포인트만큼 하트가 떠 있고 패배하면 펑펑 터집니다 — 우승하면 경기장 중앙 단상 세리머니!
+• 상점 되돌리기가 "마지막 한 건씩" 취소로 개선, 화면 제목 가독성 개선
+```
+
+### en-US
+
+```
+🏟️ Big Colosseum update!
+• Sudden death: after 1 min the arena truly crumbles — floor tears open, walls & bushes fall with it
+• Falling gets a full drop scene with a whistle sound & camera work
+• Bots dodge collapse warnings; sides randomized each round for fairness
+• No-fog rule — all visible except bushes. Desert minimap with collapse markers
+• Nexus hearts show team points and pop on defeat — win it all for a podium ceremony!
+• Shop undo now reverts one purchase at a time; sharper screen titles
+```
+
+## v1.1 (versionCode 19~25) — 2026-07-19, 대규모 콘텐츠 업데이트
 
 ### ko-KR
 
