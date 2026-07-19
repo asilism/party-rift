@@ -5367,6 +5367,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     }
   }
   let arenaFinale = null // { t0, loser, pops, base } — 종료 연출 타임라인(실시간 시계)
+  let champSet = null // 우승 무대(단상+듀오+색종이) — championCam 첫 프레임에 조립
 
   const heroPool = new Map()
   const minionPool = new Map()
@@ -6302,6 +6303,24 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       renderer.render(scene, camera)
       return
     }
+    // 우승 셀레브레이션 캠 — 콜로세움 "바깥 원거리"에서 출발해 성벽 위를 활공,
+    // 중앙 단상 앞에 안착한 뒤 느린 궤도로 만세하는 우승 듀오를 담는다.
+    if (view.championCam) {
+      if (!champSet) champSet = buildChampionSet(scene, view.champDuo || [])
+      const now = performance.now() / 1000
+      const t = now - champSet.t0
+      champSet.update(now)
+      const FLY = 5.5 // 진입 비행 시간(초)
+      const s01 = Math.min(1, t / FLY)
+      const e = s01 * s01 * (3 - 2 * s01) // smoothstep — 미려한 감속 안착
+      const ang = -0.6 + e * 1.2 + Math.max(0, t - FLY) * 0.1 // 진입 중 호를 그리고, 이후 느린 궤도
+      const r = 130 + (16.5 - 130) * e + (t > FLY ? Math.sin((t - FLY) * 0.09) * 2 : 0)
+      const h = 55 + (7.2 - 55) * e + (t > FLY ? Math.sin((t - FLY) * 0.17) * 1.1 : 0)
+      camera.position.set(Math.sin(ang) * r, h, Math.cos(ang) * r)
+      camera.lookAt(0, 2 + e * 1.1, 0) // 시선도 경기장 전경 → 단상 상단으로 스르륵
+      renderer.render(scene, camera)
+      return
+    }
     const endNexus = view.status === 'finished' && loser ? (finaleBoss || NEXUS_POS[loser]) : null
     const introBoss = !endNexus && view.mode === 'boss' && view.status === 'countdown'
       ? view.heroes?.find((h) => h.cls?.startsWith('boss_'))
@@ -6560,24 +6579,10 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume 
   }
 }
 
-// ── 콜로세움 우승 무대 — 우승 듀오가 금빛 단상 위에서 만세(교차 점프)하는 셀레브레이션 ──
-//  카메라는 느린 궤도 + 들숨/날숨 돌리로 단상을 돈다. 색종이가 쉼 없이 내린다.
-export function createChampionStage(canvas, { duo }) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
-  renderer.setClearColor(0x35243a) // 콜로세움 노을 하늘
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1))
-  const scene = new THREE.Scene()
-  scene.fog = new THREE.Fog(0x35243a, 34, 80)
-  const camera = new THREE.PerspectiveCamera(38, 16 / 9, 0.5, 120)
-  scene.add(new THREE.AmbientLight(0xffffff, 0.75))
-  const sun = new THREE.DirectionalLight(0xfff1d6, 1.1)
-  sun.position.set(8, 16, 10)
-  scene.add(sun)
-
-  // 모래 바닥 + 3단 단상(금빛 상단) + 발광 링
-  const sand = new THREE.Mesh(new THREE.CircleGeometry(36, 48), new THREE.MeshLambertMaterial({ color: 0xc9a86a }))
-  sand.rotation.x = -Math.PI / 2
-  scene.add(sand)
+// ── 콜로세움 우승 무대 세트 — 실제 경기장(createRiftScene) 중앙에 단상·듀오·색종이를 조립 ──
+//  championCam 분기(render)가 첫 프레임에 호출한다. update(now)가 만세 점프·색종이를 굴린다.
+function buildChampionSet(scene, duo) {
+  const group = new THREE.Group() // 경기장 정중앙
   const stone = new THREE.MeshLambertMaterial({ color: 0xcfc3a6 })
   const gold = new THREE.MeshLambertMaterial({ color: 0xf3c34b, emissive: 0x64430a, emissiveIntensity: 0.35 })
   const tier1 = new THREE.Mesh(new THREE.CylinderGeometry(6.4, 7.2, 1.0, 24), stone)
@@ -6586,7 +6591,7 @@ export function createChampionStage(canvas, { duo }) {
   tier2.position.y = 1.55
   const podTop = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.8, 1.0, 24), gold)
   podTop.position.y = 2.6
-  scene.add(tier1, tier2, podTop)
+  group.add(tier1, tier2, podTop)
   const TOP_Y = 3.1
   const halo = new THREE.Mesh(
     new THREE.RingGeometry(4.2, 6.4, 44),
@@ -6594,26 +6599,26 @@ export function createChampionStage(canvas, { duo }) {
   )
   halo.rotation.x = -Math.PI / 2
   halo.position.y = 0.06
-  scene.add(halo)
+  group.add(halo)
 
   // 우승 듀오 — 명패/체력바 없이 모델만, 무기는 하늘로 치켜든 자세
-  const champs = duo.slice(0, 2).map((m, i) => {
+  const champs = (duo || []).slice(0, 2).map((m2, i) => {
     const g = buildHero(
-      { id: `champ${i}`, cls: m.cls, zodiacId: m.zodiacId, team: 'blue', lvl: 18, atkSeq: 0 },
-      false, '#fff', m.hat || null, m.costume || null, m.weapon || null
+      { id: `champ${i}`, cls: m2.cls, zodiacId: m2.zodiacId, team: 'blue', lvl: 18, atkSeq: 0 },
+      false, '#fff', m2.hat || null, m2.costume || null, m2.weapon || null
     )
     const u = g.userData
     u.name.visible = false
     u.bar.visible = false
     u.weapon.userData.pose(0.5)
     u.weapon.parent.parent.rotation.z = 0.6 // 손목 들어올림 — 만세!
-    const s = CLS_SCALE[m.cls] || 1
+    const cs = CLS_SCALE[m2.cls] || 1
     g.position.set(i === 0 ? -1.7 : 1.7, TOP_Y, 0)
-    scene.add(g)
-    return { g, s, phase: i * Math.PI } // 교차 점프 위상
+    group.add(g)
+    return { g, s: cs, phase: i * Math.PI } // 교차 점프 위상
   })
 
-  // 색종이 — 하늘에서 흩날리며 끝없이 내린다
+  // 색종이 — 단상 하늘에서 흩날리며 끝없이 내린다
   const CONF_COLORS = [0xff6b81, 0xffd34d, 0x7fd6ff, 0x8dfab4, 0xd9a7ff]
   const confetti = []
   for (let i = 0; i < 44; i++) {
@@ -6621,60 +6626,34 @@ export function createChampionStage(canvas, { duo }) {
       map: glowTexture(), color: CONF_COLORS[i % CONF_COLORS.length], transparent: true, depthWrite: false,
     }))
     sp.scale.setScalar(0.3 + Math.random() * 0.3)
-    const c = { sp, x: (Math.random() - 0.5) * 24, y: 2 + Math.random() * 14, z: (Math.random() - 0.5) * 24, vy: 1.2 + Math.random() * 1.6, sway: Math.random() * Math.PI * 2 }
+    const c = { sp, x: (Math.random() - 0.5) * 26, y: 2 + Math.random() * 15, z: (Math.random() - 0.5) * 26, vy: 1.2 + Math.random() * 1.6, sway: Math.random() * Math.PI * 2 }
     sp.position.set(c.x, c.y, c.z)
     confetti.push(c)
-    scene.add(sp)
+    group.add(sp)
   }
-
-  let raf
-  let last = performance.now()
-  let time = 0
-  function frame() {
-    raf = requestAnimationFrame(frame)
-    const now = performance.now()
-    if (now - last < 1000 / 30 - 2) return // 셀레브레이션 무대는 30fps면 충분
-    let dt = (now - last) / 1000
-    last = now
-    if (!(dt > 0) || dt > 0.1) dt = 1 / 60
-    time += dt
-    // 만세 점프 — 교차 홉 + 착지 스쿼시 + 몸 흔들기
-    for (const h of champs) {
-      const cyc = Math.sin(time * 3.1 + h.phase)
-      h.g.position.y = TOP_Y + Math.max(0, cyc) * 1.0 * h.s
-      h.g.rotation.z = cyc * 0.07
-      h.g.scale.y = 1 - Math.max(0, -cyc) * 0.07
-    }
-    halo.material.opacity = 0.24 + Math.sin(time * 2.4) * 0.1
-    for (const c of confetti) {
-      c.y -= c.vy * dt
-      if (c.y < 0.3) c.y = 12 + Math.random() * 6
-      c.sp.position.set(c.x + Math.sin(time * 1.7 + c.sway) * 0.9, c.y, c.z + Math.cos(time * 1.3 + c.sway) * 0.5)
-      c.sp.material.opacity = Math.min(1, c.y / 2)
-    }
-    // 카메라 — 느린 궤도 + 돌리 숨쉬기(가까워졌다 멀어졌다)
-    const a = time * 0.14
-    const r = 16.5 + Math.sin(time * 0.09) * 2
-    camera.position.set(Math.sin(a) * r, 7.2 + Math.sin(time * 0.17) * 1.1, Math.cos(a) * r)
-    camera.lookAt(0, 3.1, 0)
-    renderer.render(scene, camera)
-  }
-  raf = requestAnimationFrame(frame)
+  scene.add(group)
 
   return {
-    resize(w, h) {
-      renderer.setSize(w, h, false)
-      camera.aspect = w / Math.max(1, h)
-      camera.updateProjectionMatrix()
-    },
-    dispose() {
-      cancelAnimationFrame(raf)
-      renderer.dispose()
+    t0: performance.now() / 1000,
+    update(now) {
+      for (const h of champs) {
+        const cyc = Math.sin(now * 3.1 + h.phase)
+        h.g.position.y = TOP_Y + Math.max(0, cyc) * 1.0 * h.s
+        h.g.rotation.z = cyc * 0.07
+        h.g.scale.y = 1 - Math.max(0, -cyc) * 0.07
+      }
+      halo.material.opacity = 0.24 + Math.sin(now * 2.4) * 0.1
+      for (const c of confetti) {
+        c.y -= c.vy * (1 / 30)
+        if (c.y < 0.3) c.y = 13 + Math.random() * 6
+        c.sp.position.set(c.x + Math.sin(now * 1.7 + c.sway) * 0.9, c.y, c.z + Math.cos(now * 1.3 + c.sway) * 0.5)
+        c.sp.material.opacity = Math.min(1, c.y / 2)
+      }
     },
   }
 }
 
-// ── 12지신 얼굴 튜너(개발용, ?faces) — 인게임 실물 12종을 진열하고 라이브 조정 ──
+// ── 12지신 얼굴 튜너// ── 12지신 얼굴 튜너(개발용, ?faces) — 인게임 실물 12종을 진열하고 라이브 조정 ──
 // 얼굴 크기·크롭·위치를 눈으로 보며 스펙(zodiacFaces.js 형식)을 만든다.
 //  api.setSpec(emoji, spec)  크롭(zoom/ox/oy)·배율(scale)·위치(dx/dy) 즉시 반영
 //  api.setDir(rad|null)      인게임처럼 바라보는 방향 전환(null=대기 자세) — 제자리 걸음 포함

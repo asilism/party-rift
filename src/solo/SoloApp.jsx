@@ -1119,7 +1119,7 @@ function ColosseumScreen({ tour, stage, onEnter, onSkipRound, onNextRound, onFin
   const [finalCard, setFinalCard] = useState(false)
   useEffect(() => {
     if (stage !== 'final') { setFinalCard(false); return undefined }
-    const t0 = setTimeout(() => setFinalCard(true), place === 1 ? 2800 : 500)
+    const t0 = setTimeout(() => setFinalCard(true), place === 1 ? 6500 : 500) // 우승: 진입 비행(5.5s) + 안착 후 카드
     return () => clearTimeout(t0)
   }, [stage, place])
 
