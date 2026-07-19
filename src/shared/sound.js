@@ -379,6 +379,35 @@ export const sound = {
     setTimeout(() => beep(300, 0.14, 'sawtooth', 0.05), 100)
     setTimeout(() => beep(200, 0.16, 'sawtooth', 0.05), 220)
   },
+  // 콜로세움 추락 — 삐유우우우웅(하강 휘슬) + 마지막에 낮은 쿵
+  fall() {
+    if (!enabled) return
+    const ac = getCtx()
+    if (!ac) return
+    const now = ac.currentTime
+    const osc = ac.createOscillator()
+    const g = ac.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(1150, now)
+    osc.frequency.exponentialRampToValueAtTime(130, now + 1.3)
+    g.gain.setValueAtTime(0.085, now)
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 1.4)
+    osc.connect(g)
+    g.connect(ac.destination)
+    osc.start(now)
+    osc.stop(now + 1.45)
+    const thud = ac.createOscillator()
+    const tg = ac.createGain()
+    thud.type = 'triangle'
+    thud.frequency.setValueAtTime(70, now + 1.32)
+    tg.gain.setValueAtTime(0.0001, now)
+    tg.gain.setValueAtTime(0.12, now + 1.32)
+    tg.gain.exponentialRampToValueAtTime(0.0001, now + 1.6)
+    thud.connect(tg)
+    tg.connect(ac.destination)
+    thud.start(now + 1.32)
+    thud.stop(now + 1.65)
+  },
   win() {
     const notes = [523, 659, 784, 1047]
     notes.forEach((f, i) => setTimeout(() => beep(f, 0.18, 'sine', 0.07), i * 130))

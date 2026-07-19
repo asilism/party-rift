@@ -2993,7 +2993,7 @@ function arenaAliveCount(state, team) {
 
 // 낙하 시작 — 0.8초간 구멍 중심으로 빨려 들어가며 추락(연출), 끝나면 사망 확정.
 //  보호막 무시(추락엔 방패가 없다). 낙하 중엔 행동·이동 불가 + 생존 판정에서 제외.
-const ARENA_FALL_T = 0.8
+const ARENA_FALL_T = 1.5 // 낙하 장면을 충분히 보여준다 — 이게 끝나야 결과 연출로 넘어간다
 function arenaFall(state, h, hole = null) {
   if (h.fallT > 0) return
   h.barrierHp = 0
