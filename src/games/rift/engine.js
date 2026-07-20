@@ -1561,7 +1561,7 @@ export function castAttack(state, id, forceRef = null) {
     return state
   }
   state.projectiles.push({
-    id: state.nextId++, kind: 'bolt', team: h.team, owner: h.id,
+    id: state.nextId++, kind: 'bolt', team: h.team, owner: h.id, cls: h.cls, // cls: 렌더러의 직업별 투사체 조형용
     x: h.x, z: h.z, target: ref, dmg: atkOf(h), speed: BOLT_SPEED,
   })
   return state
@@ -6971,6 +6971,7 @@ export function makeView(state) {
         z: r1(p.z),
         // 검기는 호(초승달) 모양이라 렌더러가 진행 방향으로 눕혀 그린다
         ...(p.kind === 'swordwave' ? { dir: r2d(p.dir) } : {}),
+        ...(p.cls ? { cls: p.cls } : {}), // 평타 구체의 직업별 조형(화살/화염구/서리 결정…)
       })),
       // 사냥매도 투사체 풀로 그린다 (보간/안개 처리 공용)
       ...state.hawks.map((hk) => ({ id: hk.id, kind: 'hawk', team: hk.team, x: r1(hk.x), z: r1(hk.z) })),

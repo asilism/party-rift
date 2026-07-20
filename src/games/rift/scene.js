@@ -3573,6 +3573,78 @@ function buildSummon(s, barColor) {
   return g
 }
 
+// ── 평타 투사체 직업별 개성 — 공용 팀색 구체 하나로는 "누가 쐈는지"가 안 읽힌다 ──
+//  근접 연출 4종(수호기사·시간여행자·야수조련사·사슬잡이)은 평타 구체를 아예 그리지
+//  않는다(엔진 판정·타이밍은 그대로 — 순수 시각 정리). 대지술사는 원거리 연출로 편입.
+const MELEE_NO_BOLT = new Set(['guardian', 'chronomancer', 'beastmaster', 'catcher'])
+const BOLT_STYLE = {
+  archer: { kind: 'arrow', color: 0xffe9b0 }, // 길쭉한 화살 — 속도감
+  mage: { kind: 'orb', color: 0xff8c3a, glow: 3.6, trail: true }, // 화염구 + 불티 꼬리
+  cryomancer: { kind: 'crystal', color: 0xa8e8ff }, // 서리 결정
+  warlock: { kind: 'orb', color: 0x9dff6a, glow: 3.2, trail: true }, // 독구
+  windcaller: { kind: 'crescent', color: 0x8ff4e0 }, // 바람 낫
+  healer: { kind: 'orb', color: 0xfff2b8, glow: 3.4 }, // 성광탄
+  fearmonger: { kind: 'flame', color: 0xc490ff }, // 어른거리는 유령불
+  engineer: { kind: 'hex', color: 0xffd94a }, // 스패너 너트
+  snarer: { kind: 'seed', color: 0x8ede5a }, // 가시 씨앗
+  terramancer: { kind: 'rock', color: 0xd8b088 }, // 자갈
+}
+function buildClassBolt(st) {
+  const g = new THREE.Group()
+  const u = { color: st.color, trail: !!st.trail }
+  const glowR = st.glow || 2.6
+  if (st.kind === 'arrow') {
+    const mat = new THREE.MeshBasicMaterial({ color: st.color })
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.5, 5), mat)
+    shaft.rotation.z = Math.PI / 2
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.5, 6), mat)
+    head.rotation.z = -Math.PI / 2
+    head.position.x = 0.95
+    g.add(shaft, head)
+    u.orient = true
+    u.halo = glowSprite(st.color, 1.6)
+    g.add(u.halo)
+    u.haloBase = 1.6
+  } else if (st.kind === 'crystal') {
+    u.core = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), new THREE.MeshBasicMaterial({ color: st.color }))
+    u.anim = (t) => { u.core.rotation.y = t * 7; u.core.rotation.x = t * 3 }
+  } else if (st.kind === 'crescent') {
+    u.core = new THREE.Mesh(
+      new THREE.TorusGeometry(0.5, 0.12, 5, 14, Math.PI * 1.2),
+      new THREE.MeshBasicMaterial({ color: st.color, transparent: true, opacity: 0.95, side: THREE.DoubleSide })
+    )
+    u.core.rotation.x = Math.PI / 2
+    u.orient = true
+    u.anim = (t) => { u.core.rotation.z = t * 12 } // 회전하는 낫
+  } else if (st.kind === 'hex') {
+    u.core = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.2, 6), new THREE.MeshBasicMaterial({ color: st.color }))
+    u.anim = (t) => { u.core.rotation.y = t * 10; u.core.rotation.z = t * 5 }
+  } else if (st.kind === 'seed' || st.kind === 'rock') {
+    u.core = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(st.kind === 'rock' ? 0.4 : 0.3, 0),
+      new THREE.MeshLambertMaterial({ color: st.color, flatShading: true })
+    )
+    u.anim = (t) => { u.core.rotation.x = t * 6; u.core.rotation.y = t * 4 }
+  } else if (st.kind === 'flame') {
+    u.core = new THREE.Mesh(new THREE.SphereGeometry(0.34, 8, 6), new THREE.MeshBasicMaterial({ color: st.color, transparent: true }))
+    u.anim = (t, p) => { // 유령불 — 일렁이는 크기·밝기
+      u.core.scale.setScalar(0.8 + Math.sin(t * 27 + p.x * 3) * 0.3)
+      u.core.material.opacity = 0.7 + Math.sin(t * 31 + p.z * 2) * 0.3
+    }
+  } else { // orb — 색·후광만 다른 발광 구체
+    u.core = new THREE.Mesh(new THREE.SphereGeometry(0.38, 8, 6), new THREE.MeshBasicMaterial({ color: st.color }))
+  }
+  if (u.core) {
+    g.add(u.core)
+    u.halo = glowSprite(st.color, 0.4 * glowR)
+    g.add(u.halo)
+    u.haloBase = 0.4 * glowR
+  }
+  g.position.y = 2.4
+  g.userData = u
+  return g
+}
+
 // 발광 구체로 그리는 투사체(평타·포탑·미니언 — 가독성용 빛덩이). 스킬 투사체는 PROJ_BUILDERS의 전용 조형.
 // glow = 후광 크기(반지름 배율), trail = 꼬리 발광 입자를 흘릴지
 const PROJ_LOOK = {
@@ -5403,7 +5475,6 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     illusionist: { kind: 'stab', color: 0xffc7ee },
     tank: { kind: 'heavy', color: 0xffd9a0 }, // 묵직한 한 방 — 넓고 느긋한 호
     guardian: { kind: 'heavy', color: 0xfff0b8 },
-    terramancer: { kind: 'heavy', color: 0xe8c9a0 },
     gladiator: { kind: 'heavy', color: 0xffc9a0 },
     swordmaster: { kind: 'arc', color: 0xbfe8ff, r: 1.25 }, // 검성 — 길고 시린 검격
   }
@@ -5411,8 +5482,23 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const trailHeavyGeo = new THREE.TorusGeometry(2.9, 0.52, 5, 22, Math.PI * 0.9)
   const trailStabGeo = new THREE.PlaneGeometry(2.6, 0.7)
   const atkTrails = []
+  // 원거리 판정: 사거리 9+ 또는 대지술사(8.5지만 돌팔매 정체성 — 원거리 연출 편입)
+  const rangedAtk = (cls) => (CLASSES[cls]?.range ?? 99) >= 9 || cls === 'terramancer'
   function spawnAtkTrail(h) {
-    if ((CLASSES[h.cls]?.range ?? 99) >= 9) return
+    if (rangedAtk(h.cls)) { // 원거리 — 손끝 머즐 플래시(발사 신호) + 스파크
+      const color = BOLT_STYLE[h.cls]?.color ?? 0xffffff
+      const cs = CLS_SCALE[h.cls] || 1
+      const wrap = new THREE.Group()
+      const px = h.x + Math.cos(h.dir) * 1.5 * cs
+      const pz = h.z + Math.sin(h.dir) * 1.5 * cs
+      wrap.position.set(px, 2.1 * cs, pz)
+      const flash = glowSprite(color, 1.4)
+      wrap.add(flash)
+      scene.add(wrap)
+      particles.emit(px, 2.1 * cs, pz, color, 4, { spread: 1.6, up: 1.2, gravity: 1.5, size: 0.7, lifeMin: 0.12, lifeMax: 0.22 })
+      atkTrails.push({ wrap, mesh: flash, t0: performance.now() / 1000, kind: 'muzzle', dir: h.dir, flip: 1, s: cs })
+      return
+    }
     const st = ATK_TRAIL[h.cls] || { kind: 'arc', color: 0xdff2ff } // 기본: 시린 백청 검격
     const cs = CLS_SCALE[h.cls] || 1
     const wrap = new THREE.Group()
@@ -5606,14 +5692,17 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       for (let i = atkTrails.length - 1; i >= 0; i--) {
         const a = atkTrails[i]
         const slow = typeof window !== 'undefined' && window.__trailSlow ? 5 : 1 // E2E 검증용 슬로모
-        const t = (nowT - a.t0) / ((a.kind === 'heavy' ? 0.34 : a.kind === 'stab' ? 0.18 : 0.25) * slow)
+        const t = (nowT - a.t0) / ((a.kind === 'heavy' ? 0.34 : a.kind === 'stab' ? 0.18 : a.kind === 'muzzle' ? 0.16 : 0.25) * slow)
         if (t >= 1) {
           scene.remove(a.wrap)
           a.mesh.material.dispose()
           atkTrails.splice(i, 1)
           continue
         }
-        if (a.kind === 'stab') {
+        if (a.kind === 'muzzle') { // 발사 섬광 — 팍! 커졌다 사그라든다
+          a.mesh.scale.setScalar((0.7 + t * 1.5) * a.s)
+          a.mesh.material.opacity = 1 - t * t
+        } else if (a.kind === 'stab') {
           a.wrap.rotation.y = -a.dir
           a.wrap.scale.setScalar(a.s)
           a.mesh.position.x = 1.1 + t * 1.7 // 앞으로 쭉 뻗는 빛줄기
@@ -6204,6 +6293,16 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     syncPool(scene, projPool, view.projectiles, (p) => {
       const custom = PROJ_BUILDERS[p.kind]
       if (custom) return custom(p)
+      if (p.kind === 'bolt') {
+        const cls = p.cls
+        if (MELEE_NO_BOLT.has(cls)) { // 근접 연출 — 구체 없이 스윙 잔상+히트만
+          const empty = new THREE.Group()
+          empty.userData = {}
+          return empty
+        }
+        const st = BOLT_STYLE[cls]
+        if (st) return buildClassBolt(st)
+      }
       const look = PROJ_LOOK[p.kind] || PROJ_LOOK.bolt
       const color = look.color ?? TEAM_COLOR[p.team]
       // 단색 구체 대신 "발광체": 밝은 코어 + 가산 후광 스프라이트(맥동)
@@ -6239,7 +6338,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       if (!u.halo) return
       const pulse = 1 + Math.sin(view.time * 16 + p.x) * 0.2 // 발광 맥동
       u.halo.scale.set(u.haloBase * pulse, u.haloBase * pulse, 1)
-      u.core.scale.setScalar(0.85 + Math.sin(view.time * 22 + p.z) * 0.15)
+      u.core?.scale.setScalar(0.85 + Math.sin(view.time * 22 + p.z) * 0.15) // 화살형은 코어 구체가 없다
     })
     // 대지술사 임시 돌벽 — 물리적 지형이라 안개와 무관하게 항상 보인다(안 보이는 벽에 막히면 억울하다)
     syncPool(scene, stoneWallPool, view.stoneWalls || [], buildStoneWall, (obj, w) => {
