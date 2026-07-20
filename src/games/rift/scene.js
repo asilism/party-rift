@@ -5396,6 +5396,42 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   let champSet = null // 우승 무대(단상+듀오+색종이) — championCam 첫 프레임에 조립
   let fallFocus = null // 콜로세움 추락 장면 카메라 표적 { x, z, t0 }
 
+  // ── 평타 궤적 잔상 — 무기를 휘두를 때 "슉!" 베기/찌르기 잔상(무기별 모양, 좌우 교차) ──
+  //  원거리(사거리 9+)는 투사체가 이미 보여주므로 근접만. atkSeq 변화 시 스폰(클라 연출, 무전송).
+  const ATK_TRAIL = {
+    assassin: { kind: 'stab', color: 0xd8f4ff }, // 쌍단검 — 빠른 찌르기 빛줄기
+    illusionist: { kind: 'stab', color: 0xffc7ee },
+    tank: { kind: 'heavy', color: 0xffd9a0 }, // 묵직한 한 방 — 넓고 느긋한 호
+    guardian: { kind: 'heavy', color: 0xfff0b8 },
+    terramancer: { kind: 'heavy', color: 0xe8c9a0 },
+    gladiator: { kind: 'heavy', color: 0xffc9a0 },
+    swordmaster: { kind: 'arc', color: 0xbfe8ff, r: 1.25 }, // 검성 — 길고 시린 검격
+  }
+  const trailArcGeo = new THREE.TorusGeometry(2.5, 0.38, 5, 22, Math.PI * 0.8)
+  const trailHeavyGeo = new THREE.TorusGeometry(2.9, 0.52, 5, 22, Math.PI * 0.9)
+  const trailStabGeo = new THREE.PlaneGeometry(2.6, 0.7)
+  const atkTrails = []
+  function spawnAtkTrail(h) {
+    if ((CLASSES[h.cls]?.range ?? 99) >= 9) return
+    const st = ATK_TRAIL[h.cls] || { kind: 'arc', color: 0xdff2ff } // 기본: 시린 백청 검격
+    const cs = CLS_SCALE[h.cls] || 1
+    const wrap = new THREE.Group()
+    wrap.position.set(h.x, 1.8 * cs, h.z)
+    const mat = new THREE.MeshBasicMaterial({
+      color: st.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    })
+    const geo = st.kind === 'stab' ? trailStabGeo : st.kind === 'heavy' ? trailHeavyGeo : trailArcGeo
+    const mesh = new THREE.Mesh(geo, mat)
+    mesh.rotation.x = st.kind === 'stab' ? -Math.PI / 2 : Math.PI / 2
+    wrap.add(mesh)
+    scene.add(wrap)
+    atkTrails.push({
+      wrap, mesh, t0: performance.now() / 1000, kind: st.kind, dir: h.dir,
+      flip: h.atkSeq % 2 === 0 ? 1 : -1, // 슉, 슉 — 좌우 교차 스윙
+      s: cs * (st.r || 1),
+    })
+  }
+
   const heroPool = new Map()
   const minionPool = new Map()
   const monsterPool = new Map()
@@ -5563,6 +5599,33 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
       }
       u.range.visible = warn
+    }
+    // 평타 궤적 잔상 갱신 — 짧게 휩쓸고 사라진다(실시간 시계)
+    if (atkTrails.length) {
+      const nowT = performance.now() / 1000
+      for (let i = atkTrails.length - 1; i >= 0; i--) {
+        const a = atkTrails[i]
+        const slow = typeof window !== 'undefined' && window.__trailSlow ? 5 : 1 // E2E 검증용 슬로모
+        const t = (nowT - a.t0) / ((a.kind === 'heavy' ? 0.34 : a.kind === 'stab' ? 0.18 : 0.25) * slow)
+        if (t >= 1) {
+          scene.remove(a.wrap)
+          a.mesh.material.dispose()
+          atkTrails.splice(i, 1)
+          continue
+        }
+        if (a.kind === 'stab') {
+          a.wrap.rotation.y = -a.dir
+          a.wrap.scale.setScalar(a.s)
+          a.mesh.position.x = 1.1 + t * 1.7 // 앞으로 쭉 뻗는 빛줄기
+          a.mesh.scale.set(0.7 + t * 0.9, 1 - t * 0.45, 1)
+          a.mesh.material.opacity = 1 - t * t
+        } else {
+          // 정면을 가로지르는 호 — flip에 따라 왼쪽↔오른쪽으로 휩쓴다
+          a.wrap.rotation.y = -a.dir - Math.PI * 0.38 + a.flip * (0.9 - t * 1.9)
+          a.wrap.scale.setScalar((0.85 + t * 0.3) * a.s)
+          a.mesh.material.opacity = 1 - t * t // 초반은 쨍하게, 끝에서 훅 사라진다
+        }
+      }
     }
     // 수호석
     for (const team of ['blue', 'red']) {
@@ -5949,10 +6012,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const hide = h.bushI >= 0 || h.stealthT > 0
         u.body.material.opacity = hide ? 0.45 : 1
         u.face.material.opacity = hide ? 0.55 : 1
-        // 공격 모션: atkSeq가 바뀌면 무기를 휘두른다
+        // 공격 모션: atkSeq가 바뀌면 무기를 휘두른다 + 궤적 잔상(슉!)
         if (h.atkSeq !== u.lastAtkSeq) {
           u.lastAtkSeq = h.atkSeq
           u.animT = 0
+          spawnAtkTrail(h)
         }
         u.animT = Math.min(1, u.animT + dt / ATK_ANIM_T)
         u.weapon.userData.pose(u.animT)
