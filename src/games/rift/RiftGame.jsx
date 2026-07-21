@@ -10,6 +10,7 @@ import { canShop, CLASSES, bountyGold } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { getItem, ITEM_SLOTS } from './items.js'
 import { sound } from '../../shared/sound.js'
+import { haptic, hapticSupported, hapticEnabled, setHapticEnabled } from '../../shared/haptics.js'
 import { loadRiftControl, saveRiftControl, loadRiftHitFx, saveRiftHitFx, loadRiftGfx, saveRiftGfx, loadRiftBtnScale, saveRiftBtnScale } from '../../shared/storage.js'
 import { useRealtimeGame } from '../../net/useRealtimeGame.js'
 import { riftNet } from './netgame.js'
@@ -27,6 +28,8 @@ export default function RiftGame({ onExit, net, bonus = null, adButton = null })
   const ctrlRef = useRef({ mx: 0, mz: 0 })
   const { view, sample, myId, sendAction } = useRealtimeGame(net, riftNet, ctrlRef)
   const [soundOn, setSoundOn] = useState(true)
+  const [hapticOn, setHapticOn] = useState(hapticEnabled())
+  const hapticPrev = useRef({}) // 내 영웅 atkSeq/스킬쿨 직전값 — 변화 감지로 진동
   // 핑(왕복 지연) — RoomClient가 2초마다 계측한 값을 1초 주기로 읽어 HUD에 보여 준다
   const [rtt, setRtt] = useState(0)
   useEffect(() => {
@@ -40,6 +43,20 @@ export default function RiftGame({ onExit, net, bonus = null, adButton = null })
     sound.setEnabled(soundOn)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // 햅틱: 내 영웅의 평타(atkSeq)·스킬(쿨 0→시작)·궁극기 발동을 감지해 진동
+  useEffect(() => {
+    const me = view?.heroes?.find((h) => h.id === myId)
+    if (!me) return
+    const p = hapticPrev.current
+    if (p.id === me.id) {
+      if (me.atkSeq !== p.atkSeq) haptic.tap()
+      if (p.skillCd === 0 && me.skillCd > 0) haptic.skill()
+      if (p.skill2Cd === 0 && me.skill2Cd > 0) haptic.skill()
+      if (p.ultCd === 0 && me.ultCd > 0) haptic.ult()
+    }
+    hapticPrev.current = { id: me.id, atkSeq: me.atkSeq, skillCd: me.skillCd, skill2Cd: me.skill2Cd, ultCd: me.ultCd }
+  }, [view, myId])
 
   // 버튼/상점 — 소유권은 서버가 판정(내 영웅에만 적용)
   function cast(slot) {
@@ -102,6 +119,8 @@ export default function RiftGame({ onExit, net, bonus = null, adButton = null })
       onExit={onExit}
       soundOn={soundOn}
       onToggleSound={toggleSound}
+      hapticOn={hapticOn}
+      onToggleHaptic={() => { setHapticOn((v) => { setHapticEnabled(!v); if (!v) haptic.skill(); return !v }) }}
     />
   )
 }
@@ -314,7 +333,7 @@ function RiftRoster({ hud, crown = null }) {
 // 우상단 설정 버튼 하나로 통합한 메뉴: 팀 현황·일시정지·소리·전체화면·조작 방식·나가기를 분기 메뉴로 띄운다.
 const GFX_LABEL = { high: '상 (최고화질)', med: '중 (균형)', low: '하 (성능)' }
 
-function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSound, scheme, onSchemeChange, hitFx, onToggleHitFx, gfx, onCycleGfx, btnScale, onBtnScaleChange, onExit }) {
+function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSound, hapticOn, onToggleHaptic, scheme, onSchemeChange, hitFx, onToggleHitFx, gfx, onCycleGfx, btnScale, onBtnScaleChange, onExit }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   useEffect(() => {
@@ -348,6 +367,11 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
           <button className="rift-settings__item" onClick={onToggleSound}>
             <span>{soundOn ? '🔊' : '🔇'}</span> {t('사운드')} {soundOn ? t('켜짐') : t('꺼짐')}
           </button>
+          {hapticSupported && (
+            <button className="rift-settings__item" onClick={onToggleHaptic}>
+              <span>{hapticOn ? '📳' : '📴'}</span> {t('진동')} {hapticOn ? t('켜짐') : t('꺼짐')}
+            </button>
+          )}
           <button className="rift-settings__item" onClick={onToggleHitFx}>
             <span>{hitFx ? '💥' : '🚫'}</span> {t('타격 효과')} {hitFx ? t('켜짐') : t('꺼짐')}
           </button>
@@ -389,7 +413,14 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
           ))}
 
           <div className="rift-settings__sep" />
-          <button className="rift-settings__item rift-settings__item--exit" onClick={() => { setOpen(false); onExit() }}>
+          <button
+            className="rift-settings__item rift-settings__item--exit"
+            onClick={() => {
+              setOpen(false)
+              // 바로 나가지 않고 공통 확인창(뒤로가기 흐름)을 띄운다 — 콜로세움 기권 경고 포함
+              window.dispatchEvent(new CustomEvent('zodiac-back'))
+            }}
+          >
             <span>🚪</span> {t('나가기')}
           </button>
         </div>

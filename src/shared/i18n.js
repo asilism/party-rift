@@ -347,6 +347,10 @@ const DICT = {
   '보스전 악몽은 쉬움 난이도를 클리어하면 열려요': 'Boss Nightmare unlocks after clearing Easy',
   '보스전 지옥은 악몽 난이도를 클리어하면 열려요': 'Boss Hell unlocks after clearing Nightmare',
   '알겠어': 'Got it',
+  '진동': 'Vibration',
+  '콜로세움을 기권할까요?': 'Forfeit the Colosseum?',
+  '기권하면 토너먼트가 그대로 종료되고 현재 순위로 정산돼요': 'Forfeiting ends the tournament right away — rewards are based on your current placing',
+  '🏳️ 기권하기': '🏳️ Forfeit',
   '🗺️ 모드': '🗺️ Modes',
   // 콜로세움
   '콜로세움': 'Colosseum',
