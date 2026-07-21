@@ -2970,48 +2970,37 @@ function stepDefenseWaves(state, dt) {
   const gate = { team: 'red', x: nx.x - 6, z: nx.z }
   // 물량 상한: 살아있는 붉은 병사 45 초과분은 안 뽑는다(모바일 성능·프레임 보호)
   const alive = state.minions.filter((m) => m.team === 'red').length
-  // 5의 배수(그림자/보스) 파도는 잡병 상한을 올린다 — 그림자 정예를 줄인 자리를 미니언이 채운다.
-  const capW = w % 5 === 0 ? 22 : 16
-  const count = Math.max(0, Math.min(Math.min(capW, 6 + Math.ceil(w * 0.7)), 45 - alive))
-  // 성장 곡선 완화 0.12→0.085 — 그림자 정예를 절반으로 줄인 만큼, 미니언이 후반에
-  //  덜 단단해져 '보스 2마리 구간(30·40웨이브)'까지 자주 도달하게 한다(유저: 그게 도파민 구간).
-  //  0.10으로 올리면 봇 시뮬 도달 중앙값이 30→24로 급락(성장이 지수적으로 누적 — 민감).
+  // 미니언 물량: 매 웨이브 매끄럽게 증가(6+⌈w·0.5⌉, 상한 24) — 5배수만 튀던 들쭉날쭉 제거.
+  //  성장(hpMul) 0.085 유지 — 지수 누적이라 매우 민감(0.10만 돼도 봇 도달 30→24 급락).
+  const count = Math.max(0, Math.min(Math.min(24, 6 + Math.ceil(w * 0.5)), 45 - alive))
   if (count > 0) bossSummon(state, gate, { count, hpMul: 1 + 0.085 * w })
-  // 10의 배수 파도 = 보스 등장! 개수는 20마다 1씩(10·20→1, 30·40→2, 50·60→3…),
-  //  20의 배수(짝수 십자리)엔 그림자 정예도 함께. 종류는 랜덤·중복 허용.
-  if (w % 10 === 0) {
-    const bossN = Math.floor((w / 10 + 1) / 2) // 10:1 20:1 30:2 40:2 50:3 …
-    const bosses = []
-    for (let i = 0; i < bossN; i++) {
-      bosses.push(spawnDefenseBoss(state, w, gate.x + (state.rng() - 0.5) * 8, gate.z + (state.rng() - 0.5) * 8))
-    }
-    const names = bosses.map((b) => CLASSES[b.cls].name).join(', ')
-    if ((w / 10) % 2 === 0) {
-      // 20의 배수 — 보스 + 그림자 정예 동반
-      const pool = ['warrior', 'mage', 'assassin', 'tank', 'archer', 'gladiator', 'cryomancer', 'warlock']
-      const blues = state.heroes.filter((e) => e.team === 'blue')
-      const avg = Math.round(blues.reduce((sum, e) => sum + e.lvl, 0) / Math.max(1, blues.length))
-      const eliteN = 1 + Math.floor(w / 40) // 절반으로(과다 → 미니언이 물량 담당)
-      for (let i = 0; i < eliteN; i++) {
-        const cls = pool[Math.floor(state.rng() * pool.length)]
-        spawnShadowAdd(state, { cls, lvl: Math.max(1, avg - 1) }, gate.x + (state.rng() - 0.5) * 8, gate.z + (state.rng() - 0.5) * 8)
-      }
-      pushFeed(state, 'obj', `👹 ${w}번째 파도 — 보스 ${names} + 그림자 정예 ${eliteN}기가 함께 밀려온다!`)
-    } else {
-      pushFeed(state, 'obj', `👹 ${w}번째 파도 — 보스 ${names} 등장! 파도 속 보스를 쓰러뜨려라!`)
-    }
-  } else if (w % 5 === 0) {
-    // 그림자 정예 합류(부활 없음 — 잡으면 성장 연료). 절반으로 줄였다(1+w/4 → 1+w/8): 과다하던
-    //  그림자 대군 대신 잡병(위 capW 상한↑)이 물량을 담당 — 보스 2마리 구간이 클라이맥스가 되게.
+  // 보스 — 10의 배수 파도, 20마다 1마리씩(10·20→1, 30·40→2, 50·60→3…). 종류 랜덤·중복 허용.
+  const bossN = w % 10 === 0 ? Math.floor((w / 10 + 1) / 2) : 0
+  const bosses = []
+  for (let i = 0; i < bossN; i++) {
+    bosses.push(spawnDefenseBoss(state, w, gate.x + (state.rng() - 0.5) * 8, gate.z + (state.rng() - 0.5) * 8))
+  }
+  // 그림자 정예 — 모든 5의 배수 파도에 통일된 완만한 곡선(1+⌊w/15⌋): 5·10→1, 15·20·25→2, 30·35·40→3.
+  //  보스 파도(10배수)에도 같은 수가 실려 30·40웨이브(보스 2마리)가 클라이맥스로 채워진다.
+  //  기울기 w/15 = 보스 파도에도 그림자를 실으면서 전체 총량은 과다하지 않게(도파민 구간 도달률 유지).
+  const shadowN = w % 5 === 0 ? 1 + Math.floor(w / 15) : 0
+  if (shadowN > 0) {
     const pool = ['warrior', 'mage', 'assassin', 'tank', 'archer', 'gladiator', 'cryomancer', 'warlock']
     const blues = state.heroes.filter((e) => e.team === 'blue')
     const avg = Math.round(blues.reduce((sum, e) => sum + e.lvl, 0) / Math.max(1, blues.length))
-    const n = 1 + Math.floor(w / 8)
-    for (let i = 0; i < n; i++) {
+    for (let i = 0; i < shadowN; i++) {
       const cls = pool[Math.floor(state.rng() * pool.length)]
-      spawnShadowAdd(state, { cls, lvl: Math.max(1, avg - 1) }, gate.x + (state.rng() - 0.5) * 6, gate.z + (state.rng() - 0.5) * 6)
+      spawnShadowAdd(state, { cls, lvl: Math.max(1, avg - 1) }, gate.x + (state.rng() - 0.5) * 8, gate.z + (state.rng() - 0.5) * 8)
     }
-    pushFeed(state, 'obj', `⚔️ ${w}번째 파도 — 그림자 정예 ${n}기가 함께 몰려온다!`)
+  }
+  // 파도 피드 — 보스/그림자/일반 조합별 안내
+  if (bossN > 0) {
+    const names = bosses.map((b) => CLASSES[b.cls].name).join(', ')
+    pushFeed(state, 'obj', shadowN > 0
+      ? `👹 ${w}번째 파도 — 보스 ${names} + 그림자 정예 ${shadowN}기가 함께 밀려온다!`
+      : `👹 ${w}번째 파도 — 보스 ${names} 등장! 파도 속 보스를 쓰러뜨려라!`)
+  } else if (shadowN > 0) {
+    pushFeed(state, 'obj', `⚔️ ${w}번째 파도 — 그림자 정예 ${shadowN}기가 함께 몰려온다!`)
   } else if (w === 1) {
     pushFeed(state, 'obj', '🌊 첫 파도가 밀려온다 — 수호석을 지켜라!')
   } else if (w % 10 === 1 && w > 1) {
