@@ -201,6 +201,23 @@ export default function SoloApp() {
     setScreen('colosseum')
   }
 
+  // 기권: 내 팀을 지금 라운드 탈락 처리하고 토너먼트를 끝낸다 — 현재 순위로 최종 화면 직행
+  function forfeitColosseum() {
+    const me = tour.teams.find((tm) => tm.isUser)
+    if (me.alive) {
+      me.alive = false
+      me.elimRound = tour.round
+    }
+    tour.over = true // 남은 대진은 의미 없다 — 바로 정산
+    setTour({ ...tour })
+    setTourStage('final')
+    arenaViewRef.current = null
+    netRef.current?.close()
+    netRef.current = null
+    setNet(null)
+    setScreen('colosseum')
+  }
+
   function arenaNextRound() {
     const me = tour.teams.find((tm) => tm.isUser)
     if (tour.over || !me.alive) {
@@ -286,8 +303,8 @@ export default function SoloApp() {
 
   function exitBattle() {
     if (mode === 'arena' && tour) {
-      // 콜로세움: 정상 종료면 결과 반영, 경기 중 이탈이면 그 라운드 몰수패
-      finishArenaRound(!arenaViewRef.current)
+      if (arenaViewRef.current) { finishArenaRound(false); return } // 정상 종료 — 결과 반영
+      forfeitColosseum() // 경기 중 이탈 = 기권 — 토너먼트 완전 종료(유저 결정: 다음 라운드 진행 없음)
       return
     }
     netRef.current?.close()
@@ -407,8 +424,14 @@ export default function SoloApp() {
         {exitAsk && (
           <div className="solo-help" onClick={() => { setExitAsk(false); netRef.current?.rtPause(false) }}>
             <div className="toy-card solo-help__card" onClick={(e) => e.stopPropagation()}>
-              <h2 className="toy-heading">{t('전투에서 나갈까요?')}</h2>
-              <p className="toy-sub">{t('지금 나가면 이 판은 전적에 기록되지 않아요')}</p>
+              <h2 className="toy-heading">
+                {mode === 'arena' && tour && !arenaViewRef.current ? t('콜로세움을 기권할까요?') : t('전투에서 나갈까요?')}
+              </h2>
+              <p className="toy-sub">
+                {mode === 'arena' && tour && !arenaViewRef.current
+                  ? t('기권하면 토너먼트가 그대로 종료되고 현재 순위로 정산돼요')
+                  : t('지금 나가면 이 판은 전적에 기록되지 않아요')}
+              </p>
               <div className="solo-exit__btns">
                 <button
                   className="toy-btn toy-btn--green"
@@ -420,7 +443,7 @@ export default function SoloApp() {
                   className="toy-btn toy-btn--orange"
                   onClick={() => { setExitAsk(false); exitBattle() }}
                 >
-                  {t('🚪 나가기')}
+                  {mode === 'arena' && tour && !arenaViewRef.current ? t('🏳️ 기권하기') : t('🚪 나가기')}
                 </button>
               </div>
             </div>
