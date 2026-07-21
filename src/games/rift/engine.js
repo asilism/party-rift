@@ -2663,7 +2663,7 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   victim.killStreak = 0
   // 보스전 부활: 짧게(상한 18초) — 죽음이 리셋이 아니라 잠깐의 공백이어야 레이드가 굴러간다.
   // 그림자 영웅(정예 소환수)은 부활하지 않는다.
-  victim.respawnT = victim.isBossAdd ? 1e9
+  victim.respawnT = (victim.isBossAdd || victim.defenseBoss) ? 1e9
     : state.mode === 'arena' ? 1e9 // 콜로세움: 한 번 죽으면 이 라운드는 끝
     : isRaidMode(state.mode) && !victim.isBoss ? Math.min(respawnTime(victim.lvl), 18)
     : respawnTime(victim.lvl)
@@ -2955,6 +2955,9 @@ export function step(state, dt) {
 //  5의 배수엔 그림자 정예가 합류(10웨이브마다 1명씩 증가), 10의 배수 뒤엔 10초 숨돌리기.
 //  승리는 없다 — 몇 번째 파도까지 버티는가가 기록이다.
 export const DEFENSE_FIRST_WAVE = 8 // 카운트다운 후 첫 파도까지(초)
+// 무한 방어 보스(10배수 파도) — 체력 스케일·투입 규모 노브(프로토타입, 시뮬로 튜닝)
+const DEF_BOSS_HP_BASE = 900
+const DEF_BOSS_HP_PER_W = 85
 function stepDefenseWaves(state, dt) {
   if (state.mode !== 'defense' || state.status !== 'playing') return
   state.defWaveT -= dt
@@ -2969,7 +2972,30 @@ function stepDefenseWaves(state, dt) {
   const alive = state.minions.filter((m) => m.team === 'red').length
   const count = Math.max(0, Math.min(Math.min(16, 6 + Math.ceil(w * 0.7)), 45 - alive))
   if (count > 0) bossSummon(state, gate, { count, hpMul: 1 + 0.12 * w })
-  if (w % 5 === 0) {
+  // 10의 배수 파도 = 보스 등장! 개수는 20마다 1씩(10·20→1, 30·40→2, 50·60→3…),
+  //  20의 배수(짝수 십자리)엔 그림자 정예도 함께. 종류는 랜덤·중복 허용.
+  if (w % 10 === 0) {
+    const bossN = Math.floor((w / 10 + 1) / 2) // 10:1 20:1 30:2 40:2 50:3 …
+    const bosses = []
+    for (let i = 0; i < bossN; i++) {
+      bosses.push(spawnDefenseBoss(state, w, gate.x + (state.rng() - 0.5) * 8, gate.z + (state.rng() - 0.5) * 8))
+    }
+    const names = bosses.map((b) => CLASSES[b.cls].name).join(', ')
+    if ((w / 10) % 2 === 0) {
+      // 20의 배수 — 보스 + 그림자 정예 동반
+      const pool = ['warrior', 'mage', 'assassin', 'tank', 'archer', 'gladiator', 'cryomancer', 'warlock']
+      const blues = state.heroes.filter((e) => e.team === 'blue')
+      const avg = Math.round(blues.reduce((sum, e) => sum + e.lvl, 0) / Math.max(1, blues.length))
+      const eliteN = 2 + Math.floor(w / 20)
+      for (let i = 0; i < eliteN; i++) {
+        const cls = pool[Math.floor(state.rng() * pool.length)]
+        spawnShadowAdd(state, { cls, lvl: Math.max(1, avg - 1) }, gate.x + (state.rng() - 0.5) * 8, gate.z + (state.rng() - 0.5) * 8)
+      }
+      pushFeed(state, 'obj', `👹 ${w}번째 파도 — 보스 ${names} + 그림자 정예 ${eliteN}기가 함께 밀려온다!`)
+    } else {
+      pushFeed(state, 'obj', `👹 ${w}번째 파도 — 보스 ${names} 등장! 파도 속 보스를 쓰러뜨려라!`)
+    }
+  } else if (w % 5 === 0) {
     // 그림자 정예 합류 — 5파도마다 1명씩 증가(부활 없음 — 잡으면 성장 연료), 진짜 시계는 이쪽
     const pool = ['warrior', 'mage', 'assassin', 'tank', 'archer', 'gladiator', 'cryomancer', 'warlock']
     const blues = state.heroes.filter((e) => e.team === 'blue')
@@ -5039,7 +5065,7 @@ function bossThink(state, h, dt) {
   //  체력바가 최대치와 함께 훅 오르던 혼란을 없앤다. 스탯은 개전부터 고정(BOSS_LEVEL로 고정 계산).
   // 재생: 8초간 무피해면 초당 최대체력 0.4% 회복 — 치고 빠지기만 반복하면 못 잡는다.
   // 각성 휴지기(보호막) 중엔 재생하지 않는다 — 깎아 둔 체력이 되돌아가면 김이 샌다.
-  if (state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
+  if (!h.defenseBoss && state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.004 * dt)
   }
   h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8 }
@@ -5076,7 +5102,8 @@ function bossThink(state, h, dt) {
     return
   }
   // 스테이지 0 — 잠(0~45초): 성곽 안 옥좌에서 무적으로 잠들어 있다(우물 레이저가 러시를 응징).
-  if (state.time < BOSS_SLEEP_END) {
+  //  무한방어 보스는 웨이브 유닛이라 잠·수면 없이 등장 즉시 진군한다.
+  if (!h.defenseBoss && state.time < BOSS_SLEEP_END) {
     h.hp = h.maxHp // 잠든 보스는 흠집도 안 난다 — 원거리 포킹으로 선공 이득을 못 본다
     h.mx = 0
     h.mz = 0
@@ -5103,9 +5130,18 @@ function bossThink(state, h, dt) {
   //  포효(잠깐 멈춤 — 위치 재정비 기회)와 충격파(밀착 응징)로 전환을 온몸으로 알린 뒤,
   //  스킬·소환이 빨라지고 피해가 오른다. 재생으로 체력이 돌아와도 페이즈는 유지된다.
   h.bossPhase ||= 1
-  const wantPhase = bossPhaseOf(h)
+  // 무한방어 보스: 체력 발악(bossPhaseOf) + 웨이브별 시작 페이즈 하한(startPhase) — 후반 보스는 처음부터 사납다.
+  const wantPhase = h.defenseBoss ? Math.max(h.startPhase || 1, bossPhaseOf(h)) : bossPhaseOf(h)
   if (h.bossPhase < wantPhase) {
     h.bossPhase = wantPhase
+    if (h.defenseBoss) {
+      // 무한방어 보스는 각성 무적(30초) 없이 즉시 발악 — 파도가 끊임없이 오는 리듬을 막지 않는다.
+      h.stunT = 0; h.freezeT = 0; h.fearT = 0; h.airT = 0; h.rootT = 0; h.pullT = 0
+      pushFx(state, 'berserk', h.x, h.z, 6, h.team, 1.0)
+      pushFeed(state, 'obj', wantPhase === 3
+        ? `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 몰아쳐라!`
+        : `💢 ${h.name}의 분노가 끓어오른다 — 공격이 거세진다!`)
+    } else {
     // 각성 휴지기: 어둠의 보호막에 감싸여 30초 무적·정지 — 게임의 시계가 잠시 멈추고,
     // 아군은 재정비·회복·짤막한 파밍(병사 소환은 계속 돈다)으로 다음 국면을 준비한다.
     h.bossShieldT = BOSS_AWAKEN_T
@@ -5125,6 +5161,7 @@ function bossThink(state, h, dt) {
       h.bossAddsDone2 = true
       bossSummonAdds(state, h)
       pushFeed(state, 'obj', `⚔️ ${h.name}의 부름에 그림자 영웅들이 다시 일어난다 — 최후의 군세다!`)
+    }
     }
   }
   // 각성 휴지기 소화: 무적·정지 상태로 서서 힘을 모은다 — 소환·공성·성장이 전부 멈춘
@@ -5147,7 +5184,7 @@ function bossThink(state, h, dt) {
     return
   }
   // ── 시간 스테이지: 대량 소환(45~150) → 정예 소환(150~240) → 진군(240~) ──
-  const stage = state.time < BOSS_MASS_END ? 'mass' : state.time < BOSS_MARCH_AT ? 'elite' : 'march'
+  const stage = h.defenseBoss ? 'march' : state.time < BOSS_MASS_END ? 'mass' : state.time < BOSS_MARCH_AT ? 'elite' : 'march'
   // 정예 소환: 보스 유형에 맞는 그림자 영웅 5기 — 한 번만, 죽으면 부활하지 않는다
   if (stage !== 'mass' && !h.bossAddsDone) {
     h.bossAddsDone = true
@@ -5401,6 +5438,33 @@ function spawnShadowAdd(state, spec, x, z) {
   add.dir = Math.PI
   state.heroes.push(add)
   pushFx(state, 'descend', x, z, 4, 'red', 1.2) // 하늘에서 빛기둥이 내려와 강림(귀환 모션풍)
+}
+
+// 무한 방어 전용 보스 — 레이드 보스를 "강력한 웨이브 유닛"으로 축소해 투입한다.
+//  시간 스테이지·각성 휴지기·재생 없이 등장 즉시 수호석으로 진군하며 전용 스킬로 위협.
+//  종류는 랜덤(중복 허용), 부활 없음(잡으면 끝). 스탯은 웨이브에 비례.
+function spawnDefenseBoss(state, wave, x, z) {
+  const cls = BOSS_IDS[Math.floor(state.rng() * BOSS_IDS.length)]
+  const b = makeHeroState(
+    { id: `dboss${state.nextId++}`, name: CLASSES[cls].name, zodiacId: cls, team: 'red', isBot: true },
+    cls, { x, z }, state.map, state.rng,
+  )
+  b.isBoss = true
+  b.defenseBoss = true // bossThink 간이 경로(진군·스킬만 — 스테이지/각성/재생 없음)
+  b.lvl = BOSS_LEVEL
+  // 웨이브 유닛급 체력 — 아군 5인이 십수 초에 정리할 규모(풀 레이드 보스 21000의 일부).
+  b.maxHp = Math.round(DEF_BOSS_HP_BASE + wave * DEF_BOSS_HP_PER_W)
+  b.hp = b.maxHp
+  b.startPhase = wave < 20 ? 1 : wave < 30 ? 2 : 3 // 후반 보스는 높은 페이즈로 시작(아군 성장 상쇄)
+  b.bossPhase = b.startPhase
+  b.role = 'mid'
+  b.dir = Math.PI
+  b.bossCd = { a: 3, b: 6, c: 10, d: 8, fan: 5, summon: 1e9 } // summon 1e9 = 병사 소환 안 함(웨이브가 이미 있다)
+  b.bossIntro = true // 등장 피드는 여기서 직접 내보낸다
+  b.bossAwake = true
+  state.heroes.push(b)
+  pushFx(state, 'descend', x, z, 8, 'red', 1.6)
+  return b
 }
 
 // 전사형 — 대지 강타(예고→광역 기절) / 격돌 돌진(들이받아 띄움) / 회전 격노(지속 광역)
