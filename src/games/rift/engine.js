@@ -2970,8 +2970,13 @@ function stepDefenseWaves(state, dt) {
   const gate = { team: 'red', x: nx.x - 6, z: nx.z }
   // 물량 상한: 살아있는 붉은 병사 45 초과분은 안 뽑는다(모바일 성능·프레임 보호)
   const alive = state.minions.filter((m) => m.team === 'red').length
-  const count = Math.max(0, Math.min(Math.min(16, 6 + Math.ceil(w * 0.7)), 45 - alive))
-  if (count > 0) bossSummon(state, gate, { count, hpMul: 1 + 0.12 * w })
+  // 5의 배수(그림자/보스) 파도는 잡병 상한을 올린다 — 그림자 정예를 줄인 자리를 미니언이 채운다.
+  const capW = w % 5 === 0 ? 22 : 16
+  const count = Math.max(0, Math.min(Math.min(capW, 6 + Math.ceil(w * 0.7)), 45 - alive))
+  // 성장 곡선 완화 0.12→0.085 — 그림자 정예를 절반으로 줄인 만큼, 미니언이 후반에
+  //  덜 단단해져 '보스 2마리 구간(30·40웨이브)'까지 자주 도달하게 한다(유저: 그게 도파민 구간).
+  //  0.10으로 올리면 봇 시뮬 도달 중앙값이 30→24로 급락(성장이 지수적으로 누적 — 민감).
+  if (count > 0) bossSummon(state, gate, { count, hpMul: 1 + 0.085 * w })
   // 10의 배수 파도 = 보스 등장! 개수는 20마다 1씩(10·20→1, 30·40→2, 50·60→3…),
   //  20의 배수(짝수 십자리)엔 그림자 정예도 함께. 종류는 랜덤·중복 허용.
   if (w % 10 === 0) {
@@ -2986,7 +2991,7 @@ function stepDefenseWaves(state, dt) {
       const pool = ['warrior', 'mage', 'assassin', 'tank', 'archer', 'gladiator', 'cryomancer', 'warlock']
       const blues = state.heroes.filter((e) => e.team === 'blue')
       const avg = Math.round(blues.reduce((sum, e) => sum + e.lvl, 0) / Math.max(1, blues.length))
-      const eliteN = 2 + Math.floor(w / 20)
+      const eliteN = 1 + Math.floor(w / 40) // 절반으로(과다 → 미니언이 물량 담당)
       for (let i = 0; i < eliteN; i++) {
         const cls = pool[Math.floor(state.rng() * pool.length)]
         spawnShadowAdd(state, { cls, lvl: Math.max(1, avg - 1) }, gate.x + (state.rng() - 0.5) * 8, gate.z + (state.rng() - 0.5) * 8)
@@ -2996,11 +3001,12 @@ function stepDefenseWaves(state, dt) {
       pushFeed(state, 'obj', `👹 ${w}번째 파도 — 보스 ${names} 등장! 파도 속 보스를 쓰러뜨려라!`)
     }
   } else if (w % 5 === 0) {
-    // 그림자 정예 합류 — 5파도마다 1명씩 증가(부활 없음 — 잡으면 성장 연료), 진짜 시계는 이쪽
+    // 그림자 정예 합류(부활 없음 — 잡으면 성장 연료). 절반으로 줄였다(1+w/4 → 1+w/8): 과다하던
+    //  그림자 대군 대신 잡병(위 capW 상한↑)이 물량을 담당 — 보스 2마리 구간이 클라이맥스가 되게.
     const pool = ['warrior', 'mage', 'assassin', 'tank', 'archer', 'gladiator', 'cryomancer', 'warlock']
     const blues = state.heroes.filter((e) => e.team === 'blue')
     const avg = Math.round(blues.reduce((sum, e) => sum + e.lvl, 0) / Math.max(1, blues.length))
-    const n = 1 + Math.floor(w / 4)
+    const n = 1 + Math.floor(w / 8)
     for (let i = 0; i < n; i++) {
       const cls = pool[Math.floor(state.rng() * pool.length)]
       spawnShadowAdd(state, { cls, lvl: Math.max(1, avg - 1) }, gate.x + (state.rng() - 0.5) * 6, gate.z + (state.rng() - 0.5) * 6)
