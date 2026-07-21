@@ -462,12 +462,69 @@ function setNameText(sp, text, color) {
 
 // 머리 위 이름표 문구: "Lv.3 ⚔️호랑이🤖" — 적·아군 모두 레벨이 항상 보인다.
 // 보스는 레벨 개념이 없다(국면으로 강해진다) — Lv 표기 없이 이름만.
+// 칭호는 여기 넣지 않는다 — 별도 배지(titleSprite)로 이름표 위에 띄워 레벨·직업·이름을 안 가린다.
 function heroLabel(h) {
   const icon = CLASSES[h.cls]?.icon || ''
   if (CLASSES[h.cls]?.boss) return `${icon}${h.name}`
-  // 장착 칭호는 이름 뒤에 ⟨⟩로 — 업적 자랑은 전장에서 제일 빛난다
-  const title = h.title ? ` ⟨${h.title}⟩` : ''
-  return `Lv.${h.lvl} ${icon}${h.name}${h.isBot ? '🤖' : ''}${title}`
+  return `Lv.${h.lvl} ${icon}${h.name}${h.isBot ? '🤖' : ''}`
+}
+
+// 장착 칭호 배지 텍스처 — 금빛 알약 안에 "👑 칭호". 이름표와 겹치지 않게 그 위에 뜬다.
+function makeTitleTexture(text) {
+  const c = document.createElement('canvas')
+  c.width = 256
+  c.height = 56
+  const ctx = c.getContext('2d')
+  const label = `👑 ${text}`
+  ctx.font = '800 23px system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  const tw = ctx.measureText(label).width
+  const w = Math.min(248, tw + 30)
+  const x0 = 128 - w / 2
+  const y0 = 12
+  const bh = 32
+  const r = bh / 2
+  ctx.beginPath()
+  ctx.moveTo(x0 + r, y0)
+  ctx.arcTo(x0 + w, y0, x0 + w, y0 + bh, r)
+  ctx.arcTo(x0 + w, y0 + bh, x0, y0 + bh, r)
+  ctx.arcTo(x0, y0 + bh, x0, y0, r)
+  ctx.arcTo(x0, y0, x0 + w, y0, r)
+  ctx.closePath()
+  ctx.fillStyle = 'rgba(58, 40, 8, 0.86)'
+  ctx.fill()
+  ctx.lineWidth = 2.5
+  ctx.strokeStyle = 'rgba(255, 214, 77, 0.95)'
+  ctx.stroke()
+  ctx.lineWidth = 5
+  ctx.strokeStyle = 'rgba(28, 18, 0, 0.9)'
+  ctx.strokeText(label, 128, 29)
+  ctx.fillStyle = '#ffe27a'
+  ctx.fillText(label, 128, 29)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+function titleSprite(text) {
+  const sp = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: makeTitleTexture(text), depthWrite: false, transparent: true })
+  )
+  sp.scale.set(6, 1.31, 1)
+  return sp
+}
+
+// 이름표·체력바·칭호는 게임에 가장 중요한 표시 — 걷기 bob이나 다른 캐릭터·지형에
+// 절대 가려지면 안 된다. 깊이 검사를 끄고(항상 위) 렌더 순서를 올려 무조건 맨 앞에 그린다.
+function alwaysOnTop(obj, order = 11) {
+  obj.renderOrder = order
+  obj.traverse((o) => {
+    if (o.material) {
+      o.material.depthTest = false
+      o.material.depthWrite = false
+      o.renderOrder = order
+    }
+  })
 }
 
 // 골드 획득 표시: 떠오르며 사라지는 금색 "+N" 스프라이트 (내 영웅 막타 때만)
@@ -593,6 +650,9 @@ function setHpBarSegments(bar, maxHp) {
     const tick = new THREE.Sprite(
       new THREE.SpriteMaterial({ color: 0x101626, opacity: 0.92, transparent: true, depthWrite: false })
     )
+    // 눈금은 바보다 나중에 추가되므로 부모의 "항상 위" 설정(depthTest 끔·renderOrder)을 직접 물려받는다
+    tick.material.depthTest = bar.children[0]?.material.depthTest ?? true
+    tick.renderOrder = bar.renderOrder
     tick.center.set(0.5, 0.5)
     tick.scale.set(0.05, 0.24, 1)
     tick.position.set(u.fgLeft + frac * u.width, 0, 0.01) // 색 막대 위에 살짝 띄워 칸 구분선
@@ -2982,12 +3042,22 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   const nameColor = mine ? '#ffe066' : '#ffffff'
   const name = nameSprite(heroLabel(h), nameColor)
   const bar = makeHpBar(s > 1.5 ? 5.5 : 3, barColor) // 보스는 체력바도 큼직하게
-  // 이름표·체력바 — 얼굴 위로 여유를 두고(기본도 살짝 위로), 모자를 쓰면
-  // 모자 높이만큼 더 올려 모자가 체력바를 가리지 않게 한다.
-  // 거체(보스)는 머리(≈4.4s+얼굴 반높이)에 맞춰 비례해 올린다.
-  const uiLift = 0.5 + (hat ? 1.0 : 0) + (s > 1.5 ? (s - 1) * 4.4 : 0)
-  name.position.y = 6.6 + uiLift
-  bar.position.y = 5.7 + uiLift
+  // 이름표·체력바 — 얼굴(≈4.4s+얼굴 반높이)보다 확실히 위로 띄운다. 걷기 bob으로 몸이
+  // 위로 튀어도 침범하지 않게 여유를 크게 두고, 모자를 쓰면 모자 높이만큼 더 올린다.
+  // 거체(보스)는 머리에 맞춰 비례해 올린다.
+  const uiLift = 0.9 + (hat ? 1.0 : 0) + (s > 1.5 ? (s - 1) * 4.4 : 0)
+  name.position.y = 6.9 + uiLift
+  bar.position.y = 6.0 + uiLift
+  // 장착 칭호 — 레벨·직업·이름을 가리지 않게 이름표 "위"에 금빛 배지로. (보스는 칭호 없음)
+  let title = null
+  if (h.title && !CLASSES[h.cls]?.boss) {
+    title = titleSprite(h.title)
+    title.position.y = 8.4 + uiLift
+    alwaysOnTop(title, 12)
+  }
+  // 체력바·이름표는 절대 가려지면 안 되는 정보 — 항상 맨 앞에 그린다(걷기·겹침 무관)
+  alwaysOnTop(name, 11)
+  alwaysOnTop(bar, 11)
   // 내 영웅 발밑 링
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(1.5, 2.1, 24),
@@ -3149,8 +3219,9 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     dpPeak[i] = 0.3 + rnd() * 1.2
   }
   g.add(shadow, body, face, name, bar, ring, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, deathPts)
+  if (title) g.add(title)
   g.userData = {
-    body, outline, face, name, nameColor, nameLvl: h.lvl, isMine: mine, shadow,
+    body, outline, face, name, title, nameColor, nameLvl: h.lvl, isMine: mine, shadow,
     faceEmoji, faceTexOrig: face.material.map, faceTexMirror: null, // 좌우 반전용(미러는 지연 생성)
     faceDX: zspec.dx || 0, clsScale: s, // 얼굴 위치 보정·몸집(쏠림/보정 계산용)
     hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
@@ -3178,6 +3249,7 @@ function setHeroDead(u, dead) {
   u.face.visible = !dead
   u.name.visible = !dead
   u.bar.visible = !dead
+  if (u.title) u.title.visible = !dead
   u.ring.visible = !dead && u.isMine
   u.shadow.visible = !dead
   if (u.hat) u.hat.visible = !dead // 모자만 공중에 남지 않게
