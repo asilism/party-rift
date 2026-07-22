@@ -2882,35 +2882,43 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   victim.damagedBy = {} // 사망 처리 끝 — 피해 이력 비움(부활 후 새로 쌓는다)
 }
 
-// 증강 처치 효과: 킬 골드 + 연쇄 폭발(주변 병사 광역). 폭발은 병사만, 크레딧 없이(재귀·중복골드 방지).
-function augOnKill(state, attacker, x, z, victimMaxHp) {
+// 증강 처치 효과: 킬 골드 + 연쇄 폭발(주변 병사 광역). 폭발은 병사만 타격.
+//  폭발로 죽인 병사도 정상 처치처럼 골드·경험치를 준다(공정) — 단 allowExplode=false로 연쇄만 끊는다.
+function augOnKill(state, attacker, x, z, victimMaxHp, allowExplode = true) {
   if (!attacker) return
   const a = augOf(attacker)
   if (a.killGold > 0) awardGold(state, attacker, a.killGold, x, z)
-  if (a.explode > 0) {
+  if (allowExplode && a.explode > 0) {
     const dmg = victimMaxHp * a.explode
-    const r2 = 25 // 반경 5
-    for (const mm of state.minions) {
+    const r = 5.5
+    const r2 = r * r
+    let hit = 0
+    for (const mm of state.minions.slice()) { // 복사본 순회 — 폭발 중 minions 배열이 변한다
       if (mm.team === attacker.team) continue
-      if ((mm.x - x) ** 2 + (mm.z - z) ** 2 <= r2) damageMinion(state, mm, dmg, null) // 크레딧 없음 → 재귀 안 함
+      if ((mm.x - x) ** 2 + (mm.z - z) ** 2 <= r2) { damageMinion(state, mm, dmg, attacker, false); hit++ } // 골드는 주되 재폭발 금지
     }
-    pushFx(state, 'death', x, z, 4, attacker.team)
+    // 펑! — 강한 폭발 연출(불꽃 충격 + 파편 + 링). 규모는 잡은 대상 크기에 비례.
+    const scale = Math.min(2, 0.9 + victimMaxHp / 900)
+    pushFx(state, 'meteorhit', x, z, 6 * scale, attacker.team, 0.85)
+    pushFx(state, 'rocksplash', x, z, 4.5 * scale, attacker.team)
+    if (hit >= 3) pushFx(state, 'berserk', x, z, 5 * scale, attacker.team, 0.7) // 여럿 터지면 더 화려하게
   }
 }
 
-function damageMinion(state, m, amount, attacker) {
+function damageMinion(state, m, amount, attacker, allowExplode = true) {
   m.hp -= amount
   if (m.hp > 0) return
   const mx = m.x
   const mz = m.z
   const mMax = m.maxHp
+  const mRanged = m.ranged
   state.minions = state.minions.filter((o) => o !== m)
   pushFx(state, 'death', mx, mz, 2, m.team) // 그 자리에서 파티클로 분해
   if (attacker?.team) awardXp(state, attacker.team, m, MINION_XP, attacker)
-  // 막타 골드는 영웅에게만 (병사/타워가 잡으면 없음 — 막타 챙기는 재미)
-  if (attacker?.items) awardGold(state, attacker, m.ranged ? GOLD_MINION_RANGED : GOLD_MINION_MELEE, mx, mz)
+  // 막타 골드는 영웅에게만 (병사/타워가 잡으면 없음). 폭발로 죽여도 정상 처치처럼 지급된다(공정).
+  if (attacker?.items) awardGold(state, attacker, mRanged ? GOLD_MINION_RANGED : GOLD_MINION_MELEE, mx, mz)
   if (attacker?.soldierKills != null) attacker.soldierKills++ // 업적: 병사 막타 수
-  augOnKill(state, attacker, mx, mz, mMax) // 증강: 킬 골드 + 연쇄 폭발
+  augOnKill(state, attacker, mx, mz, mMax, allowExplode) // 증강: 킬 골드 + 연쇄 폭발(연쇄는 1회만)
 }
 
 function damageMonster(state, m, amount, attacker) {
