@@ -3,6 +3,8 @@ import Rift3D from './Rift3D.jsx'
 import RiftMiniMap from './RiftMiniMap.jsx'
 import RiftControls from './RiftControls.jsx'
 import RiftShop from './RiftShop.jsx'
+import RiftAugmentDraw from './RiftAugmentDraw.jsx'
+import { AUG_BY_ID, RARITY_META } from './augments.js'
 import Fireworks from '../../shared/Fireworks.jsx'
 import FullscreenButton from '../../shared/FullscreenButton.jsx'
 import { IS_APP_SHELL } from '../../shared/appShell.js'
@@ -78,6 +80,9 @@ export default function RiftGame({ onExit, net, bonus = null, adButton = null })
   function enhance(slot) {
     sendAction({ type: 'enhance', slot }) // 아이템 강화(무한 방어)
   }
+  function pickAugment(augId) {
+    sendAction({ type: 'pickAugment', augId }) // 조디악 증강 카드 선택
+  }
 
   function toggleSound() {
     const n = !soundOn
@@ -114,6 +119,7 @@ export default function RiftGame({ onExit, net, bonus = null, adButton = null })
       onSell={sell}
       onResetShop={resetShopBuys}
       onEnhance={enhance}
+      onPickAugment={pickAugment}
       onUseItem={useItemSlot}
       rtt={rtt}
       onTogglePause={net.rtPause ? () => net.rtPause(!view.paused) : null}
@@ -435,7 +441,7 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
 
 // 전투 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function RiftPlay({
-  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onEnhance, onUseItem, rtt = 0, onTogglePause, exitLabel = '🔁 새 매치 찾기', onExit, soundOn, onToggleSound, bonus = null, adButton = null,
+  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onEnhance, onPickAugment, onUseItem, rtt = 0, onTogglePause, exitLabel = '🔁 새 매치 찾기', onExit, soundOn, onToggleSound, bonus = null, adButton = null,
 }) {
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
@@ -781,6 +787,20 @@ function RiftPlay({
 
       {shopOpen && me && meCanShop && (
         <RiftShop me={me} mode={hud.mode} onBuy={onBuy} onSell={onSell} onResetShop={onResetShop} onEnhance={onEnhance} onClose={() => setShopOpen(false)} />
+      )}
+
+      {me?.augments?.length > 0 && (
+        <div className="aug-owned">
+          {me.augments.map((id, i) => {
+            const a = AUG_BY_ID[id]
+            if (!a) return null
+            return <span key={i} className="aug-owned__chip" style={{ '--rar': RARITY_META[a.rarity]?.color }} title={`${t(a.name)} — ${t(a.desc)}`}>{a.icon}</span>
+          })}
+        </div>
+      )}
+
+      {me?.augDraw && (
+        <RiftAugmentDraw draw={me.augDraw} zodiacId={me.zodiacId} wave={hud.wave || 0} onPick={onPickAugment} />
       )}
 
       {finished && showWin && (
