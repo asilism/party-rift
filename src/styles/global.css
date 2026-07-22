@@ -2985,7 +2985,9 @@ body {
 .mode-screen__levels { display: flex; gap: 10px; margin-top: clamp(10px, 2.6vh, 20px); }
 /* 모드 카드 횡스크롤 — 4개 모드가 한 화면에 다 안 들어온다. 스크롤 가능함을 세 겹으로 알린다:
    ① 마지막 카드가 화면 끝에 반쯤 걸치게(자연 어포던스) ② 엣지 페이드 ③ 맥동하는 › 화살표 */
-.mode-screen__scrollwrap { position: relative; align-self: stretch; flex: 1; display: flex; min-width: 0; }
+/* min-height:0 필수 — 없으면 flex 자식이 콘텐츠 높이(min-height:auto)만큼 부풀어
+   세로 스택 모드(≤760px)에서 카드가 화면 밖으로 넘쳐 스크롤이 안 먹는다(4:3·1:1 게임기 버그) */
+.mode-screen__scrollwrap { position: relative; align-self: stretch; flex: 1; display: flex; min-width: 0; min-height: 0; }
 .mode-screen__cards {
   flex: 1; display: flex; align-items: center; gap: clamp(14px, 3vw, 30px);
   padding: 12px clamp(16px, 4vw, 40px) 4vh;
@@ -3337,7 +3339,9 @@ body {
   .char-show__emoji { font-size: 28px; }
   .char-show__mid, .char-show__desc { display: none; }
   .char-show__start { margin: 0 0 0 auto; width: auto; min-width: 150px; }
-  .mode-screen__cards { flex-direction: column; gap: 12px; overflow-y: auto; overflow-x: hidden; }
+  .mode-screen__cards { flex-direction: column; gap: 12px; overflow-y: auto; overflow-x: hidden; min-height: 0; align-items: center; padding: 8px 12px 16px; }
+  /* 세로 스택에선 카드가 자연 높이만 차지하게 — flex:0으로 안 눌리게(스크롤로 아래 카드 도달) */
+  .mode-screen__cards .mode-card { flex: 0 0 auto; width: min(320px, 86%); transform: none; }
   .mode-scroll-fade, .mode-scroll-hint { display: none; }
   .profile-card__grid { grid-template-columns: repeat(4, 1fr); }
   .menu-screen__logo { display: none; }
