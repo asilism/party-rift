@@ -2,6 +2,34 @@
 
 각 언어 500자 제한. 업로드하는 트랙의 "버전 세부정보 > 출시 노트"에 붙여넣기.
 
+## v1.2 무한 방어 심화 (versionCode 51) — 2026-07-23
+
+v46~v51 누적분. 무한 방어의 성장 시스템 두 종(강화·증강)이 핵심.
+
+### ko-KR
+
+```
+🌊 무한 방어 대폭 강화 — 30웨이브의 벽을 넘어서!
+• 아이템 강화: 인벤토리가 꽉 차도 골드로 아이템을 강화해 계속 강해집니다 (실패해도 아이템은 그대로)
+• 조디악 증강 카드: 5파도마다 3장 중 1장 선택! 일반/레어/전설 + 12지신 시그니처로 매 판 빌드가 달라집니다
+• 연쇄 폭발·처형·가시 반사·궁 쿨 감소 등 34종 증강으로 나만의 조합 만들기
+• 콜로세움에서 휴식(부전) 시 골드·레벨이 누락되던 문제 수정
+• 평타 이펙트가 칼 휘두르는 속도에 맞춰 더 시원하게
+• 4:3·1:1 화면 게임기에서 모드 선택이 안 되던 문제 수정
+```
+
+### en-US
+
+```
+🌊 Endless Defense overhaul — break past the wave-30 wall!
+• Item Enhancement: full inventory? Spend gold to upgrade items and keep growing (fail = item kept)
+• Zodiac Augments: every 5 waves, pick 1 of 3! Common/Rare/Legendary + 12 zodiac signatures — fresh build each run
+• 34 augments: chain blasts, execute, thorns, ult-cooldown & more
+• Fixed missing gold/level on a Colosseum bye
+• Slash effects now match your weapon's swing speed
+• Fixed mode select on 4:3 / 1:1 screens
+```
+
 ## v1.1 콜로세움 개선판 (versionCode 45) — 2026-07-22
 
 v26~v33 누적분. 직전 업로드가 v25 이전이면 아래의 "대규모 콘텐츠 업데이트" 항목도 함께 참고.
