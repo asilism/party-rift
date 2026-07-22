@@ -2743,6 +2743,13 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
     a.deathStreak = 0
     awardGold(state, a, GOLD_ASSIST, victim.x, victim.z)
   }
+  // 무한 방어 보스 처치 보상 — 클라이맥스에 걸맞게 방어팀 전원에게 웨이브 비례 보너스 골드.
+  //  막타 독식(200골드)이 아니라 함께 잡은 팀 전체가 다음 파도 대비로 상점을 강화하는 성장 사이클.
+  if (victim.defenseBoss) {
+    const bonus = (state.wave || 1) * DEF_BOSS_KILL_GOLD
+    teamGold(state, enemyOf(victim.team), bonus)
+    pushFeed(state, 'obj', `💰 ${victim.name} 처치! 방어팀 전원 +${bonus}골드`)
+  }
   victim.damagedBy = {} // 사망 처리 끝 — 피해 이력 비움(부활 후 새로 쌓는다)
 }
 
@@ -2958,6 +2965,7 @@ export const DEFENSE_FIRST_WAVE = 8 // 카운트다운 후 첫 파도까지(초)
 // 무한 방어 보스(10배수 파도) — 체력 스케일·투입 규모 노브(프로토타입, 시뮬로 튜닝)
 const DEF_BOSS_HP_BASE = 900
 const DEF_BOSS_HP_PER_W = 85
+const DEF_BOSS_KILL_GOLD = 25 // 무한 방어 보스 처치 시 방어팀 전원에게 웨이브×이만큼(10웨 250·30웨 750)
 function stepDefenseWaves(state, dt) {
   if (state.mode !== 'defense' || state.status !== 'playing') return
   state.defWaveT -= dt
