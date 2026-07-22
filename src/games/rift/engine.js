@@ -2970,11 +2970,10 @@ function stepDefenseWaves(state, dt) {
   const gate = { team: 'red', x: nx.x - 6, z: nx.z }
   // 물량 상한: 살아있는 붉은 병사 45 초과분은 안 뽑는다(모바일 성능·프레임 보호)
   const alive = state.minions.filter((m) => m.team === 'red').length
-  // 미니언 물량: 매 웨이브 매끄럽게 증가(6+⌈w·0.5⌉, 상한 24) — 5배수만 튀던 들쭉날쭉 제거.
-  //  성장(hpMul) 0.085 유지 — 지수 누적이라 매우 민감(0.10만 돼도 봇 도달 30→24 급락).
-  const count = Math.max(0, Math.min(Math.min(24, 6 + Math.ceil(w * 0.5)), 45 - alive))
-  // 미니언 성장 0.10(원래 0.12에서 살짝 완화 — 유저 요청). 미니언은 봇이 잘 뚫어 난이도 노브로
-  //  둔감하다(0.085~0.14 사이 밴드 차이 미미) — 무한 방어 난이도의 진짜 노브는 '그림자 수'.
+  // 미니언 물량: 5웨이브당 1마리씩만 완만히 증가(7+⌊w/5⌋, 상한 24). 유저 관찰상 마릿수가
+  //  체력계수(hpMul)와 곱해져 후반을 지배 — 이전 ⌈w·0.5⌉(웨이브당 0.5마리)는 과했다.
+  const count = Math.max(0, Math.min(Math.min(24, 7 + Math.floor(w / 5)), 45 - alive))
+  // 미니언 성장 0.10(원래 0.12에서 살짝 완화 — 유저 요청).
   if (count > 0) bossSummon(state, gate, { count, hpMul: 1 + 0.10 * w })
   // 보스 — 10의 배수 파도, 20마다 1마리씩(10·20→1, 30·40→2, 50·60→3…). 종류 랜덤·중복 허용.
   const bossN = w % 10 === 0 ? Math.floor((w / 10 + 1) / 2) : 0
