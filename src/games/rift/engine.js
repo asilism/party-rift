@@ -2973,7 +2973,9 @@ function stepDefenseWaves(state, dt) {
   // 미니언 물량: 매 웨이브 매끄럽게 증가(6+⌈w·0.5⌉, 상한 24) — 5배수만 튀던 들쭉날쭉 제거.
   //  성장(hpMul) 0.085 유지 — 지수 누적이라 매우 민감(0.10만 돼도 봇 도달 30→24 급락).
   const count = Math.max(0, Math.min(Math.min(24, 6 + Math.ceil(w * 0.5)), 45 - alive))
-  if (count > 0) bossSummon(state, gate, { count, hpMul: 1 + 0.085 * w })
+  // 미니언 성장 0.10(원래 0.12에서 살짝 완화 — 유저 요청). 미니언은 봇이 잘 뚫어 난이도 노브로
+  //  둔감하다(0.085~0.14 사이 밴드 차이 미미) — 무한 방어 난이도의 진짜 노브는 '그림자 수'.
+  if (count > 0) bossSummon(state, gate, { count, hpMul: 1 + 0.10 * w })
   // 보스 — 10의 배수 파도, 20마다 1마리씩(10·20→1, 30·40→2, 50·60→3…). 종류 랜덤·중복 허용.
   const bossN = w % 10 === 0 ? Math.floor((w / 10 + 1) / 2) : 0
   const bosses = []
@@ -5180,8 +5182,10 @@ function bossThink(state, h, dt) {
   }
   // ── 시간 스테이지: 대량 소환(45~150) → 정예 소환(150~240) → 진군(240~) ──
   const stage = h.defenseBoss ? 'march' : state.time < BOSS_MASS_END ? 'mass' : state.time < BOSS_MARCH_AT ? 'elite' : 'march'
-  // 정예 소환: 보스 유형에 맞는 그림자 영웅 5기 — 한 번만, 죽으면 부활하지 않는다
-  if (stage !== 'mass' && !h.bossAddsDone) {
+  // 정예 소환: 보스 유형에 맞는 그림자 영웅 5기 — 한 번만, 죽으면 부활하지 않는다.
+  //  ⚠️ 무한 방어 보스는 제외: stage='march' 강제라 이 조건을 통과해 등장 즉시 정예 5기(+티어 adds)를
+  //  뿜던 버그(그림자가 웨이브 공식과 무관하게 5~7기 추가). 무한 방어의 그림자는 stepDefenseWaves가 관리.
+  if (!h.defenseBoss && stage !== 'mass' && !h.bossAddsDone) {
     h.bossAddsDone = true
     bossSummonAdds(state, h)
     pushFeed(state, 'obj', `⚔️ ${h.name}이(가) 정예 그림자 영웅들을 불러냈다 — 진군 전에 쓰러뜨려라!`)
