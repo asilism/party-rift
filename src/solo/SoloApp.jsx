@@ -19,7 +19,7 @@ import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRIC
 import { buildSoloRoster } from './roster.js'
 import { missionRows, recordMissionProgress, claimMission, allClearState, claimAllClear, ALL_CLEAR_REWARD } from './missions.js'
 import { recordMatchForAchievements, achievementRows, evaluateAchievements } from './achievements.js'
-import { createTournament, nextRound, resolveRound, userPlacement, arenaLevelFor, ARENA_PLACE_COIN, ARENA_LAYOUT_META } from './colosseum.js'
+import { createTournament, nextRound, resolveRound, userPlacement, arenaLevelFor, ARENA_PLACE_COIN, ARENA_ROUND_GOLD, ARENA_LAYOUT_META } from './colosseum.js'
 import Fireworks from '../shared/Fireworks.jsx'
 import { adsAvailable, showRewarded } from '../shared/ads.js'
 import MenuStage, { ArenaStage, ChampionStage } from './MenuStage.jsx'
@@ -145,7 +145,7 @@ export default function SoloApp() {
     const carry = {}
     for (const m of myTeam.members) carry[m.id] = arenaCarryRef.current[m.id] || { lvl, gold: 0 }
     // 상대 봇: 레벨 동기 + 지난 라운드 몫의 골드(이번 준비 페이즈에 몰아서 산다)
-    for (const m of opp.members) carry[m.id] = { lvl, gold: (tour.round - 1) * 1000 }
+    for (const m of opp.members) carry[m.id] = { lvl, gold: (tour.round - 1) * ARENA_ROUND_GOLD }
     setCoinMsg(null)
     setAdState('idle')
     arenaViewRef.current = null
@@ -217,6 +217,19 @@ export default function SoloApp() {
     netRef.current = null
     setNet(null)
     setScreen('colosseum')
+  }
+
+  // 부전(휴식) 라운드 처리 — 경기는 안 하지만 라운드 지원금(1000골드)과 레벨 승급은 챙겨 준다.
+  //  이걸 빼먹으면 쉬는 팀이 골드·레벨에서 뒤처져 오히려 불리해진다(경기하면 createGame이 +1000·finishArenaRound가 레벨 승급).
+  function byeArenaRound() {
+    const nextLvl = arenaLevelFor(tour.round + 1)
+    for (const id of ['solo', 'ally']) {
+      const c = arenaCarryRef.current[id] || { gold: 0, items: [] }
+      arenaCarryRef.current[id] = { ...c, lvl: Math.max(nextLvl, c.lvl || 0), gold: (c.gold || 0) + ARENA_ROUND_GOLD }
+    }
+    resolveRound(tour, false) // 유저는 어느 페어에도 없어 승패 인자는 무시됨(부전은 포인트 변화 없음)
+    setTour({ ...tour })
+    setTourStage('result')
   }
 
   function arenaNextRound() {
@@ -485,7 +498,7 @@ export default function SoloApp() {
           tour={tour}
           stage={tourStage}
           onEnter={startArenaRound}
-          onSkipRound={() => { resolveRound(tour, false); setTour({ ...tour }); setTourStage('result') }}
+          onSkipRound={byeArenaRound}
           onNextRound={arenaNextRound}
           onFinish={finishColosseum}
         />

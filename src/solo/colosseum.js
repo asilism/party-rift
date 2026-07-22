@@ -8,6 +8,9 @@ import { t } from '../shared/i18n.js'
 //  유저 경기만 실제 시뮬 — 봇팀끼리는 즉시 판정(50/50 랜덤).
 
 export const ARENA_START_PTS = 10
+// 라운드마다 팀에 지급되는 지원금 — 경기에 나가면 engine createGame이 챙겨 준다(mode 'arena' +1000).
+//  부전(휴식)으로 경기를 안 하는 라운드엔 이 값만큼 이월 골드에 직접 얹어 줘야 뒤처지지 않는다.
+export const ARENA_ROUND_GOLD = 1000
 // 차감 2, 4, 6, 8… — 3 시작은 중앙값 5라운드로 "생각보다 빨리 끝나" 2로 하향(중앙값 6라운드)
 export const arenaDeduction = (round) => 2 + (round - 1) * 2
 export const ARENA_PLACE_COIN = { 1: 80, 2: 50, 3: 35, 4: 25, 5: 15, 6: 10 }
