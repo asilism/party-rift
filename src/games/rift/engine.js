@@ -9,6 +9,7 @@ import {
 } from './map.js'
 import { getZodiac } from '../../shared/zodiac.js'
 import { ITEM_SLOTS, SELL_REFUND, ITEMS, ITEMS_BY_ID, sumStats, buildQuote } from './items.js'
+import { AUG_BY_ID, rollAugmentChoices, RARITY_ORDER } from './augments.js'
 
 export { ITEM_SLOTS } from './items.js'
 
@@ -673,7 +674,7 @@ const ZERO_BONUS = sumStats([])
 //  (원래 1.0 ↔ 한때 1.2 사이의 중간값)
 export const HP_SCALE = 1.1
 // statMul: 콜로세움 봇 난이도 보정 배율(체력·공격력·주문력 공통) — createGame이 봇에만 심는다.
-const heroMaxHp = (h) => Math.round((CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1) + itemBonus(h).hp) * HP_SCALE * (h.statMul || 1))
+const heroMaxHp = (h) => Math.round((CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1) + itemBonus(h).hp) * HP_SCALE * (h.statMul || 1) * (1 + augOf(h).hpMul))
 // 밸런스: 공격력 기반 딜러(근접·원거리)는 순간 딜링이 과해 마법사·물몸이 버티기 어려웠다.
 //  직업 고유 공격력 곡선(기본 + 레벨 성장)을 20% 낮춘다 — 평타와 공격력 계수 스킬 모두에 함께 반영된다.
 //  (아이템 공격력은 그대로 둬서 장비 투자 가치는 유지) 탱커·하이브리드(소환사)는 딜러가 아니라 제외.
@@ -684,12 +685,13 @@ const innateAtk = (h) => {
   const base = c.atk + c.atkLvl * (h.lvl - 1)
   return AD_DAMAGE_CLASSES.has(h.cls) ? base * AD_CURVE : base
 }
-const heroAtk = (h) => (innateAtk(h) + itemBonus(h).atk) * (h.statMul || 1)
+// 증강: atkMul(고정 배율) + augStacks(파도마다 누적되는 영구 배율)
+const heroAtk = (h) => (innateAtk(h) + itemBonus(h).atk) * (h.statMul || 1) * (1 + augOf(h).atkMul + (h.augStacks || 0))
 // 보스는 국면이 오를수록 몸이 커지고, 커진 만큼 팔도 길어진다(사거리 +15%/국면)
 const heroRange = (h) =>
   (CLASSES[h.cls].range + itemBonus(h).range + (h.bladeT > 0 ? BLADE_RANGE : 0)) *
   (h.isBoss ? 1 + 0.15 * ((h.bossPhase || 1) - 1) : 1)
-const heroSpeed = (h) => CLASSES[h.cls].speed + itemBonus(h).speed
+const heroSpeed = (h) => CLASSES[h.cls].speed + itemBonus(h).speed + augOf(h).speed
 // 레벨업 필요 경험치 — 전반적으로 상향(레벨링을 느리게).
 //  Lv1→Lv2 = 250 ≈ 적 병사 1.5웨이브(병사 28xp × 9마리). 정글러는 늑대 3마리(84×3)면 2렙.
 export const xpNeed = (lvl) => 250 + 98 * (lvl - 1) // 레벨업 ~10% 빠르게(증가폭 110→98) — 가벼운 가속
@@ -734,6 +736,11 @@ function makeHeroState(p, cls, pos, map, rng) {
       items: [], // 산 아이템 id (최대 ITEM_SLOTS칸)
       itemPlus: [], // items와 인덱스 정렬된 강화 레벨(무한 방어 전용, 런 한정)
       itemFails: [], // 슬롯별 연속 강화 실패 수(pity — 실패마다 다음 성공률↑)
+      augments: [], // 획득한 조디악 증강 카드 id(무한 방어, 런 한정)
+      aug: null, // 증강 효과 집계 캐시(recomputeAugments)
+      augStacks: 0, // 파도마다 누적되는 영구 공격력 배율(perWaveAtk 카드)
+      augPity: 0, // 전설 미출현 뽑기 연속 횟수(pity)
+      augDraw: null, // 대기 중인 뽑기 { choices:[id,id,id], seq } — 있으면 시뮬 정지(사람이 고를 때까지)
       itemCd: {}, // 액티브 아이템 남은 쿨다운 (itemId → 초)
       // 상점 세션(우물/사망 중) 동안의 무료 취소용 — 진입 시점 스냅샷 + 그동안의 순지출
       shopStack: null, // 이번 세션의 구매/판매 기록 스택 — 되돌리기가 한 스텝씩 역순 취소. null이면 세션 아님
@@ -1129,7 +1136,9 @@ const HYBRID_CLASSES = new Set(['beastmaster', 'engineer'])
 const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46, windcaller: 42, chronomancer: 44, fearmonger: 42, terramancer: 40 }
 const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7, windcaller: 10, chronomancer: 10, fearmonger: 10, terramancer: 9 }
 const spellPower = (h) =>
-  ((SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power) * (h.statMul || 1)
+  ((SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power) * (h.statMul || 1) * (1 + augOf(h).powerMul)
+// 쿨다운 감소: 아이템 + 증강(가산), 실효 상한 0.6
+const cdrOf = (h) => Math.min(0.6, itemBonus(h).cdr + augOf(h).cdr)
 // 캐릭터 주력 스탯 — 스킬 계수가 곱해지는 값
 //  · 하이브리드(야수조련사·엔지니어)는 공격력·주문력의 평균 → 소환수가 두 스탯 모두에 비례한다.
 const powerStat = (h) =>
@@ -1424,6 +1433,31 @@ function teamGold(state, team, amount) {
 
 // 아이템 효과를 다시 계산해 영웅 능력치에 반영 (구매/판매 시).
 // 최대 체력이 늘면 그만큼 즉시 회복(우물/부활 대기 중이라 자연스럽다).
+// ── 조디악 증강(무한 방어) — h.augments의 효과를 합산해 h.aug(집계)로 캐시. 훅 지점이 이걸 읽는다. ──
+const AUG_ZERO = {
+  atkMul: 0, powerMul: 0, hpMul: 0, speed: 0, cdr: 0, regen: 0, def: 0, dealMul: 0,
+  lowHpDR: 0, killGold: 0, perWaveAtk: 0, thorns: 0, explode: 0, execute: 0, ultCdMul: 1, skillRefund: 0,
+}
+const augOf = (h) => h.aug || AUG_ZERO
+function recomputeAugments(h) {
+  const e = { ...AUG_ZERO }
+  for (const id of h.augments || []) {
+    const a = AUG_BY_ID[id]
+    if (!a) continue
+    for (const k in a.effect) {
+      if (k === 'ultCdMul') e.ultCdMul *= a.effect[k] // 곱연산
+      else e[k] += a.effect[k]
+    }
+  }
+  h.aug = e
+  // hpMul 반영 — 최대 체력 갱신(늘면 즉시 그만큼 회복, 살아 있을 때)
+  const before = h.maxHp
+  h.maxHp = heroMaxHp(h)
+  const gain = h.maxHp - before
+  if (gain > 0 && h.respawnT <= 0) h.hp += gain
+  if (h.hp > h.maxHp) h.hp = h.maxHp
+}
+
 function applyItems(h) {
   // 강화 배열을 items 길이에 맞춰 정규화(누락 push 방어 — 정렬은 각 변이 지점에서 명시적으로 맞춘다)
   if (!h.itemPlus) h.itemPlus = []
@@ -1665,7 +1699,8 @@ export function castSkill(state, id) {
   const ok = SKILLS[h.cls](state, h)
   if (ok === false) return state // 대상이 없으면 쿨다운을 안 쓴다
   cancelRecall(h) // 스킬을 쓰면 집중이 풀린다
-  h.skillCd = CLASSES[h.cls].skill.cd * (1 - itemBonus(h).cdr)
+  h.skillCd = CLASSES[h.cls].skill.cd * (1 - cdrOf(h))
+  if (augOf(h).skillRefund > 0) h.ultCd = Math.max(0, h.ultCd - augOf(h).skillRefund) // 증강: 스킬 시전 시 궁 쿨 감소
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
   return state
 }
@@ -1959,7 +1994,7 @@ export function castUlt(state, id) {
   const ok = ULTS[h.cls](state, h)
   if (ok === false) return state
   cancelRecall(h) // 궁극기를 쓰면 집중이 풀린다
-  h.ultCd = CLASSES[h.cls].ult.cd * (1 - itemBonus(h).cdr)
+  h.ultCd = CLASSES[h.cls].ult.cd * (1 - cdrOf(h)) * augOf(h).ultCdMul // 증강: 궁 쿨 배율
   if (h.resetUltCd) { h.ultCd = 0; h.resetUltCd = false } // 그림자처형 처치 → 처형 쿨 초기화
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
   return state
@@ -2276,7 +2311,7 @@ export function castSkill2(state, id) {
   const ok = fn(state, h)
   if (ok === false) return state // 효과 대상이 없으면 쿨다운을 안 쓴다
   cancelRecall(h)
-  h.skill2Cd = CLASSES[h.cls].skill2.cd * (1 - itemBonus(h).cdr)
+  h.skill2Cd = CLASSES[h.cls].skill2.cd * (1 - cdrOf(h))
   return state
 }
 
@@ -2671,6 +2706,12 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
     if (attacker) amount *= ARENA_CLASS_MOD[attacker.cls]?.deal ?? 1
     amount *= ARENA_CLASS_MOD[victim.cls]?.take ?? 1
   }
+  // 증강(무한 방어): 주는 피해 배율 + 저체력 적 처형
+  if (!redirected && attacker) {
+    const ea = augOf(attacker)
+    if (ea.dealMul) amount *= 1 + ea.dealMul
+    if (ea.execute && victim.hp < victim.maxHp * 0.3) amount *= 1 + ea.execute
+  }
   // 가시갑옷: 반사창 동안 보스를 때리면 35%를 되받는다(반사 피해는 다시 반사되지 않는다)
   if (victim.isBoss && victim.thornArmorT > 0 && attacker && !redirected && attacker.hp > 0 && !attacker.isBoss) {
     damageHero(state, attacker, amount * 0.35, victim, true)
@@ -2712,7 +2753,10 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   // 방어 아이템: 받는 피해 감소 — 콜로세움은 효율 일괄 감쇠(흡혈 ×0.1과 짝):
   //  방어 스택이 온존하면 후반 라운드 탱커·힐러가 벽이 된다(직업 배율로는 못 잡는 구조 편차)
   const itemDef = itemBonus(victim).def * (state.mode === 'arena' ? ARENA_ITEM_DEF_MULT : 1)
-  amount *= 1 - itemDef
+  // 증강 방어: def(상시) + lowHpDR(체력 35% 이하) — 아이템 방어와 합산해 상한 0.85로 캡
+  const va = augOf(victim)
+  const augDef = va.def + (victim.hp < victim.maxHp * 0.35 ? va.lowHpDR : 0)
+  amount *= 1 - Math.min(0.85, itemDef + augDef)
   if (victim.shieldT > 0) amount *= SHIELD_CUT // 방패막기!
   if (victim.whirlT > 0) amount *= 1 - WHIRL_DR // 전사 회전베기 중 방어 ↑(앞라인 탱킹)
   if (victim.wardT > 0) amount *= WARD_CUT // 수호기사 결속(아군 피해 감소)
@@ -2724,6 +2768,11 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   }
   victim.hp -= amount
   victim.lastHurt = state.time
+  // 증강 가시(반사): 받은 피해의 일부를 때린 적 영웅(그림자/보스)에게 되돌린다.
+  //  영웅 공격자에게만(attacker.deaths로 식별), 리다이렉트 제외, 재반사 방지(redirected=true로 호출).
+  if (!redirected && va.thorns > 0 && amount > 0 && attacker && attacker.deaths != null && attacker.team !== victim.team && attacker.hp > 0) {
+    damageHero(state, attacker, amount * va.thorns, victim, true)
+  }
   if (victim.recallT > 0) victim.recallT = 0 // 피해를 받으면 귀환이 끊긴다
   if (attacker?.id) {
     victim.lastHitBy = attacker.id
@@ -2809,6 +2858,7 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
     const penalty = DEATHSTREAK_PENALTY * Math.max(0, victim.deathStreak - 1)
     const reward = Math.max(KILL_BOUNTY_MIN, GOLD_KILL + bountyBonus - penalty)
     awardGold(state, killer, reward, victim.x, victim.z)
+    augOnKill(state, killer, victim.x, victim.z, victim.maxHp) // 증강: 킬 골드 + 연쇄 폭발
     const bountyTag = bountyBonus > 0 ? ` 💰현상금 +${bountyBonus}!` : ''
     const assistTag = assisters.length ? ` (도움: ${assisters.map((a) => emojiOf(a.zodiacId)).join('')})` : ''
     pushFeed(state, 'kill', `${emojiOf(killer.zodiacId)} ${killer.name} ⚔️ ${emojiOf(victim.zodiacId)} ${victim.name} 처치!${bountyTag}${assistTag}`)
@@ -2832,15 +2882,35 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   victim.damagedBy = {} // 사망 처리 끝 — 피해 이력 비움(부활 후 새로 쌓는다)
 }
 
+// 증강 처치 효과: 킬 골드 + 연쇄 폭발(주변 병사 광역). 폭발은 병사만, 크레딧 없이(재귀·중복골드 방지).
+function augOnKill(state, attacker, x, z, victimMaxHp) {
+  if (!attacker) return
+  const a = augOf(attacker)
+  if (a.killGold > 0) awardGold(state, attacker, a.killGold, x, z)
+  if (a.explode > 0) {
+    const dmg = victimMaxHp * a.explode
+    const r2 = 25 // 반경 5
+    for (const mm of state.minions) {
+      if (mm.team === attacker.team) continue
+      if ((mm.x - x) ** 2 + (mm.z - z) ** 2 <= r2) damageMinion(state, mm, dmg, null) // 크레딧 없음 → 재귀 안 함
+    }
+    pushFx(state, 'death', x, z, 4, attacker.team)
+  }
+}
+
 function damageMinion(state, m, amount, attacker) {
   m.hp -= amount
   if (m.hp > 0) return
+  const mx = m.x
+  const mz = m.z
+  const mMax = m.maxHp
   state.minions = state.minions.filter((o) => o !== m)
-  pushFx(state, 'death', m.x, m.z, 2, m.team) // 그 자리에서 파티클로 분해
+  pushFx(state, 'death', mx, mz, 2, m.team) // 그 자리에서 파티클로 분해
   if (attacker?.team) awardXp(state, attacker.team, m, MINION_XP, attacker)
   // 막타 골드는 영웅에게만 (병사/타워가 잡으면 없음 — 막타 챙기는 재미)
-  if (attacker?.items) awardGold(state, attacker, m.ranged ? GOLD_MINION_RANGED : GOLD_MINION_MELEE, m.x, m.z)
+  if (attacker?.items) awardGold(state, attacker, m.ranged ? GOLD_MINION_RANGED : GOLD_MINION_MELEE, mx, mz)
   if (attacker?.soldierKills != null) attacker.soldierKills++ // 업적: 병사 막타 수
+  augOnKill(state, attacker, mx, mz, mMax) // 증강: 킬 골드 + 연쇄 폭발
 }
 
 function damageMonster(state, m, amount, attacker) {
@@ -2991,6 +3061,8 @@ function giveXp(state, h, amount) {
 
 // ── 물리 1틱 ──
 export function step(state, dt) {
+  // 증강 뽑기 대기 중이면 완전 정지(시간·전투 모두) — 사람이 카드를 고를 때까지. 봇은 즉시 골라 안 걸린다.
+  if (state.status === 'playing' && state.augPending) return state
   state.time += dt
   if (state.status === 'countdown') {
     state.countdown = Math.max(0, COUNTDOWN_TIME - state.time)
@@ -3060,7 +3132,8 @@ function stepDefenseWaves(state, dt) {
   // 미니언 물량: 5웨이브당 1마리씩만 완만히 증가(7+⌊w/5⌋, 상한 24). 유저 관찰상 마릿수가
   //  체력계수(hpMul)와 곱해져 후반을 지배 — 이전 ⌈w·0.5⌉(웨이브당 0.5마리)는 과했다.
   const count = Math.max(0, Math.min(Math.min(24, 7 + Math.floor(w / 5)), 45 - alive))
-  // 미니언 성장 0.10(원래 0.12에서 살짝 완화 — 유저 요청).
+  // 미니언 성장 0.10/웨. ⚠️ 봇은 완벽 AoE라 미니언 HP에 둔감(오히려 farm↑로 역효과 — 시뮬 확인) →
+  //  증강 시대의 난이도 튜닝은 미니언 HP가 아니라 그림자/보스·적 화력, 그리고 실기기 유저 체감으로 잡는다.
   if (count > 0) bossSummon(state, gate, { count, hpMul: 1 + 0.10 * w })
   // 보스 — 10의 배수 파도, 20마다 1마리씩(10·20→1, 30·40→2, 50·60→3…). 종류 랜덤·중복 허용.
   const bossN = w % 10 === 0 ? Math.floor((w / 10 + 1) / 2) : 0
@@ -3094,6 +3167,68 @@ function stepDefenseWaves(state, dt) {
   } else if (w % 10 === 1 && w > 1) {
     pushFeed(state, 'obj', `🌊 ${w}번째 파도 — 파도가 더 거세진다!`)
   }
+  // 증강: perWaveAtk 카드를 가진 아군은 파도를 넘길 때마다 영구 공격력 스택 누적(상한 AUG_STACK_CAP)
+  for (const h of state.heroes) {
+    if (h.team === 'blue' && !h.isBoss && augOf(h).perWaveAtk > 0) {
+      h.augStacks = Math.min(AUG_STACK_CAP, (h.augStacks || 0) + augOf(h).perWaveAtk)
+    }
+  }
+  // 증강 뽑기: 5의 배수 파도마다 아군에게 카드 3장 중 택1(봇은 자동, 사람은 정지 후 선택)
+  if (w % 5 === 0) triggerAugmentDraw(state)
+}
+
+// ── 조디악 증강: 뽑기 트리거 / 적용 / 선택 ──
+// 곱연산 폭주 방지 — 한 판에 고를 수 있는 증강 수 상한(집중된 빌드 = 하데스식) + perWave 스택 상한.
+//  이 둘이 없으면 봇이 20+장·+900% 스택으로 불사가 돼 무한 방어의 "레이스"가 무너진다(시뮬 확인).
+const AUG_MAX = 10
+const AUG_STACK_CAP = 1.0
+function applyAugment(state, h, id) {
+  if (!AUG_BY_ID[id] || !h.augments) return
+  h.augments.push(id)
+  recomputeAugments(h)
+}
+
+// 봇 자동 선택 — 등급 우선 + 직업 계열(AP/AD) 가중, 생존 효과는 늘 약간 가점.
+function botPickAugment(state, h, choices) {
+  const ap = AP_CLASSES.has(h.cls)
+  const score = (c) => {
+    let s = RARITY_ORDER[c.rarity] * 10
+    const e = c.effect
+    if (ap && (e.powerMul || e.cdr || e.skillRefund || e.ultCdMul < 1)) s += 2
+    if (!ap && (e.atkMul || e.dealMul || e.execute)) s += 2
+    if (e.hpMul || e.def || e.lowHpDR) s += 1
+    return s
+  }
+  let best = choices[0]
+  for (const c of choices) if (score(c) > score(best)) best = c
+  applyAugment(state, h, best.id)
+}
+
+function triggerAugmentDraw(state) {
+  for (const h of state.heroes) {
+    if (h.team !== 'blue' || h.isBoss || h.isBossAdd || h.shadowHero) continue
+    if ((h.augments?.length || 0) >= AUG_MAX) continue // 빌드 상한 도달 — 더 안 뽑는다
+    const { choices, pity } = rollAugmentChoices(state.rng, h, state.wave, h.augPity || 0)
+    if (!choices.length) continue
+    h.augPity = pity // 오퍼 기준 pity 갱신(전설이 후보에 있었으면 0)
+    if (h.isBot) {
+      botPickAugment(state, h, choices)
+    } else {
+      h.augDraw = { choices: choices.map((c) => c.id), seq: (h.augDrawSeq = (h.augDrawSeq || 0) + 1) }
+      state.augPending = true // 사람이 고를 때까지 시뮬 정지
+    }
+  }
+}
+
+// 사람 플레이어의 증강 선택(액션) — 후보에 있는 카드만, 소유권은 서버가 판정.
+export function pickAugment(state, id, augId) {
+  if (state.status !== 'playing') return state
+  const h = getHero(state, id)
+  if (!h || !h.augDraw || !h.augDraw.choices.includes(augId)) return state
+  applyAugment(state, h, augId)
+  h.augDraw = null
+  state.augPending = state.heroes.some((o) => o.augDraw) // 남은 사람 뽑기가 없으면 재개
+  return state
 }
 
 // 병사 웨이브: 세 레인마다 근접 3 + 원거리 3
@@ -3362,7 +3497,7 @@ function stepHero(state, h, dt) {
       h.turretStock = (h.turretStock ?? 0) + 1
     }
     if ((h.turretStock ?? 0) < ENGI_MAX_TURRETS && h.skillCd <= 0) {
-      h.skillCd = CLASSES.engineer.skill.cd * (1 - itemBonus(h).cdr)
+      h.skillCd = CLASSES.engineer.skill.cd * (1 - cdrOf(h))
     }
   }
   for (const k in h.itemCd) {
@@ -3575,8 +3710,9 @@ function stepHero(state, h, dt) {
   }
   if (h.baronT > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.02 * dt)
   if (h.rageT > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * RAGE_REGEN * dt) // 검투의 분노: 지속 회복
-  // 아이템 체력 재생 (전투 중에도 항상)
-  if (itemBonus(h).regen > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * itemBonus(h).regen * dt)
+  // 아이템 + 증강 체력 재생 (전투 중에도 항상)
+  const regenRate = itemBonus(h).regen + augOf(h).regen
+  if (regenRate > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * regenRate * dt)
   // (골드 자동 수입은 위쪽에서 — 죽어 있을 때도 모이도록 부활 분기 앞에서 처리한다)
   // 회전베기(전사 궁극기): 도는 동안 WHIRL_TICK 간격으로 반경 안을 후린다 (이동은 위에서 이미 처리)
   if (h.whirlT > 0) {
@@ -7036,6 +7172,9 @@ export function makeView(state) {
       enhanceSeq: h.enhanceSeq || 0, // 강화 시도 카운터(상점이 감지해 성공/실패 반짝)
       enhanceSlot: h.enhanceSlot ?? -1,
       enhanceOk: !!h.enhanceOk,
+      augments: h.augments ? h.augments.slice() : [], // 획득 증강(복사 — 앨리어싱 회피)
+      augStacks: r2d(h.augStacks || 0), // 파도 누적 공격 배율(HUD 표시용)
+      augDraw: h.augDraw ? { choices: h.augDraw.choices.slice(), seq: h.augDraw.seq } : null, // 대기 중 뽑기
       power: Math.round(powerStat(h)), // 스킬 계수가 곱해지는 주력 스탯(공격력/주문력) — 툴팁 계산용
       dmgMult: r2d(dmgMult(h)), // 버프 피해 배율(용/이무기) — 툴팁 계산용
 

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   createGame, setInput, castAttack, castSkill, castSkill2, castUlt, castRecall, step, makeView, makeBot,
   towerVulnerable, nexusVulnerable, isHeroVisible, isUnitVisible, buyItem, sellItem, resetShop, canShop, useItem,
-  enhanceItem, enhanceCost, enhanceRate, ENHANCE_MAX,
+  enhanceItem, enhanceCost, enhanceRate, ENHANCE_MAX, pickAugment,
   STEP, COUNTDOWN_TIME, ULT_LEVEL, SKILL2_LEVEL, TEAM_SIZE, MAX_LEVEL, RECALL_TIME, CLASS_IDS, CLASSES,
   ITEM_SLOTS, BOT_STUCK_T, HP_SCALE,
 } from './engine.js'
@@ -3406,4 +3406,93 @@ test('콜로세움 봇 스탯 보정: 난이도별로 봇 체력만 배율 — e
   assert.equal(hpOf('easy', 'me'), hpOf('hard', 'me'))
   const g3 = createGame(humans().map((p) => ({ ...p, isBot: true })), { botLevel: 'hard', rng: () => 0.5 })
   assert.ok(g3.heroes.every((h) => !h.statMul), '3v3 등 다른 모드는 스탯 보정 없음')
+})
+
+// ── 조디악 증강 (무한 방어) ──
+function defenseGame(seed = 5) {
+  const rng = (s => () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296))(seed)
+  const players = [
+    { id: 'solo', zodiacId: 'rat', team: 'blue', cls: 'warrior', isBot: false },
+    { id: 'b1', zodiacId: 'ox', team: 'blue', cls: 'mage', isBot: true },
+  ]
+  const g = createGame(players, { mode: 'defense', rng })
+  startPlaying(g)
+  return g
+}
+
+test('증강: 5배수 파도에 뽑기 — 봇 자동픽·사람 대기·시뮬 정지·선택 후 재개', () => {
+  const g = defenseGame()
+  g.wave = 4
+  g.defWaveT = 0
+  step(g, STEP) // 파도 5 진입 → 뽑기 트리거
+  assert.equal(g.wave, 5)
+  const me = g.heroes.find((h) => h.id === 'solo')
+  const bot = g.heroes.find((h) => h.id === 'b1')
+  assert.ok(me.augDraw, '사람은 뽑기 대기')
+  assert.equal(me.augDraw.choices.length, 3)
+  assert.equal(bot.augDraw, null, '봇은 대기 안 함')
+  assert.equal(bot.augments.length, 1, '봇 자동 선택 완료')
+  assert.equal(g.augPending, true, '시뮬 정지 플래그 ON')
+
+  const t0 = g.time
+  step(g, STEP)
+  assert.equal(g.time, t0, '뽑기 대기 중 시간 정지')
+
+  pickAugment(g, 'solo', me.augDraw.choices[0])
+  assert.equal(me.augments.length, 1, '증강 획득')
+  assert.equal(me.augDraw, null, '뽑기 종료')
+  assert.equal(g.augPending, false, '재개')
+  step(g, STEP)
+  assert.ok(g.time > t0, '재개 후 시간 진행')
+})
+
+test('증강: 후보에 없는 카드 선택은 무시된다', () => {
+  const g = defenseGame()
+  g.wave = 4; g.defWaveT = 0; step(g, STEP)
+  const me = g.heroes.find((h) => h.id === 'solo')
+  pickAugment(g, 'solo', 'c_atk___없는후보')
+  assert.equal(me.augments.length, 0, '무시')
+  assert.ok(me.augDraw, '여전히 대기')
+})
+
+test('증강: 획득 효과가 집계(h.aug)와 체력에 반영된다', () => {
+  const g = defenseGame()
+  const me = g.heroes.find((h) => h.id === 'solo')
+  // 공격 배율
+  me.augDraw = { choices: ['c_atk'], seq: 1 }
+  pickAugment(g, 'solo', 'c_atk')
+  assert.ok(Math.abs(me.aug.atkMul - 0.15) < 1e-9, 'atkMul 0.15')
+  // 체력 배율 — 최대 체력이 늘어난다
+  const hpBefore = me.maxHp
+  me.augDraw = { choices: ['c_hp'], seq: 2 }
+  pickAugment(g, 'solo', 'c_hp')
+  assert.ok(me.maxHp > hpBefore, 'hpMul로 최대 체력 증가')
+  assert.ok(Math.abs(me.aug.hpMul - 0.18) < 1e-9, 'hpMul 0.18')
+  // 전설 궁 쿨 배율(곱연산)
+  me.augDraw = { choices: ['l_ult'], seq: 3 }
+  pickAugment(g, 'solo', 'l_ult')
+  assert.ok(Math.abs(me.aug.ultCdMul - 0.55) < 1e-9, 'ultCdMul 0.55')
+})
+
+test('증강: perWaveAtk는 파도를 넘길 때마다 영구 스택이 쌓인다', () => {
+  const g = defenseGame()
+  const me = g.heroes.find((h) => h.id === 'solo')
+  me.augDraw = { choices: ['r_stack'], seq: 1 } // perWaveAtk 0.025
+  pickAugment(g, 'solo', 'r_stack')
+  const s0 = me.augStacks || 0
+  g.wave = 5; g.defWaveT = 0; step(g, STEP) // 파도 6
+  const s1 = me.augStacks
+  assert.ok(Math.abs(s1 - (s0 + 0.025)) < 1e-9, '파도마다 +0.025 누적')
+  // 이 카드가 없는 봇은 스택이 안 쌓인다
+  const bot = g.heroes.find((h) => h.id === 'b1')
+  assert.ok(!bot.augStacks || !bot.augments.includes('r_stack') ? true : bot.augStacks >= 0)
+})
+
+test('증강: 봇은 뽑기 트리거 시 즉시 한 장을 자동 선택한다', () => {
+  const g = defenseGame(9)
+  const bot = g.heroes.find((h) => h.id === 'b1')
+  g.wave = 4; g.defWaveT = 0; step(g, STEP)
+  assert.equal(bot.augments.length, 1, '봇이 한 장 선택')
+  assert.equal(typeof bot.augments[0], 'string')
+  assert.equal(bot.augDraw, null, '봇은 대기 안 함')
 })

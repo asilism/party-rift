@@ -1,7 +1,15 @@
 # 무한 방어 심화 — 아이템 강화 + 조디악 증강 카드 설계
 
-작성: 2026-07-22. 상태: **시스템 A(아이템 강화) 1차 구현 완료(PR #224, v49). 시스템 B(증강)는 미착수.**
+작성: 2026-07-22. 상태: **시스템 A(강화, PR #224 v49) + 시스템 B(조디악 증강, PR #225 v50) 1차 구현 완료.**
 목적: 30웨이브 이후의 "벽"(레벨 상한 18 + 아이템 5칸)을 넘어 성장이 계속되게 한다.
+
+> **구현 노트(증강, 2026-07-23)**: `augments.js`(카드 33장: 일반8·레어8·전설6·12지신 시그니처 + 드로우/pity/픽3 순수함수).
+> 엔진: `recomputeAugments`(h.aug 집계), 16개 effect 키를 훅에 주입(heroAtk/spellPower/heroMaxHp/heroSpeed/cdrOf/
+> damageHero[dealMul·execute·def·lowHpDR·thorns]/damageMinion·killer[killGold·explode]/regen/castSkill·castUlt).
+> 5배수 파도 클리어마다 `triggerAugmentDraw`(봇 자동픽, 사람은 augDraw 설정+`state.augPending`으로 step 완전정지).
+> `pickAugment` 액션, makeView 노출, `RiftAugmentDraw` 모달 + HUD 칩. **곱연산 폭주 방지**: AUG_MAX 10(집중 빌드)·
+> AUG_STACK_CAP 1.0. ⚠️ 시뮬 교훈 재확인: 미니언 HP↑는 봇에 역효과(farm↑) — 증강 시대 난이도는 미니언이 아니라
+> 그림자/보스·적 화력·실기기 유저 체감으로 튜닝. 봇 도달 중앙 ~83(봇은 미니언 둔감 — 사람은 훨씬 이르게 위협받음).
 
 > **구현 노트(강화, 2026-07-23)**: `h.itemPlus`/`h.itemFails` 상태, `sumStats(items, plus)` 강화 반영,
 > `enhanceItem`(성공률/비용 테이블·pity·실패=골드만), 봇 자동강화(`botEnhance`), makeView·net action(`enhance`),
