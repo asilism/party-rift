@@ -75,6 +75,9 @@ export default function RiftGame({ onExit, net, bonus = null, adButton = null })
   function useItemSlot(slot) {
     sendAction({ type: 'useItem', slot }) // 액티브 아이템(물병/종) 사용
   }
+  function enhance(slot) {
+    sendAction({ type: 'enhance', slot }) // 아이템 강화(무한 방어)
+  }
 
   function toggleSound() {
     const n = !soundOn
@@ -110,6 +113,7 @@ export default function RiftGame({ onExit, net, bonus = null, adButton = null })
       onBuy={buy}
       onSell={sell}
       onResetShop={resetShopBuys}
+      onEnhance={enhance}
       onUseItem={useItemSlot}
       rtt={rtt}
       onTogglePause={net.rtPause ? () => net.rtPause(!view.paused) : null}
@@ -431,7 +435,7 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
 
 // 전투 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function RiftPlay({
-  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onUseItem, rtt = 0, onTogglePause, exitLabel = '🔁 새 매치 찾기', onExit, soundOn, onToggleSound, bonus = null, adButton = null,
+  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onEnhance, onUseItem, rtt = 0, onTogglePause, exitLabel = '🔁 새 매치 찾기', onExit, soundOn, onToggleSound, bonus = null, adButton = null,
 }) {
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
@@ -776,7 +780,7 @@ function RiftPlay({
       )}
 
       {shopOpen && me && meCanShop && (
-        <RiftShop me={me} onBuy={onBuy} onSell={onSell} onResetShop={onResetShop} onClose={() => setShopOpen(false)} />
+        <RiftShop me={me} mode={hud.mode} onBuy={onBuy} onSell={onSell} onResetShop={onResetShop} onEnhance={onEnhance} onClose={() => setShopOpen(false)} />
       )}
 
       {finished && showWin && (

@@ -2461,18 +2461,46 @@ body {
   padding: 8px; border-radius: 12px; background: rgba(8, 12, 26, 0.5);
 }
 .rift-shop__slot {
-  width: 64px; height: 64px; border-radius: 12px;
+  width: 64px; border-radius: 12px; position: relative;
   border: 2px dashed rgba(255, 255, 255, 0.2);
-  display: flex; align-items: center; justify-content: center;
+  display: flex; flex-direction: column; align-items: stretch;
 }
 .rift-shop__slot--filled { border-style: solid; border-color: rgba(255, 211, 77, 0.5); }
-.rift-shop__slot-empty { font-size: 26px; color: rgba(255, 255, 255, 0.3); }
+.rift-shop__slot-empty {
+  height: 64px; font-size: 26px; color: rgba(255, 255, 255, 0.3);
+  display: flex; align-items: center; justify-content: center;
+}
 .rift-shop__sell {
-  width: 100%; height: 100%; cursor: pointer; position: relative;
+  width: 100%; height: 64px; cursor: pointer; position: relative;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
   background: transparent; border: none; color: #fff; font-weight: 800;
 }
-.rift-shop__slot-icon { font-size: 26px; line-height: 1; }
+.rift-shop__slot-icon { font-size: 26px; line-height: 1; position: relative; }
+/* 강화 레벨 배지 (+N) — 아이콘 좌상단 */
+.rift-shop__plus {
+  position: absolute; top: -5px; left: -9px; font-size: 10px; font-weight: 900; color: #2a1c05;
+  background: linear-gradient(#ffe08a, #ffc23a); border-radius: 8px; padding: 0 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+/* 강화 버튼 — 슬롯 하단 바 */
+.rift-shop__enhance {
+  width: 100%; margin-top: 2px; padding: 3px 2px; border: none; cursor: pointer;
+  border-radius: 0 0 9px 9px; font-weight: 900; line-height: 1.1;
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+  background: linear-gradient(#f0a93a, #d6871f); color: #2a1c05;
+}
+.rift-shop__enh-cost { font-size: 8.5px; }
+.rift-shop__enh-rate { font-size: 10px; }
+.rift-shop__enhance:disabled { filter: grayscale(0.65) brightness(0.72); cursor: default; }
+/* 강화 성공/실패 반짝 */
+@keyframes enhanceOk { 0%, 100% { box-shadow: none; } 30% { box-shadow: 0 0 0 3px #7fe3a0, 0 0 18px #7fe3a0; } }
+@keyframes enhanceFail {
+  0%, 100% { box-shadow: none; transform: translateX(0); }
+  20%, 50% { box-shadow: 0 0 0 3px #ff6b6b; }
+  25% { transform: translateX(-2px); } 40% { transform: translateX(2px); }
+}
+.rift-shop__slot--ok { animation: enhanceOk 0.65s ease; }
+.rift-shop__slot--fail { animation: enhanceFail 0.6s ease; }
 .rift-shop__sell small { font-size: 9px; opacity: 0.8; max-width: 60px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rift-shop__sell-tag {
@@ -2528,8 +2556,14 @@ body {
   .rift-shop__who { font-size: 13px; }
   .rift-shop__gold { font-size: 14px; }
   .rift-shop__inv { padding: 5px; gap: 5px; }
-  .rift-shop__slot { width: 44px; height: 44px; border-radius: 9px; }
+  .rift-shop__slot { width: 46px; border-radius: 9px; }
+  .rift-shop__sell { height: 44px; }
+  .rift-shop__slot-empty { height: 44px; }
   .rift-shop__slot-icon { font-size: 18px; }
+  .rift-shop__enhance { padding: 2px 1px; }
+  .rift-shop__enh-cost { font-size: 7px; }
+  .rift-shop__enh-rate { font-size: 8.5px; }
+  .rift-shop__plus { font-size: 8px; top: -4px; left: -7px; }
   .rift-shop__sell small { font-size: 7.5px; max-width: 42px; }
   .rift-shop__sell-tag { font-size: 8px; top: -6px; right: -6px; }
   .rift-shop__stat { font-size: 9.5px; }
