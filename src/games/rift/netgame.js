@@ -27,7 +27,7 @@ export const riftNet = {
         isBot: !!p.isBot,
         deviceId: p.deviceId,
       }))
-      return { players: list, opts: { mode, botLevel: config?.botLevel, bossTier: config?.bossTier, carry: config?.carry, arenaLayout: config?.arenaLayout, arenaPts: config?.arenaPts, arenaDeduct: config?.arenaDeduct } }
+      return { players: list, opts: { mode, botLevel: config?.botLevel, bossTier: config?.bossTier, carry: config?.carry, arenaLayout: config?.arenaLayout, arenaPts: config?.arenaPts, arenaDeduct: config?.arenaDeduct, arenaRound: config?.arenaRound } }
     }
 
     const teams = config?.teams || {}
@@ -54,10 +54,10 @@ export const riftNet = {
         })
       }
     }
-    return { players: [...humans, ...bots], opts: { mode, botLevel: config?.botLevel, bossTier: config?.bossTier, carry: config?.carry, arenaLayout: config?.arenaLayout, arenaPts: config?.arenaPts, arenaDeduct: config?.arenaDeduct } }
+    return { players: [...humans, ...bots], opts: { mode, botLevel: config?.botLevel, bossTier: config?.bossTier, carry: config?.carry, arenaLayout: config?.arenaLayout, arenaPts: config?.arenaPts, arenaDeduct: config?.arenaDeduct, arenaRound: config?.arenaRound } }
   },
   createGame: (players, opts) =>
-    createGame(players, { mode: opts?.mode, botLevel: opts?.botLevel, bossTier: opts?.bossTier, carry: opts?.carry, arenaLayout: opts?.arenaLayout, arenaPts: opts?.arenaPts, arenaDeduct: opts?.arenaDeduct, rng: Math.random }),
+    createGame(players, { mode: opts?.mode, botLevel: opts?.botLevel, bossTier: opts?.bossTier, carry: opts?.carry, arenaLayout: opts?.arenaLayout, arenaPts: opts?.arenaPts, arenaDeduct: opts?.arenaDeduct, arenaRound: opts?.arenaRound, rng: Math.random }),
   setInput,
   applyAction(state, action, pid) {
     if (action.type === 'cast') {

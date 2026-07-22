@@ -672,7 +672,8 @@ const ZERO_BONUS = sumStats([])
 // 밸런스: 전투가 한 방에 끝나지 않게 영웅 체력을 전반적으로 10% 상향(기본·레벨·아이템 모두 포함).
 //  (원래 1.0 ↔ 한때 1.2 사이의 중간값)
 export const HP_SCALE = 1.1
-const heroMaxHp = (h) => Math.round((CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1) + itemBonus(h).hp) * HP_SCALE)
+// statMul: 콜로세움 봇 난이도 보정 배율(체력·공격력·주문력 공통) — createGame이 봇에만 심는다.
+const heroMaxHp = (h) => Math.round((CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1) + itemBonus(h).hp) * HP_SCALE * (h.statMul || 1))
 // 밸런스: 공격력 기반 딜러(근접·원거리)는 순간 딜링이 과해 마법사·물몸이 버티기 어려웠다.
 //  직업 고유 공격력 곡선(기본 + 레벨 성장)을 20% 낮춘다 — 평타와 공격력 계수 스킬 모두에 함께 반영된다.
 //  (아이템 공격력은 그대로 둬서 장비 투자 가치는 유지) 탱커·하이브리드(소환사)는 딜러가 아니라 제외.
@@ -683,7 +684,7 @@ const innateAtk = (h) => {
   const base = c.atk + c.atkLvl * (h.lvl - 1)
   return AD_DAMAGE_CLASSES.has(h.cls) ? base * AD_CURVE : base
 }
-const heroAtk = (h) => innateAtk(h) + itemBonus(h).atk
+const heroAtk = (h) => (innateAtk(h) + itemBonus(h).atk) * (h.statMul || 1)
 // 보스는 국면이 오를수록 몸이 커지고, 커진 만큼 팔도 길어진다(사거리 +15%/국면)
 const heroRange = (h) =>
   (CLASSES[h.cls].range + itemBonus(h).range + (h.bladeT > 0 ? BLADE_RANGE : 0)) *
@@ -853,6 +854,9 @@ export function createGame(players, opts = {}) {
     // 보스는 레벨이 없다 — 대신 개전부터 고정 파워(BOSS_LEVEL 상당)로 계산해 스탯을 못박는다.
     //  이후 bossThink에서 레벨업하지 않으므로 이 값이 게임 내내 유지된다.
     if (h.isBoss) h.lvl = BOSS_LEVEL
+    // 콜로세움 봇 난이도 보정: 사람의 컨트롤 우위를 스탯으로 상쇄 — 악몽(normal) 1.1배, 지옥(hard) 1.2배.
+    //  체력·공격력·주문력 공통(heroMaxHp/heroAtk/spellPower가 statMul을 곱한다). 아군 봇도 동일하게 받는다.
+    if (mode === 'arena' && h.isBot) h.statMul = (BOT_LEVELS[o.botLevel] || BOT_LEVELS.normal).arenaStat
     h.maxHp = heroMaxHp(h)
     // 난이도 티어: 보스 체력만 생성 시 1회 가중(공격은 damageHero에서, 템포는 쿨다운에서)
     if (h.isBoss) h.maxHp = Math.round(h.maxHp * (BOSS_TIERS[o.bossTier]?.hp || 1))
@@ -920,6 +924,7 @@ export function createGame(players, opts = {}) {
     arenaWave: 0, // 서든데스 붕괴 웨이브 번호
     arenaPts: mode === 'arena' ? { blue: 10, red: 10, ...(o.arenaPts || {}) } : null, // 팀별 토너먼트 포인트(수호석 하트)
     arenaDeduct: mode === 'arena' ? (o.arenaDeduct ?? 3) : 0, // 이번 라운드 패배 시 차감량(하트 펑 연출용)
+    arenaRound: mode === 'arena' ? (o.arenaRound || 1) : 0, // 토너먼트 라운드 — 봇 장보기 단계(공격→피해감소→방어)를 가른다
     healOrbs: [], // 콜로세움 회복 열매 {id,x,z,t} — 먹으면 체력 회복
     orbT: 6, // 다음 열매 낙하까지(전투 개시 후)
     holes: [], // 붕괴 구멍 {x,z,r} — 밟으면 추락
@@ -1118,7 +1123,7 @@ const HYBRID_CLASSES = new Set(['beastmaster', 'engineer'])
 const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46, windcaller: 42, chronomancer: 44, fearmonger: 42, terramancer: 40 }
 const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7, windcaller: 10, chronomancer: 10, fearmonger: 10, terramancer: 9 }
 const spellPower = (h) =>
-  (SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power
+  ((SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power) * (h.statMul || 1)
 // 캐릭터 주력 스탯 — 스킬 계수가 곱해지는 값
 //  · 하이브리드(야수조련사·엔지니어)는 공격력·주문력의 평균 → 소환수가 두 스탯 모두에 비례한다.
 const powerStat = (h) =>
@@ -4476,10 +4481,12 @@ const BOT_REACT_MAX = 0.3
 // 봇 난이도(솔로 모드) — 봇 영웅이 주는 피해 배율(dmg)과 평타 반응 지연 배수(react).
 // createGame opts.botLevel로 지정하고, 지정 없으면(온라인 서버 포함) normal이다.
 //  easy: 뜸을 오래 들이고 덜 아프게 — 처음 하는 사람용 / hard: 칼반응 + 강타
+// arenaStat: 콜로세움 전용 봇 스탯 배율(체력·공격력·주문력) — 사람은 봇보다 잘 싸우므로
+//  난이도가 오를수록 봇 몸값을 올려 상쇄한다(솔로 난이도 표기: easy=쉬움, normal=악몽, hard=지옥).
 export const BOT_LEVELS = {
-  easy: { dmg: 0.65, react: 3 },
-  normal: { dmg: 1, react: 1 },
-  hard: { dmg: 1.15, react: 0.55 },
+  easy: { dmg: 0.65, react: 3, arenaStat: 1 },
+  normal: { dmg: 1, react: 1, arenaStat: 1.1 },
+  hard: { dmg: 1.15, react: 0.55, arenaStat: 1.2 },
 }
 
 // 봇 평타: 쿨이 끝나면 곧장 쏘지 않고 짧은 반응 지연을 굴린 뒤 친다.
@@ -4556,6 +4563,26 @@ const BOT_BUILD = {
   terramancer: ['leather', 'frost_staff', 'mirror_shield', 'giant_heart', 'heal_flask'],
 }
 
+// 콜로세움 봇 장보기 순서: 사람의 고승률 트리를 흉내 낸다 —
+//  1라운드는 공격템 몰빵(초반 스노볼), 2라운드는 피해감소(def)템 1개부터 확보(이후 라운드 생존 직결),
+//  3라운드+는 방어템 우선. 빌드에 피해감소템이 없는 직업은 계열에 맞는 걸 하나 끼운다
+//  (주문 계열 → 수호의 망토, 그 외 → 강철 판금). 다른 모드는 빌드 순서 그대로.
+function botBuildOrder(state, h) {
+  const base = BOT_BUILD[h.cls] || []
+  if (state.mode !== 'arena') return base
+  const isDef = (id) => ITEMS_BY_ID[id]?.cat === 'defense'
+  const def = base.filter(isDef)
+  const off = base.filter((id) => !isDef(id))
+  if (!def.some((id) => ITEMS_BY_ID[id].stats?.def)) def.unshift(AP_CLASSES.has(h.cls) ? 'guardian_cloak' : 'plate')
+  const round = state.arenaRound || 1
+  if (round <= 1) return [...off, ...def]
+  if (round === 2) {
+    const dr = def.find((id) => ITEMS_BY_ID[id].stats?.def) // 피해감소 1순위, 나머진 공격 이어서
+    return [dr, ...off, ...def.filter((id) => id !== dr)]
+  }
+  return [...def, ...off]
+}
+
 // 봇 자동 구매: 우물 안 + 빈 칸 있으면 빌드 우선순위에서 안 가진 첫 구매 가능 아이템을 산다.
 //  조합으로 상위템에 흡수된 재료는 "이미 거친 것"으로 보고 다시 사지 않는다.
 function botShop(state, h) {
@@ -4564,7 +4591,7 @@ function botShop(state, h) {
   if (!inFountain(h) && !(isRaidMode(state.mode) && h.team === 'blue')) return
   const upgraded = new Set()
   for (const id of h.items) for (const c of ITEMS_BY_ID[id]?.from || []) upgraded.add(c)
-  for (const itemId of BOT_BUILD[h.cls] || []) {
+  for (const itemId of botBuildOrder(state, h)) {
     if (h.items.includes(itemId) || upgraded.has(itemId)) continue
     if (!ITEMS_BY_ID[itemId]) continue
     const quote = buildQuote(h.items, itemId) // 재료 보유 시 조합 할인가로 판단

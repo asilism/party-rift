@@ -2,7 +2,7 @@
 
 각 언어 500자 제한. 업로드하는 트랙의 "버전 세부정보 > 출시 노트"에 붙여넣기.
 
-## v1.1 콜로세움 개선판 (versionCode 44) — 2026-07-22
+## v1.1 콜로세움 개선판 (versionCode 45) — 2026-07-22
 
 v26~v33 누적분. 직전 업로드가 v25 이전이면 아래의 "대규모 콘텐츠 업데이트" 항목도 함께 참고.
 
@@ -16,6 +16,7 @@ v26~v33 누적분. 직전 업로드가 v25 이전이면 아래의 "대규모 콘
 • 노포그 규칙 적용 — 수풀 안만 빼고 전장 전체가 훤히 보입니다. 미니맵도 모래 테마+붕괴 표시로 개편
 • 수호석에 팀 포인트만큼 하트가 떠 있고 패배하면 펑펑 터집니다 — 우승하면 경기장 중앙 단상 세리머니!
 • 상점 되돌리기가 "마지막 한 건씩" 취소로 개선, 화면 제목 가독성 개선
+• 난이도별 봇 강화(악몽·지옥에서 봇이 더 단단하고 아픕니다) + 봇이 사람처럼 아이템 트리를 탑니다
 ```
 
 ### en-US
@@ -28,6 +29,7 @@ v26~v33 누적분. 직전 업로드가 v25 이전이면 아래의 "대규모 콘
 • No-fog rule — all visible except bushes. Desert minimap with collapse markers
 • Nexus hearts show team points and pop on defeat — win it all for a podium ceremony!
 • Shop undo now reverts one purchase at a time; sharper screen titles
+• Bots hit harder on Nightmare/Hell and build items like humans do
 ```
 
 ## v1.1 (versionCode 19~25) — 2026-07-19, 대규모 콘텐츠 업데이트
