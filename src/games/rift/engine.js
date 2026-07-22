@@ -732,6 +732,8 @@ function makeHeroState(p, cls, pos, map, rng) {
       xp: 0,
       gold: START_GOLD,
       items: [], // 산 아이템 id (최대 ITEM_SLOTS칸)
+      itemPlus: [], // items와 인덱스 정렬된 강화 레벨(무한 방어 전용, 런 한정)
+      itemFails: [], // 슬롯별 연속 강화 실패 수(pity — 실패마다 다음 성공률↑)
       itemCd: {}, // 액티브 아이템 남은 쿨다운 (itemId → 초)
       // 상점 세션(우물/사망 중) 동안의 무료 취소용 — 진입 시점 스냅샷 + 그동안의 순지출
       shopStack: null, // 이번 세션의 구매/판매 기록 스택 — 되돌리기가 한 스텝씩 역순 취소. null이면 세션 아님
@@ -866,8 +868,12 @@ export function createGame(players, opts = {}) {
       h.lvl = Math.min(MAX_LEVEL, carry.lvl || h.lvl)
       h.gold = carry.gold ?? h.gold
       // 아이템은 id 문자열 배열 — 얕은 복사면 충분(스프레드로 문자열을 부수면 증발한다)
-      if (Array.isArray(carry.items)) h.items = [...carry.items]
-      h.bonus = sumStats(h.items) // 이월 아이템의 능력치 반영
+      if (Array.isArray(carry.items)) {
+        h.items = [...carry.items]
+        h.itemPlus = h.items.map(() => 0) // 강화는 런 한정 — 이월 안 함(콜로세움 등)
+        h.itemFails = h.items.map(() => 0)
+      }
+      h.bonus = sumStats(h.items, h.itemPlus) // 이월 아이템의 능력치 반영
       h.maxHp = heroMaxHp(h)
     }
     if (mode === 'arena') h.gold += 1000 // 콜로세움: 라운드 개시 지원금(이월 골드 위에 지급)
@@ -1419,8 +1425,15 @@ function teamGold(state, team, amount) {
 // 아이템 효과를 다시 계산해 영웅 능력치에 반영 (구매/판매 시).
 // 최대 체력이 늘면 그만큼 즉시 회복(우물/부활 대기 중이라 자연스럽다).
 function applyItems(h) {
+  // 강화 배열을 items 길이에 맞춰 정규화(누락 push 방어 — 정렬은 각 변이 지점에서 명시적으로 맞춘다)
+  if (!h.itemPlus) h.itemPlus = []
+  if (!h.itemFails) h.itemFails = []
+  while (h.itemPlus.length < h.items.length) h.itemPlus.push(0)
+  while (h.itemFails.length < h.items.length) h.itemFails.push(0)
+  h.itemPlus.length = h.items.length
+  h.itemFails.length = h.items.length
   const before = h.maxHp
-  h.bonus = sumStats(h.items)
+  h.bonus = sumStats(h.items, h.itemPlus)
   h.maxHp = heroMaxHp(h)
   const gain = h.maxHp - before
   if (gain > 0 && h.respawnT <= 0) h.hp += gain // 살아 있으면 늘어난 만큼 즉시 회복
@@ -1442,9 +1455,16 @@ export function buyItem(state, id, itemId) {
   if (h.items.length - quote.consumes.length >= ITEM_SLOTS) return state
   if (h.gold < quote.price) return state
   const consumed = quote.consumes.map((i) => h.items[i]) // 조합에 흡수된 재료 — 되돌리면 복원
-  for (const idx of [...quote.consumes].sort((a, b) => b - a)) h.items.splice(idx, 1)
+  // 강화 배열도 items와 같은 인덱스로 splice/push(정렬 유지). 조합으로 흡수된 재료의 강화는 소멸(새 아이템은 +0)
+  for (const idx of [...quote.consumes].sort((a, b) => b - a)) {
+    h.items.splice(idx, 1)
+    h.itemPlus.splice(idx, 1)
+    h.itemFails.splice(idx, 1)
+  }
   h.gold -= quote.price
   h.items.push(itemId)
+  h.itemPlus.push(0)
+  h.itemFails.push(0)
   if (h.shopStack) h.shopStack.push({ t: 'buy', itemId, price: quote.price, consumed })
   h.shopChanged = !!h.shopStack?.length
   applyItems(h)
@@ -1493,6 +1513,8 @@ export function sellItem(state, id, slot) {
   const item = ITEMS_BY_ID[itemId]
   if (!item) return state
   h.items.splice(slot, 1)
+  h.itemPlus.splice(slot, 1)
+  h.itemFails.splice(slot, 1)
   const refund = Math.floor(item.cost * SELL_REFUND)
   h.gold += refund
   if (h.shopStack) h.shopStack.push({ t: 'sell', itemId, slot, refund })
@@ -1509,17 +1531,69 @@ export function resetShop(state, id) {
   const h = getHero(state, id)
   if (!h || !canShop(h) || !h.shopStack?.length) return state
   const op = h.shopStack.pop()
+  // 강화 배열도 함께 되감는다. 되돌리기는 빌드업 단계용이라 강화(엔드게임)와 겹치는 일이 드물어,
+  //  복원되는 아이템은 +0으로 되살린다(되돌리기가 강화를 보존하진 않음 — 드문 엣지, 길이 정합성만 보장).
   if (op.t === 'buy') {
     const idx = h.items.lastIndexOf(op.itemId)
-    if (idx >= 0) h.items.splice(idx, 1)
+    if (idx >= 0) {
+      h.items.splice(idx, 1)
+      h.itemPlus.splice(idx, 1)
+      h.itemFails.splice(idx, 1)
+    }
     h.items.push(...op.consumed) // 조합에 흡수됐던 재료 복원
+    for (const _ of op.consumed) { h.itemPlus.push(0); h.itemFails.push(0) }
     h.gold += op.price
   } else {
-    h.items.splice(Math.min(op.slot, h.items.length), 0, op.itemId) // 팔았던 자리에 복원
+    const at = Math.min(op.slot, h.items.length)
+    h.items.splice(at, 0, op.itemId) // 팔았던 자리에 복원
+    h.itemPlus.splice(at, 0, 0)
+    h.itemFails.splice(at, 0, 0)
     h.gold -= op.refund
   }
   h.shopChanged = h.shopStack.length > 0
   applyItems(h)
+  return state
+}
+
+// ── 아이템 강화 (무한 방어 전용) ──
+//  인벤토리가 꽉 차 더 살 게 없어도, 남는 골드로 아이템을 강화해 계속 성장한다(30웨 이후 "벽" 해소).
+//  실패해도 아이템은 파괴하지 않는다(런 즉사 방지) — 골드만 소모하고 다음 성공률이 오른다(pity).
+export const ENHANCE_MAX = 10 // 하드캡(안전장치) — 실질 상한은 비용·확률 경제가 만든다
+const ENHANCE_COSTS = [300, 450, 600, 800, 1000, 1300, 1600] // cur(현재 강화)→cur+1 비용
+const ENHANCE_RATES = [0.95, 0.85, 0.75, 0.62, 0.50, 0.42, 0.35] // cur→cur+1 성공률(pity 전)
+export const enhanceCost = (cur) => (cur < ENHANCE_COSTS.length ? ENHANCE_COSTS[cur] : 1600 + 400 * (cur - 6))
+export const enhanceRate = (cur, fails = 0) => {
+  const base = cur < ENHANCE_RATES.length ? ENHANCE_RATES[cur] : Math.max(0.28, 0.35 - 0.03 * (cur - 6))
+  return Math.min(0.95, base + 0.05 * (fails || 0)) // 연속 실패마다 +5%p(성공 시 리셋)
+}
+
+// 아이템 강화 시도 — 우물/사망 중(방어전 봇은 원격), 골드 충분, 상한 미만일 때.
+export function enhanceItem(state, id, slot) {
+  if (state.status !== 'playing') return state
+  if (state.mode !== 'defense') return state // 무한 방어 전용
+  const h = getHero(state, id)
+  const remoteOk = isRaidMode(state.mode) && h?.isBot && h.team === 'blue' // 방어전 봇은 우물 밖에서도 보급
+  if (!h || (!canShop(h) && !remoteOk)) return state
+  if (slot < 0 || slot >= h.items.length) return state
+  const cur = h.itemPlus[slot] || 0
+  if (cur >= ENHANCE_MAX) return state
+  const cost = enhanceCost(cur)
+  if (h.gold < cost) return state
+  h.gold -= cost
+  const ok = state.rng() < enhanceRate(cur, h.itemFails[slot] || 0)
+  h.enhanceSeq = (h.enhanceSeq || 0) + 1 // 클라 연출용 — 시도마다 증가(상점이 감지해 반짝인다)
+  h.enhanceSlot = slot
+  h.enhanceOk = ok
+  const name = ITEMS_BY_ID[h.items[slot]]?.name
+  if (ok) {
+    h.itemPlus[slot] = cur + 1
+    h.itemFails[slot] = 0
+    applyItems(h)
+    if (!h.isBot) pushFeed(state, 'obj', `⚒️ ${name} 강화 성공! +${cur + 1}`)
+  } else {
+    h.itemFails[slot] = (h.itemFails[slot] || 0) + 1
+    if (!h.isBot) pushFeed(state, 'obj', `⚒️ ${name} 강화 실패… 골드만 소모(다음 성공률↑)`)
+  }
   return state
 }
 
@@ -4586,7 +4660,7 @@ function botBuildOrder(state, h) {
 // 봇 자동 구매: 우물 안 + 빈 칸 있으면 빌드 우선순위에서 안 가진 첫 구매 가능 아이템을 산다.
 //  조합으로 상위템에 흡수된 재료는 "이미 거친 것"으로 보고 다시 사지 않는다.
 function botShop(state, h) {
-  if (h.items.length >= ITEM_SLOTS) return
+  if (h.items.length >= ITEM_SLOTS) { botEnhance(state, h); return } // 꽉 찼으면 남는 골드로 강화(방어전)
   // 보스전 아군 봇은 어디서든 보급(buyItem도 허용) — 아니면 골드를 쥔 채 맨몸으로 싸운다
   if (!inFountain(h) && !(isRaidMode(state.mode) && h.team === 'blue')) return
   const upgraded = new Set()
@@ -4620,6 +4694,23 @@ function botShop(state, h) {
     if (!best || q.price > bestQ.price) { best = it; bestQ = q }
   }
   if (best) buyItem(state, h.id, best.id)
+}
+
+// 봇 자동 강화(방어전 전용): 인벤토리 꽉 + 여유 골드면 강화 낮은 딜템(공격/주문 우선)을 1회 강화 시도.
+//  사람과 같은 성공률·비용. 남는 골드(보스 처치 팀 골드)를 후반 성장으로 돌린다.
+function botEnhance(state, h) {
+  if (state.mode !== 'defense' || h.gold < 1200) return
+  let bestSlot = -1
+  let bestScore = Infinity
+  for (let i = 0; i < h.items.length; i++) {
+    const cur = h.itemPlus[i] || 0
+    if (cur >= ENHANCE_MAX) continue
+    const cat = ITEMS_BY_ID[h.items[i]]?.cat
+    const pref = cat === 'attack' || cat === 'magic' ? 0 : 1 // 딜템 우선
+    const score = cur * 2 + pref // 낮은 강화·딜템 우선
+    if (score < bestScore) { bestScore = score; bestSlot = i }
+  }
+  if (bestSlot >= 0 && h.gold >= enhanceCost(h.itemPlus[bestSlot] || 0)) enhanceItem(state, h.id, bestSlot)
 }
 
 // ── 봇 교전 판단용 점수 헬퍼: "잡을 수 있나 + 살아 돌아올 수 있나"를 수치로 가늠한다 ──
@@ -6939,8 +7030,12 @@ export function makeView(state) {
       xpNeed: h.lvl >= MAX_LEVEL ? 0 : xpNeed(h.lvl),
       gold: Math.floor(h.gold),
       items: h.items.slice(),
+      itemPlus: h.itemPlus ? h.itemPlus.slice() : [], // 슬롯별 강화 레벨(복사 — 원본 참조 금지: 델타 코덱 앨리어싱)
       itemCds: h.items.map((id) => r2d(h.itemCd[id] || 0)), // 슬롯별 액티브 남은 쿨(초)
       shopUndo: !!h.shopChanged, // 이번 상점 세션에 무료 취소할 변경이 있나
+      enhanceSeq: h.enhanceSeq || 0, // 강화 시도 카운터(상점이 감지해 성공/실패 반짝)
+      enhanceSlot: h.enhanceSlot ?? -1,
+      enhanceOk: !!h.enhanceOk,
       power: Math.round(powerStat(h)), // 스킬 계수가 곱해지는 주력 스탯(공격력/주문력) — 툴팁 계산용
       dmgMult: r2d(dmgMult(h)), // 버프 피해 배율(용/이무기) — 툴팁 계산용
 

@@ -417,6 +417,17 @@ export const sound = {
     beep(880, 0.08, 'sine', 0.06)
     setTimeout(() => beep(1175, 0.12, 'sine', 0.06), 90)
   },
+  // 아이템 강화 — 성공: 반짝 상승 종소리 / 실패: 짧게 툭 떨어진다
+  enhance(ok) {
+    if (ok) {
+      beep(660, 0.08, 'sine', 0.06)
+      setTimeout(() => beep(990, 0.1, 'sine', 0.06), 80)
+      setTimeout(() => beep(1320, 0.16, 'triangle', 0.06), 180)
+    } else {
+      beep(320, 0.1, 'sawtooth', 0.05)
+      setTimeout(() => beep(190, 0.16, 'sawtooth', 0.05), 110)
+    }
+  },
   // 레이스 카운트다운: 도(C5)... 출발은 한 옥타브 위 도(C6)!
   count() {
     beep(523, 0.13, 'square', 0.07)

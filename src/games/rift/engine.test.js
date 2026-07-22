@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   createGame, setInput, castAttack, castSkill, castSkill2, castUlt, castRecall, step, makeView, makeBot,
   towerVulnerable, nexusVulnerable, isHeroVisible, isUnitVisible, buyItem, sellItem, resetShop, canShop, useItem,
+  enhanceItem, enhanceCost, enhanceRate, ENHANCE_MAX,
   STEP, COUNTDOWN_TIME, ULT_LEVEL, SKILL2_LEVEL, TEAM_SIZE, MAX_LEVEL, RECALL_TIME, CLASS_IDS, CLASSES,
   ITEM_SLOTS, BOT_STUCK_T, HP_SCALE,
 } from './engine.js'
@@ -2146,6 +2147,104 @@ test('상점: 되팔면 칸이 비고 골드를 일부 돌려받는다', () => {
   assert.equal(h.items.length, 0)
   assert.equal(h.bonus.atk, 0)
   assert.ok(h.gold > afterBuy && h.gold < 1000) // 일부 환급
+})
+
+// ── 아이템 강화 (무한 방어 전용) ──
+function defenseHero() {
+  const g = createGame(humans(), { mode: 'defense', rng: () => 0.5 })
+  startPlaying(g)
+  const h = g.heroes.find((x) => x.team === 'blue')
+  toFountain(g, h)
+  if (!canShop(h)) h.respawnT = 5 // 상점 접근 확실히 (fountain 지오메트리 무관)
+  return { g, h }
+}
+
+test('강화: 성공 시 스탯↑·골드 소모·강화레벨↑, 실패 시 아이템 유지·골드만 소모·pity↑', () => {
+  const { g, h } = defenseHero()
+  g.rng = () => 0 // 항상 성공
+  h.gold = 5000
+  buyItem(g, h.id, 'executioner') // atk 55
+  const atk0 = h.bonus.atk
+  const gold0 = h.gold
+  enhanceItem(g, h.id, 0)
+  assert.equal(h.itemPlus[0], 1, '강화 +1')
+  assert.equal(h.gold, gold0 - enhanceCost(0), '비용만큼 골드 소모')
+  assert.ok(h.bonus.atk > atk0, '공격력 증가')
+  assert.equal(h.bonus.atk, Math.round(55 * 1.07 * 1.5), '강화 배율(×1.07) 정확')
+
+  g.rng = () => 0.999 // 항상 실패
+  const plus1 = h.itemPlus[0]
+  const goldA = h.gold
+  enhanceItem(g, h.id, 0)
+  assert.equal(h.itemPlus[0], plus1, '실패 — 강화 레벨 그대로')
+  assert.equal(h.items.length, 1, '실패 — 아이템 파괴 안 됨')
+  assert.equal(h.gold, goldA - enhanceCost(plus1), '실패 — 골드만 소모')
+  assert.equal(h.itemFails[0], 1, 'pity — 실패 카운트 증가')
+})
+
+test('강화: 성공률·비용 곡선 단조 + pity가 성공률을 올린다', () => {
+  assert.ok(enhanceRate(0) > enhanceRate(3) && enhanceRate(3) > enhanceRate(6), '강화가 오를수록 성공률↓')
+  assert.ok(enhanceCost(0) < enhanceCost(3) && enhanceCost(3) < enhanceCost(6), '강화가 오를수록 비용↑')
+  assert.ok(enhanceRate(3, 2) > enhanceRate(3, 0), 'pity: 연속 실패가 성공률↑')
+  assert.ok(enhanceRate(3, 99) <= 0.95, '성공률 상한 95%')
+})
+
+test('강화: 배열 동기화 — 강화한 아이템을 팔면 강화값도 함께 제거된다', () => {
+  const { g, h } = defenseHero()
+  g.rng = () => 0
+  h.gold = 9999
+  buyItem(g, h.id, 'longsword') // slot0
+  buyItem(g, h.id, 'orb') // slot1
+  enhanceItem(g, h.id, 1) // orb +1
+  assert.deepEqual(h.itemPlus, [0, 1])
+  sellItem(g, h.id, 0) // longsword 판매 → slot0 제거
+  assert.equal(h.items[0], 'orb', 'orb가 남는다')
+  assert.deepEqual(h.itemPlus, [1], '강화값도 슬롯과 함께 이동')
+  assert.equal(h.itemPlus.length, h.items.length, '길이 정합')
+})
+
+test('강화: 배열 동기화 — 조합 구매가 재료 슬롯과 강화값을 함께 소모한다', () => {
+  const { g, h } = defenseHero()
+  g.rng = () => 0
+  h.gold = 9999
+  buyItem(g, h.id, 'longsword') // slot0 (executioner 재료)
+  enhanceItem(g, h.id, 0) // longsword +1
+  buyItem(g, h.id, 'executioner') // longsword 소모 조합 → 새 아이템은 +0
+  assert.equal(h.items.length, 1)
+  assert.equal(h.items[0], 'executioner')
+  assert.deepEqual(h.itemPlus, [0], '조합된 새 아이템은 +0')
+  assert.equal(h.itemPlus.length, h.items.length)
+})
+
+test('강화: 무한 방어 전용 — 다른 모드/골드부족에서 무시', () => {
+  const g3 = createGame(humans(), { rng: () => 0 }) // 3v3
+  startPlaying(g3)
+  const h3 = g3.heroes.find((x) => x.team === 'blue')
+  toFountain(g3, h3)
+  if (!canShop(h3)) h3.respawnT = 5
+  h3.gold = 5000
+  buyItem(g3, h3.id, 'longsword')
+  enhanceItem(g3, h3.id, 0)
+  assert.equal(h3.itemPlus[0], 0, '3v3에서는 강화 안 됨')
+
+  const { g, h } = defenseHero()
+  g.rng = () => 0
+  h.gold = 5000
+  buyItem(g, h.id, 'longsword')
+  h.gold = enhanceCost(0) - 1 // 1골드 모자라게
+  const before = h.gold
+  enhanceItem(g, h.id, 0)
+  assert.equal(h.itemPlus[0], 0, '골드 부족 — 강화 안 됨')
+  assert.equal(h.gold, before, '골드 부족 — 소모도 없음')
+})
+
+test('강화: 상한(ENHANCE_MAX)에서 더 오르지 않는다', () => {
+  const { g, h } = defenseHero()
+  g.rng = () => 0
+  h.gold = 1e9
+  buyItem(g, h.id, 'longsword')
+  for (let i = 0; i < ENHANCE_MAX + 5; i++) enhanceItem(g, h.id, 0)
+  assert.equal(h.itemPlus[0], ENHANCE_MAX, '상한에서 정지')
 })
 
 test('아이템 효과: 공격력/방어 아이템이 실제 전투 수치에 반영된다', () => {

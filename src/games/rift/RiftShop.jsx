@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CATEGORIES, ITEMS, getItem, sumStats, STAT_LABEL, ITEM_SLOTS, SELL_REFUND, buildQuote } from './items.js'
-import { CLASSES } from './engine.js'
+import { CLASSES, ENHANCE_MAX, enhanceCost, enhanceRate } from './engine.js'
 import { getZodiac } from '../../shared/zodiac.js'
+import { sound } from '../../shared/sound.js'
 import { t } from '../../shared/i18n.js'
 
 // 아이템 능력치를 한 줄 칩들로 (예: "공격력 +45"). 실제 적용되는(배율 포함) 값으로 보여 준다.
@@ -18,15 +19,32 @@ function StatTags({ stats }) {
 }
 
 // 수호석 우물 상점 (오버레이). 우물 안에 있을 때만 열 수 있고,
-//  - 골드로 아이템을 사면 인벤토리(3칸)에 들어가 능력치가 바로 오른다.
+//  - 골드로 아이템을 사면 인벤토리(5칸)에 들어가 능력치가 바로 오른다.
 //  - 칸이 꽉 차면 되팔아 자리를 비운다.
-export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
+//  - 무한 방어에서는 꽉 찬 뒤에도 골드로 아이템을 "강화"해 계속 성장한다(실패 시 파괴 없음).
+export default function RiftShop({ me, mode, onBuy, onSell, onResetShop, onEnhance, onClose }) {
   const [cat, setCat] = useState('attack')
+  const [flash, setFlash] = useState(null) // { slot, ok } — 강화 결과 반짝
+  const seqRef = useRef(me?.enhanceSeq || 0)
+  // 강화 결과 감지: enhanceSeq가 바뀌면 해당 슬롯을 성공/실패로 반짝이고 소리를 낸다
+  useEffect(() => {
+    if (!me) return undefined
+    if (me.enhanceSeq !== seqRef.current) {
+      seqRef.current = me.enhanceSeq
+      setFlash({ slot: me.enhanceSlot, ok: me.enhanceOk })
+      sound.enhance(me.enhanceOk)
+      const tm = setTimeout(() => setFlash(null), 650)
+      return () => clearTimeout(tm)
+    }
+    return undefined
+  }, [me])
   if (!me) return null
   const cls = CLASSES[me.cls]
   const items = me.items || []
+  const plusArr = me.itemPlus || []
   const full = items.length >= ITEM_SLOTS
-  const bonus = sumStats(items)
+  const canEnhance = mode === 'defense' // 강화는 무한 방어 전용
+  const bonus = sumStats(items, plusArr) // 강화 반영 합산
   const shown = ITEMS.filter((it) => it.cat === cat)
   const owned = new Set(items)
 
@@ -58,18 +76,43 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
           {Array.from({ length: ITEM_SLOTS }).map((_, i) => {
             const it = getItem(items[i])
             const sellPrice = it ? Math.floor(it.cost * SELL_REFUND) : 0
+            const plus = plusArr[i] || 0
+            const maxed = plus >= ENHANCE_MAX
+            const cost = enhanceCost(plus)
+            const rate = Math.round(enhanceRate(plus) * 100)
+            const afford = me.gold >= cost
+            const flashCls = flash && flash.slot === i ? (flash.ok ? ' rift-shop__slot--ok' : ' rift-shop__slot--fail') : ''
             return (
-              <div key={i} className={`rift-shop__slot ${it ? 'rift-shop__slot--filled' : ''}`}>
+              <div key={i} className={`rift-shop__slot ${it ? 'rift-shop__slot--filled' : ''}${flashCls}`}>
                 {it ? (
-                  <button
-                    className="rift-shop__sell"
-                    onClick={() => onSell(i)}
-                    title={`${t(it.name)} ${t('되팔기')} — 💰${sellPrice} ${t('돌려받음')}`}
-                  >
-                    <span className="rift-shop__slot-icon">{it.icon}</span>
-                    <small>{t(it.name)}</small>
-                    <span className="rift-shop__sell-tag">↩ 💰{sellPrice}</span>
-                  </button>
+                  <>
+                    <button
+                      className="rift-shop__sell"
+                      onClick={() => onSell(i)}
+                      title={`${t(it.name)} ${t('되팔기')} — 💰${sellPrice} ${t('돌려받음')}`}
+                    >
+                      <span className="rift-shop__slot-icon">
+                        {it.icon}
+                        {plus > 0 && <b className="rift-shop__plus">+{plus}</b>}
+                      </span>
+                      <small>{t(it.name)}</small>
+                      <span className="rift-shop__sell-tag">↩ 💰{sellPrice}</span>
+                    </button>
+                    {canEnhance && onEnhance && (
+                      <button
+                        className="rift-shop__enhance"
+                        onClick={() => onEnhance(i)}
+                        disabled={maxed || !afford}
+                        title={maxed
+                          ? t('최대 강화입니다')
+                          : t('강화 도전 — 실패해도 아이템은 그대로(골드만 소모). 무제한 스탯(공격력·주문력·체력)에 특히 효과적이에요.')}
+                      >
+                        {maxed
+                          ? <>⚒️ MAX</>
+                          : <><span className="rift-shop__enh-cost">⚒️💰{cost}</span><b className="rift-shop__enh-rate">{rate}%</b></>}
+                      </button>
+                    )}
+                  </>
                 ) : (
                   <span className="rift-shop__slot-empty">＋</span>
                 )}
@@ -145,8 +188,10 @@ export default function RiftShop({ me, onBuy, onSell, onResetShop, onClose }) {
           })}
         </div>
         <p className="rift-shop__foot">
-          {full ? t('🎒 인벤토리가 꽉 찼어요 — 되팔아 자리를 비우세요.')
-            : t('병사·정글몹·타워·적 영웅을 처치해 골드를 모으세요!')}
+          {canEnhance && full
+            ? t('⚒️ 인벤토리가 꽉 찼어요 — 아이템을 강화해 계속 강해지세요! (실패해도 아이템은 그대로)')
+            : full ? t('🎒 인벤토리가 꽉 찼어요 — 되팔아 자리를 비우세요.')
+              : t('병사·정글몹·타워·적 영웅을 처치해 골드를 모으세요!')}
           <span className="rift-shop__foot-note">{t(' · ↺ 되돌리기로 방금 구매부터 한 건씩 무료 취소(상점을 벗어나기 전까지)')}</span>
         </p>
       </div>

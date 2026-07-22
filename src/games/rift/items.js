@@ -53,6 +53,10 @@ const CAPS = { def: 0.6, atkSpeed: 0.5, cdr: 0.45 }
 // 아이템 효과 배율 — 장비 효과가 확실히 체감되게 표기값보다 강하게 적용.
 export const EFFECT_MULT = 1.5
 
+// 아이템 강화(무한 방어 전용) — 강화 레벨당 그 아이템의 능력치가 이만큼 곱으로 오른다.
+//  +N이면 스탯 ×(1 + N×ENHANCE_PLUS_STAT). 상한(CAPS)은 강화 후에도 그대로 적용된다.
+export const ENHANCE_PLUS_STAT = 0.07
+
 export const ITEMS = [
   // ── 마법 (주문 위력 / 쿨다운) ──
   { id: 'orb', cat: 'magic', name: '마력의 구슬', icon: '🔮', cost: 300,
@@ -153,12 +157,15 @@ export function buildQuote(ownedIds, itemId) {
 }
 
 // 가진 아이템 id 목록 → 합산 보너스(능력치). 효과 배율 후 상한을 적용한다.
-export function sumStats(itemIds) {
+//  plusLevels: itemIds와 인덱스 정렬된 강화 레벨 배열(선택) — 그 아이템 기여분에 강화 배율을 곱한다.
+export function sumStats(itemIds, plusLevels) {
   const b = { atk: 0, power: 0, hp: 0, def: 0, speed: 0, atkSpeed: 0, cdr: 0, regen: 0, lifesteal: 0, range: 0 }
-  for (const id of itemIds || []) {
-    const it = ITEMS_BY_ID[id]
+  const ids = itemIds || []
+  for (let i = 0; i < ids.length; i++) {
+    const it = ITEMS_BY_ID[ids[i]]
     if (!it) continue
-    for (const k in it.stats) b[k] += it.stats[k]
+    const mult = 1 + (plusLevels?.[i] || 0) * ENHANCE_PLUS_STAT // 강화 반영(없으면 1)
+    for (const k in it.stats) b[k] += it.stats[k] * mult
   }
   // 정수형 능력치(공격력/체력 등)는 반올림해 깔끔하게
   const round = new Set(['atk', 'power', 'hp'])
