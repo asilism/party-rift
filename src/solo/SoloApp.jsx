@@ -156,6 +156,7 @@ export default function SoloApp() {
         mode: 'arena', roster, carry, botLevel: dOpt.botLevel, arenaLayout: cur.layout,
         arenaPts: { [mySide]: myTeam.pts, [oppSide]: opp.pts }, // 수호석 하트 = 현재 토너먼트 포인트(진영 키)
         arenaDeduct: cur.deduction, // 패배 시 터질 하트 개수
+        arenaRound: cur.round, // 봇 장보기 단계(1R 공격 → 2R 피해감소 확보 → 3R+ 방어 우선)
       },
       deviceId: 'solo',
       onFinish(view) {
