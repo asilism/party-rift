@@ -5759,31 +5759,36 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       u.range.visible = warn
     }
     // 평타 궤적 잔상 갱신 — 짧게 휩쓸고 사라진다(실시간 시계)
+    //  칼 휘두르는 모션(ATK_ANIM_T 0.35s, 실제 '베기'는 앞 절반 ≈0.175s)과 궤적이 따로 놀지 않게:
+    //  궤적의 '스윕 이동'은 수명의 앞부분(sweepFrac)에 몰아 칼날 속도에 맞추고, 빛만 나머지 구간에 잔상으로 사그라든다.
     if (atkTrails.length) {
       const nowT = performance.now() / 1000
       for (let i = atkTrails.length - 1; i >= 0; i--) {
         const a = atkTrails[i]
         const slow = typeof window !== 'undefined' && window.__trailSlow ? 5 : 1 // E2E 검증용 슬로모
-        const t = (nowT - a.t0) / ((a.kind === 'heavy' ? 0.34 : a.kind === 'stab' ? 0.18 : a.kind === 'muzzle' ? 0.16 : 0.25) * slow)
+        // 수명 단축(0.25→0.22 등) + 스윕은 앞 66~70%에 완료 → 칼날 각속도(≈12rad/s)에 근접
+        const t = (nowT - a.t0) / ((a.kind === 'heavy' ? 0.28 : a.kind === 'stab' ? 0.16 : a.kind === 'muzzle' ? 0.16 : 0.22) * slow)
         if (t >= 1) {
           scene.remove(a.wrap)
           a.mesh.material.dispose()
           atkTrails.splice(i, 1)
           continue
         }
+        // te = 스윕 진행도(앞부분에 몰림). t = 페이드 진행도(전체 수명). 이동은 te로, 투명도는 t로.
+        const te = Math.min(1, t / (a.kind === 'stab' ? 0.66 : 0.68))
         if (a.kind === 'muzzle') { // 발사 섬광 — 팍! 커졌다 사그라든다
           a.mesh.scale.setScalar((0.7 + t * 1.5) * a.s)
           a.mesh.material.opacity = 1 - t * t
         } else if (a.kind === 'stab') {
           a.wrap.rotation.y = -a.dir
           a.wrap.scale.setScalar(a.s)
-          a.mesh.position.x = 1.1 + t * 1.7 // 앞으로 쭉 뻗는 빛줄기
-          a.mesh.scale.set(0.7 + t * 0.9, 1 - t * 0.45, 1)
+          a.mesh.position.x = 1.1 + te * 1.7 // 앞으로 쭉 뻗는 빛줄기 — 찌르기 속도로
+          a.mesh.scale.set(0.7 + te * 0.9, 1 - te * 0.45, 1)
           a.mesh.material.opacity = 1 - t * t
         } else {
-          // 정면을 가로지르는 호 — flip에 따라 왼쪽↔오른쪽으로 휩쓴다
-          a.wrap.rotation.y = -a.dir - Math.PI * 0.38 + a.flip * (0.9 - t * 1.9)
-          a.wrap.scale.setScalar((0.85 + t * 0.3) * a.s)
+          // 정면을 가로지르는 호 — flip에 따라 왼쪽↔오른쪽으로 휩쓴다(칼 베기 속도에 맞춰 앞부분에 완료)
+          a.wrap.rotation.y = -a.dir - Math.PI * 0.38 + a.flip * (0.9 - te * 1.9)
+          a.wrap.scale.setScalar((0.85 + te * 0.3) * a.s)
           a.mesh.material.opacity = 1 - t * t // 초반은 쨍하게, 끝에서 훅 사라진다
         }
       }
