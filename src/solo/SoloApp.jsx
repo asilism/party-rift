@@ -16,7 +16,7 @@ import {
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
-import { buildSoloRoster } from './roster.js'
+import { buildSoloRoster, BOSS_NAMES } from './roster.js'
 import { missionRows, recordMissionProgress, claimMission, allClearState, claimAllClear, ALL_CLEAR_REWARD } from './missions.js'
 import { recordMatchForAchievements, achievementRows, evaluateAchievements } from './achievements.js'
 import { createTournament, nextRound, resolveRound, userPlacement, arenaLevelFor, ARENA_PLACE_COIN, ARENA_ROUND_GOLD, ARENA_LAYOUT_META } from './colosseum.js'
@@ -294,6 +294,9 @@ export default function SoloApp() {
             const time = view.timePlayed || 0
             bossRec = { ...recordBossClear(bossHero.cls, time, tier), time, tier }
             if (bossRec.isFirst) earn += 100 // 이 보스·이 티어 첫 토벌 보너스
+            // 보스 전리품(꾸미기) 지급 — 첫 토벌이 아니어도 미보유면 준다(과거 기록 유저 소급)
+            const drops = grantBossTrophies(bossHero.cls, tier)
+            if (drops.length) bossRec.drops = drops
           }
         }
         // 방어전 기록 — 도달 파도·최고 기록
@@ -396,6 +399,11 @@ export default function SoloApp() {
                   {BOSS_TIER_ICON[coinMsg.bossRec.tier] && `${BOSS_TIER_ICON[coinMsg.bossRec.tier]} ${t(BOSS_TIER_OPTS.find((o) => o.id === coinMsg.bossRec.tier)?.label || '')} `}
                   ⏱ {fmtClearTime(coinMsg.bossRec.time)}
                   {coinMsg.bossRec.isFirst ? ` 🏅 ${t('첫 토벌!')} +100` : coinMsg.bossRec.isBest ? ` 🏆 ${t('최단 기록!')}` : ''}
+                </span>
+              )}
+              {coinMsg.bossRec?.drops?.length > 0 && (
+                <span className="win-banner__bossrec win-banner__trophy">
+                  {' · '}🎁 {t('전리품 획득')}: {coinMsg.bossRec.drops.map((n) => t(n)).join(', ')}
                 </span>
               )}
               {coinMsg.defRec && (
@@ -1371,6 +1379,8 @@ const HATS = [
   { id: 'viking', name: '바이킹 투구', price: 900, fx: true },
   { id: 'sakura', name: '벚꽃 화관', price: 1000, fx: true },
   { id: 'crown', name: '왕관', price: 1500, fx: true },
+  // ── 보스 전리품(비매품): trophy = { boss, tier } — 해당 보스·난이도 토벌 시 지급, 코인 구매 불가 ──
+  { id: 'shadowmask', name: '그림자 가면', trophy: { boss: 'boss_shadow', tier: 'normal' }, fx: true },
 ]
 
 // 옷 코스튬 목록 — 모자와 같은 구조(scene.js COSTUME_BUILDERS와 id 일치)
@@ -1391,6 +1401,7 @@ const COSTUMES = [
   { id: 'wings', name: '천사 날개', price: 1200, fx: true },
   { id: 'devilwings', name: '악마 날개', price: 1200, fx: true },
   { id: 'starcape', name: '별의 망토', price: 1500, fx: true },
+  { id: 'abysscloak', name: '심연 망토', trophy: { boss: 'boss_shadow', tier: 'hard' }, fx: true },
 ]
 
 // 무기 스킨 목록 — 장착하면 직업 기본 무기를 대체한다(scene.js WEAPON_SKINS와 id 일치)
@@ -1411,6 +1422,7 @@ const WEAPONS = [
   { id: 'flamesword', name: '화염검', price: 1200, fx: true },
   { id: 'frostblade', name: '서리검', price: 1200, fx: true },
   { id: 'excalibur', name: '성검', price: 1500, fx: true },
+  { id: 'crescentscythe', name: '그믐의 낫', trophy: { boss: 'boss_shadow', tier: 'nightmare' }, fx: true },
 ]
 
 // 보스전 클리어 타임 표기 (m:ss)
@@ -1440,6 +1452,26 @@ const WARDROBE_TABS = {
   },
 }
 
+// ── 보스 전리품(비매품) — 코인 구매 불가, 해당 보스·난이도 토벌로만 지급 ──
+// 잠금 문구: "🏆 녹스 · 악몽 토벌" — 티어 표기는 승리 배너와 같은 BOSS_TIER_OPTS를 쓴다
+const trophyLockLabel = (trophy) =>
+  `${t(BOSS_NAMES[trophy.boss] || '')} · ${t(BOSS_TIER_OPTS.find((o) => o.id === trophy.tier)?.label || '')} ${t('토벌')}`
+
+// 토벌 승리 → 이 보스·이 티어에 걸린 전리품을 전부 지급(이미 보유분은 건너뜀).
+// 결과 배너에 띄울 새 획득 이름 목록을 돌려준다. 한 보스 3난이도를 다 깨면 세트 완성(세트 오라+PvE 소효과).
+function grantBossTrophies(bossCls, tier) {
+  const drops = []
+  for (const T of Object.values(WARDROBE_TABS)) {
+    for (const item of T.items) {
+      if (item.trophy?.boss !== bossCls || item.trophy.tier !== tier) continue
+      if (T.loadOwned().includes(item.id)) continue
+      T.addOwned(item.id)
+      drops.push(item.name)
+    }
+  }
+  return drops
+}
+
 function HatScreen({ profile, onBack }) {
   const [tab, setTab] = useState('hat')
   const [coins, setCoins] = useState(loadCoins)
@@ -1465,7 +1497,7 @@ function HatScreen({ profile, onBack }) {
   }
 
   function buyPreview() {
-    if (previewOwned || !previewDef || coins < previewDef.price) return
+    if (previewOwned || !previewDef || previewDef.trophy || coins < previewDef.price) return // 전리품은 비매품
     sound.go()
     addCoins(-previewDef.price)
     T.addOwned(preview[tab])
@@ -1484,13 +1516,15 @@ function HatScreen({ profile, onBack }) {
           <HatPreview cls={previewCls} zodiacId={profile} hat={preview.hat} costume={preview.costume} weapon={preview.weapon} />
           <span className="char-screen__coins">🪙 {coins}</span>
           {!previewOwned && previewDef && (
-            coins >= previewDef.price
-              ? (
-                <button className="toy-btn toy-btn--yellow hats-buy" onClick={() => { sound.step(); setBuyAsk(previewDef) }}>
-                  🪙 {previewDef.price} {t('구매·장착')}
-                </button>
-              )
-              : <span className="hats-buy hats-buy--poor">🪙 {previewDef.price} — {t('코인이 부족해요')}</span>
+            previewDef.trophy
+              ? <span className="hats-buy hats-buy--trophy">🏆 {trophyLockLabel(previewDef.trophy)} {t('시 획득해요')}</span>
+              : coins >= previewDef.price
+                ? (
+                  <button className="toy-btn toy-btn--yellow hats-buy" onClick={() => { sound.step(); setBuyAsk(previewDef) }}>
+                    🪙 {previewDef.price} {t('구매·장착')}
+                  </button>
+                )
+                : <span className="hats-buy hats-buy--poor">🪙 {previewDef.price} — {t('코인이 부족해요')}</span>
           )}
         </aside>
         <div className="toy-card hats-grid-card">
@@ -1510,15 +1544,19 @@ function HatScreen({ profile, onBack }) {
               const isOwned = item.id === null || owned[tab].includes(item.id)
               const isOn = (equipped[tab] || null) === item.id
               const isPreview = (preview[tab] || null) === item.id
+              const isTrophy = !!item.trophy // 보스 전리품 — 비매품: 해금 전 자물쇠, 해금 후 금테+리본
+              const tGot = isTrophy && (isOwned || HAT_DEV) // 개발자 모드에선 전리품도 해금 취급
               return (
                 <button
                   key={item.id || 'none'}
-                  className={`hat-card ${isOn ? 'is-on' : ''} ${!isOn && isPreview ? 'is-preview' : ''}`}
+                  className={`hat-card ${isOn ? 'is-on' : ''} ${!isOn && isPreview ? 'is-preview' : ''} ${isTrophy ? (tGot ? 'hat-card--trophy' : 'hat-card--tlocked') : ''}`}
                   onClick={() => pick(item)}
                 >
-                  <span className="hat-card__name">{t(item.name)}{item.fx ? ' ✨' : ''}</span>
+                  <span className="hat-card__name">{isTrophy && !tGot ? '🔒 ' : ''}{t(item.name)}{item.fx ? ' ✨' : ''}</span>
                   <span className="hat-card__tag">
-                    {isOn ? t('장착 중') : isOwned ? t('보유') : `🪙 ${item.price}`}
+                    {isOn ? t('장착 중')
+                      : isTrophy ? (tGot ? `🏆 ${t('전리품')}` : `🏆 ${trophyLockLabel(item.trophy)}`)
+                        : isOwned ? t('보유') : `🪙 ${item.price}`}
                   </span>
                 </button>
               )

@@ -1,7 +1,7 @@
 import { t } from '../shared/i18n.js'
-import { CLASS_IDS, BOSS_IDS, CLASSES, TEAM_SIZE, TEAM_SIZES } from '../games/rift/engine.js'
+import { CLASS_IDS, BOSS_IDS, CLASSES, TEAM_SIZE, TEAM_SIZES, trophySetOf } from '../games/rift/engine.js'
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
-import { loadEquippedTitle } from '../shared/storage.js'
+import { loadEquippedTitle, loadEquippedHat, loadEquippedCostume, loadEquippedWeapon } from '../shared/storage.js'
 
 const shuffle = (arr) => {
   const a = [...arr]
@@ -15,8 +15,8 @@ const shuffle = (arr) => {
 // 온라인 드래프트가 만드는 것과 같은 완성 로스터 — 봇은 매판 랜덤 조디악·직업.
 // 온라인과 같은 규칙으로 "매치 전체에서 같은 직업은 한 명뿐" — 내가 고른 직업을
 // 적팀 봇이 들고나오는 거울 매치가 생기지 않는다.
-// 보스전 보스 이름 — 타입별 고유 네임드
-const BOSS_NAMES = { boss_colossus: '카르곤', boss_archmage: '아르케인', boss_shadow: '녹스', boss_thorn: '브램블' }
+// 보스전 보스 이름 — 타입별 고유 네임드 (꾸미기 전리품 잠금 문구도 이 이름을 쓴다)
+export const BOSS_NAMES = { boss_colossus: '카르곤', boss_archmage: '아르케인', boss_shadow: '녹스', boss_thorn: '브램블' }
 
 export function buildSoloRoster({ zodiacId, cls, mode }) {
   const size = TEAM_SIZES[mode] || TEAM_SIZE
@@ -25,7 +25,12 @@ export function buildSoloRoster({ zodiacId, cls, mode }) {
   const takenCls = new Set([cls]) // 매치 전체 공용 — 팀별이 아니다
   const roster = [
     // title: 장착 칭호 — 여기서 현지화해 두면 씬(이름표)은 그대로 그리기만 한다
-    { id: 'solo', name: t(me?.name) || t('나'), zodiacId, color: me?.color, team: 'blue', cls, deviceId: 'solo', title: t(loadEquippedTitle()) || null },
+    // trophySet: 장착 꾸미기 3피스가 한 보스의 전리품 세트면 그 보스 id — PvE 소효과(엔진이 모드 게이트)
+    {
+      id: 'solo', name: t(me?.name) || t('나'), zodiacId, color: me?.color, team: 'blue', cls, deviceId: 'solo',
+      title: t(loadEquippedTitle()) || null,
+      trophySet: trophySetOf(loadEquippedHat(), loadEquippedCostume(), loadEquippedWeapon()),
+    },
   ]
   if (mode === 'boss') {
     // 보스전: 아군 봇 4 + 무작위 타입의 보스 1 (zodiacId=클래스 id → 얼굴/피드 아이콘이 보스 아이콘)
