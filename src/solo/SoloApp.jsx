@@ -1371,7 +1371,10 @@ const HATS = [
   { id: 'sakura', name: '벚꽃 화관', price: 1000, fx: true },
   { id: 'crown', name: '왕관', price: 1500, fx: true },
   // ── 보스 전리품(비매품): trophy = { boss, tier } — 해당 보스·난이도 토벌 시 지급, 코인 구매 불가 ──
+  { id: 'lavahelm', name: '용암 뿔투구', trophy: { boss: 'boss_colossus', tier: 'normal' }, fx: true },
+  { id: 'nebulacrown', name: '성운의 관', trophy: { boss: 'boss_archmage', tier: 'normal' }, fx: true },
   { id: 'shadowmask', name: '그림자 가면', trophy: { boss: 'boss_shadow', tier: 'normal' }, fx: true },
+  { id: 'thorncrown', name: '가시 왕관', trophy: { boss: 'boss_thorn', tier: 'normal' }, fx: true },
 ]
 
 // 옷 코스튬 목록 — 모자와 같은 구조(scene.js COSTUME_BUILDERS와 id 일치)
@@ -1392,7 +1395,10 @@ const COSTUMES = [
   { id: 'wings', name: '천사 날개', price: 1200, fx: true },
   { id: 'devilwings', name: '악마 날개', price: 1200, fx: true },
   { id: 'starcape', name: '별의 망토', price: 1500, fx: true },
+  { id: 'magmaplate', name: '마그마 갑주', trophy: { boss: 'boss_colossus', tier: 'hard' }, fx: true },
+  { id: 'galaxyrobe', name: '은하 로브', trophy: { boss: 'boss_archmage', tier: 'hard' }, fx: true },
   { id: 'abysscloak', name: '심연 망토', trophy: { boss: 'boss_shadow', tier: 'hard' }, fx: true },
+  { id: 'vinemail', name: '덩굴 갑옷', trophy: { boss: 'boss_thorn', tier: 'hard' }, fx: true },
 ]
 
 // 무기 스킨 목록 — 장착하면 직업 기본 무기를 대체한다(scene.js WEAPON_SKINS와 id 일치)
@@ -1413,7 +1419,10 @@ const WEAPONS = [
   { id: 'flamesword', name: '화염검', price: 1200, fx: true },
   { id: 'frostblade', name: '서리검', price: 1200, fx: true },
   { id: 'excalibur', name: '성검', price: 1500, fx: true },
+  { id: 'quakemaul', name: '대지파쇄 망치', trophy: { boss: 'boss_colossus', tier: 'nightmare' }, fx: true },
+  { id: 'cometstaff', name: '운석 지팡이', trophy: { boss: 'boss_archmage', tier: 'nightmare' }, fx: true },
   { id: 'crescentscythe', name: '그믐의 낫', trophy: { boss: 'boss_shadow', tier: 'nightmare' }, fx: true },
+  { id: 'bramblesword', name: '가시 대검', trophy: { boss: 'boss_thorn', tier: 'nightmare' }, fx: true },
 ]
 
 // 보스전 클리어 타임 표기 (m:ss)

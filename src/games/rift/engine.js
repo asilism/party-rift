@@ -686,7 +686,7 @@ const innateAtk = (h) => {
   return AD_DAMAGE_CLASSES.has(h.cls) ? base * AD_CURVE : base
 }
 // 증강: atkMul(고정 배율) + augStacks(파도마다 누적되는 영구 배율)
-const heroAtk = (h) => (innateAtk(h) + itemBonus(h).atk) * (h.statMul || 1) * (1 + augOf(h).atkMul + (h.augStacks || 0))
+const heroAtk = (h) => (innateAtk(h) + itemBonus(h).atk) * (h.statMul || 1) * (1 + augOf(h).atkMul + (h.augStacks || 0)) * (1 + trophyFx(h).atkMul)
 // 보스는 국면이 오를수록 몸이 커지고, 커진 만큼 팔도 길어진다(사거리 +15%/국면)
 const heroRange = (h) =>
   (CLASSES[h.cls].range + itemBonus(h).range + (h.bladeT > 0 ? BLADE_RANGE : 0)) *
@@ -696,8 +696,12 @@ const heroSpeed = (h) => CLASSES[h.cls].speed + itemBonus(h).speed + augOf(h).sp
 // ── 보스 전리품 세트(꾸미기 3피스) — 풀세트 장착 시에만 소효과 ──
 //  개별 조각은 순수 꾸미기(스탯 없음). PvE(보스전·무한방어) 전용 — createGame이 그 외
 //  모드에선 trophySet을 아예 비워 콜로세움·대전에 새는 일이 없다(grind-to-win 방지).
+//  fx는 보스 테마를 따른다: 거인=공격력 / 대마도사=주문력 / 그림자=이속 / 가시=피해감소 — 전부 +3% 급 소효과
 export const TROPHY_SETS = {
+  boss_colossus: { hat: 'lavahelm', costume: 'magmaplate', weapon: 'quakemaul', fx: { atkMul: 0.03 } }, // 거인 세트: 공격력 +3%
+  boss_archmage: { hat: 'nebulacrown', costume: 'galaxyrobe', weapon: 'cometstaff', fx: { powerMul: 0.03 } }, // 대마도사 세트: 주문력 +3%
   boss_shadow: { hat: 'shadowmask', costume: 'abysscloak', weapon: 'crescentscythe', fx: { speed: 0.4 } }, // 그림자 세트: 이속 +3%
+  boss_thorn: { hat: 'thorncrown', costume: 'vinemail', weapon: 'bramblesword', fx: { def: 0.03 } }, // 가시 세트: 피해감소 +3%
 }
 // 장착 3피스가 한 보스의 전리품 세트면 그 보스 id — 로스터(클라)와 씬(오라)이 같이 쓴다
 export function trophySetOf(hat, costume, weapon) {
@@ -706,7 +710,9 @@ export function trophySetOf(hat, costume, weapon) {
   }
   return null
 }
-const TROPHY_ZERO = { speed: 0 }
+const TROPHY_ZERO = { speed: 0, atkMul: 0, powerMul: 0, def: 0 }
+// 모듈 초기화 때 미기재 키를 0으로 채워 둔다 — trophyFx가 핫패스(heroSpeed 등)라 매 호출 병합 금지
+for (const set of Object.values(TROPHY_SETS)) set.fx = { ...TROPHY_ZERO, ...set.fx }
 const trophyFx = (h) => (h.trophySet && TROPHY_SETS[h.trophySet]?.fx) || TROPHY_ZERO
 // 레벨업 필요 경험치 — 전반적으로 상향(레벨링을 느리게).
 //  Lv1→Lv2 = 250 ≈ 적 병사 1.5웨이브(병사 28xp × 9마리). 정글러는 늑대 3마리(84×3)면 2렙.
@@ -1156,7 +1162,7 @@ const HYBRID_CLASSES = new Set(['beastmaster', 'engineer'])
 const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46, windcaller: 42, chronomancer: 44, fearmonger: 42, terramancer: 40 }
 const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7, windcaller: 10, chronomancer: 10, fearmonger: 10, terramancer: 9 }
 const spellPower = (h) =>
-  ((SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power) * (h.statMul || 1) * (1 + augOf(h).powerMul)
+  ((SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power) * (h.statMul || 1) * (1 + augOf(h).powerMul) * (1 + trophyFx(h).powerMul)
 // 쿨다운 감소: 아이템 + 증강(가산), 실효 상한 0.6
 const cdrOf = (h) => Math.min(0.6, itemBonus(h).cdr + augOf(h).cdr)
 // 캐릭터 주력 스탯 — 스킬 계수가 곱해지는 값
@@ -2776,7 +2782,7 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   // 증강 방어: def(상시) + lowHpDR(체력 35% 이하) — 아이템 방어와 합산해 상한 0.85로 캡
   const va = augOf(victim)
   const augDef = va.def + (victim.hp < victim.maxHp * 0.35 ? va.lowHpDR : 0)
-  amount *= 1 - Math.min(0.85, itemDef + augDef)
+  amount *= 1 - Math.min(0.85, itemDef + augDef + trophyFx(victim).def) // 가시 세트(PvE 전용) 소량 가산
   if (victim.shieldT > 0) amount *= SHIELD_CUT // 방패막기!
   if (victim.whirlT > 0) amount *= 1 - WHIRL_DR // 전사 회전베기 중 방어 ↑(앞라인 탱킹)
   if (victim.wardT > 0) amount *= WARD_CUT // 수호기사 결속(아군 피해 감소)
@@ -3570,6 +3576,22 @@ function stepHero(state, h, dt) {
         if (dist(h, o) > 4.5) continue
         damageHero(state, o, h.thornBombDmg || 0, from)
       }
+    }
+  }
+  // 성좌 낙인(STACK): 시한이 다하면 낙인자 위치에 거대 운석 — 총피해를 원 안 인원수로 분할.
+  //  홀로 맞으면 즉사급, 모여서 나누면 견딜 만하다 — 가시 낙인(산개)과 정확히 반대 문법.
+  if (h.stackT > 0) {
+    h.stackT -= dt
+    if (h.stackT <= 0) {
+      h.stackT = 0
+      const from = state.heroes.find((b) => b.id === h.stackFrom) || null
+      pushFx(state, 'meteorhit', h.x, h.z, STACK_R + 2, 'red', 1.2)
+      const share = state.heroes.filter((o) => o.team === h.team && o.respawnT <= 0 && dist(h, o) <= STACK_R)
+      const each = (h.stackDmg || 0) / Math.max(1, share.length)
+      for (const o of share) damageHero(state, o, each, from)
+      pushFeed(state, 'obj', share.length >= 2
+        ? `🌠 ${share.length}명이 성좌 낙인을 나눠 맞았다!`
+        : '🌠 성좌 낙인을 홀로 받아냈다 — 다음엔 모여서 나눠 맞아라!')
     }
   }
   if (h.tauntT > 0 && (h.tauntT = Math.max(0, h.tauntT - dt)) === 0) h.tauntBy = null
@@ -5307,6 +5329,17 @@ const GAZE_TELE = 2.4 // 채널(예고) 시간 — 티어 tele 배율 적용(악
 const GAZE_CD = 17 // 기본 쿨 — 페이즈·티어 배율 적용(필사 국면엔 거의 두 배 잦다)
 const GAZE_FEAR = 2.6 // 사로잡히면 공포 질주 — 암살자 보스 옆에서 통제를 잃는 것 자체가 벌
 
+// ── 성좌 낙인(대마도사 시그니처 STACK): 총피해를 원 안 인원수로 "나눠 맞는" 기믹 ──
+//  단순 나눗셈(반비례): 혼자 = 대상 체력 200%(즉사급) / 다섯이 모이면 각자 40%(아프지만 산다).
+//  1→2명에서 절반으로 뚝 떨어지는 감쇠 곡선이 "한 명이라도 빠지면 확 아파진다"는 긴장을 만든다.
+//  산개(빙성 낙하)와 정반대 판단 — 표시(🤝+파란 링)로 "모여!"를 못박는다. 보스전 전용.
+export const STACK_R = 6 // 나눠 맞기 판정 반경 — 씬(파란 링)과 공유
+const STACK_TELE = 2.6 // 낙인 → 폭발까지(집결 이동 시간)
+const STACK_CD = 30 // 기본 쿨 — 페이즈·티어 배율 적용(필사 국면 ≈13초)
+const STACK_DMG_MUL = 1.45 // 총피해 = 낙인 대상 최대체력 × 이 배율: 혼자 145%(죽음)/5분할 29%
+//  ⚠️ 튜닝 기록: 2.0·쿨21 = 클리어율 0/16 → 1.6·쿨24 = 3/16 → 1.45·쿨30 = 밴드 복원.
+//  집결 이동으로 팀 DPS가 이미 세금을 내는 기믹이라, 몫 피해까지 무거우면 회복이 못 따라간다
+
 // 보스 예고 장판 생성 — stepZones('bosszone')가 경고→폭발→잔류를 처리한다.
 //  hue: 클라 표식 색조(lava 주황/frost 청/shadow 보라)
 function pushBossZone(state, h, opts) {
@@ -5369,7 +5402,7 @@ function bossThink(state, h, dt) {
   if (!h.defenseBoss && state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.004 * dt)
   }
-  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26 }
+  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18 } // gaze/stomp/stack = 보스전 전용 시그니처
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
   // ── 예고된 처형기 집행: 예고가 끝나는 순간 발동한다 (시전 후 취소 없음 — 읽었다면 이미 피했다) ──
   // 가시갑옷 도발 집행: 예고가 끝나는 순간 링(r9) 안의 적을 도발(강제 평타) + 반사창 개시
@@ -5800,6 +5833,27 @@ function bossColossus(state, h, foe) {
   const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd // 페이즈 가속 × 난이도 티어
   // 평타 사거리가 아군보다 길어진 대신, 자기 중심 스킬은 "품에 들어온 적"이 있어야 나간다
   const nearFoe = foe && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && dist(h, e) < 9)
+  // 발구르기(시그니처 · 보스전 전용): ① 주변에 용암 웅덩이가 먼저 고인다 ② 1.2초 뒤 발을 굴러
+  //  품 안의 적을 크게 밀쳐낸다. 넉백 자체는 안 아프다 — "어디로 밀려날지"가 문제다.
+  //  웅덩이를 등지고 서면 그대로 처박힌다: 회피 = 도망이 아니라 "설 자리 고르기".
+  //  무한방어의 메아리 보스는 쓰지 않는다(보스전 전용 기믹 — 모드 축 분리).
+  if (!h.defenseBoss && (h.bossCd.stomp ?? 1) <= 0 && nearFoe) {
+    h.bossCd.stomp = 26 * cdMul
+    for (let i = 0; i < p + 1; i++) { // 국면당 웅덩이 2~4개 — 안전한 방위가 점점 준다
+      const a = state.rng() * Math.PI * 2
+      const d = 9 + state.rng() * 5
+      pushBossZone(state, h, {
+        x: h.x + Math.cos(a) * d, z: h.z + Math.sin(a) * d, r: 4.6,
+        delay: 0.9, dmg: skillDmg(h, 55, 1.0), vfx: 'quake', hue: 'lava',
+        life: 3.2, dps: skillDmg(h, 15, 0.26), slow: 0.35, // 밟고 서면 아픈 정도 — 스치는 건 용서
+      })
+    }
+    pushBossZone(state, h, {
+      x: h.x, z: h.z, r: 9.5, delay: 1.2, dmg: skillDmg(h, 90, 1.7),
+      knock: 11, knockStun: 0.4, vfx: 'repulse', hue: 'lava',
+    })
+    pushFeed(state, 'obj', `🦶 ${h.name}이(가) 발을 구른다 — 등 뒤 용암을 확인하라, 크게 밀려난다!`)
+  }
   if (h.bossCd.a <= 0 && nearFoe) {
     h.bossCd.a = CLASSES[h.cls].skill.cd * cdMul
     pushFx(state, 'rocksplash', h.x, h.z, 4, h.team) // 땅을 파고드는 예열
@@ -5878,6 +5932,30 @@ function bossColossus(state, h, foe) {
 function bossArchmage(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd // 페이즈 가속 × 난이도 티어
+  // 성좌 낙인(STACK, 시그니처 · 보스전 전용): 보이는 적 하나에 거대 운석 조준 —
+  //  총피해(대상 최대체력 ×1.6)를 폭발 반경 안 인원수로 나눈다. "모여서 나눠 맞아라!"
+  //  무한방어의 메아리 보스는 쓰지 않는다(보스전 전용 기믹 — 모드 축 분리).
+  if (!h.defenseBoss && (h.bossCd.stack ?? 1) <= 0) {
+    const marks = state.heroes.filter((e) =>
+      e.team !== h.team && e.respawnT <= 0 && !e.isBoss && !(e.stackT > 0)
+      && isHeroVisible(state, e, h.team) && dist(h, e) < 26)
+    if (marks.length >= 2) { // 혼자뿐이면 나눌 사람이 없다 — 기믹이 성립할 때만
+      h.bossCd.stack = STACK_CD * cdMul
+      const e = marks[Math.floor(state.rng() * marks.length)]
+      const tele = STACK_TELE * bossTierOf(state).tele
+      e.stackT = tele
+      e.stackDmg = e.maxHp * STACK_DMG_MUL
+      e.stackFrom = h.id
+      // 낙인 진행 + 폭발 직후 2.4초는 다른 기술을 쉰다(아래 홀드) — 뭉친 팀이 흩어질 틈
+      h.stackRestUntil = state.time + tele + 2.4
+      pushFx(state, 'abszero', e.x, e.z, 4, h.team, 0.8)
+      pushFeed(state, 'obj', `🌠 ${e.name}에게 성좌 낙인! 모두 모여 피해를 나눠 맞아라!`)
+    }
+  }
+  // 낙인 진행~직후엔 다른 장판을 깔지 않는다 — "모여!"와 "흩어져!"(빙성 낙하)가 동시에 떨어지면
+  //  정답이 없고(시뮬 0/16 교훈), 폭발 직후엔 팀이 한 점에 뭉쳐 있어 광역 한 방이 전멸기가 된다.
+  //  기믹은 한 번에 하나, 큰 기술 뒤엔 한숨 — 이게 레이드 문법이다.
+  if (state.time < (h.stackRestUntil || 0)) return
   // 근접 견제 '염력 폭발'(2페이즈+): 몸에 붙은 적이 있으면 강력한 염력을 방출해
   //  자기 중심에서 바깥으로 크게 밀쳐낸다 — 근접이 달라붙어 순삭하던 걸 끊는다.
   //  예고 0.8초(모여드는 냉기 링)를 보고 미리 빠지면 안 밀리고 안 맞는다.
@@ -6218,6 +6296,8 @@ function stepBots(state, dt) {
     if (isRaidMode(state.mode) && h.team === 'blue' && botSpreadBomb(state, h, dt)) continue
     // 공포의 응시 채널 = 제자리 등돌리기 — 장판(즉사급)이 먼저, 시선 회피는 그다음
     if (state.mode === 'boss' && h.team === 'blue' && botGazeAvert(state, h)) continue
+    // 성좌 낙인(STACK) = 낙인 찍힌 아군에게 집결 — 나눠 맞으면 시시해진다
+    if (state.mode === 'boss' && h.team === 'blue' && botStackUp(state, h, dt)) continue
     // 도발당한 봇: 후퇴/임무보다 우선 — 도발한 탱커에게 끌려가 평타친다
     if (h.tauntT > 0) {
       const tk = state.heroes.find((o) => o.id === h.tauntBy && o.team !== h.team && o.respawnT <= 0)
@@ -6565,14 +6645,35 @@ function botGazeAvert(state, h) {
   return true
 }
 
+// 성좌 낙인(STACK) 집결: 낙인 찍힌 아군에게 달려가 원 안에 선다 — 달려가면서도 계속 때린다
+// (기믹 대응은 최소 시간 원칙: 이미 원 안이면 하던 일을 계속하고, 너무 멀면 무리하지 않는다).
+// 낙인자 본인은 제자리 — 아군이 오는 쪽이 이동 총량이 적다.
+function botStackUp(state, h, dt) {
+  let mark = null
+  for (const e of state.heroes) {
+    if (e.team === h.team && e.respawnT <= 0 && e.stackT > 0) { mark = e; break }
+  }
+  if (!mark || mark === h) return false
+  const d = dist(h, mark)
+  if (d > 34 || d <= STACK_R - 1.5) return false // 원 밖 먼 곳(포기) / 이미 안(그냥 싸운다)
+  steerToward(state, h, mark)
+  botAttack(state, h, dt)
+  return true
+}
+
 function botDodgeBossZone(state, h, dt) {
   let zone = null
   let soonest = Infinity
   for (const z of state.zones) {
-    if (z.kind !== 'bosszone' || z.exploded || z.t >= z.delay) continue
+    if (z.kind !== 'bosszone') continue
+    // ① 예고 중인 장판 위 → 터지기 전에 이탈 ② 잔류 도트 장판(용암·서리)을 밟고 서 있으면 걸어 나온다
+    //  (잔류를 모른 척하면 발구르기 웅덩이·서리밭에서 체력이 줄줄 샌다 — 시뮬 44%→25% 폭락 교훈)
+    const pending = !z.exploded && z.t < z.delay
+    const residual = z.exploded && z.dps > 0 && z.t < z.delay + z.life - 0.2
+    if (!pending && !residual) continue
     const d2v = (h.x - z.x) ** 2 + (h.z - z.z) ** 2
-    if (d2v > (z.r + 0.8) ** 2) continue
-    const left = z.delay - z.t
+    if (d2v > (pending ? (z.r + 0.8) ** 2 : z.r * z.r)) continue // 잔류는 "안에 있을 때만" — 근처는 무시
+    const left = pending ? z.delay - z.t : 0 // 잔류는 지금 당장이 급하다
     if (left < soonest) { soonest = left; zone = z }
   }
   if (!zone) return false
@@ -7249,6 +7350,7 @@ export function makeView(state) {
       title: h.title || null, // 장착 칭호 — 이름표 표시용
       thornBombT: r2d(h.thornBombT || 0), // 가시 낙인 카운트다운(머리 위 ❗ 표시)
       thornArmorT: r2d(h.thornArmorT || 0), // 가시갑옷 반사창(💢 표시)
+      stackT: r2d(h.stackT || 0), // 성좌 낙인(STACK) 카운트다운(🤝 + 파란 링 — "모여!")
       zodiacId: h.zodiacId,
       color: h.color,
       team: h.team,
