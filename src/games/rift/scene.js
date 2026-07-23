@@ -3264,6 +3264,11 @@ function setHeroDead(u, dead) {
     u.fear.visible = false
     u.recall.visible = false
     u.recallBeam.visible = false
+    // 상태 아이콘도 시체에 남지 않게 (특히 가시갑옷 💢가 허공에 떠 있던 버그)
+    if (u.thornArmor) u.thornArmor.visible = false
+    if (u.bombMark) u.bombMark.visible = false
+    if (u.threat) u.threat.visible = false
+    if (u.dormant) u.dormant.visible = false
   }
 }
 
@@ -5942,15 +5947,21 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             obj.scale.setScalar(1 - fp * 0.45)
             return
           }
-          obj.visible = true // 시체 파티클은 늘 보인다 (쓰러뜨렸음을 알림)
           obj.position.set(h.x, 0, h.z)
           if (!u.dead) {
             u.dead = true
             u.deathT = 0
+            u.deathPts.material.opacity = 0.92 // 새 죽음 — 불투명도 복원
           }
           u.deathT += dt
           updateHeroDeathParticles(u)
           setHeroDead(u, true)
+          // 시체는 잠깐 보여 주고(처치 알림) 페이드아웃 → 후반 시체 누적 렉 방지. 엔진이 곧 완전히 제거한다.
+          const CORPSE_HOLD = 1.3
+          const CORPSE_FADE = 1.1
+          const cf = u.deathT <= CORPSE_HOLD ? 0 : Math.min(1, (u.deathT - CORPSE_HOLD) / CORPSE_FADE)
+          u.deathPts.material.opacity = 0.92 * (1 - cf)
+          obj.visible = cf < 1 // 다 사라지면 감춘다(부활형은 부활 시 복원)
           return
         }
         if (u.dead) {

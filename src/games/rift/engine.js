@@ -2784,6 +2784,7 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   if (victim.hp > 0) return
   // 사망!
   victim.hp = 0
+  victim.deadSince = state.time // 부활 없는 적(그림자/보스)은 시체를 잠깐 뒤 시뮬에서 제거(누적 렉 방지)
   victim.deaths++
   victim.deathStreak++ // 킬/어시를 따면 0으로 리셋(아래 killer/assist 처리에서)
   // 죽기 직전까지 쌓은 연속 킬에 비례한 현상금(killStreak 2부터). 죽었으니 killStreak는 0으로.
@@ -2892,16 +2893,15 @@ function augOnKill(state, attacker, x, z, victimMaxHp, allowExplode = true) {
     const dmg = victimMaxHp * a.explode
     const r = 5.5
     const r2 = r * r
-    let hit = 0
     for (const mm of state.minions.slice()) { // 복사본 순회 — 폭발 중 minions 배열이 변한다
       if (mm.team === attacker.team) continue
-      if ((mm.x - x) ** 2 + (mm.z - z) ** 2 <= r2) { damageMinion(state, mm, dmg, attacker, false); hit++ } // 골드는 주되 재폭발 금지
+      if ((mm.x - x) ** 2 + (mm.z - z) ** 2 <= r2) damageMinion(state, mm, dmg, attacker, false) // 골드는 주되 재폭발 금지
     }
-    // 펑! — 강한 폭발 연출(불꽃 충격 + 파편 + 링). 규모는 잡은 대상 크기에 비례.
+    // 펑! — 단발 폭발(연쇄 아님). 불꽃 충격 + 파편. 규모는 잡은 대상 크기에 비례.
+    //  fx는 처치당 2개로 고정(대량 클리어 시 파티클 폭주 방지 — 후반 렉 완화).
     const scale = Math.min(2, 0.9 + victimMaxHp / 900)
     pushFx(state, 'meteorhit', x, z, 6 * scale, attacker.team, 0.85)
     pushFx(state, 'rocksplash', x, z, 4.5 * scale, attacker.team)
-    if (hit >= 3) pushFx(state, 'berserk', x, z, 5 * scale, attacker.team, 0.7) // 여럿 터지면 더 화려하게
   }
 }
 
@@ -3099,6 +3099,11 @@ export function step(state, dt) {
     state.tempWalls = state.tempWalls.filter((w) => (w.t += dt) < w.life)
   }
   state.fx = state.fx.filter((n) => (n.t += dt) < (n.life || 0.8))
+  // 부활 없는 적 시체 정리: 그림자 정예/무한방어 보스는 죽으면 영영 남아(respawnT 1e9) 후반에
+  //  수백 구가 쌓여 makeView 직렬화·렌더가 느려진다. 처치 연출(씬 페이드 ~2.4s) 뒤 시뮬에서 제거.
+  //  some()로 훑어 실제 제거 대상이 있을 때만 filter(할당) — 매 틱 배열 재생성 방지.
+  const cullable = (h) => (h.isBossAdd || h.defenseBoss) && h.hp <= 0 && h.deadSince != null && state.time - h.deadSince > CORPSE_CULL_T
+  if (state.heroes.some(cullable)) state.heroes = state.heroes.filter((h) => !cullable(h))
   // 보스전: 보스가 쓰러지면 그 즉시 파랑팀 승리 (부활 없음)
   if (state.mode === 'boss' && state.status === 'playing') {
     const boss = state.heroes.find((b) => b.isBoss)
@@ -3121,6 +3126,7 @@ export function step(state, dt) {
 //  5의 배수엔 그림자 정예가 합류(10웨이브마다 1명씩 증가), 10의 배수 뒤엔 10초 숨돌리기.
 //  승리는 없다 — 몇 번째 파도까지 버티는가가 기록이다.
 export const DEFENSE_FIRST_WAVE = 8 // 카운트다운 후 첫 파도까지(초)
+const CORPSE_CULL_T = 3.2 // 부활 없는 적 시체를 시뮬에서 제거하기까지(초) — 씬 페이드(~2.4s) 이후여야 자연스럽다
 // 무한 방어 보스(10배수 파도) — 체력 스케일·투입 규모 노브(프로토타입, 시뮬로 튜닝)
 const DEF_BOSS_HP_BASE = 900
 const DEF_BOSS_HP_PER_W = 85
