@@ -3350,8 +3350,17 @@ body {
   color: #ffd34d; text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6); white-space: nowrap;
 }
 /* 결과 배너 업적 달성 줄 — 여러 개면 줄바꿈으로 쌓인다 */
-.win-banner__ach { display: block; margin-top: 4px; font-size: 0.8em; }
-.win-banner__ach-item { display: block; color: #ffe9a8; }
+/* 축하 로테이션(전리품·업적) — 항목이 몇 개든 배너는 딱 한 줄만 차지한다.
+   key 교체로 리마운트 → 스왑마다 아래에서 떠오르는 짧은 페이드 인 */
+.win-banner__ticker {
+  display: block; margin-top: 4px; min-height: 1.35em; font-size: 0.85em; color: #ffe9a8;
+  animation: ticker-in 0.35s ease-out;
+}
+.win-banner__ticker-dots { opacity: 0.55; font-size: 0.78em; margin-left: 6px; }
+@keyframes ticker-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
 .win-banner__bonus {
   margin: 6px 0 0; font-weight: 900; font-size: clamp(15px, 3vh, 22px); color: #ffd34d;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
@@ -3596,7 +3605,8 @@ body {
 /* 모드 카드의 보스 토벌 전적 줄 */
 .mode-card__rec { margin-top: 4px; font-size: 11.5px; color: #ffd34d; opacity: 0.95; }
 .win-banner__bossrec { color: #cfe0ff; }
-.win-banner__trophy { color: #ffd9f0; } /* 전리품 획득 줄 — 코인·기록과 구분되는 톤 */
+/* ⚠️ 배너 안 새 요소에 win-banner__trophy 이름 금지 — 꼭대기 거대 이모지(88px)가 선점한
+   클래스라 재사용하면 텍스트가 화면을 뒤덮는다(v53 전리품 줄 사고) */
 
 /* 전적 화면 — 보스 토벌 섹션 */
 .records-card--boss { margin-top: 10px; }

@@ -401,26 +401,17 @@ export default function SoloApp() {
                   {coinMsg.bossRec.isFirst ? ` 🏅 ${t('첫 토벌!')} +100` : coinMsg.bossRec.isBest ? ` 🏆 ${t('최단 기록!')}` : ''}
                 </span>
               )}
-              {coinMsg.bossRec?.drops?.length > 0 && (
-                <span className="win-banner__bossrec win-banner__trophy">
-                  {' · '}🎁 {t('전리품 획득')}: {coinMsg.bossRec.drops.map((n) => t(n)).join(', ')}
-                </span>
-              )}
               {coinMsg.defRec && (
                 <span className="win-banner__bossrec">
                   {' · '}🌊 {coinMsg.defRec.wave}{t('번째 파도')}
                   {coinMsg.defRec.isBest && coinMsg.defRec.wave > 0 ? ` 🏆 ${t('최고 기록!')}` : ''}
                 </span>
               )}
-              {coinMsg.achNew?.length > 0 && (
-                <span className="win-banner__ach">
-                  {coinMsg.achNew.map((a) => (
-                    <span key={a.id} className="win-banner__ach-item">
-                      🏆 {t('업적 달성')}: {a.icon} <b>{t(a.name)}</b> +{a.reward}🪙
-                    </span>
-                  ))}
-                </span>
-              )}
+              {/* 축하(전리품·업적)는 쌓지 않고 한 줄 자리에서 순환 — 배너 높이 고정, 표 안 밀림 */}
+              <BonusTicker items={[
+                ...(coinMsg.bossRec?.drops || []).map((n) => <span key={n}>🎁 {t('전리품 획득')}: <b>{t(n)}</b></span>),
+                ...(coinMsg.achNew || []).map((a) => <span key={a.id}>🏆 {t('업적 달성')}: {a.icon} <b>{t(a.name)}</b> +{a.reward}🪙</span>),
+              ]} />
             </>
           ) : null}
           adButton={coinMsg && !coinMsg.doubled && adsAvailable() ? (
@@ -1427,6 +1418,25 @@ const WEAPONS = [
 
 // 보스전 클리어 타임 표기 (m:ss)
 const fmtClearTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+
+// 승리 배너 축하 로테이션 — 전리품·업적이 한 판에 몰려도(첫 토벌 판이 특히) 배너 높이는
+// 한 줄로 고정: 같은 자리에서 2.5초씩 하나씩 교대(순환)한다. 스코어 표를 밀어내지 않고,
+// 각 축하가 제 순간을 갖는다. 영구 기록은 어차피 전적/업적/꾸미기 화면에 남는다.
+function BonusTicker({ items }) {
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    if (items.length <= 1) return undefined
+    const id = setInterval(() => setI((v) => (v + 1) % items.length), 2500)
+    return () => clearInterval(id)
+  }, [items.length])
+  if (!items.length) return null
+  return (
+    <span key={i} className="win-banner__ticker">{/* key 교체로 스왑마다 페이드 인 */}
+      {items[i % items.length]}
+      {items.length > 1 && <span className="win-banner__ticker-dots">{i % items.length + 1}/{items.length}</span>}
+    </span>
+  )
+}
 
 // 개발자 모드 — 웹 테스트(vite dev 서버 또는 주소에 ?devhat)에서는 모든 꾸미기를 코인 없이
 // 바로 장착해 본다. 앱(Capacitor)과 일반 빌드에서는 꺼져 있어 코인 경제에 영향 없음.
