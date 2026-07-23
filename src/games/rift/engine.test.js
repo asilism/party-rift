@@ -3496,3 +3496,17 @@ test('증강: 봇은 뽑기 트리거 시 즉시 한 장을 자동 선택한다'
   assert.equal(typeof bot.augments[0], 'string')
   assert.equal(bot.augDraw, null, '봇은 대기 안 함')
 })
+
+test('무한 방어: 부활 없는 적(isBossAdd) 시체는 CORPSE_CULL_T 후 시뮬에서 제거된다(누적 렉 방지)', () => {
+  const g = defenseGame()
+  const victim = g.heroes.find((h) => h.id === 'b1')
+  victim.isBossAdd = true // 그림자 정예 흉내
+  victim.hp = 0
+  victim.respawnT = 1e9 // 부활 없음
+  victim.deadSince = g.time
+  step(g, STEP)
+  assert.ok(g.heroes.includes(victim), 'CORPSE_CULL_T 전엔 시체가 남아 있다(처치 연출)')
+  g.time += 5 // CORPSE_CULL_T(3.2초) 초과
+  step(g, STEP)
+  assert.ok(!g.heroes.includes(victim), 'CORPSE_CULL_T 후 시뮬에서 제거')
+})
