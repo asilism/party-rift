@@ -8,7 +8,7 @@ import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import {
   NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, RESPAWN_ARC_HALF, buildMap,
 } from './map.js'
-import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP, GAZE_R, GAZE_SAFE_COS, trophySetOf } from './engine.js'
+import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP, GAZE_R, GAZE_SAFE_COS, STACK_R, trophySetOf } from './engine.js'
 import { ZODIAC_FACES } from './zodiacFaces.js'
 
 // ── 그래픽 품질 프리셋 ──
@@ -1326,6 +1326,80 @@ const HAT_BUILDERS = {
     g.userData.eyes = eyes
     return g
   },
+  // 용암 뿔투구(카르곤 전리품 · 비매품): 흑요석 투구 + 용암 띠 + 끝이 달아오른 뿔
+  lavahelm(s) {
+    const g = new THREE.Group()
+    const obsidian = new THREE.MeshLambertMaterial({ color: 0x3a3038, emissive: 0x241014, emissiveIntensity: 0.45 })
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.82 * s, 12, 9), obsidian)
+    dome.scale.y = 0.7
+    dome.position.y = 0.12 * s
+    g.add(dome)
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.78 * s, 0.09 * s, 6, 18),
+      new THREE.MeshLambertMaterial({ color: 0xff8a4d, emissive: 0xd6453f, emissiveIntensity: 0.8 }))
+    band.rotation.x = Math.PI / 2
+    band.position.y = 0.02 * s
+    g.add(band)
+    g.userData.band = band // FX가 용암 띠를 숨쉬게 한다
+    const tips = []
+    for (const side of [-1, 1]) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.2 * s, 0.7 * s, 8), obsidian)
+      horn.position.set(side * 0.9 * s, 0.32 * s, 0)
+      horn.rotation.z = -side * 0.8
+      g.add(horn)
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.1 * s, 0.3 * s, 6),
+        new THREE.MeshLambertMaterial({ color: 0xffb066, emissive: 0xff6a30, emissiveIntensity: 0.95 }))
+      tip.position.set(side * 1.16 * s, 0.62 * s, 0)
+      tip.rotation.z = -side * 0.8
+      g.add(tip)
+      tips.push(tip)
+    }
+    g.userData.tips = tips
+    return g
+  },
+  // 성운의 관(아르케인 전리품 · 비매품): 밤하늘색 서클릿 + 궤도를 도는 별 보석
+  nebulacrown(s) {
+    const g = new THREE.Group()
+    const circlet = new THREE.Mesh(new THREE.TorusGeometry(0.72 * s, 0.08 * s, 6, 20),
+      new THREE.MeshLambertMaterial({ color: 0x2a3a6e, emissive: 0x141c48, emissiveIntensity: 0.7 }))
+    circlet.rotation.x = Math.PI / 2
+    circlet.position.y = 0.05 * s
+    g.add(circlet)
+    // 관 위를 도는 별 셋 — FX가 공전시킨다(달지 않고 띄운다: 마법사의 관은 손대지 않은 채 빛난다)
+    const stars = [0x9fd0ff, 0xffe066, 0xd9b8ff].map((c, i) => {
+      const st = gemMesh(c, 0.11 * s)
+      const a = (i / 3) * Math.PI * 2
+      st.position.set(Math.cos(a) * 0.72 * s, 0.3 * s, Math.sin(a) * 0.72 * s)
+      g.add(st)
+      return st
+    })
+    g.userData.stars = stars
+    // 이마 중앙의 큰 성운 보석
+    const core = gemMesh(0x6fb6ff, 0.16 * s)
+    core.position.set(0, 0.18 * s, 0.7 * s)
+    g.add(core)
+    g.userData.core = core
+    return g
+  },
+  // 가시 왕관(브램블 전리품 · 비매품): 덩굴 링 + 가시 돌기 + 붉은 장미 한 송이
+  thorncrown(s) {
+    const g = new THREE.Group()
+    const vine = new THREE.Mesh(new THREE.TorusGeometry(0.76 * s, 0.08 * s, 6, 18), lamb(0x4a7e3a))
+    vine.rotation.x = Math.PI / 2
+    vine.position.y = 0.05 * s
+    g.add(vine)
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + 0.2
+      const thorn = new THREE.Mesh(new THREE.ConeGeometry(0.09 * s, 0.42 * s, 5), lamb(0x2e5e2e))
+      thorn.position.set(Math.cos(a) * 0.76 * s, 0.26 * s, Math.sin(a) * 0.76 * s)
+      g.add(thorn)
+    }
+    const rose = new THREE.Mesh(new THREE.SphereGeometry(0.17 * s, 8, 6),
+      new THREE.MeshLambertMaterial({ color: 0xd6453f, emissive: 0x5e1010, emissiveIntensity: 0.5 }))
+    rose.position.set(0, 0.16 * s, 0.68 * s)
+    g.add(rose)
+    g.userData.rose = rose
+    return g
+  },
 }
 
 // 보석 조형 — 팔면체(다이아 컷 느낌)를 세로로 살짝 늘이고 자체 발광을 준다
@@ -1514,6 +1588,56 @@ const HAT_FX = {
       fire(glint, glintCurve(t, 3.4, 0.2, 0.11) * 0.8, t, 0.8)
     }
   },
+  // 용암 뿔투구: 뿔 끝 불씨가 피어오르고 용암 띠가 숨쉰다 — 도깨비 뿔의 상위 호환 연출
+  lavahelm(g, s) {
+    const embers = [1, -1].map(() => fxSprite(g, 0xff8a4d, 0.42 * s, false))
+    const pops = [1, -1].map(() => fxSprite(g, 0xffb066, 0.5 * s))
+    return (t) => {
+      if (g.userData.band) g.userData.band.material.emissiveIntensity = 0.6 + 0.35 * Math.sin(t * 2.6)
+      const tips = g.userData.tips || []
+      tips.forEach((tip, i) => { tip.material.emissiveIntensity = 0.7 + 0.3 * Math.sin(t * 3.4 + i * 2.1) })
+      for (let i = 0; i < 2; i++) {
+        const side = i === 0 ? 1 : -1
+        const c = (t / 1.9 + i * 0.5) % 1 // 뿔 끝에서 위로 피어오르는 불씨
+        embers[i].position.set(side * 1.16 * s, (0.75 + c * 0.8) * s, 0.1 * s)
+        embers[i].material.opacity = Math.sin(c * Math.PI) * 0.6
+        embers[i].scale.setScalar(embers[i].userData.base * (0.6 + 0.4 * Math.sin(c * Math.PI)))
+        pops[i].position.set(side * 1.16 * s, 0.68 * s, 0.15 * s)
+        fire(pops[i], glintCurve(t, 2.9, i * 0.47) * 0.85, t, 1.2)
+      }
+    }
+  },
+  // 성운의 관: 별들이 관 둘레를 공전하고, 성운 보석이 번갈아 샤링
+  nebulacrown(g, s) {
+    const glint = fxSprite(g, 0xcfe4ff, 0.6 * s)
+    return (t) => {
+      const stars = g.userData.stars || []
+      stars.forEach((st, i) => {
+        const a = t * 0.9 + (i / stars.length) * Math.PI * 2 // 느린 공전
+        st.position.set(Math.cos(a) * 0.72 * s, (0.3 + Math.sin(t * 1.7 + i) * 0.08) * s, Math.sin(a) * 0.72 * s)
+        st.material.emissiveIntensity = 0.35 + Math.max(0, Math.sin(t * 2.1 + i * 1.9)) * 0.5
+      })
+      if (g.userData.core) g.userData.core.material.emissiveIntensity = 0.4 + glintCurve(t, 2.8, 0.2) * 0.55
+      glint.position.set(0, 0.22 * s, 0.78 * s)
+      fire(glint, glintCurve(t, 2.8, 0.2, 0.11) * 0.9, t, 0.9)
+    }
+  },
+  // 가시 왕관: 장미가 숨쉬고 초록 홀씨가 흩날린다
+  thorncrown(g, s) {
+    const spores = [0, 1, 2].map(() => fxSprite(g, 0xa8f0b0, 0.22 * s, false))
+    const glint = fxSprite(g, 0xffd0da, 0.45 * s)
+    return (t) => {
+      if (g.userData.rose) g.userData.rose.material.emissiveIntensity = 0.35 + 0.25 * Math.sin(t * 2.2)
+      spores.forEach((p, i) => {
+        const c = (t / 3.0 + i / 3) % 1 // 왕관에서 위로 떠오르는 홀씨
+        p.position.set(Math.sin(t * 1.1 + i * 2.2) * 0.6 * s, (0.2 + c * 1.1) * s, 0.4 * s)
+        p.material.opacity = Math.sin(c * Math.PI) * 0.5
+        p.scale.setScalar(p.userData.base * (0.7 + 0.3 * Math.sin(c * Math.PI)))
+      })
+      glint.position.set(0, 0.2 * s, 0.76 * s) // 장미 글린트
+      fire(glint, glintCurve(t, 3.3, 0.5, 0.11) * 0.75, t, 0.8)
+    }
+  },
 }
 
 // 모자 하나를 만든다 — 위치는 호출부가 정한다(쇼케이스/인게임 공용 순수 조형).
@@ -1540,7 +1664,7 @@ export function updateHatSparkle(hat, t) {
 export const COSTUME_IDS = [
   'bowtie', 'scarf', 'lei', 'backpack', 'quiver', 'shield', 'tube', 'lantern',
   'goldcape', 'armor', 'redcloak', 'jetpack', 'wings', 'devilwings', 'starcape',
-  'abysscloak', // 녹스 전리품(비매품) — 심연 망토
+  'abysscloak', 'magmaplate', 'galaxyrobe', 'vinemail', // 보스 전리품(비매품) 4종
 ]
 
 function equippedCostume() {
@@ -1885,6 +2009,96 @@ const COSTUME_BUILDERS = {
     g.userData.hideCape = true
     return g
   },
+  // 마그마 갑주(카르곤 전리품 · 비매품): 현무암 판금 + 판 사이로 새어 나오는 용암 이음새
+  magmaplate(s) {
+    const g = new THREE.Group()
+    const basalt = new THREE.MeshLambertMaterial({ color: 0x4a4048, emissive: 0x1c1014, emissiveIntensity: 0.4 })
+    const seamMat = new THREE.MeshLambertMaterial({ color: 0xff8a4d, emissive: 0xd6453f, emissiveIntensity: 0.85 })
+    // 가슴 판 — 앞(+x)에 걸치는 두꺼운 판금
+    const chest = new THREE.Mesh(new THREE.SphereGeometry(1.02 * s, 10, 8), basalt)
+    chest.scale.set(0.5, 0.85, 1.0)
+    chest.position.set(0.62 * s, 0.35 * s, 0)
+    g.add(chest)
+    // 용암 이음새 — 가슴 판을 가로지르는 발광 틈 두 줄
+    const seams = [0.15, -0.25].map((dy) => {
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.07 * s, 1.5 * s), seamMat.clone())
+      seam.position.set(1.05 * s, (0.35 + dy) * s, 0)
+      g.add(seam)
+      return seam
+    })
+    g.userData.seams = seams
+    // 어깨 판 — 위로 솟은 현무암 뿔 견갑
+    for (const sz of [1, -1]) {
+      const pad = new THREE.Mesh(new THREE.SphereGeometry(0.5 * s, 8, 6), basalt)
+      pad.scale.y = 0.75
+      pad.position.set(0, 1.18 * s, sz * 1.02 * s)
+      g.add(pad)
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.14 * s, 0.5 * s, 6), seamMat.clone())
+      spike.position.set(0, 1.55 * s, sz * 1.05 * s)
+      spike.rotation.x = sz * 0.35
+      g.add(spike)
+      seams.push(spike)
+    }
+    return g
+  },
+  // 은하 로브(아르케인 전리품 · 비매품): 밤하늘 로브에 나선 은하수 — 별의 망토와 달리
+  // 별이 "나선"으로 감기고 성운 빛무리가 숨쉰다
+  galaxyrobe(s) {
+    const g = new THREE.Group()
+    const cape = capeMesh(s, new THREE.MeshLambertMaterial({
+      color: 0x201c48, emissive: 0x100c30, emissiveIntensity: 0.7, side: THREE.DoubleSide,
+    }))
+    g.userData.cape = cape
+    g.add(cape)
+    // 나선 은하수 — 위→아래로 감아 내려가는 작은 별 여섯
+    const tints = [0x9fd0ff, 0xffe066, 0xd9b8ff]
+    g.userData.stars = [0, 1, 2, 3, 4, 5].map((i) => {
+      const c = i / 5
+      const a = c * Math.PI * 2.2
+      const st = gemMesh(tints[i % 3], (0.1 - c * 0.03) * s)
+      st.position.set(-1.06 * s, (0.9 - c * 1.7) * s, Math.sin(a) * 0.8 * s)
+      g.add(st)
+      return st
+    })
+    const pin = gemMesh(0x6fb6ff, 0.14 * s)
+    pin.position.set(0.95 * s, 0.58 * s, 0.34 * s)
+    g.add(pin)
+    g.userData.hideCape = true
+    return g
+  },
+  // 덩굴 갑옷(브램블 전리품 · 비매품): 가슴을 감는 덩굴 띠 + 잎 견갑 + 가시 돌기
+  vinemail(s) {
+    const g = new THREE.Group()
+    const vineMat = lamb(0x4a7e3a)
+    // 가슴을 대각선으로 감는 덩굴 두 줄(어깨→허리)
+    for (const sz of [1, -1]) {
+      const strap = new THREE.Mesh(new THREE.TorusGeometry(1.02 * s, 0.09 * s, 6, 18, Math.PI * 0.9), vineMat)
+      strap.rotation.y = Math.PI / 2 // 몸통을 옆에서 감는 호
+      strap.rotation.x = sz * 0.5
+      strap.position.set(0.25 * s, 0.35 * s, 0)
+      g.add(strap)
+    }
+    // 잎 견갑 — 넓은 잎사귀를 겹쳐 얹는다
+    for (const sz of [1, -1]) {
+      for (let k = 0; k < 2; k++) {
+        const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.42 * s, 8, 6), lamb(k ? 0x5aa34a : 0x3f7e33))
+        leaf.scale.set(1.2, 0.35, 0.85)
+        leaf.position.set(k * 0.1 * s, (1.15 + k * 0.14) * s, sz * 1.0 * s)
+        leaf.rotation.z = -0.2
+        g.add(leaf)
+      }
+      const thorn = new THREE.Mesh(new THREE.ConeGeometry(0.1 * s, 0.4 * s, 5), lamb(0x2e5e2e))
+      thorn.position.set(0, 1.5 * s, sz * 1.0 * s)
+      g.add(thorn)
+    }
+    // 허리께 붉은 열매 — 포인트 컬러
+    const berry = new THREE.Mesh(new THREE.SphereGeometry(0.12 * s, 6, 5),
+      new THREE.MeshLambertMaterial({ color: 0xd6453f, emissive: 0x5e1010, emissiveIntensity: 0.45 }))
+    berry.position.set(0.85 * s, -0.15 * s, 0.4 * s)
+    g.add(berry)
+    g.userData.berry = berry
+    return g
+  },
 }
 
 // 옷 FX — 최고가만. 날개는 깃 끝 성광 + 등 뒤 은은한 후광 펄스.
@@ -1998,6 +2212,57 @@ const COSTUME_FX = {
       })
       glint.position.set(0.95 * s, 0.62 * s, 0.4 * s) // 그믐달 브로치 글린트
       fire(glint, glintCurve(t, 3.6, 0.4, 0.1) * 0.8, t, 0.8)
+    }
+  },
+  // 마그마 갑주: 이음새가 마그마처럼 숨쉬고, 판 틈에서 불씨가 피어오른다
+  magmaplate(g, s) {
+    const embers = [0, 1].map(() => fxSprite(g, 0xff9a4d, 0.3 * s, false))
+    const glint = fxSprite(g, 0xffd08a, 0.55 * s)
+    return (t) => {
+      const seams = g.userData.seams || []
+      seams.forEach((sm, i) => { sm.material.emissiveIntensity = 0.65 + 0.3 * Math.sin(t * 2.8 + i * 1.6) })
+      embers.forEach((m, i) => {
+        const c = (t / 2.1 + i * 0.5) % 1 // 가슴 틈에서 위로 오르는 불씨
+        m.position.set(1.05 * s, (0.3 + c * 1.2) * s, Math.sin(i * 2 + t) * 0.4 * s)
+        m.material.opacity = Math.sin(c * Math.PI) * 0.55
+        m.scale.setScalar(m.userData.base * (0.7 + 0.3 * Math.sin(c * Math.PI)))
+      })
+      glint.position.set(1.1 * s, 0.5 * s, 0.3 * s)
+      fire(glint, glintCurve(t, 3.1, 0.3, 0.11) * 0.8, t, 1.0)
+    }
+  },
+  // 은하 로브: 천 웨이브 + 나선 별이 위→아래로 차례로 반짝(은하수가 흐른다) + 성운 빛무리
+  galaxyrobe(g, s) {
+    const nebula = fxSprite(g, 0x8a9aff, 1.2 * s, false)
+    const twinkle = fxSprite(g, 0xcfe4ff, 0.4 * s)
+    return (t) => {
+      waveCape(g.userData.cape, t, s)
+      const stars = g.userData.stars || []
+      stars.forEach((st, i) => {
+        st.material.emissiveIntensity = 0.3 + Math.max(0, Math.sin(t * 2.4 - i * 0.9)) * 0.55 // 나선 따라 흐르는 반짝임
+      })
+      nebula.position.set(-1.15 * s, 0.2 * s, 0)
+      nebula.material.opacity = 0.1 + 0.06 * Math.sin(t * 1.6)
+      nebula.scale.setScalar(nebula.userData.base * (0.9 + 0.1 * Math.sin(t * 1.6)))
+      const k = stars[Math.floor(((t * 0.45) % 1) * stars.length)] // 이따금 별 하나가 크게 샤링
+      if (k) twinkle.position.set(k.position.x - 0.06 * s, k.position.y, k.position.z)
+      fire(twinkle, glintCurve(t, 2.4, 0.2, 0.12) * 0.85, t, 0.9)
+    }
+  },
+  // 덩굴 갑옷: 잎 홀씨가 흩날리고 열매가 숨쉰다
+  vinemail(g, s) {
+    const spores = [0, 1, 2].map(() => fxSprite(g, 0xa8f0b0, 0.24 * s, false))
+    const glint = fxSprite(g, 0xd8ffde, 0.4 * s)
+    return (t) => {
+      if (g.userData.berry) g.userData.berry.material.emissiveIntensity = 0.3 + 0.25 * Math.sin(t * 2.4)
+      spores.forEach((p, i) => {
+        const c = (t / 2.9 + i / 3) % 1 // 어깨 잎에서 흘러내리는 홀씨
+        p.position.set(Math.sin(t * 1.2 + i * 2.1) * 0.5 * s, (1.3 - c * 1.8) * s, (i % 2 ? 1 : -1) * 0.9 * s)
+        p.material.opacity = Math.sin(c * Math.PI) * 0.45
+        p.scale.setScalar(p.userData.base * (0.7 + 0.3 * Math.sin(c * Math.PI)))
+      })
+      glint.position.set(0.88 * s, -0.1 * s, 0.45 * s) // 열매 글린트
+      fire(glint, glintCurve(t, 3.5, 0.6, 0.1) * 0.7, t, 0.8)
     }
   },
 }
@@ -2364,7 +2629,7 @@ export function buildClassParts(cls, s, body) {
 export const WEAPON_SKIN_IDS = [
   'woodsword', 'candycane', 'pan', 'mallet', 'fish', 'umbrella', 'trident',
   'doubleaxe', 'guitar', 'scythe', 'gemstaff', 'lightspear', 'flamesword', 'frostblade', 'excalibur',
-  'crescentscythe', // 녹스 전리품(비매품) — 그믐의 낫
+  'crescentscythe', 'quakemaul', 'cometstaff', 'bramblesword', // 보스 전리품(비매품) 4종
 ]
 
 function equippedWeaponSkin() {
@@ -2672,6 +2937,93 @@ const WEAPON_SKINS = {
     g.add(gem2)
     g.userData.gem = gem2
   },
+  // 대지파쇄 망치(카르곤 전리품 · 비매품): 거대한 현무암 머리 + 용암 균열 — 발구르기의 무게
+  quakemaul(g) {
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 1.5, 8), lamb(0x3a3038))
+    handle.rotation.z = -Math.PI / 2
+    handle.position.x = 0.75
+    g.add(handle)
+    const basalt = new THREE.MeshLambertMaterial({ color: 0x5a5058, emissive: 0x1c1014, emissiveIntensity: 0.4 })
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.62, 0.95), basalt)
+    head.position.x = 1.75
+    g.add(head)
+    // 머리를 가로지르는 용암 균열 — 발광 틈 두 줄
+    const cracks = []
+    for (const dy of [0.12, -0.14]) {
+      const crack = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.07, 0.99),
+        new THREE.MeshLambertMaterial({ color: 0xff8a4d, emissive: 0xd6453f, emissiveIntensity: 0.85 }))
+      crack.position.set(1.75, dy, 0)
+      crack.rotation.x = dy > 0 ? 0.18 : -0.22
+      g.add(crack)
+      cracks.push(crack)
+    }
+    g.userData.cracks = cracks
+    // 양면 타격부 스터드
+    for (const sz of [1, -1]) {
+      const stud = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.36, 0.12, 8), lamb(0x3a3038))
+      stud.rotation.x = Math.PI / 2
+      stud.position.set(1.75, 0, sz * 0.53)
+      g.add(stud)
+    }
+  },
+  // 운석 지팡이(아르케인 전리품 · 비매품): 혜성 머리 + 꼬리 결정 — 낙하하는 별의 형상
+  cometstaff(g) {
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.8, 8), lamb(0x2a3a6e))
+    shaft.rotation.z = -Math.PI / 2
+    shaft.position.x = 0.9
+    g.add(shaft)
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.15 * 1, 0.05, 6, 12), lamb(0x9fd0ff))
+    collar.rotation.y = Math.PI / 2
+    collar.position.x = 1.82
+    g.add(collar)
+    // 혜성 머리 — 큰 성운 보석
+    const head = gemMesh(0x6fb6ff, 0.27)
+    head.position.x = 2.2
+    head.rotation.z = Math.PI / 2
+    g.add(head)
+    g.userData.gem = head
+    // 뒤로 흘러내리는 꼬리 결정(작아지며 3개) — 혜성이 날아가는 방향감
+    g.userData.tail = [0, 1, 2].map((i) => {
+      const bit = gemMesh(0x9fd0ff, 0.12 - i * 0.03)
+      bit.position.set(1.95 - i * 0.28, 0.16 + i * 0.1, 0)
+      g.add(bit)
+      return bit
+    })
+  },
+  // 가시 대검(브램블 전리품 · 비매품): 덩굴이 감긴 넓은 날 + 가시 돌기 — 자연이 벼린 검
+  bramblesword(g) {
+    const bladeMat = new THREE.MeshLambertMaterial({ color: 0x6a8e5a, emissive: 0x1c3814, emissiveIntensity: 0.5 })
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.15, 0.42), bladeMat)
+    blade.position.x = 1.22
+    bladeGlow(blade, 0x67d67f, 0.22, 1.05, 2.2, 1.7) // 날을 감싸는 초록 생기
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 4), bladeMat)
+    tip.rotation.z = -Math.PI / 2
+    tip.position.x = 2.4
+    g.add(blade, tip)
+    // 날을 감는 덩굴 줄기 — 토러스 조각을 어슷하게
+    for (let i = 0; i < 3; i++) {
+      const wrap = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.05, 5, 10, Math.PI * 1.5), lamb(0x3f7e33))
+      wrap.position.x = 0.75 + i * 0.55
+      wrap.rotation.x = Math.PI / 2
+      wrap.rotation.z = 0.4 + i * 0.5
+      g.add(wrap)
+    }
+    // 날등의 가시 돌기
+    for (let i = 0; i < 3; i++) {
+      const thorn = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 5), lamb(0x2e5e2e))
+      thorn.position.set(0.85 + i * 0.5, 0.16, 0)
+      g.add(thorn)
+    }
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.2, 0.7), lamb(0x4a3a28))
+    guard.position.x = 0.35
+    g.add(guard)
+    // 코등이의 붉은 열매
+    const berry = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 5),
+      new THREE.MeshLambertMaterial({ color: 0xd6453f, emissive: 0x5e1010, emissiveIntensity: 0.5 }))
+    berry.position.set(0.35, 0.14, 0)
+    g.add(berry)
+    g.userData.berry = berry
+  },
 }
 
 // 무기 스킨 FX — 고가만. 검신을 따라 흐르는 글린트가 "샤링"의 핵심
@@ -2758,6 +3110,59 @@ const WEAPON_FX = {
       glint.position.set(2.05, 0.08, 0.12)
       fire(glint, glintCurve(t, 2.7, 0.3, 0.11) * 0.9, t, 1.1)
       if (g.userData.gem) g.userData.gem.material.emissiveIntensity = 0.4 + Math.max(0, Math.sin(t * 2.1)) * 0.5
+    }
+  },
+  // 대지파쇄 망치: 균열이 마그마처럼 고동치고, 머리에서 불씨가 톡톡 튄다
+  quakemaul(g) {
+    const embers = [0, 1].map(() => fxSprite(g, 0xff9a4d, 0.3, false))
+    const glint = fxSprite(g, 0xffd08a, 0.6)
+    return (t) => {
+      const cracks = g.userData.cracks || []
+      cracks.forEach((c, i) => { c.material.emissiveIntensity = 0.65 + 0.3 * Math.sin(t * 3.1 + i * 1.8) })
+      embers.forEach((m, i) => {
+        const c = (t / 1.6 + i * 0.5) % 1 // 머리 위로 튀는 불씨
+        m.position.set(1.6 + c * 0.4, 0.35 + c * 0.55, 0.15)
+        m.material.opacity = Math.sin(c * Math.PI) * 0.6
+        m.scale.setScalar(m.userData.base * (0.7 + 0.3 * Math.sin(c * Math.PI)))
+      })
+      glint.position.set(1.95, 0.2, 0.3)
+      fire(glint, glintCurve(t, 2.9, 0.3, 0.11) * 0.85, t, 1.0)
+    }
+  },
+  // 운석 지팡이: 혜성 머리 둘레를 도는 마력 입자 + 꼬리 결정이 차례로 반짝(날아가는 잔상)
+  cometstaff(g) {
+    const mote = fxSprite(g, 0x9fd0ff, 0.3, false)
+    const glint = fxSprite(g, 0xcfe4ff, 0.66)
+    return (t) => {
+      const on = glintCurve(t, 2.5, 0)
+      glint.position.set(2.2, 0, 0.2)
+      fire(glint, on * 0.95, t, 1.0)
+      if (g.userData.gem) g.userData.gem.material.emissiveIntensity = 0.4 + on * 0.5
+      const tail = g.userData.tail || []
+      tail.forEach((bit, i) => {
+        bit.material.emissiveIntensity = 0.3 + Math.max(0, Math.sin(t * 3.2 - i * 1.1)) * 0.55 // 머리→꼬리로 흐른다
+      })
+      const a = t * 2.4 // 혜성 머리를 도는 마력 입자
+      mote.position.set(2.2 + Math.cos(a) * 0.42, Math.sin(a) * 0.42, 0.12)
+      mote.material.opacity = 0.5
+      mote.scale.setScalar(mote.userData.base)
+    }
+  },
+  // 가시 대검: 날을 따라 흐르는 생기 글린트 + 열매 명멸 + 초록 홀씨
+  bramblesword(g) {
+    const spore = fxSprite(g, 0xa8f0b0, 0.24, false)
+    const glints = [0, 1].map((i) => fxSprite(g, 0xd8ffde, 0.5 - i * 0.12))
+    return (t) => {
+      if (g.userData.berry) g.userData.berry.material.emissiveIntensity = 0.35 + 0.25 * Math.sin(t * 2.3)
+      glints.forEach((sp, i) => {
+        const c = (t / 2.3 + i / 2) % 1 // 손잡이→칼끝으로 흐르는 생기
+        sp.position.set(0.6 + c * 1.8, 0.12, 0.14)
+        fire(sp, Math.sin(c * Math.PI) ** 2 * glintCurve(t, 2.3, i / 2, 0.3) * 0.8, t, 0.9)
+      })
+      const c = (t / 2.6) % 1 // 날 위로 떠오르는 홀씨
+      spore.position.set(1.2 + Math.sin(t * 1.3) * 0.5, 0.2 + c * 0.7, 0.1)
+      spore.material.opacity = Math.sin(c * Math.PI) * 0.5
+      spore.scale.setScalar(spore.userData.base)
     }
   },
 }
@@ -3086,21 +3491,29 @@ function buildWeapon(cls, skinId = null) {
 }
 
 // 영웅: 팀 색 캡슐 몸통 + 12지신 이모지 얼굴 + 직업 아이콘 이름표 + 체력바
-// 보스 전리품 풀세트 오라 — 발밑에 도는 보랏빛 링 + 피어오르는 어둠 입자(명예 표시).
-// 스탯 효과(PvE 이속)는 엔진 몫이고 이건 순수 연출 — 콜로세움에서도 보이지만 효과는 없다.
-function buildTrophyAura(s) {
+// 보스 전리품 풀세트 오라 — 발밑에 도는 테마색 링 + 피어오르는 입자(명예 표시).
+// 스탯 효과(PvE 소효과)는 엔진 몫이고 이건 순수 연출 — 콜로세움에서도 보이지만 효과는 없다.
+// 세트마다 색이 다르다: 용암 주황 / 성운 청 / 심연 보라 / 자연 초록 — 멀리서도 "어느 보스 세트"가 읽힌다.
+const TROPHY_AURA_HUE = {
+  boss_colossus: [0xff8a4d, 0xffc08a],
+  boss_archmage: [0x6fb6ff, 0xb8dcff],
+  boss_shadow: [0x8a4ee0, 0xb08aff],
+  boss_thorn: [0x67d67f, 0xb0f0c0],
+}
+function buildTrophyAura(s, setBoss) {
+  const [ringHue, moteHue] = TROPHY_AURA_HUE[setBoss] || TROPHY_AURA_HUE.boss_shadow
   const g = new THREE.Group()
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(1.7 * s, 2.3 * s, 28),
     new THREE.MeshBasicMaterial({
-      color: 0x8a4ee0, transparent: true, opacity: 0.38, side: THREE.DoubleSide,
+      color: ringHue, transparent: true, opacity: 0.38, side: THREE.DoubleSide,
       depthWrite: false, blending: THREE.AdditiveBlending,
     })
   )
   ring.rotation.x = -Math.PI / 2
   ring.position.y = 0.12
   g.add(ring)
-  const motes = [0, 1, 2].map(() => fxSprite(g, 0xb08aff, 0.5 * s, false))
+  const motes = [0, 1, 2].map(() => fxSprite(g, moteHue, 0.5 * s, false))
   g.userData.fxUpdate = (t) => {
     ring.rotation.z = t * 0.8
     ring.material.opacity = 0.28 + 0.14 * Math.sin(t * 2.4)
@@ -3250,11 +3663,29 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   let thornArmor = null // 가시갑옷 💢 — 반사창 동안 "때리지 마" 신호
   let gazeMark = null // 공포의 응시 👁️ — 채널 중 보스를 "바라보는" 동안만 켜진다(등 돌리면 즉시 꺼짐)
   let gazeEye = null // 보스 전용: 채널 동안 가슴께에 부릅뜨는 거대한 눈
+  let stackMark = null // 성좌 낙인 🤝 — "나한테 모여!" (파란 링과 세트)
+  let stackRing = null // 성좌 낙인 파란 링 — 나눠 맞기 판정 반경(STACK_R)을 바닥에 그대로 그린다
   if (!CLASSES[h.cls]?.boss) {
     gazeMark = emojiSprite('👁️', 1.9)
     gazeMark.position.set(0, 7.6 + uiLift, 0)
     gazeMark.visible = false
     g.add(gazeMark)
+    stackMark = emojiSprite('🤝', 2.0)
+    stackMark.position.set(0, 7.6 + uiLift, 0)
+    stackMark.visible = false
+    alwaysOnTop(stackMark, 10)
+    g.add(stackMark)
+    stackRing = new THREE.Mesh(
+      new THREE.RingGeometry(STACK_R - 0.55, STACK_R, 36),
+      new THREE.MeshBasicMaterial({
+        color: 0x6fb6ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide,
+        depthWrite: false, blending: THREE.AdditiveBlending,
+      })
+    )
+    stackRing.rotation.x = -Math.PI / 2
+    stackRing.position.y = 0.14
+    stackRing.visible = false
+    g.add(stackRing)
   }
   if (CLASSES[h.cls]?.boss) {
     dormant = emojiSprite('💤', 2.6)
@@ -3274,8 +3705,9 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   // 보스 전리품 풀세트 오라 — 장착 3피스가 한 보스 세트일 때만(명예 표시, 씬 전용 코스메틱).
   // 인게임(내 영웅)과 꾸미기 쇼케이스가 같은 경로로 얻는다 — 넘겨받은 장착 id로 판정.
   let setAura = null
-  if (trophySetOf(hatId, costumeId, weaponSkinId)) {
-    setAura = buildTrophyAura(s)
+  const setBoss = trophySetOf(hatId, costumeId, weaponSkinId)
+  if (setBoss) {
+    setAura = buildTrophyAura(s, setBoss)
     g.add(setAura)
   }
   if (CLASSES[h.cls]?.boss) {
@@ -3419,7 +3851,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
     costume, // 옷 — FX(fxUpdate) 애니메이션용 참조
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, stackMark, stackRing, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
@@ -3463,6 +3895,8 @@ function setHeroDead(u, dead) {
     if (u.dormant) u.dormant.visible = false
     if (u.gazeMark) u.gazeMark.visible = false // 공포의 응시 👁️ 경고
     if (u.gazeEye) u.gazeEye.visible = false // 보스의 부릅뜬 눈
+    if (u.stackMark) u.stackMark.visible = false // 성좌 낙인 🤝
+    if (u.stackRing) u.stackRing.visible = false
   }
   if (u.setAura) u.setAura.visible = !dead // 전리품 세트 오라도 시체에 남지 않게
 }
@@ -6377,6 +6811,21 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             const open = 1 - Math.min(1, h.bossGazeT / 2.4) // 0→1: 눈이 점점 크게 떠진다
             u.gazeEye.scale.setScalar(3.4 * (0.65 + open * 0.65) * (1 + 0.05 * Math.sin(view.time * 10)))
             u.gazeEye.material.opacity = 0.7 + 0.3 * Math.abs(Math.sin(view.time * 7))
+          }
+        }
+        // 성좌 낙인(STACK) 🤝 + 파란 링: "나한테 모여!" — 링(판정 반경 그대로)이 좁아지는 게 아니라
+        // 시간이 줄수록 다급하게 고동친다. 링 안에 몇 명이 서 있는지가 곧 생사다.
+        if (u.stackMark) {
+          const st = (h.stackT || 0) > 0
+          u.stackMark.visible = st
+          if (u.stackRing) u.stackRing.visible = st
+          if (st) {
+            const urgency = 1 + Math.max(0, 2.6 - h.stackT) * 2.2
+            u.stackMark.scale.setScalar(2.0 * (1 + 0.25 * Math.abs(Math.sin(view.time * 4 * urgency))))
+            if (u.stackRing) {
+              u.stackRing.material.opacity = 0.35 + 0.25 * Math.abs(Math.sin(view.time * 3 * urgency))
+              u.stackRing.rotation.z = view.time * 1.2
+            }
           }
         }
         // 탱커 방패막기(파란 막). 보스 각성 휴지기엔 같은 구체를 어둠의 보호막(보라 맥동)으로 쓴다

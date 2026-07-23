@@ -3593,3 +3593,119 @@ test('전리품 풀세트: PvE(무한방어)에선 이속 보너스, 대전(3v3)
   const spdP = makeView(pvp, 'p1').heroes.find((h) => h.id === 'p1').mvSpeed
   assert.ok(Math.abs(spdD - spdP - 0.4) < 0.011, `세트 이속 +0.4 (PvE ${spdD} vs PvP ${spdP})`)
 })
+
+// ── 보스전 심화 확장: 대마도사 STACK + 거인 발구르기 + 전 세트 효과 ──
+
+test('성좌 낙인(STACK): 총피해를 원 안 인원수로 나눈다 — 모이면 절반, 밖이면 무피해', () => {
+  const g = createGame([
+    { id: 'p1', name: 'P1', zodiacId: 'rat', color: '#abc', cls: 'warrior', team: 'blue' },
+    { id: 'p2', name: 'P2', zodiacId: 'ox', color: '#abc', cls: 'archer', team: 'blue' },
+    { id: 'p3', name: 'P3', zodiacId: 'tiger', color: '#abc', cls: 'mage', team: 'blue' },
+    { id: 'boss', name: '아르케인', zodiacId: 'boss_archmage', color: '#f55', cls: 'boss_archmage', team: 'red', isBot: true },
+  ], { mode: 'boss', rng: () => 0.5 })
+  startPlaying(g)
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1') // 낙인 대상
+  const b = g.heroes.find((h) => h.id === 'p2') // 원 안(나눠 맞기)
+  const c = g.heroes.find((h) => h.id === 'p3') // 원 밖(안전)
+  const bf = g.map.FOUNTAIN_POS.blue
+  boss.x = bf.x + 30; boss.z = bf.z + 30 // 멀리 — 다른 스킬 개입 방지
+  a.x = bf.x; a.z = bf.z
+  b.x = bf.x + 3; b.z = bf.z // 반경 6 안
+  c.x = bf.x + 20; c.z = bf.z // 반경 밖
+  const hpB = b.hp
+  const hpC = c.hp
+  a.stackT = 0.01 // 다음 스텝에 폭발
+  a.stackDmg = a.maxHp * 2
+  a.stackFrom = boss.id
+  step(g, STEP)
+  const total = a.maxHp * 2
+  const dmgB = hpB - b.hp
+  assert.ok(a.hp > 0, '둘이 나눠 맞으면 낙인 대상도 산다(200%÷2=100%에 방어 감산)')
+  assert.ok(dmgB > 0, '원 안 아군은 몫을 맞는다')
+  assert.ok(dmgB < total * 0.75, `개인 몫은 총피해의 절반 근처다 (${Math.round(dmgB)}/${Math.round(total)})`)
+  assert.equal(c.hp, hpC, '원 밖 아군은 무피해')
+})
+
+test('성좌 낙인: 혼자 맞으면 즉사급(최대체력 200%)', () => {
+  const g = createGame([
+    { id: 'p1', name: 'P1', zodiacId: 'rat', color: '#abc', cls: 'archer', team: 'blue' },
+    { id: 'boss', name: '아르케인', zodiacId: 'boss_archmage', color: '#f55', cls: 'boss_archmage', team: 'red', isBot: true },
+  ], { mode: 'boss', rng: () => 0.5 })
+  startPlaying(g)
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const bf = g.map.FOUNTAIN_POS.blue
+  boss.x = bf.x + 40; boss.z = bf.z + 40
+  a.x = bf.x + 15; a.z = bf.z + 15 // 우물 회복 밖에서 홀로
+  a.stackT = 0.01
+  a.stackDmg = a.maxHp * 2
+  a.stackFrom = boss.id
+  step(g, STEP)
+  assert.ok(a.hp <= 0 || a.respawnT > 0, '홀로 받으면 죽는다 — 모여야 하는 이유')
+})
+
+test('봇 집결: 낙인 찍힌 아군에게 달려가 반경 안으로 들어온다', () => {
+  const g = createGame([
+    { id: 'b1', name: 'B1', zodiacId: 'rat', color: '#abc', cls: 'warrior', team: 'blue', isBot: true },
+    { id: 'p2', name: 'P2', zodiacId: 'ox', color: '#abc', cls: 'archer', team: 'blue' },
+    { id: 'boss', name: '아르케인', zodiacId: 'boss_archmage', color: '#f55', cls: 'boss_archmage', team: 'red', isBot: true },
+  ], { mode: 'boss', rng: () => 0.5 })
+  startPlaying(g)
+  const bot = g.heroes.find((h) => h.id === 'b1')
+  const mark = g.heroes.find((h) => h.id === 'p2')
+  const boss = g.heroes.find((h) => h.isBoss)
+  const bf = g.map.FOUNTAIN_POS.blue
+  boss.x = bf.x + 60; boss.z = bf.z + 60 // 개입 없음
+  mark.x = bf.x + 14; mark.z = bf.z
+  bot.x = bf.x; bot.z = bf.z // 낙인자와 거리 14
+  mark.stackT = 2.6
+  mark.stackDmg = mark.maxHp * 2
+  mark.stackFrom = boss.id
+  run(g, 1.6)
+  assert.ok(Math.hypot(bot.x - mark.x, bot.z - mark.z) < 7, `봇이 낙인자 곁으로 모였다 (거리 ${Math.hypot(bot.x - mark.x, bot.z - mark.z).toFixed(1)})`)
+})
+
+test('전리품 세트 4종: 보스별 3피스 조합이 각자 세트로 판정된다', () => {
+  assert.equal(trophySetOf('lavahelm', 'magmaplate', 'quakemaul'), 'boss_colossus')
+  assert.equal(trophySetOf('nebulacrown', 'galaxyrobe', 'cometstaff'), 'boss_archmage')
+  assert.equal(trophySetOf('shadowmask', 'abysscloak', 'crescentscythe'), 'boss_shadow')
+  assert.equal(trophySetOf('thorncrown', 'vinemail', 'bramblesword'), 'boss_thorn')
+  assert.equal(trophySetOf('lavahelm', 'galaxyrobe', 'quakemaul'), null, '섞어 입으면 세트가 아니다')
+})
+
+test('세트 효과 테마: 거인=공격력·대마도사=주문력·가시=피해감소 (PvE에서만)', () => {
+  const mk = (trophySet) => {
+    const g = createGame([
+      { id: 'p1', name: 'P1', zodiacId: 'rat', color: '#abc', cls: 'mage', team: 'blue', trophySet },
+      { id: 'p2', name: 'P2', zodiacId: 'ox', color: '#abc', cls: 'warrior', team: 'blue' },
+    ], { mode: 'defense', rng: () => 0.5 })
+    return g
+  }
+  // 거인 세트: 공격력 +3% (power = 주문력 직업이라 mage 대신 warrior로 비교해야 하지만
+  //  view.power가 주력 스탯이므로 mage(주문력)엔 대마도사 세트가 잡힌다)
+  const base = makeView(mk(null), 'p1').heroes.find((h) => h.id === 'p1').power
+  const arch = makeView(mk('boss_archmage'), 'p1').heroes.find((h) => h.id === 'p1').power
+  assert.ok(arch > base * 1.02 && arch < base * 1.04, `대마도사 세트 주문력 +3% (${base} → ${arch})`)
+  // 가시 세트: 받는 피해 3% 감소 — 같은 피해를 넣고 체력 감소량 비교
+  const gN = mk(null)
+  const gT = mk('boss_thorn')
+  for (const g of [gN, gT]) {
+    startPlaying(g)
+    const v = g.heroes.find((h) => h.id === 'p1')
+    const w = g.heroes.find((h) => h.id === 'p2')
+    v.x = 0; v.z = 0; w.x = 50; w.z = 50 // 우물 회복 밖
+  }
+  const vN = gN.heroes.find((h) => h.id === 'p1')
+  const vT = gT.heroes.find((h) => h.id === 'p1')
+  const before = { n: vN.hp, t: vT.hp }
+  // damageHero는 내부 함수 — 같은 조건의 폭발(stackT)로 우회 주입.
+  // 즉사하면 감소량이 체력으로 캡핑돼 차이가 안 보인다 — 체력보다 작은 피해로 비교
+  vN.stackT = 0.01; vN.stackDmg = 200; vN.stackFrom = 'none'
+  vT.stackT = 0.01; vT.stackDmg = 200; vT.stackFrom = 'none'
+  step(gN, STEP)
+  step(gT, STEP)
+  const dmgN = before.n - vN.hp
+  const dmgT = before.t - vT.hp
+  assert.ok(dmgT < dmgN, `가시 세트가 피해를 줄인다 (${Math.round(dmgN)} → ${Math.round(dmgT)})`)
+})
