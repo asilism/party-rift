@@ -3324,9 +3324,19 @@ body {
 .hat-card.is-preview { border-color: var(--toy-blue, #6db6ff); background: #eef6ff; }
 .hats-buy { margin-top: 4px; font-size: clamp(12px, 2.3vh, 14px); }
 .hats-buy--poor { font-family: var(--toy-font); font-weight: 700; color: #b06a6a; }
+/* 보스 전리품(비매품) 안내 — 구매 버튼 자리에 해금 조건을 띄운다 */
+.hats-buy--trophy { font-family: var(--toy-font); font-weight: 800; color: #8a6bb8; text-align: center; }
 .hat-card__name { font-weight: 800; font-size: clamp(12px, 2.3vh, 14px); color: var(--ink); }
 .hat-card__tag { font-size: clamp(10px, 2vh, 12px); font-weight: 700; color: #8a80ad; }
 .hat-card.is-on .hat-card__tag { color: #6b5200; }
+/* 보스 전리품 카드 — 해금: 금테+보라 리본 톤 / 미해금: 흐리게+자물쇠(이름에 🔒) */
+.hat-card--trophy {
+  border-color: #d9a94e; background: linear-gradient(160deg, #fff8e6, #f3eaff);
+  box-shadow: 0 3px 0 #c8933a;
+}
+.hat-card--trophy .hat-card__tag { color: #8a5bb0; }
+.hat-card--tlocked { opacity: 0.62; background: #f1eef8; border-style: dashed; }
+.hat-card--tlocked .hat-card__tag { color: #7d739e; }
 .hats-note { margin: 0; text-align: center; color: #8a80ad; font-size: clamp(10px, 2vh, 12px); }
 @media (max-height: 470px) {
   .hats-preview { flex-basis: 150px; padding: 8px; }
@@ -3586,6 +3596,7 @@ body {
 /* 모드 카드의 보스 토벌 전적 줄 */
 .mode-card__rec { margin-top: 4px; font-size: 11.5px; color: #ffd34d; opacity: 0.95; }
 .win-banner__bossrec { color: #cfe0ff; }
+.win-banner__trophy { color: #ffd9f0; } /* 전리품 획득 줄 — 코인·기록과 구분되는 톤 */
 
 /* 전적 화면 — 보스 토벌 섹션 */
 .records-card--boss { margin-top: 10px; }

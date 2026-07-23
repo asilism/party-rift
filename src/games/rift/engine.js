@@ -691,7 +691,23 @@ const heroAtk = (h) => (innateAtk(h) + itemBonus(h).atk) * (h.statMul || 1) * (1
 const heroRange = (h) =>
   (CLASSES[h.cls].range + itemBonus(h).range + (h.bladeT > 0 ? BLADE_RANGE : 0)) *
   (h.isBoss ? 1 + 0.15 * ((h.bossPhase || 1) - 1) : 1)
-const heroSpeed = (h) => CLASSES[h.cls].speed + itemBonus(h).speed + augOf(h).speed
+const heroSpeed = (h) => CLASSES[h.cls].speed + itemBonus(h).speed + augOf(h).speed + trophyFx(h).speed
+
+// ── 보스 전리품 세트(꾸미기 3피스) — 풀세트 장착 시에만 소효과 ──
+//  개별 조각은 순수 꾸미기(스탯 없음). PvE(보스전·무한방어) 전용 — createGame이 그 외
+//  모드에선 trophySet을 아예 비워 콜로세움·대전에 새는 일이 없다(grind-to-win 방지).
+export const TROPHY_SETS = {
+  boss_shadow: { hat: 'shadowmask', costume: 'abysscloak', weapon: 'crescentscythe', fx: { speed: 0.4 } }, // 그림자 세트: 이속 +3%
+}
+// 장착 3피스가 한 보스의 전리품 세트면 그 보스 id — 로스터(클라)와 씬(오라)이 같이 쓴다
+export function trophySetOf(hat, costume, weapon) {
+  for (const [boss, set] of Object.entries(TROPHY_SETS)) {
+    if (set.hat === hat && set.costume === costume && set.weapon === weapon) return boss
+  }
+  return null
+}
+const TROPHY_ZERO = { speed: 0 }
+const trophyFx = (h) => (h.trophySet && TROPHY_SETS[h.trophySet]?.fx) || TROPHY_ZERO
 // 레벨업 필요 경험치 — 전반적으로 상향(레벨링을 느리게).
 //  Lv1→Lv2 = 250 ≈ 적 병사 1.5웨이브(병사 28xp × 9마리). 정글러는 늑대 3마리(84×3)면 2렙.
 export const xpNeed = (lvl) => 250 + 98 * (lvl - 1) // 레벨업 ~10% 빠르게(증가폭 110→98) — 가벼운 가속
@@ -722,6 +738,7 @@ function makeHeroState(p, cls, pos, map, rng) {
     team: p.team,
     cls,
     isBot: !!p.isBot,
+    trophySet: p.trophySet || null, // 보스 전리품 풀세트(꾸미기 3피스) — PvE 소효과. createGame이 모드로 게이트한다
       role: null, // 봇 역할은 아래에서 직업 기준으로 배정 (사람은 null로 자유 이동)
       x: pos.x,
       z: pos.z,
@@ -866,6 +883,9 @@ export function createGame(players, opts = {}) {
     // 콜로세움 봇 난이도 보정: 사람의 컨트롤 우위를 스탯으로 상쇄 — 악몽(normal) 1.1배, 지옥(hard) 1.2배.
     //  체력·공격력·주문력 공통(heroMaxHp/heroAtk/spellPower가 statMul을 곱한다). 아군 봇도 동일하게 받는다.
     if (mode === 'arena' && h.isBot) h.statMul = (BOT_LEVELS[o.botLevel] || BOT_LEVELS.normal).arenaStat
+    // 전리품 세트 효과는 PvE(보스전·무한방어) 전용 — 콜로세움·대전에선 생성 시점에 아예 지운다.
+    //  스탯 파이프라인 어디서도 다시 검사하지 않아도 새어 나갈 수 없다(밸런스 보호).
+    if (!isRaidMode(mode)) h.trophySet = null
     h.maxHp = heroMaxHp(h)
     // 난이도 티어: 보스 체력만 생성 시 1회 가중(공격은 damageHero에서, 템포는 쿨다운에서)
     if (h.isBoss) h.maxHp = Math.round(h.maxHp * (BOSS_TIERS[o.bossTier]?.hp || 1))
@@ -5278,6 +5298,15 @@ export const BOSS_TIERS = {
 }
 const bossTierOf = (state) => BOSS_TIERS[state.bossTier] || BOSS_TIERS.normal
 
+// ── 공포의 응시(그림자 군주 시그니처): "위치"가 아니라 "시선"을 읽는 기믹 ──
+//  채널이 끝나는 순간 반경 안에서 보스를 바라보던 영웅만 공포+피해 — 등을 돌리면 완전 회피(메두사식).
+//  장판(빠져나가기)과 다른 근육을 쓰게 하는 보스전 전용 패턴 — 무한방어의 메아리 보스는 안 쓴다.
+export const GAZE_R = 20 // 유효 반경 — 씬(👁️ 경고 표시)과 공유
+export const GAZE_SAFE_COS = 0.34 // 시선 판정: 보스 방향과 내적이 이 미만(약 70° 밖)이면 "등 돌림" — 옆만 봐도 산다
+const GAZE_TELE = 2.4 // 채널(예고) 시간 — 티어 tele 배율 적용(악몽만 짧아진다)
+const GAZE_CD = 17 // 기본 쿨 — 페이즈·티어 배율 적용(필사 국면엔 거의 두 배 잦다)
+const GAZE_FEAR = 2.6 // 사로잡히면 공포 질주 — 암살자 보스 옆에서 통제를 잃는 것 자체가 벌
+
 // 보스 예고 장판 생성 — stepZones('bosszone')가 경고→폭발→잔류를 처리한다.
 //  hue: 클라 표식 색조(lava 주황/frost 청/shadow 보라)
 function pushBossZone(state, h, opts) {
@@ -5340,7 +5369,7 @@ function bossThink(state, h, dt) {
   if (!h.defenseBoss && state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.004 * dt)
   }
-  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8 }
+  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26 }
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
   // ── 예고된 처형기 집행: 예고가 끝나는 순간 발동한다 (시전 후 취소 없음 — 읽었다면 이미 피했다) ──
   // 가시갑옷 도발 집행: 예고가 끝나는 순간 링(r9) 안의 적을 도발(강제 평타) + 반사창 개시
@@ -5354,6 +5383,28 @@ function bossThink(state, h, dt) {
       e.tauntBy = h.id
     }
     pushFx(state, 'berserk', h.x, h.z, 6, h.team, 1.0)
+  }
+  // 공포의 응시 집행: 채널이 끝나는 순간 — 반경 안에서 보스를 "바라보던" 적만 공포+피해.
+  //  등/옆을 돌린 영웅은 완전 회피(피해 0) — 회피 판정은 위치가 아니라 각자의 시선(dir)이다.
+  if (h.bossGazeAt && state.time >= h.bossGazeAt) {
+    h.bossGazeAt = null
+    let caught = 0
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
+      if (dist(h, e) > GAZE_R) continue
+      if (Math.cos((e.dir || 0) - Math.atan2(h.z - e.z, h.x - e.x)) < GAZE_SAFE_COS) continue // 시선을 뗐다 — 회피
+      damageHero(state, e, skillDmg(h, 140, 2.6), h)
+      applyFear(state, e, GAZE_FEAR)
+      caught++
+    }
+    pushFx(state, 'shriek', h.x, h.z, 8, h.team, 1.1)
+    if (caught) pushFeed(state, 'obj', `👁️ ${caught}명이 응시에 사로잡혔다 — 공포에 질려 달아난다!`)
+  }
+  // 응시 채널 중: 눈을 부릅뜨고 제자리에 선다 — 그동안 이동·다른 기술 없음(집행은 위에서)
+  if (h.bossGazeAt) {
+    h.mx = 0
+    h.mz = 0
+    return
   }
   // 격돌 돌진: 예고해 둔 착지점으로 몸을 날린다(피해·기절은 예고 장판이 처리)
   if (h.bossDash && state.time >= h.bossDash.at) {
@@ -5968,6 +6019,22 @@ function bossThorn(state, h, foe) {
 function bossShadow(state, h, foe, siege) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd // 페이즈 가속 × 난이도 티어
+  // 공포의 응시(시그니처): 반경 안에 적이 있으면 눈을 부릅뜨는 채널 개시 — 집행은 bossThink 펜딩 섹션.
+  //  무한방어의 메아리 보스는 안 쓴다(보스전 전용 기믹 — 두 모드의 축 분리).
+  if (!h.defenseBoss && (h.bossCd.gaze ?? 1) <= 0 && !h.bossGazeAt) {
+    let near = 0
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
+      if (dist(h, e) <= GAZE_R - 2) near++ // 반경보다 약간 안쪽 — 채널 중 걸어 나갈 여지를 준다
+    }
+    if (near >= 1) {
+      h.bossCd.gaze = GAZE_CD * cdMul
+      h.bossGazeAt = state.time + GAZE_TELE * bossTierOf(state).tele
+      pushFx(state, 'shriek', h.x, h.z, 5, h.team, 0.8)
+      pushFeed(state, 'obj', `👁️ ${h.name}이(가) 공포의 응시를 시전한다 — 등을 돌려라! 바라보면 공포에 사로잡힌다!`)
+      return // 채널 개시 틱 — 다른 기술과 겹치지 않는다
+    }
+  }
   if (h.bossCd.a <= 0) {
     let weakest = null
     for (const e of state.heroes) {
@@ -6149,6 +6216,8 @@ function stepBots(state, dt) {
     // 보스 예고 장판 위 = 만사 제치고 이탈 (보스전 아군 — '공략' 반사신경)
     if (isRaidMode(state.mode) && h.team === 'blue' && botDodgeBossZone(state, h, dt)) continue
     if (isRaidMode(state.mode) && h.team === 'blue' && botSpreadBomb(state, h, dt)) continue
+    // 공포의 응시 채널 = 제자리 등돌리기 — 장판(즉사급)이 먼저, 시선 회피는 그다음
+    if (state.mode === 'boss' && h.team === 'blue' && botGazeAvert(state, h)) continue
     // 도발당한 봇: 후퇴/임무보다 우선 — 도발한 탱커에게 끌려가 평타친다
     if (h.tauntT > 0) {
       const tk = state.heroes.find((o) => o.id === h.tauntBy && o.team !== h.team && o.respawnT <= 0)
@@ -6475,6 +6544,24 @@ function botSpreadBomb(state, h, dt) {
   const d = Math.hypot(dx, dz) || 0.001
   steerToward(state, h, { x: h.x + (dx / d) * 7, z: h.z + (dz / d) * 7 })
   botAttack(state, h, dt) // 떨어지면서도 사거리 안이면 계속 때린다
+  return true
+}
+
+// 공포의 응시 채널 감지: 집행 직전(GAZE_TURN_W)에만 제자리에서 등을 돌린다 — 레이드 정석
+// "마지막 순간까지 딜하고 홱 돌기". 회피 조건은 오직 "시선"이라 도망칠 필요도 없다.
+//  · 채널 내내 멈추면 팀 DPS 증발(시뮬 클리어율 70%→30~35% 폭락), 도망은 복귀 낭비까지 얹는다.
+//  · 봇들이 일제히 홱 도는 순간이 사람에게 "지금이 돌 타이밍"을 가르치는 살아 있는 큐가 된다.
+const GAZE_TURN_W = 0.9 // 집행 전 이만큼 남았을 때부터 등돌림(초) — 그 전까진 평소처럼 싸운다
+function botGazeAvert(state, h) {
+  let boss = null
+  for (const e of state.heroes) {
+    if (e.isBoss && e.team !== h.team && e.bossGazeAt && e.respawnT <= 0 && e.hp > 0) { boss = e; break }
+  }
+  if (!boss || boss.bossGazeAt - state.time > GAZE_TURN_W) return false
+  if (dist(h, boss) > GAZE_R + 2) return false
+  h.mx = 0
+  h.mz = 0
+  h.dir = Math.atan2(h.z - boss.z, h.x - boss.x) // 보스 반대쪽 — 확실한 등돌림
   return true
 }
 
@@ -7236,7 +7323,8 @@ export function makeView(state) {
       bushI: h.bushI,
       revealT: r2d(h.revealT),
       // 보스전: 현재 국면(1~3)과 각성 보호막 잔여 — 위협 링 색·보호막 구체 연출용
-      ...(h.isBoss ? { bossPhase: h.bossPhase || 1, bossShieldT: r2d(h.bossShieldT || 0) } : null),
+      //  bossGazeT: 공포의 응시 채널 잔여(>0 = 채널 중) — 부릅뜬 눈 + 영웅별 👁️ 경고 연출용
+      ...(h.isBoss ? { bossPhase: h.bossPhase || 1, bossShieldT: r2d(h.bossShieldT || 0), bossGazeT: r2d(Math.max(0, (h.bossGazeAt || 0) - state.time)) } : null),
       dragonT: r1(h.dragonT),
       baronT: r1(h.baronT),
       kills: h.kills,

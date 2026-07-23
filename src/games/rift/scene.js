@@ -8,7 +8,7 @@ import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import {
   NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, RESPAWN_ARC_HALF, buildMap,
 } from './map.js'
-import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP } from './engine.js'
+import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP, GAZE_R, GAZE_SAFE_COS, trophySetOf } from './engine.js'
 import { ZODIAC_FACES } from './zodiacFaces.js'
 
 // ── 그래픽 품질 프리셋 ──
@@ -1293,6 +1293,39 @@ const HAT_BUILDERS = {
     g.userData.gems = gems
     return g
   },
+  // 그림자 가면(녹스 전리품 · 비매품): 이마 위로 밀어 올린 암보라 오니 가면 —
+  // 부릅뜬 보라 눈 + 은빛 그믐달 문양. FX(어둠 안개·눈 명멸)와 세트.
+  shadowmask(s) {
+    const g = new THREE.Group()
+    const dark = new THREE.MeshLambertMaterial({ color: 0x352a4e, emissive: 0x1a1030, emissiveIntensity: 0.55 })
+    const plate = new THREE.Mesh(new THREE.SphereGeometry(0.95 * s, 12, 9), dark)
+    plate.scale.set(1.05, 0.8, 0.45)
+    plate.position.set(0, 0.2 * s, 0.3 * s) // 살짝 앞으로 — 빌보드에서 얼굴 위 가면으로 읽힌다
+    g.add(plate)
+    // 부릅뜬 눈 두 개 — 세트의 주인(공포의 응시)을 그대로 새겼다
+    const eyes = [-1, 1].map((side) => {
+      const eye = gemMesh(0xb44ee0, 0.14 * s)
+      eye.scale.set(1.5, 0.9, 1)
+      eye.position.set(side * 0.4 * s, 0.22 * s, 0.68 * s)
+      g.add(eye)
+      return eye
+    })
+    // 이마의 은빛 그믐달(가는 초승 호)
+    const moon = new THREE.Mesh(new THREE.TorusGeometry(0.26 * s, 0.05 * s, 6, 14, Math.PI * 1.2),
+      new THREE.MeshLambertMaterial({ color: 0xd9dee8, emissive: 0x8a90a8, emissiveIntensity: 0.5 }))
+    moon.position.set(0, 0.58 * s, 0.62 * s)
+    moon.rotation.z = Math.PI * 0.9
+    g.add(moon)
+    // 가면 윗단 뿔 두 개 — 실루엣 포인트
+    for (const side of [-1, 1]) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.13 * s, 0.5 * s, 6), dark)
+      horn.position.set(side * 0.72 * s, 0.62 * s, 0.2 * s)
+      horn.rotation.z = -side * 0.5
+      g.add(horn)
+    }
+    g.userData.eyes = eyes
+    return g
+  },
 }
 
 // 보석 조형 — 팔면체(다이아 컷 느낌)를 세로로 살짝 늘이고 자체 발광을 준다
@@ -1462,6 +1495,25 @@ const HAT_FX = {
       fire(tip, glintCurve(t, 2.8, 0.62, 0.1) * 0.9, t, 1.2)
     }
   },
+  // 그림자 가면: 눈이 어둠 속에서 명멸하고, 보랏빛 안개가 가면 둘레를 흘러내린다
+  shadowmask(g, s) {
+    const eyes = g.userData.eyes || []
+    const mist = [0, 1, 2].map(() => fxSprite(g, 0x8a5bd6, 0.34 * s, false))
+    const glint = fxSprite(g, 0xd9b8ff, 0.5 * s)
+    return (t) => {
+      eyes.forEach((eye, i) => {
+        eye.material.emissiveIntensity = 0.4 + Math.max(0, Math.sin(t * 2.3 + i * 0.9)) * 0.55 // 번갈아 명멸
+      })
+      mist.forEach((m, i) => {
+        const c = (t / 2.9 + i / 3) % 1 // 가면 가장자리에서 아래로 스며 내리는 안개
+        m.position.set(Math.sin(i * 2.4 + t * 0.6) * 0.7 * s, (0.35 - c * 1.3) * s, 0.45 * s)
+        m.material.opacity = Math.sin(c * Math.PI) * 0.4
+        m.scale.setScalar(m.userData.base * (0.7 + 0.5 * c))
+      })
+      glint.position.set(0, 0.6 * s, 0.7 * s) // 그믐달 문양의 은빛 글린트
+      fire(glint, glintCurve(t, 3.4, 0.2, 0.11) * 0.8, t, 0.8)
+    }
+  },
 }
 
 // 모자 하나를 만든다 — 위치는 호출부가 정한다(쇼케이스/인게임 공용 순수 조형).
@@ -1488,6 +1540,7 @@ export function updateHatSparkle(hat, t) {
 export const COSTUME_IDS = [
   'bowtie', 'scarf', 'lei', 'backpack', 'quiver', 'shield', 'tube', 'lantern',
   'goldcape', 'armor', 'redcloak', 'jetpack', 'wings', 'devilwings', 'starcape',
+  'abysscloak', // 녹스 전리품(비매품) — 심연 망토
 ]
 
 function equippedCostume() {
@@ -1807,6 +1860,31 @@ const COSTUME_BUILDERS = {
     }
     return g
   },
+  // 심연 망토(녹스 전리품 · 비매품): 빛을 삼키는 암보라 망토 — 은빛 그믐달 브로치 +
+  // 밑단으로 갈수록 어둠에 녹아드는 느낌은 FX(스며 내리는 어둠 안개)가 맡는다.
+  abysscloak(s) {
+    const g = new THREE.Group()
+    const cloak = capeMesh(s, new THREE.MeshLambertMaterial({
+      color: 0x241a3e, emissive: 0x0e0820, emissiveIntensity: 0.75, side: THREE.DoubleSide,
+    }))
+    g.userData.cape = cloak
+    g.add(cloak)
+    // 어깨의 은빛 그믐달 브로치(가는 초승 호) — 가면·낫과 같은 문양으로 세트감을 잇는다
+    const moon = new THREE.Mesh(new THREE.TorusGeometry(0.2 * s, 0.05 * s, 6, 14, Math.PI * 1.2),
+      new THREE.MeshLambertMaterial({ color: 0xd9dee8, emissive: 0x8a90a8, emissiveIntensity: 0.55 }))
+    moon.position.set(0.95 * s, 0.6 * s, 0.32 * s)
+    moon.rotation.z = Math.PI * 0.9
+    g.add(moon)
+    // 망토 자락의 보라 마력 결정 — 심연에서 스며 나온 조각들
+    g.userData.shards = [[0.5, 0.5], [-0.4, -0.5], [0.2, 0.9]].map(([dy, dz]) => {
+      const sh = gemMesh(0x8a5bd6, 0.08 * s)
+      sh.position.set(-1.06 * s, dy * s, dz * s)
+      g.add(sh)
+      return sh
+    })
+    g.userData.hideCape = true
+    return g
+  },
 }
 
 // 옷 FX — 최고가만. 날개는 깃 끝 성광 + 등 뒤 은은한 후광 펄스.
@@ -1900,6 +1978,26 @@ const COSTUME_FX = {
       glow.position.set(-1.38 * s, 1.75 * s, 0.1 * s)
       glow.material.opacity = 0.22 + 0.08 * Math.sin(t * 3.2)
       glow.scale.setScalar(glow.userData.base)
+    }
+  },
+  // 심연 망토: 천 웨이브 + 결정 명멸 + 밑단에서 스며 내리는 어둠 안개
+  abysscloak(g, s) {
+    const mist = [0, 1, 2].map(() => fxSprite(g, 0x6a48b0, 0.4 * s, false))
+    const glint = fxSprite(g, 0xd9b8ff, 0.5 * s)
+    return (t) => {
+      waveCape(g.userData.cape, t, s)
+      const shards = g.userData.shards || []
+      shards.forEach((sh, i) => {
+        sh.material.emissiveIntensity = 0.3 + Math.max(0, Math.sin(t * 1.7 + i * 1.4)) * 0.5
+      })
+      mist.forEach((m, i) => {
+        const c = (t / 3.1 + i / 3) % 1 // 밑단에서 바닥으로 흘러내려 녹아 사라진다
+        m.position.set(-1.1 * s, (-0.6 - c * 1.1) * s, Math.sin(i * 2.2 + t * 0.5) * 0.7 * s)
+        m.material.opacity = Math.sin(c * Math.PI) * 0.38
+        m.scale.setScalar(m.userData.base * (0.6 + 0.6 * c))
+      })
+      glint.position.set(0.95 * s, 0.62 * s, 0.4 * s) // 그믐달 브로치 글린트
+      fire(glint, glintCurve(t, 3.6, 0.4, 0.1) * 0.8, t, 0.8)
     }
   },
 }
@@ -2266,6 +2364,7 @@ export function buildClassParts(cls, s, body) {
 export const WEAPON_SKIN_IDS = [
   'woodsword', 'candycane', 'pan', 'mallet', 'fish', 'umbrella', 'trident',
   'doubleaxe', 'guitar', 'scythe', 'gemstaff', 'lightspear', 'flamesword', 'frostblade', 'excalibur',
+  'crescentscythe', // 녹스 전리품(비매품) — 그믐의 낫
 ]
 
 function equippedWeaponSkin() {
@@ -2546,6 +2645,33 @@ const WEAPON_SKINS = {
     g.add(blade, tip, guard, gem)
     g.userData.gem = gem
   },
+  // 그믐의 낫(녹스 전리품 · 비매품): 일반 낫보다 한층 큰 그믐달 칼날 —
+  // 어둠을 벼린 암보라 날 + 보랏빛 냉광 셸. FX(어둠 위스프)와 세트.
+  crescentscythe(g) {
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.075, 2.1, 8), lamb(0x2a2038))
+    shaft.rotation.z = -Math.PI / 2
+    shaft.position.x = 1.05
+    // 자루의 은빛 감개 두 줄 — 밋밋함 방지
+    for (const dx of [0.55, 1.35]) {
+      const wrap = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.03, 6, 10), lamb(0x8a90a8))
+      wrap.rotation.y = Math.PI / 2
+      wrap.position.x = dx
+      g.add(wrap)
+    }
+    // 그믐달 칼날 — 크게 휘어 도는 초승 호(기본 낫 0.62 → 0.85)
+    const dark = new THREE.MeshLambertMaterial({ color: 0x4a3a6e, emissive: 0x2a1a4e, emissiveIntensity: 0.8 })
+    const blade = new THREE.Mesh(new THREE.TorusGeometry(0.85, 0.085, 6, 18, 2.4), dark)
+    blade.position.set(2.1, -0.35, 0)
+    blade.rotation.z = 1.85
+    blade.scale.z = 0.35
+    bladeGlow(blade, 0x8a5bd6, 0.3, 1.05, 1.9, 1.9) // 날을 감싸는 보랏빛 냉광
+    g.add(shaft, blade)
+    // 날 뿌리의 마력 결정(보라) — 낫의 심장
+    const gem2 = gemMesh(0x8a4ee0, 0.14)
+    gem2.position.set(2.05, 0.05, 0)
+    g.add(gem2)
+    g.userData.gem = gem2
+  },
 }
 
 // 무기 스킨 FX — 고가만. 검신을 따라 흐르는 글린트가 "샤링"의 핵심
@@ -2615,6 +2741,23 @@ const WEAPON_FX = {
       aura.material.opacity = 0.18 + 0.1 * Math.sin(t * 2.4)
       aura.scale.setScalar(aura.userData.base)
       if (g.userData.gem) g.userData.gem.material.emissiveIntensity = 0.4 + 0.3 * Math.sin(t * 2.4)
+    }
+  },
+  // 그믐의 낫: 날의 호를 따라 흐르는 어둠 위스프 + 마력 결정 명멸
+  crescentscythe(g) {
+    const wisps = [0, 1].map(() => fxSprite(g, 0x8a5bd6, 0.36, false))
+    const glint = fxSprite(g, 0xd9b8ff, 0.55)
+    return (t) => {
+      wisps.forEach((w, i) => {
+        const c = (t / 1.9 + i * 0.5) % 1 // 날 뿌리→끝으로 호를 그리며 흐른다
+        const a = 1.0 + c * 1.9
+        w.position.set(2.1 + Math.cos(a) * 0.85, -0.35 + Math.sin(a) * 0.85, 0.1)
+        w.material.opacity = Math.sin(c * Math.PI) * 0.6
+        w.scale.setScalar(w.userData.base * (0.6 + 0.4 * Math.sin(c * Math.PI)))
+      })
+      glint.position.set(2.05, 0.08, 0.12)
+      fire(glint, glintCurve(t, 2.7, 0.3, 0.11) * 0.9, t, 1.1)
+      if (g.userData.gem) g.userData.gem.material.emissiveIntensity = 0.4 + Math.max(0, Math.sin(t * 2.1)) * 0.5
     }
   },
 }
@@ -2943,6 +3086,35 @@ function buildWeapon(cls, skinId = null) {
 }
 
 // 영웅: 팀 색 캡슐 몸통 + 12지신 이모지 얼굴 + 직업 아이콘 이름표 + 체력바
+// 보스 전리품 풀세트 오라 — 발밑에 도는 보랏빛 링 + 피어오르는 어둠 입자(명예 표시).
+// 스탯 효과(PvE 이속)는 엔진 몫이고 이건 순수 연출 — 콜로세움에서도 보이지만 효과는 없다.
+function buildTrophyAura(s) {
+  const g = new THREE.Group()
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(1.7 * s, 2.3 * s, 28),
+    new THREE.MeshBasicMaterial({
+      color: 0x8a4ee0, transparent: true, opacity: 0.38, side: THREE.DoubleSide,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    })
+  )
+  ring.rotation.x = -Math.PI / 2
+  ring.position.y = 0.12
+  g.add(ring)
+  const motes = [0, 1, 2].map(() => fxSprite(g, 0xb08aff, 0.5 * s, false))
+  g.userData.fxUpdate = (t) => {
+    ring.rotation.z = t * 0.8
+    ring.material.opacity = 0.28 + 0.14 * Math.sin(t * 2.4)
+    motes.forEach((m, i) => {
+      const c = (t / 2.7 + i / 3) % 1 // 링 언저리에서 피어올라 녹아 사라지는 입자
+      const a = i * 2.1 + t * 0.7
+      m.position.set(Math.cos(a) * 1.8 * s, (0.3 + c * 3.6) * s, Math.sin(a) * 1.8 * s)
+      m.material.opacity = Math.sin(c * Math.PI) * 0.45
+      m.scale.setScalar(m.userData.base * (0.6 + 0.4 * Math.sin(c * Math.PI)))
+    })
+  }
+  return g
+}
+
 function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkinId = null) {
   const g = new THREE.Group()
   const col = TEAM_COLOR[h.team]
@@ -3076,6 +3248,14 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   bombMark.visible = false
   g.add(bombMark)
   let thornArmor = null // 가시갑옷 💢 — 반사창 동안 "때리지 마" 신호
+  let gazeMark = null // 공포의 응시 👁️ — 채널 중 보스를 "바라보는" 동안만 켜진다(등 돌리면 즉시 꺼짐)
+  let gazeEye = null // 보스 전용: 채널 동안 가슴께에 부릅뜨는 거대한 눈
+  if (!CLASSES[h.cls]?.boss) {
+    gazeMark = emojiSprite('👁️', 1.9)
+    gazeMark.position.set(0, 7.6 + uiLift, 0)
+    gazeMark.visible = false
+    g.add(gazeMark)
+  }
   if (CLASSES[h.cls]?.boss) {
     dormant = emojiSprite('💤', 2.6)
     dormant.position.set(1.6 * s, 5.9 * s, 0)
@@ -3085,6 +3265,18 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     thornArmor.position.set(-1.6 * s, 5.9 * s, 0)
     thornArmor.visible = false
     g.add(thornArmor)
+    gazeEye = emojiSprite('👁️', 3.4)
+    gazeEye.position.set(0, 3.0 * s, 0) // 가슴께 — "보스가 나를 노려본다"가 정면으로 읽힌다
+    gazeEye.visible = false
+    alwaysOnTop(gazeEye, 10)
+    g.add(gazeEye)
+  }
+  // 보스 전리품 풀세트 오라 — 장착 3피스가 한 보스 세트일 때만(명예 표시, 씬 전용 코스메틱).
+  // 인게임(내 영웅)과 꾸미기 쇼케이스가 같은 경로로 얻는다 — 넘겨받은 장착 id로 판정.
+  let setAura = null
+  if (trophySetOf(hatId, costumeId, weaponSkinId)) {
+    setAura = buildTrophyAura(s)
+    g.add(setAura)
   }
   if (CLASSES[h.cls]?.boss) {
     threat = new THREE.Mesh(
@@ -3227,7 +3419,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
     costume, // 옷 — FX(fxUpdate) 애니메이션용 참조
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, threat, dormant, bombMark, thornArmor, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
@@ -3269,7 +3461,10 @@ function setHeroDead(u, dead) {
     if (u.bombMark) u.bombMark.visible = false
     if (u.threat) u.threat.visible = false
     if (u.dormant) u.dormant.visible = false
+    if (u.gazeMark) u.gazeMark.visible = false // 공포의 응시 👁️ 경고
+    if (u.gazeEye) u.gazeEye.visible = false // 보스의 부릅뜬 눈
   }
+  if (u.setAura) u.setAura.visible = !dead // 전리품 세트 오라도 시체에 남지 않게
 }
 
 // 사망 파티클 위치 갱신: deathT(초)에 따라 튀어올랐다 바닥(y≈0.18)에 쌓인다
@@ -5925,6 +6120,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
       }
     }
+    // 공포의 응시 채널 중인 보스(한 번에 하나) — 영웅별 "바라보는 중" 👁️ 경고 판정에 쓴다
+    let gazeBoss = null
+    for (const h of view.heroes) {
+      if ((h.bossGazeT || 0) > 0 && h.respawnT <= 0) { gazeBoss = h; break }
+    }
     // 영웅 — 적은 시야/수풀 규칙에 걸리면 안 보인다
     syncPool(
       scene, heroPool, view.heroes,
@@ -6034,6 +6234,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
         if (u.costume) updateHatSparkle(u.costume, view.time) // 옷 FX(날개 후광 등)
         updateHatSparkle(u.weapon, view.time) // 무기 스킨 FX(화염검 불씨 등) — 없으면 no-op
+        if (u.setAura) updateHatSparkle(u.setAura, view.time) // 전리품 세트 오라(링 회전·입자)
         if (h.whirlT <= 0 && h.airT <= 0) u.body.rotation.z = Math.sin(u.wphase) * 0.06 * wk.amt
         else u.body.rotation.z = 0
         // 다리 성큼성큼 + 팔 흔들기: 다리는 반대 위상, 팔은 같은 쪽 다리와 반대로(자연스러운 걸음)
@@ -6150,6 +6351,33 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           const armored = (h.thornArmorT || 0) > 0
           u.thornArmor.visible = armored
           if (armored) u.thornArmor.material.rotation = Math.sin(view.time * 5) * 0.2
+        }
+        // 공포의 응시 👁️ 경고: 채널 중 보스를 "바라보는" 동안만 머리 위에 뜬다 —
+        // 등을 돌리면 즉시 꺼진다: 회피 성공이 실시간으로 손에 잡히는 피드백
+        if (u.gazeMark) {
+          let watching = false
+          if (gazeBoss && h.team !== gazeBoss.team && h.respawnT <= 0) {
+            const dx = gazeBoss.x - h.x
+            const dz = gazeBoss.z - h.z
+            if (dx * dx + dz * dz < GAZE_R * GAZE_R) {
+              watching = Math.cos((h.dir || 0) - Math.atan2(dz, dx)) >= GAZE_SAFE_COS
+            }
+          }
+          u.gazeMark.visible = watching
+          if (watching) { // 채널 종료가 다가올수록 다급하게 고동친다(가시 낙인 ❗ 문법)
+            const urgency = 1 + Math.max(0, 2.4 - gazeBoss.bossGazeT) * 2.5
+            u.gazeMark.scale.setScalar(1.9 * (1 + 0.25 * Math.abs(Math.sin(view.time * 4 * urgency))))
+          }
+        }
+        // 보스의 부릅뜬 눈: 채널 동안 가슴께에서 점점 크게 열린다 — "지금 등을 돌려야 한다" 카운트다운
+        if (u.gazeEye) {
+          const gz = (h.bossGazeT || 0) > 0
+          u.gazeEye.visible = gz
+          if (gz) {
+            const open = 1 - Math.min(1, h.bossGazeT / 2.4) // 0→1: 눈이 점점 크게 떠진다
+            u.gazeEye.scale.setScalar(3.4 * (0.65 + open * 0.65) * (1 + 0.05 * Math.sin(view.time * 10)))
+            u.gazeEye.material.opacity = 0.7 + 0.3 * Math.abs(Math.sin(view.time * 7))
+          }
         }
         // 탱커 방패막기(파란 막). 보스 각성 휴지기엔 같은 구체를 어둠의 보호막(보라 맥동)으로 쓴다
         const bossShielded = (h.bossShieldT || 0) > 0
@@ -6936,6 +7164,7 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume 
     }
     if (u.costume) updateHatSparkle(u.costume, time) // 옷 FX
     updateHatSparkle(u.weapon, time) // 무기 스킨 FX — 없으면 no-op
+    if (u.setAura) updateHatSparkle(u.setAura, time) // 전리품 세트 오라 — 쇼케이스에서도 돈다
     if (u.legs) {
       u.legs[0].rotation.z = stride
       u.legs[1].rotation.z = -stride

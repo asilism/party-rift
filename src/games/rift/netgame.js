@@ -26,6 +26,7 @@ export const riftNet = {
         cls: p.cls,
         isBot: !!p.isBot,
         deviceId: p.deviceId,
+        trophySet: p.trophySet || null, // 보스 전리품 풀세트 — PvE 소효과(엔진이 모드로 게이트)
       }))
       return { players: list, opts: { mode, botLevel: config?.botLevel, bossTier: config?.bossTier, carry: config?.carry, arenaLayout: config?.arenaLayout, arenaPts: config?.arenaPts, arenaDeduct: config?.arenaDeduct, arenaRound: config?.arenaRound } }
     }

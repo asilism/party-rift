@@ -1,6 +1,9 @@
 # 보스전 심화 — 기믹 + 전리품 + 세트 효과 설계
 
-작성: 2026-07-23. 상태: **설계 계획, 미착수(백로그).** 나중에 이 문서에서 이어서 시작한다.
+작성: 2026-07-23. 상태: **그림자 군주 세로 슬라이스 구현 완료(v53)** — gaze 기믹 + 전리품 3피스 +
+비매품 UI + 클리어 해금 + 세트 효과(PvE 이속)까지 전 흐름 검증됨. 나머지 3보스는 이 문서로 이어서 확장한다.
+슬라이스에서 얻은 교훈: **봇은 채널 내내 멈추면 안 된다** — 집행 직전(0.9초)에만 등을 돌리게 해야
+클리어율 밴드가 유지된다(내내 멈추면 70%→30%대 폭락). 다음 보스 기믹도 "봇 대응은 최소 시간" 원칙으로.
 목적: 보스전이 "증강 없는 디펜스"처럼 얇게 느껴지는 문제 해소 — 두 모드의 정체성을 갈라 겹침을 없앤다.
 
 ## 배경 / 핵심 방향
@@ -104,8 +107,15 @@
 
 **병목 = 꾸미기 3D 모델 12개(scene.js 절차 빌더).** 나머지(데이터·UI·해금·효과 게이트)는 가벼움.
 
-### 세로 슬라이스 먼저 — 보스 1종(예: 그림자 군주)으로 전 흐름 검증
+### 세로 슬라이스 먼저 — 보스 1종(예: 그림자 군주)으로 전 흐름 검증 ✅ 완료(v53)
 ① gaze 기믹(엔진+봇) → ② 3피스 전리품 모델 + trophy 데이터 → ③ 비매품 UI → ④ 클리어 해금 훅 → ⑤ 세트 효과(PvE) → ⑥ 실기기 확인. 흐름 확정 후 나머지 3보스 확장.
+
+구현 위치(다음 보스 확장 시 그대로 따라가면 된다):
+- 기믹: engine.js `GAZE_*` 상수 + bossShadow 시전 + bossThink 펜딩 집행 + `botGazeAvert`(집행 직전만 등돌림) + makeView `bossGazeT`
+- 연출: scene.js 보스 가슴께 👁️(점점 커짐) + 영웅 머리 위 👁️ 경고(바라보는 동안만 — 등 돌리면 즉시 꺼져 회피 성공이 읽힌다)
+- 전리품: SoloApp `HATS/COSTUMES/WEAPONS`에 `trophy:{boss,tier}` 항목 + `grantBossTrophies`(onFinish) + HatScreen 잠금/전리품 분기
+- 모델: scene.js `shadowmask`(HAT_BUILDERS/FX) · `abysscloak`(COSTUME_BUILDERS/FX) · `crescentscythe`(WEAPON_SKINS/FX) — 은빛 그믐달 문양으로 세트감 통일
+- 세트 효과: engine.js `TROPHY_SETS`/`trophySetOf` + roster.js에서 장착 판정 → netgame/makeHeroState 전달 → createGame이 `isRaidMode` 아니면 제거(콜로세움 누수 원천 차단) + scene `buildTrophyAura`(발밑 보라 링·입자)
 
 ### 이후
 - 나머지 3보스 기믹 + 전리품(모델 9개)
