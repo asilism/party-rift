@@ -12,10 +12,13 @@ const RiftGame = lazy(() => import('./games/rift/RiftGame.jsx'))
 
 // 솔로(오프라인) 모드 — 앱 셸(Electron/안드로이드 Capacitor) 또는 ?solo.
 //  서버 연결 없이 로컬 시뮬 봇전만 돈다. 웹 온라인 플로우는 그대로.
+//  ?boss(보스 디버그)는 솔로 위에서 도는 모드라 자동으로 솔로를 켠다 — ?solo를 같이 칠 필요 없음.
 const SoloApp = lazy(() => import('./solo/SoloApp.jsx'))
 const soloMode =
   typeof window !== 'undefined' &&
-  (IS_APP_SHELL || new URLSearchParams(window.location.search).has('solo'))
+  (IS_APP_SHELL
+    || new URLSearchParams(window.location.search).has('solo')
+    || new URLSearchParams(window.location.search).has('boss'))
 
 // 개발 검수용 — ?faces: 12지신 인게임 실물을 한 화면에 진열(얼굴 크기·크롭 비교)
 const FaceGallery = lazy(() => import('./dev/FaceGallery.jsx'))
