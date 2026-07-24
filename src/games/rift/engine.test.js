@@ -3779,3 +3779,85 @@ test('bossRush 없는 보통 판은 그대로: 1레벨 시작 + 보스 수면', 
   assert.equal(g.heroes.find((h) => !h.isBoss).lvl, 1)
   assert.equal(g.time, 0)
 })
+
+// ── 아르케인 개편: 소환 의식(소환석 DPS 체크) + 섬멸의 광선 ──
+
+function arcaneRaid() {
+  const g = createGame([
+    { id: 'p1', name: 'P1', zodiacId: 'rat', color: '#abc', cls: 'warrior', team: 'blue' },
+    { id: 'p2', name: 'P2', zodiacId: 'ox', color: '#abc', cls: 'archer', team: 'blue' },
+    { id: 'boss', name: '아르케인', zodiacId: 'boss_archmage', color: '#f55', cls: 'boss_archmage', team: 'red', isBot: true },
+  ], { mode: 'boss', rng: () => 0.5 })
+  startPlaying(g)
+  return g
+}
+
+test('소환석: 피해량과 무관하게 타격 1회당 체력 1 — 의식 중 보스는 무적', () => {
+  const g = arcaneRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  boss.stonesAt = g.time + 14
+  const stone = { id: g.nextId++, team: 'red', stone: true, lane: 'mid', ranged: false, x: 0, z: 0, hp: 10, maxHp: 10, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0 }
+  g.minions.push(stone)
+  const bossHp = boss.hp
+  // 큰 피해를 넣어도 1씩만 깎인다
+  const dmg = 500
+  const before = stone.hp
+  // damageMinion은 내부 함수 — 평타 파이프라인 대신 직접 시뮬: 미니언에 광역 피해를 주는
+  // 성좌 낙인 폭발은 영웅 대상이라, 봇 평타로 검증한다
+  const a = g.heroes.find((h) => h.id === 'p1')
+  a.x = 2; a.z = 0
+  castAttack(g, 'p1', { tk: 'minion', id: stone.id })
+  run(g, 0.6) // 투사체 명중 대기
+  assert.equal(stone.hp, before - 1, `타격 1회 = 정확히 1 (남은 ${stone.hp})`)
+  // 의식 중 보스 무적
+  const hpB = boss.hp
+  boss.lastHurt = 0
+  a.x = boss.x - 4; a.z = boss.z
+  castAttack(g, 'p1', { tk: 'hero', id: boss.id })
+  run(g, 0.6)
+  assert.ok(boss.hp >= hpB - 1, '의식 채널 중 보스는 무적(재생 오차 허용)')
+})
+
+test('소환 의식 실패: 남은 소환석 수만큼 아군이 즉결 처형당한다', () => {
+  const g = arcaneRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  for (let i = 0; i < 2; i++) {
+    g.minions.push({ id: g.nextId++, team: 'red', stone: true, lane: 'mid', ranged: false, x: 10 + i, z: 0, hp: 10, maxHp: 10, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0 })
+  }
+  boss.stonesAt = g.time // 이번 스텝에 시한 만료
+  const aliveBefore = g.heroes.filter((h) => h.team === 'blue' && h.respawnT <= 0).length
+  step(g, STEP)
+  const aliveAfter = g.heroes.filter((h) => h.team === 'blue' && h.respawnT <= 0).length
+  assert.equal(aliveBefore - aliveAfter, 2, '소환석 2개 → 2명 처형')
+  assert.equal(g.minions.filter((m) => m.stone).length, 0, '의식 종료 — 돌 소멸')
+})
+
+test('소환 의식 저지: 시한 내 전파괴 → 보스 그로기(기절)', () => {
+  const g = arcaneRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  boss.stonesAt = g.time + 10
+  g.minions.push({ id: g.nextId++, team: 'red', stone: true, lane: 'mid', ranged: false, x: 10, z: 0, hp: 0, maxHp: 10, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0 })
+  g.minions = g.minions.filter((m) => !m.stone) // 마지막 돌이 깨진 상황
+  step(g, STEP)
+  assert.equal(boss.stonesAt, null, '의식이 끊겼다')
+  assert.ok(boss.stunT >= 2.3, `저지 보상 그로기 (${boss.stunT})`)
+})
+
+test('섬멸의 광선: 경로 안 즉사(넉백 후 소멸), 경로 밖 무피해', () => {
+  const g = arcaneRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1') // 경로 안
+  const b = g.heroes.find((h) => h.id === 'p2') // 경로 밖
+  const bf = g.map.FOUNTAIN_POS.blue
+  boss.x = bf.x + 30; boss.z = bf.z
+  boss.bossBeamDir = Math.PI // -x 방향(아군 쪽)
+  boss.bossBeamAt = g.time // 이번 스텝 발사
+  a.x = bf.x + 10; a.z = bf.z // 광선 축 위
+  b.x = bf.x + 10; b.z = bf.z + 10 // 축에서 10 벗어남(반폭 3.6 밖)
+  const hpB = b.hp
+  step(g, STEP)
+  assert.ok(a.beamDeathAt != null || a.respawnT > 0, '경로 안 — 소멸 예약(넉백 비행 중)')
+  run(g, 0.8)
+  assert.ok(a.respawnT > 0, '날아가던 끝에서 즉사')
+  assert.equal(b.hp, hpB, '경로 밖 — 무피해')
+})
