@@ -5268,7 +5268,8 @@ function buildBeamOverlay() {
   return g
 }
 
-// 서리 숨결 부채꼴 예고 — 반각 CONE_HALF의 부채꼴이 청백으로 점멸 가속
+// 서리 숨결 부채꼴 예고 — 청백 점멸 가속. 국면 스케일(반각 변화)은 지오메트리 교체,
+// 길이 변화는 스케일로 따라간다(엔진 판정과 항상 일치해야 한다)
 function buildConeOverlay() {
   const g = new THREE.Group()
   const tele = new THREE.Mesh(
@@ -5281,7 +5282,7 @@ function buildConeOverlay() {
   tele.rotation.x = -Math.PI / 2
   tele.position.y = 0.35
   g.add(tele)
-  g.userData = { tele }
+  g.userData = { tele, half: CONE_HALF }
   return g
 }
 
@@ -7429,6 +7430,14 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           seen.add(coneKey)
           co.position.set(h.x, 0, h.z)
           co.rotation.y = -(h.bossConeDir || 0)
+          // 국면 스케일: 반각이 바뀌면 부채꼴을 다시 굽고, 길이는 스케일로
+          const ch2 = h.bossConeHalf || CONE_HALF
+          if (co.userData.half !== ch2) {
+            co.userData.tele.geometry.dispose()
+            co.userData.tele.geometry = new THREE.CircleGeometry(CONE_R, 26, -ch2, ch2 * 2)
+            co.userData.half = ch2
+          }
+          co.scale.setScalar((h.bossConeR || CONE_R) / CONE_R)
           const urg = 1 - Math.min(1, h.bossConeT / (h.bossConeT0 || 1.1))
           co.userData.tele.material.color.setHex(urg > 0.6 ? 0xcfe8ff : 0x9fe4ff)
           co.userData.tele.material.opacity = 0.16 + urg * 0.3 + 0.1 * Math.abs(Math.sin(view.time * (7 + urg * 16)))

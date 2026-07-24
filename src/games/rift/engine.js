@@ -5403,7 +5403,7 @@ const SLAM_AIR = 1.0 // 휘말리면 공중에 뜨는 시간(돌풍 airT 재사�
 export const STONE_HP = 9 // 소환석 체력 — 피해량 무관 타격 1회당 1씩(스킬도 1) — "손이 몇 번 갔나"
 const STONE_TIME = 12 // 의식 시간 — 이 안에 전부 못 부수면 남은 수만큼 아군 즉결 처형
 const STONE_COUNT = [3, 4, 5] // 국면별 소환석 수
-const STONES_CD = 42 // 의식 주기 — 페이즈·티어 배율 적용
+const STONES_CD = 50 // 의식 주기 — 자주 오면 손맛이 아니라 숙제가 된다(유저 피드백) — 페이즈·티어 배율 적용
 export const BEAM_LEN = 55 // 섬멸 광선 길이 — 씬(경고 띠)과 공유
 export const BEAM_HALF = 3.6 // 광선 반폭
 const BEAM_CHARGE = 1.2 // 조준(경고) 시간 — 티어 tele 적용. 경로에서 비키면 완전 회피
@@ -5412,8 +5412,8 @@ const BEAM_CD = 34
 const BEAM_FLING_T = 0.85 // 피격 시 비행 시간 — 지형 무시로 맵 끝까지 쏘아진 뒤 소멸
 const BEAM_FLING_V = 85 // 비행 속도 — "정말 섬멸당하는" 속도감
 // 국면별 가닥 수: 1 → 2(방사형 ±26°) → 3(±46°) — 가닥 사이가 도망 골목이다
-export const beamOffsets = (n) => (n >= 3 ? [-0.8, 0, 0.8] : n === 2 ? [-0.45, 0.45] : [0])
-const PRISON_CD = 16 // 바위감옥+운석 3연타 연계 주기
+export const beamOffsets = (n) => (n >= 3 ? [-0.68, 0, 0.68] : n === 2 ? [-0.38, 0.38] : [0]) // 각을 살짝 좁혀 도망 골목을 타이트하게
+const PRISON_CD = 19 // 바위감옥+운석 3연타 연계 주기
 export const PRISON_R = 5 // 감옥 반경 — 뭉친 무리를 통째로 가둘 크기
 // 서리 숨결(한빙술사 콘 크게): 부채꼴 예고 → 전방 부채꼴 빙결 — 각도로 피하는 새 동사
 export const CONE_R = 20 // 숨결 길이 — 씬(부채꼴 예고)과 공유
@@ -5494,7 +5494,7 @@ function bossThink(state, h, dt) {
   if (!h.defenseBoss && state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.004 * dt)
   }
-  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 30 } // gaze/stomp/stones = 보스전 전용 시그니처
+  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34 } // gaze/stomp/stones = 보스전 전용 시그니처
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
   // ── 예고된 처형기 집행: 예고가 끝나는 순간 발동한다 (시전 후 취소 없음 — 읽었다면 이미 피했다) ──
   // 가시갑옷 도발 집행: 예고가 끝나는 순간 링(r9) 안의 적을 도발(강제 평타) + 반사창 개시
@@ -5629,15 +5629,15 @@ function bossThink(state, h, dt) {
     h.bossConeSeq = (h.bossConeSeq || 0) + 1
     for (const e of state.heroes) {
       if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
-      if (dist(h, e) > CONE_R) continue
+      if (dist(h, e) > (h.bossConeR || CONE_R)) continue
       let dd = Math.atan2(e.z - h.z, e.x - h.x) - h.bossConeDir
       while (dd > Math.PI) dd -= 2 * Math.PI
       while (dd < -Math.PI) dd += 2 * Math.PI
-      if (Math.abs(dd) > CONE_HALF) continue
-      damageHero(state, e, skillDmg(h, 85, 1.6), h)
+      if (Math.abs(dd) > (h.bossConeHalf || CONE_HALF)) continue
+      damageHero(state, e, skillDmg(h, 75, 1.4), h)
       e.freezeT = Math.max(e.freezeT, 1.2)
     }
-    pushFxDir(state, 'frost', h.x, h.z, CONE_R, h.bossConeDir, h.team)
+    pushFxDir(state, 'frost', h.x, h.z, h.bossConeR || CONE_R, h.bossConeDir, h.team)
   }
   // 숨결 조준 중: 그 방향으로 숨을 들이켠다 — 부채꼴 예고가 곧 데드라인
   if (h.bossConeAt) {
@@ -6265,6 +6265,8 @@ function bossArchmage(state, h, foe) {
   if (h.bossCd.b <= 0 && foe && dist(h, foe) < CONE_R - 2 && !h.bossConeAt && bigReady) {
     h.bossCd.b = CONE_CD * cdMul
     h.bossConeDir = Math.atan2(foe.z - h.z, foe.x - h.x)
+    h.bossConeR = p >= 3 ? 26 : p === 2 ? 23 : CONE_R // 국면이 오르면 숨결이 길고 넓어진다
+    h.bossConeHalf = p >= 3 ? 0.75 : p === 2 ? 0.65 : CONE_HALF
     const charge = CONE_CHARGE * bossTierOf(state).tele
     h.bossConeAt = state.time + charge
     h.bossConeT0 = charge
@@ -6278,14 +6280,15 @@ function bossArchmage(state, h, foe) {
     h.bossCd.fan = GALE_CD * cdMul
     const dir = Math.atan2(foe.z - h.z, foe.x - h.x)
     h.dir = dir
-    const offs = p >= 3 ? [-0.4, 0, 0.4] : [-0.28, 0.28]
+    const offs = p >= 3 ? [-0.55, -0.18, 0.18, 0.55] : p === 2 ? [-0.4, 0, 0.4] : [-0.28, 0.28] // 국면당 2→3→4기
+    const gr = p >= 3 ? 3.6 : p === 2 ? 3.3 : 3.0 // 국면이 오르면 회오리도 굵어진다
     for (const off of offs) {
       const d = dir + off
       state.projectiles.push({
         id: state.nextId++, kind: 'tornado', team: h.team, owner: h.id,
         x: h.x + Math.cos(d) * 3, z: h.z + Math.sin(d) * 3, dir: d,
         vx: Math.cos(d) * GUST_SPEED, vz: Math.sin(d) * GUST_SPEED,
-        travel: 0, max: 34, r: 3.0, dmg: skillDmg(h, 55, 1.0), hit: new Set(),
+        travel: 0, max: 34, r: gr, dmg: skillDmg(h, 45, 0.85), hit: new Set(),
       })
     }
     pushFx(state, 'tornado', h.x, h.z, 5, h.team, 0.8)
@@ -6956,13 +6959,15 @@ function botDodgeBeam(state, h, dt) {
     }
     if (b.bossConeAt) {
       const d = dist(h, b)
-      if (d < CONE_R + 2) {
+      const cr = b.bossConeR || CONE_R
+      const chh = b.bossConeHalf || CONE_HALF
+      if (d < cr + 2) {
         let dd = Math.atan2(h.z - b.z, h.x - b.x) - b.bossConeDir
         while (dd > Math.PI) dd -= 2 * Math.PI
         while (dd < -Math.PI) dd += 2 * Math.PI
-        if (Math.abs(dd) < CONE_HALF + 0.18) {
+        if (Math.abs(dd) < chh + 0.18) {
           const side = dd >= 0 ? 1 : -1 // 치우친 쪽 바깥 각도로 마저 빠진다
-          const esc = b.bossConeDir + side * (CONE_HALF + 0.55)
+          const esc = b.bossConeDir + side * (chh + 0.55)
           steerToward(state, h, { x: b.x + Math.cos(esc) * Math.max(8, d), z: b.z + Math.sin(esc) * Math.max(8, d) })
           botAttack(state, h, dt)
           return true
@@ -7813,6 +7818,8 @@ export function makeView(state) {
         bossConeT: r2d(Math.max(0, (h.bossConeAt || 0) - state.time)), // 서리 숨결 조준(부채꼴 예고)
         bossConeT0: r2d(h.bossConeT0 || 0),
         bossConeDir: r2d(h.bossConeDir || 0),
+        bossConeR: r2d(h.bossConeR || 0), // 국면 스케일(길이·반각) — 씬 부채꼴이 판정과 같게
+        bossConeHalf: r2d(h.bossConeHalf || 0),
         bossConeSeq: h.bossConeSeq || 0,
       } : null),
       dragonT: r1(h.dragonT),
