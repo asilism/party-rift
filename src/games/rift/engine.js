@@ -5368,6 +5368,7 @@ function pushBossZone(state, h, opts) {
     knock: opts.knock || 0, knockStun: opts.knockStun || 0, // >0이면 폭발 시 중심에서 바깥으로 밀어낸다
     life: opts.life || 0, dps: opts.dps || 0, slow: opts.slow || 0,
     safe: opts.safe || false, // 안전지대(발구르기): 피해 없음 — "여기로 피해!" 표식. 봇 회피에서 제외
+    arrowOnly: opts.arrowOnly || false, // 돌진: 원 없이 경로 화살표만 — 카르곤 원 과밀 해소(유저 피드백)
     vfx: opts.vfx || 'quake', hue: opts.hue || 'lava', exploded: false,
     // 소환 장판: delay가 끝나면 피해 대신 이 정예를 하늘빛과 함께 강림시킨다
     spawnAdd: opts.spawnAdd || null,
@@ -5948,7 +5949,9 @@ function bossColossus(state, h, foe) {
       h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
       pushBossZone(state, h, {
         x: foe.x, z: foe.z, r: 5, delay: 1.0, dmg: skillDmg(h, 250, 5.0), stun: 1.2,
-        vfx: 'boom', hue: 'lava', aim: true, from: { x: h.x, z: h.z }, // 경로 화살표(> > >)
+        // 화살표만(원 없음): 카르곤은 원 예고가 이미 포화(강타·파문·단층선·안전지대) —
+        // 돌진은 경로 화살표(> > >)가 곧 경고다. 판정(반경 5)은 그대로.
+        vfx: 'boom', hue: 'lava', arrowOnly: true, from: { x: h.x, z: h.z },
       })
       h.bossDash = { x: foe.x, z: foe.z, at: state.time + 1.0 }
     }
@@ -7603,6 +7606,7 @@ export function makeView(state) {
           ...(z.rIn ? { rIn: z.rIn } : null),
           ...(z.aim ? { aim: true } : null),
           ...(z.safe ? { safe: true } : null), // 안전지대(발구르기) — 클라가 초록 비콘으로 그린다
+          ...(z.arrowOnly ? { arrowOnly: true } : null), // 돌진 — 원 없이 경로 화살표만
           ...(z.ox != null ? { ox: r1(z.ox), oz: r1(z.oz) } : null), // 돌진 경로 화살표용 시전 원점
         }
         : null),
