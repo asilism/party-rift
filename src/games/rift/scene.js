@@ -3204,6 +3204,50 @@ function buildWeapon(cls, skinId = null) {
       g.rotation.y = 1.1 - swing(t) * 2.2 // 바깥→안쪽으로 베기
       g.rotation.z = swing(t) * 0.4
     }
+  } else if (cls === 'boss_colossus') {
+    // 카르곤 전용 거대 돌몽둥이 — 검이 아니라 "무게"가 보이는 무기(검은 짧아서 거체에 안 읽혔다).
+    // 스윙 두 갈래: swingN 짝수 = 횡으로 크게 쓸기 / 홀수 = 종으로 들었다 내리찍기.
+    // 부채꼴 공격(삼중격·단층선)은 씬이 횡베기로, 대지 강타는 내리찍기로 강제한다(bossFanSeq/bossSmashSeq).
+    const stone = new THREE.MeshLambertMaterial({ color: 0x6a5e58, emissive: 0x241014, emissiveIntensity: 0.35 })
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 1.1, 8), wood)
+    grip.rotation.z = -Math.PI / 2
+    grip.position.x = 0.55
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.22, 1.7, 8), stone)
+    shaft.rotation.z = -Math.PI / 2
+    shaft.position.x = 1.95
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.66, 10, 8), stone)
+    head.scale.set(1.3, 1, 1)
+    head.position.x = 3.05
+    // 머리를 감는 용암 균열 링 + 사방 돌기 — 대지파쇄 망치와 같은 계열(보스와 전리품이 짝)
+    const seam = new THREE.Mesh(new THREE.TorusGeometry(0.62, 0.08, 6, 14),
+      new THREE.MeshLambertMaterial({ color: 0xff8a4d, emissive: 0xd6453f, emissiveIntensity: 0.8 }))
+    seam.rotation.y = Math.PI / 2
+    seam.position.x = 3.05
+    g.add(grip, shaft, head, seam)
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.4
+      const stud = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.4, 5), stone)
+      stud.position.set(3.05, Math.cos(a) * 0.62, Math.sin(a) * 0.62)
+      stud.rotation.x = Math.atan2(Math.sin(a), 0) // 바깥쪽으로
+      stud.rotation.z = -Math.cos(a) * 1.2
+      g.add(stud)
+    }
+    g.position.set(0.3, 0.3, 0.9)
+    g.userData.swings = true // 씬이 swingN(횡/종 교차)을 굴린다
+    g.userData.swingN = 0
+    g.userData.pose = (t) => {
+      const ph = Math.min(1, t)
+      if ((g.userData.swingN || 0) % 2 === 0) {
+        // 횡베기: 바깥에서 안쪽으로 수평 대원호 — 부채꼴 검기·균열이 이 궤적에서 태어난다
+        g.rotation.y = 1.3 - swing(t) * 2.6
+        g.rotation.z = 0.15
+      } else {
+        // 종베기(내리찍기): 머리 위로 크게 들었다(35%) 지면까지 내리꽂는다 — 끝나면 땅에 박힌 채 쉰다
+        const lift = ph < 0.35 ? ph / 0.35 : Math.max(-0.55, 1 - ((ph - 0.35) / 0.4) * 1.55)
+        g.rotation.y = 0.35
+        g.rotation.z = 0.15 + lift * 1.15
+      }
+    }
   } else if (cls === 'assassin') {
     // 쌍단검: 빠른 찌르기
     for (const side of [0.55, -0.55]) {
@@ -3793,7 +3837,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   // 직업 무기 — 오른팔(손)에 쥐게 한다. 팔 그룹은 어깨가 피벗이라 걸을 때 앞뒤로 흔들린다.
   // 무기 스킨(꾸미기)을 장착했으면 직업 무기를 대체한다.
   // 보스는 타입별 기본 무기를 차용(전사 검/마법사 지팡이/암살자 단검)해 거체에 맞게 키운다
-  const BOSS_WEAPON = { boss_colossus: 'warrior', boss_archmage: 'mage', boss_shadow: 'assassin', boss_thorn: 'snarer' }
+  const BOSS_WEAPON = { boss_archmage: 'mage', boss_shadow: 'assassin', boss_thorn: 'snarer' } // 카르곤은 전용 돌몽둥이(buildWeapon 분기)
   const weapon = buildWeapon(BOSS_WEAPON[h.cls] || h.cls, weaponSkinId)
   if (s > 1.5) weapon.scale.setScalar(s * 0.8) // 거인의 손엔 거인의 무기
   // 손 위치 = 무기 그룹의 원점(=손잡이). 무기마다 달라서 각자에 맞춰 팔을 뻗는다(고정값이면 어깨에 뜬 것처럼 보인다).
@@ -3852,6 +3896,8 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     costume, // 옷 — FX(fxUpdate) 애니메이션용 참조
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
     bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, stackMark, stackRing, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
+    // 보스 전용 모션·연출 시퀀스 스냅샷 — 접속 시점 값으로 초기화해야 빌드 직후 유령 스윙이 안 난다
+    ...(CLASSES[h.cls]?.boss ? { lastFanSeq: h.bossFanSeq || 0, lastSmashSeq: h.bossSmashSeq || 0, lastSlamSeq: h.bossSlamSeq || 0 } : null),
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
@@ -5121,11 +5167,16 @@ function buildMeteorZone(z) {
 
 // 보스 예고 장판 — 경고(닫혀 들어오는 링 + 고동치는 원판 + 도는 내곽 링) → 폭발(fx가 그림)
 //  → 잔류 장판(용암/서리/어둠 웅덩이, 사라지기 전 페이드). hue로 색조를 정한다.
+// 발구르기 착지 화면 진동 — bossSlamSeq 변화로 무장, 실시간 시계로 감쇠(뷰 주기와 무관하게 매끈)
+const CAM_SHAKE_T = 0.8
+let camShakeUntil = 0
+
 const BOSSZONE_HUES = {
   lava: { ring: 0xff7a2e, fill: 0xff5a1e, pool: 0xff6a30 },
   frost: { ring: 0x8fd8ff, fill: 0x6db8e8, pool: 0x9fe4ff },
   shadow: { ring: 0xb266ff, fill: 0x8a5cff, pool: 0x9a6cff },
   venom: { ring: 0x8fe04a, fill: 0x5cba32, pool: 0x74d43e }, // 가시군주 — 독green 덤불
+  safe: { ring: 0x5fe89a, fill: 0x3fd67f, pool: 0x8af0b0 }, // 안전지대(발구르기) — "여기로!" 초록
 }
 
 // 보스 장판 질감 — 흰색(재질 색으로 물듦) 패턴을 hue별로 1회 구워 캐시한다.
@@ -5137,10 +5188,32 @@ function bosszoneTexture(hue) {
   c.width = c.height = 256
   const ctx = c.getContext('2d')
   const cx = 128
-  const rnd = lcg(hue === 'lava' ? 11 : hue === 'frost' ? 22 : hue === 'venom' ? 44 : 33)
+  const rnd = lcg(hue === 'lava' ? 11 : hue === 'frost' ? 22 : hue === 'venom' ? 44 : hue === 'safe' ? 55 : 33)
   ctx.strokeStyle = '#ffffff'
   ctx.lineCap = 'round'
-  if (hue === 'venom') {
+  if (hue === 'safe') {
+    // 안전지대: 이중 동심원 + 사방 짧은 눈금 — 위협 질감(균열·가시)과 정반대로 "정돈된 피난처"
+    for (const r of [58, 96]) {
+      ctx.globalAlpha = 0.7
+      ctx.lineWidth = 5
+      ctx.beginPath()
+      ctx.arc(cx, cx, r, 0, Math.PI * 2)
+      ctx.stroke()
+    }
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2
+      ctx.globalAlpha = 0.8
+      ctx.lineWidth = 6
+      ctx.beginPath()
+      ctx.moveTo(cx + Math.cos(a) * 104, cx + Math.sin(a) * 104)
+      ctx.lineTo(cx + Math.cos(a) * 118, cx + Math.sin(a) * 118)
+      ctx.stroke()
+    }
+    ctx.globalAlpha = 0.85
+    ctx.beginPath()
+    ctx.arc(cx, cx, 14, 0, Math.PI * 2)
+    ctx.fill()
+  } else if (hue === 'venom') {
     // 가시덤불: 휘어지는 덩굴 호 + 가시 바늘 — 밟으면 아플 것 같은 질감
     for (let i = 0; i < 7; i++) {
       let a = rnd() * Math.PI * 2
@@ -5363,7 +5436,25 @@ function buildBossZone(z) {
   spin.rotation.x = -Math.PI / 2
   spin.position.y = 0.26
   g.add(mark, disc, spin)
+  // 안전지대(발구르기): 위험 장판과 문법이 정반대인데 같은 표식이면 "피해야 할 곳"으로 오독한다 —
+  // 하늘로 뻗는 초록 빛기둥(비콘)을 세워 "여기로 모여!"를 멀리서도 못박는다(귀환 빛기둥 문법 재사용)
+  let beacon = null
+  if (z.safe) {
+    beacon = new THREE.Mesh(
+      new THREE.CylinderGeometry(z.r * 0.5, z.r * 0.85, 26, 20, 1, true),
+      new THREE.MeshBasicMaterial({
+        color: 0x5fe89a, transparent: true, opacity: 0.16,
+        side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
+      })
+    )
+    beacon.position.y = 13
+    g.add(beacon)
+  }
   g.userData.update = (zz) => {
+    if (beacon) {
+      beacon.rotation.y = zz.t * 1.1
+      beacon.material.opacity = 0.13 + 0.07 * Math.sin(zz.t * 3.4) // 숨쉬는 초대 신호
+    }
     const delay = zz.delay || 1
     if (zz.t < delay) {
       // 경고: 바깥에서 조여 들어오는 링 + 점점 짙어지는 원판
@@ -6607,7 +6698,14 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         if (!obj.visible) return
         // 돌풍에 띄워지면(airT) 몸이 공중으로 떠오른다 — 띄운 동안 빙글빙글 + 위로 솟았다 내려온다
         const air = h.airT > 0 ? Math.sin(Math.min(1, (1.5 - h.airT) / 1.5 + 0.0) * Math.PI) : 0
-        obj.position.set(h.x, air * 3.2, h.z)
+        // 발구르기 도약(카르곤): 포물선으로 크게 솟았다 내리꽂는다 — 착지 순간 화면 진동(bossSlamSeq)
+        const leap = (h.bossLeapT || 0) > 0 && (h.bossLeapT0 || 0) > 0
+          ? Math.sin(Math.min(1, 1 - h.bossLeapT / h.bossLeapT0) * Math.PI) : 0
+        obj.position.set(h.x, air * 3.2 + leap * 15, h.z)
+        if (u.lastSlamSeq !== undefined && (h.bossSlamSeq || 0) !== u.lastSlamSeq) {
+          u.lastSlamSeq = h.bossSlamSeq || 0
+          camShakeUntil = performance.now() / 1000 + CAM_SHAKE_T // 착지 쿵 — 전장 전체가 흔들린다
+        }
         // 콜로세움 추락 — 빙글 돌며 갱 속으로 가라앉는다(실시간 시계 — 뷰가 멈춰도 끝까지)
         if (u.fellAt) {
           const fp = Math.min(1, (performance.now() / 1000 - u.fellAt) / 1.55)
@@ -6871,6 +6969,22 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           u.lastAtkSeq = h.atkSeq
           u.animT = 0
           spawnAtkTrail(h)
+          // 카르곤 몽둥이: 평타마다 횡↔종 스윙을 번갈아 — 위아래로만 깨작이던 어색함 해소
+          if (u.weapon.userData.swings) u.weapon.userData.swingN = (u.weapon.userData.swingN || 0) + 1
+        }
+        // 보스 기술 모션 강제: 부채꼴(삼중격·단층선) = 항상 횡으로 크게 쓸기 / 대지 강타 = 종내리찍기
+        if (u.weapon.userData.swings) {
+          if ((h.bossFanSeq || 0) !== u.lastFanSeq) {
+            u.lastFanSeq = h.bossFanSeq || 0
+            u.weapon.userData.swingN = 0 // 짝수 = 횡베기
+            u.animT = 0
+            spawnAtkTrail(h)
+          }
+          if ((h.bossSmashSeq || 0) !== u.lastSmashSeq) {
+            u.lastSmashSeq = h.bossSmashSeq || 0
+            u.weapon.userData.swingN = 1 // 홀수 = 내리찍기(궤적 잔상은 횡베기 전용이라 생략)
+            u.animT = 0
+          }
         }
         u.animT = Math.min(1, u.animT + dt / ATK_ANIM_T)
         u.weapon.userData.pose(u.animT)
@@ -7424,6 +7538,16 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       camTarget.lerp(want, endNexus ? 0.08 : introBoss ? 0.055 : 0.12)
     }
     camera.position.set(camTarget.x, camTarget.y + offY, camTarget.z + offZ)
+    // 발구르기 착지 진동: 크게 흔들렸다 빠르게 잦아든다 — 피격 연출 토글(hitFxOn)을 존중
+    const shakeLeft = camShakeUntil - performance.now() / 1000
+    if (hitFxOn && shakeLeft > 0) {
+      const k = shakeLeft / CAM_SHAKE_T
+      const mag = 1.6 * k * k
+      const tt = performance.now() / 1000
+      camera.position.x += Math.sin(tt * 71) * mag
+      camera.position.z += Math.cos(tt * 83) * mag
+      camera.position.y += Math.sin(tt * 57) * mag * 0.6
+    }
     camera.lookAt(camTarget.x, 0, camTarget.z - 6)
     renderer.render(scene, camera)
   }

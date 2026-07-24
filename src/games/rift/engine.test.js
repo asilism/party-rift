@@ -5,7 +5,7 @@ import {
   towerVulnerable, nexusVulnerable, isHeroVisible, isUnitVisible, buyItem, sellItem, resetShop, canShop, useItem,
   enhanceItem, enhanceCost, enhanceRate, ENHANCE_MAX, pickAugment,
   STEP, COUNTDOWN_TIME, ULT_LEVEL, SKILL2_LEVEL, TEAM_SIZE, MAX_LEVEL, RECALL_TIME, CLASS_IDS, CLASSES,
-  ITEM_SLOTS, BOT_STUCK_T, HP_SCALE, GAZE_SAFE_COS, trophySetOf,
+  ITEM_SLOTS, BOT_STUCK_T, HP_SCALE, GAZE_SAFE_COS, SLAM_SAFE_R, trophySetOf,
 } from './engine.js'
 import { ITEMS_BY_ID, sumStats, buildQuote } from './items.js'
 import {
@@ -3708,4 +3708,50 @@ test('세트 효과 테마: 거인=공격력·대마도사=주문력·가시=피
   const dmgN = before.n - vN.hp
   const dmgT = before.t - vT.hp
   assert.ok(dmgT < dmgN, `가시 세트가 피해를 줄인다 (${Math.round(dmgN)} → ${Math.round(dmgT)})`)
+})
+
+// ── 발구르기 개편(도약 강타): 안전지대 피신 기믹 ──
+
+test('발구르기 착지: 안전지대 안은 무피해, 밖은 피해 + 공중에 뜬다', () => {
+  const g = createGame([
+    { id: 'p1', name: 'P1', zodiacId: 'rat', color: '#abc', cls: 'warrior', team: 'blue' },
+    { id: 'p2', name: 'P2', zodiacId: 'ox', color: '#abc', cls: 'archer', team: 'blue' },
+    { id: 'boss', name: '카르곤', zodiacId: 'boss_colossus', color: '#f55', cls: 'boss_colossus', team: 'red', isBot: true },
+  ], { mode: 'boss', rng: () => 0.5 })
+  startPlaying(g)
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const b = g.heroes.find((h) => h.id === 'p2')
+  const bf = g.map.FOUNTAIN_POS.blue
+  boss.x = bf.x + 20; boss.z = bf.z
+  boss.bossSlamAt = g.time // 이번 스텝에 착지
+  boss.bossSlamSafe = { x: bf.x + 10, z: bf.z }
+  a.x = bf.x + 10; a.z = bf.z // 안전지대 중앙 — 피신 성공
+  b.x = bf.x + 10; b.z = bf.z + 10 // 안전지대 밖(보스 충격 반경 안)
+  const hpA = a.hp
+  const hpB = b.hp
+  step(g, STEP)
+  assert.equal(a.hp, hpA, '안전지대 안은 무피해')
+  assert.ok(b.hp < hpB, '밖은 피해를 입는다')
+  assert.ok(b.airT > 0, '충격에 공중으로 뜬다')
+  assert.equal(a.airT, 0, '안전지대 안은 뜨지도 않는다')
+})
+
+test('봇 피신: 도약 예고 중 안전지대(초록 원)로 달려간다', () => {
+  const g = createGame([
+    { id: 'b1', name: 'B1', zodiacId: 'rat', color: '#abc', cls: 'warrior', team: 'blue', isBot: true },
+    { id: 'boss', name: '카르곤', zodiacId: 'boss_colossus', color: '#f55', cls: 'boss_colossus', team: 'red', isBot: true },
+  ], { mode: 'boss', rng: () => 0.5 })
+  startPlaying(g)
+  const boss = g.heroes.find((h) => h.isBoss)
+  const bot = g.heroes.find((h) => h.id === 'b1')
+  const bf = g.map.FOUNTAIN_POS.blue
+  boss.x = bf.x + 24; boss.z = bf.z
+  bot.x = bf.x; bot.z = bf.z
+  boss.bossSlamAt = g.time + 1.9
+  boss.bossSlamT0 = 1.9
+  boss.bossSlamSafe = { x: bf.x + 12, z: bf.z }
+  run(g, 1.4)
+  const d = Math.hypot(bot.x - (bf.x + 12), bot.z - bf.z)
+  assert.ok(d < SLAM_SAFE_R, `봇이 안전지대 안으로 들어왔다 (거리 ${d.toFixed(1)})`)
 })
