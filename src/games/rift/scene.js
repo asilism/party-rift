@@ -8,7 +8,7 @@ import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import {
   NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, RESPAWN_ARC_HALF, buildMap,
 } from './map.js'
-import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP, GAZE_R, GAZE_SAFE_COS, STACK_R, trophySetOf } from './engine.js'
+import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP, GAZE_R, GAZE_SAFE_COS, STACK_R, BEAM_LEN, BEAM_HALF, trophySetOf } from './engine.js'
 import { ZODIAC_FACES } from './zodiacFaces.js'
 
 // ── 그래픽 품질 프리셋 ──
@@ -3248,6 +3248,48 @@ function buildWeapon(cls, skinId = null) {
         g.rotation.z = 0.15 + lift * 1.15
       }
     }
+  } else if (cls === 'boss_archmage') {
+    // 아르케인 전용 대보석 지팡이 — 아르케인만큼 긴 자루 + 거대 성운 보석.
+    // 평타(화염구)·운석·광선이 전부 이 보석에서 태어난다는 인상을 준다.
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.13, 3.4, 8),
+      new THREE.MeshLambertMaterial({ color: 0x2a3a6e, emissive: 0x141c48, emissiveIntensity: 0.55 }))
+    shaft.rotation.z = -Math.PI / 2
+    shaft.position.x = 1.7
+    g.add(shaft)
+    // 자루의 금테 감개 두 줄
+    for (const dx of [0.7, 2.4]) {
+      const wrap = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.045, 6, 12), lamb(0xd9b84e))
+      wrap.rotation.y = Math.PI / 2
+      wrap.position.x = dx
+      g.add(wrap)
+    }
+    // 머리: 초승달 홀더가 거대 보석을 감싼다
+    const holder = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.09, 8, 16, Math.PI * 1.25), lamb(0xd9b84e))
+    holder.position.x = 3.6
+    holder.rotation.z = Math.PI * 0.87
+    g.add(holder)
+    const gem = gemMesh(0x6fb6ff, 0.42)
+    gem.position.x = 3.65
+    gem.rotation.z = Math.PI / 2
+    g.add(gem)
+    g.userData.gem = gem
+    g.position.set(0.3, 0.3, 0.9)
+    g.userData.pose = (t) => {
+      // 대기: 지팡이를 비스듬히 세워 든다 / 시전(평타): 보석을 앞으로 내지른다
+      const p2 = swing(t)
+      g.rotation.y = 0.35 - p2 * 0.9
+      g.rotation.z = 0.55 - p2 * 0.75 // 세워 들었다 → 앞으로 겨눔
+    }
+    g.userData.fxUpdate = ((gg) => {
+      const mote = fxSprite(gg, 0x9fd0ff, 0.4, false)
+      return (t) => {
+        if (gg.userData.gem) gg.userData.gem.material.emissiveIntensity = 0.45 + 0.3 * Math.sin(t * 2.4)
+        const a = t * 2.0
+        mote.position.set(3.65 + Math.cos(a) * 0.6, Math.sin(a) * 0.6, 0.15)
+        mote.material.opacity = 0.55
+        mote.scale.setScalar(mote.userData.base)
+      }
+    })(g)
   } else if (cls === 'assassin') {
     // 쌍단검: 빠른 찌르기
     for (const side of [0.55, -0.55]) {
@@ -3707,6 +3749,9 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   let thornArmor = null // 가시갑옷 💢 — 반사창 동안 "때리지 마" 신호
   let gazeMark = null // 공포의 응시 👁️ — 채널 중 보스를 "바라보는" 동안만 켜진다(등 돌리면 즉시 꺼짐)
   let gazeEye = null // 보스 전용: 채널 동안 가슴께에 부릅뜨는 거대한 눈
+  let beamG = null // 아르케인 섬멸의 광선(경고 띠+섬광) — 보스 전용
+  let beamTele = null
+  let beamFlash = null
   let stackMark = null // 성좌 낙인 🤝 — "나한테 모여!" (파란 링과 세트)
   let stackRing = null // 성좌 낙인 파란 링 — 나눠 맞기 판정 반경(STACK_R)을 바닥에 그대로 그린다
   if (!CLASSES[h.cls]?.boss) {
@@ -3745,6 +3790,25 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     gazeEye.visible = false
     alwaysOnTop(gazeEye, 10)
     g.add(gazeEye)
+    // 아르케인 섬멸의 광선 — 조준 경고 띠(노랑→빨강 점멸 가속) + 발사 섬광. 엔진 판정과 같은 크기
+    beamG = new THREE.Group()
+    const beamGeo = new THREE.PlaneGeometry(BEAM_LEN, BEAM_HALF * 2)
+    beamGeo.translate(BEAM_LEN / 2, 0, 0) // 원점 = 보스, +x로 뻗는다
+    beamTele = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({
+      color: 0xffdf6a, transparent: true, opacity: 0.25, side: THREE.DoubleSide,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    beamTele.rotation.x = -Math.PI / 2
+    beamTele.position.y = 0.35
+    beamFlash = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({
+      color: 0xfff6d8, transparent: true, opacity: 0, side: THREE.DoubleSide,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    beamFlash.rotation.x = -Math.PI / 2
+    beamFlash.position.y = 0.6
+    beamG.add(beamTele, beamFlash)
+    beamG.visible = false
+    g.add(beamG)
   }
   // 보스 전리품 풀세트 오라 — 장착 3피스가 한 보스 세트일 때만(명예 표시, 씬 전용 코스메틱).
   // 인게임(내 영웅)과 꾸미기 쇼케이스가 같은 경로로 얻는다 — 넘겨받은 장착 id로 판정.
@@ -3837,7 +3901,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   // 직업 무기 — 오른팔(손)에 쥐게 한다. 팔 그룹은 어깨가 피벗이라 걸을 때 앞뒤로 흔들린다.
   // 무기 스킨(꾸미기)을 장착했으면 직업 무기를 대체한다.
   // 보스는 타입별 기본 무기를 차용(전사 검/마법사 지팡이/암살자 단검)해 거체에 맞게 키운다
-  const BOSS_WEAPON = { boss_archmage: 'mage', boss_shadow: 'assassin', boss_thorn: 'snarer' } // 카르곤은 전용 돌몽둥이(buildWeapon 분기)
+  const BOSS_WEAPON = { boss_shadow: 'assassin', boss_thorn: 'snarer' } // 카르곤=돌몽둥이·아르케인=대보석 지팡이(buildWeapon 분기)
   const weapon = buildWeapon(BOSS_WEAPON[h.cls] || h.cls, weaponSkinId)
   if (s > 1.5) weapon.scale.setScalar(s * 0.8) // 거인의 손엔 거인의 무기
   // 손 위치 = 무기 그룹의 원점(=손잡이). 무기마다 달라서 각자에 맞춰 팔을 뻗는다(고정값이면 어깨에 뜬 것처럼 보인다).
@@ -3895,9 +3959,9 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
     costume, // 옷 — FX(fxUpdate) 애니메이션용 참조
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, stackMark, stackRing, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, beamG, beamTele, beamFlash, stackMark, stackRing, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     // 보스 전용 모션·연출 시퀀스 스냅샷 — 접속 시점 값으로 초기화해야 빌드 직후 유령 스윙이 안 난다
-    ...(CLASSES[h.cls]?.boss ? { lastFanSeq: h.bossFanSeq || 0, lastSmashSeq: h.bossSmashSeq || 0, lastSlamSeq: h.bossSlamSeq || 0 } : null),
+    ...(CLASSES[h.cls]?.boss ? { lastFanSeq: h.bossFanSeq || 0, lastSmashSeq: h.bossSmashSeq || 0, lastSlamSeq: h.bossSlamSeq || 0, lastBeamSeq: h.bossBeamSeq || 0, beamFlashT: 0 } : null),
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
@@ -3943,6 +4007,7 @@ function setHeroDead(u, dead) {
     if (u.gazeEye) u.gazeEye.visible = false // 보스의 부릅뜬 눈
     if (u.stackMark) u.stackMark.visible = false // 성좌 낙인 🤝
     if (u.stackRing) u.stackRing.visible = false
+    if (u.beamG) u.beamG.visible = false // 섬멸의 광선 경고 띠
   }
   if (u.setAura) u.setAura.visible = !dead // 전리품 세트 오라도 시체에 남지 않게
 }
@@ -3964,6 +4029,31 @@ function updateHeroDeathParticles(u) {
 }
 
 function buildMinion(m, barColor) {
+  // 소환석(아르케인 의식): 공중에 살짝 떠서 위아래로 부유하는 마력 결정 —
+  // 병사와 완전히 다른 실루엣이어야 "이걸 부숴야 한다"가 즉시 읽힌다
+  if (m.stone) {
+    const g = new THREE.Group()
+    const crystal = gemMesh(0x8a9aff, 1.05)
+    crystal.position.y = 2.6
+    g.add(crystal)
+    // 결정 둘레를 도는 작은 조각들
+    const bits = [0, 1, 2].map((i) => {
+      const b = gemMesh(0x6fb6ff, 0.22)
+      b.position.y = 2.6
+      g.add(b)
+      return b
+    })
+    const halo = glowSprite(0x8a9aff, 4.2)
+    halo.position.y = 2.6
+    g.add(halo)
+    const bar = makeHpBar(2.2, barColor)
+    bar.position.y = 5.2
+    alwaysOnTop(bar, 11)
+    const shadow = blobShadow(1.1)
+    g.add(shadow, bar)
+    g.userData = { bar, stone: true, crystal, bits, halo, bobPhase: (m.id % 97) / 97 * Math.PI * 2 }
+    return g
+  }
   const g = new THREE.Group()
   const col = TEAM_COLOR[m.team]
   const dark = darken(col, 0.6)
@@ -4340,6 +4430,7 @@ const BOLT_STYLE = {
   engineer: { kind: 'hex', color: 0xffd94a }, // 스패너 너트
   snarer: { kind: 'seed', color: 0x8ede5a }, // 가시 씨앗
   terramancer: { kind: 'rock', color: 0xd8b088 }, // 자갈
+  boss_archmage: { kind: 'orb', color: 0xff8c3a, glow: 6.5, trail: true }, // 아르케인 평타 = 대형 화염구(마법사 화염구 확장)
 }
 function buildClassBolt(st) {
   const g = new THREE.Group()
@@ -6939,13 +7030,38 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             }
           }
         }
-        // 탱커 방패막기(파란 막). 보스 각성 휴지기엔 같은 구체를 어둠의 보호막(보라 맥동)으로 쓴다
+        // 탱커 방패막기(파란 막). 보스 각성 휴지기엔 같은 구체를 어둠의 보호막(보라 맥동)으로 쓴다.
+        // 아르케인 소환 의식(stonesT) 중에도 같은 버블 — "지금은 무적, 소환석을 쳐라"가 한눈에 읽힌다
         const bossShielded = (h.bossShieldT || 0) > 0
-        u.shield.visible = h.shieldT > 0 || bossShielded
-        if (bossShielded) {
-          u.shield.material.color.setHex(0xa06bff)
+        const ritual = (h.stonesT || 0) > 0
+        u.shield.visible = h.shieldT > 0 || bossShielded || ritual
+        if (bossShielded || ritual) {
+          u.shield.material.color.setHex(ritual ? 0x6fb6ff : 0xa06bff)
           u.shield.material.opacity = 0.32 + Math.abs(Math.sin(view.time * 3)) * 0.12
           u.shield.scale.setScalar(1 + Math.sin(view.time * 2.2) * 0.04)
+        }
+        // 아르케인 섬멸의 광선: 경고 띠(다급해질수록 빨갛게 점멸 가속) + 발사 섬광 + 화면 진동
+        if (u.beamG) {
+          const aiming = (h.bossBeamT || 0) > 0
+          if ((h.bossBeamSeq || 0) !== u.lastBeamSeq) {
+            u.lastBeamSeq = h.bossBeamSeq || 0
+            u.beamFlashT = 0.55
+            camShakeUntil = performance.now() / 1000 + 0.5 // 광선 발사 — 짧은 진동
+          }
+          if (u.beamFlashT > 0) u.beamFlashT = Math.max(0, u.beamFlashT - dt)
+          u.beamG.visible = aiming || u.beamFlashT > 0
+          if (u.beamG.visible) {
+            u.beamG.rotation.y = -(h.bossBeamDir || 0)
+            u.beamTele.visible = aiming
+            if (aiming) {
+              const urg = 1 - Math.min(1, h.bossBeamT / (h.bossBeamT0 || 2.4))
+              u.beamTele.material.color.setHex(urg > 0.65 ? 0xff5a3a : 0xffdf6a)
+              u.beamTele.material.opacity = 0.15 + urg * 0.25 + 0.1 * Math.abs(Math.sin(view.time * (6 + urg * 16)))
+            }
+            const bf = u.beamFlashT / 0.55
+            u.beamFlash.visible = bf > 0
+            u.beamFlash.material.opacity = bf * 0.9
+          }
         }
         // 각성 휴지기 💤 — 둥실 떠오르며 깜빡여 "웅크려 힘을 모으는 중"을 알린다
         if (u.dormant) {
@@ -7040,6 +7156,25 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         obj.position.set(m.x, 0, m.z)
         const u = obj.userData
         setHpBar(u.bar, m.hp / m.maxHp)
+        // 소환석: 위아래 부유 + 자전 + 타격 시 반짝 — 병사 로직(걷기·공격 모션)은 안 탄다
+        if (u.stone) {
+          const bob = Math.sin(view.time * 2.1 + u.bobPhase) * 0.4
+          u.crystal.position.y = 2.6 + bob
+          u.halo.position.y = 2.6 + bob
+          u.crystal.rotation.y = view.time * 0.9
+          u.crystal.material.emissiveIntensity = 0.4 + 0.25 * Math.sin(view.time * 3.1 + u.bobPhase)
+          u.bits.forEach((b, i) => {
+            const a = view.time * 1.6 + (i / u.bits.length) * Math.PI * 2
+            b.position.set(Math.cos(a) * 1.7, 2.6 + bob + Math.sin(view.time * 2.6 + i) * 0.3, Math.sin(a) * 1.7)
+          })
+          const sdHp = (u.lastHp == null ? m.hp : u.lastHp) - m.hp
+          u.lastHp = m.hp
+          if (sdHp > 0 && obj.visible) { // 타격당 1 — 한 대 한 대가 진행도
+            popDamage(m.x, m.z, 1, 'dmg')
+            particles.emit(m.x, 2.6 + bob, m.z, 0x9fd0ff, 7, { spread: 7, up: 6, gravity: 18, size: 1.3, hard: true, lifeMin: 0.15, lifeMax: 0.32 })
+          }
+          return
+        }
         // 타격감: 병사가 맞으면 데미지 숫자 + (옵션 켜짐 시) 잠깐 붉게 물든다 (막타 손맛)
         const mdHp = (u.lastHp == null ? m.hp : u.lastHp) - m.hp
         u.lastHp = m.hp
