@@ -912,6 +912,21 @@ export function createGame(players, opts = {}) {
     if (mode === 'arena') h.gold += 1000 // 콜로세움: 라운드 개시 지원금(이월 골드 위에 지급)
     h.hp = h.maxHp
   }
+  // 보스 디버그 러시(웹 ?boss 전용): 개전 즉시 진군 국면 + 아군 10레벨·군자금 —
+  //  수면(30초)·소환 국면(240초)을 건너뛰어 보스 기믹 실테스트를 급행으로 돌린다.
+  //  정예(그림자 영웅 5기)도 생략해 보스 본체 기믹에만 집중한다. 기록·보상은 클라가 안 남긴다.
+  if (o.bossRush && mode === 'boss') {
+    for (const h of heroes) {
+      if (h.isBoss) {
+        h.bossAddsDone = true
+      } else if (h.team === 'blue') {
+        h.lvl = 10
+        h.maxHp = heroMaxHp(h)
+        h.hp = h.maxHp
+        h.gold += 3000 // 개전 장비를 갖출 군자금 — 10레벨 중반전 상태 재현
+      }
+    }
+  }
   // 봇 역할 배정(팀별): 직업이 선호하는 라인을 잡되, 겹치면 남은 자리를 채워 라인 공백을 막는다.
   //  → 마법사 미드 / 탱커 탑 / 궁수·힐러 봇 / 전사·암살자 정글(5:5)
   for (const team of ['blue', 'red']) {
@@ -971,7 +986,8 @@ export function createGame(players, opts = {}) {
     wave: 0, // 무한 방어: 현재 파도 번호(기록 = 버틴 파도 수)
     defWaveT: DEFENSE_FIRST_WAVE, // 무한 방어: 다음 파도까지 남은 시간
     map,
-    time: 0,
+    // 보스 디버그 러시: 시계를 진군 개시 시각으로 감아 두면 수면·소환 국면이 통째로 사라진다
+    time: o.bossRush && mode === 'boss' ? BOSS_MARCH_AT : 0,
     countdown: COUNTDOWN_TIME,
     winner: null, // 'blue' | 'red' | null(무승부)
     heroes,

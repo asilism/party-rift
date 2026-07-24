@@ -28,7 +28,7 @@ export const riftNet = {
         deviceId: p.deviceId,
         trophySet: p.trophySet || null, // 보스 전리품 풀세트 — PvE 소효과(엔진이 모드로 게이트)
       }))
-      return { players: list, opts: { mode, botLevel: config?.botLevel, bossTier: config?.bossTier, carry: config?.carry, arenaLayout: config?.arenaLayout, arenaPts: config?.arenaPts, arenaDeduct: config?.arenaDeduct, arenaRound: config?.arenaRound } }
+      return { players: list, opts: { mode, botLevel: config?.botLevel, bossTier: config?.bossTier, carry: config?.carry, arenaLayout: config?.arenaLayout, arenaPts: config?.arenaPts, arenaDeduct: config?.arenaDeduct, arenaRound: config?.arenaRound, bossRush: config?.bossRush } }
     }
 
     const teams = config?.teams || {}
@@ -58,7 +58,7 @@ export const riftNet = {
     return { players: [...humans, ...bots], opts: { mode, botLevel: config?.botLevel, bossTier: config?.bossTier, carry: config?.carry, arenaLayout: config?.arenaLayout, arenaPts: config?.arenaPts, arenaDeduct: config?.arenaDeduct, arenaRound: config?.arenaRound } }
   },
   createGame: (players, opts) =>
-    createGame(players, { mode: opts?.mode, botLevel: opts?.botLevel, bossTier: opts?.bossTier, carry: opts?.carry, arenaLayout: opts?.arenaLayout, arenaPts: opts?.arenaPts, arenaDeduct: opts?.arenaDeduct, arenaRound: opts?.arenaRound, rng: Math.random }),
+    createGame(players, { mode: opts?.mode, botLevel: opts?.botLevel, bossTier: opts?.bossTier, carry: opts?.carry, arenaLayout: opts?.arenaLayout, arenaPts: opts?.arenaPts, arenaDeduct: opts?.arenaDeduct, arenaRound: opts?.arenaRound, bossRush: opts?.bossRush, rng: Math.random }),
   setInput,
   applyAction(state, action, pid) {
     if (action.type === 'cast') {

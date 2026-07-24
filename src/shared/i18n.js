@@ -610,6 +610,10 @@ const DICT = {
   '광고 보고 2배': 'Watch ad for ×2',
   '구매·장착': 'Buy & Equip',
   '코인이 부족해요': 'Not enough coins',
+  // 보스 디버그(웹 ?boss)
+  '보스 디버그': 'Boss Debug',
+  '즉시 진군전 시작': 'Start march fight now',
+  '수면·소환 국면 생략 · 기록/보상 없음 · 직업은 마지막 저장값': 'Skips sleep/summon phases · no records/rewards · uses last saved class',
   // 보스 전리품(비매품 꾸미기)
   '전리품': 'Trophy',
   '전리품 획득': 'Trophy earned',

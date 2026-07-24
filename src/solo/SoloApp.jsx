@@ -60,12 +60,56 @@ const MODE_OPTS = [
   { id: 'arena', emoji: '🏟️', name: '콜로세움', desc: '12지신 2대2 토너먼트 — 최후의 팀이 되어라!', tag: '결투', price: 300 },
 ]
 
+// ── 보스 디버그(웹 ?boss 전용): 보스·티어를 골라 즉시 10레벨 진군전 — 기믹 실테스트 급행 ──
+// 수면(30초)·소환 국면(240초)을 건너뛰고 곧장 진군. 기록·코인·전리품은 일절 남기지 않는다
+// (디버그 판이 실계정 보상·토벌 기록을 오염시키면 안 된다). 앱 빌드에선 URL 파라미터가 없어 비활성.
+const BOSS_DEBUG = typeof location !== 'undefined' && new URLSearchParams(location.search).has('boss')
+
+function BossDebugScreen({ onStart }) {
+  const [boss, setBoss] = useState('boss_colossus')
+  const [tier, setTier] = useState('normal')
+  return (
+    <div className="screen bossdebug-screen">
+      <h2 className="toy-heading toy-heading--screen">👹 {t('보스 디버그')}</h2>
+      <div className="toy-card bossdebug-card">
+        <div className="bossdebug-row">
+          {BOSS_IDS.map((id) => (
+            <button
+              key={id}
+              className={`toy-btn bossdebug-pick ${boss === id ? 'toy-btn--yellow' : ''}`}
+              onClick={() => { sound.step(); setBoss(id) }}
+            >
+              {CLASSES[id].icon} {t(BOSS_NAMES[id])}
+            </button>
+          ))}
+        </div>
+        <div className="bossdebug-row">
+          {BOSS_TIER_OPTS.map((o) => (
+            <button
+              key={o.id}
+              className={`toy-btn bossdebug-pick ${tier === o.id ? 'toy-btn--yellow' : ''}`}
+              onClick={() => { sound.step(); setTier(o.id) }}
+            >
+              {o.icon} {t(o.label)}
+            </button>
+          ))}
+        </div>
+        <button className="toy-btn toy-btn--yellow bossdebug-go" onClick={() => onStart(boss, tier)}>
+          ⚔️ {t('즉시 진군전 시작')} — Lv.10
+        </button>
+        <p className="bossdebug-note">?boss · {t('수면·소환 국면 생략 · 기록/보상 없음 · 직업은 마지막 저장값')}</p>
+      </div>
+    </div>
+  )
+}
+
 export default function SoloApp() {
   const [profile, setProfileState] = useState(() => {
     const p = loadProfile()
     return getZodiac(p) ? p : null
   })
   const [screen, setScreen] = useState(() => {
+    if (BOSS_DEBUG) return 'bossdebug' // 웹 ?boss — 보스 기믹 실테스트 급행 모드
     // 언어 전환 등 새로고침 뒤 복귀할 화면(1회성 힌트)
     try {
       const r = sessionStorage.getItem('bgp.rift.resume.v1')
@@ -75,7 +119,7 @@ export default function SoloApp() {
       }
     } catch { /* 무시 */ }
     return 'title'
-  }) // title | profile | menu | mode | char | records | settings | play
+  }) // title | profile | menu | mode | char | records | settings | play | bossdebug
   const saved = loadSoloPick()
   const [mode, setMode] = useState(TEAM_SIZES[saved?.mode] ? saved.mode : '3v3')
   const [diff, setDiff] = useState(
@@ -318,7 +362,35 @@ export default function SoloApp() {
     setScreen('play')
   }
 
+  // 보스 디버그 시작 — 로스터의 무작위 보스를 선택 보스로 갈아끼우고 bossRush로 개전
+  function startDebugBoss(bossCls, tier) {
+    sound.go()
+    const sp = loadSoloPick()
+    const cls = CLASSES[sp?.cls] && !CLASSES[sp.cls].boss ? sp.cls : 'warrior'
+    const roster = buildSoloRoster({ zodiacId: profile || 'rat', cls, mode: 'boss' })
+    const bi = roster.findIndex((p) => p.team === 'red')
+    if (bi >= 0) roster[bi] = { ...roster[bi], cls: bossCls, zodiacId: bossCls, name: t(BOSS_NAMES[bossCls]) }
+    const n = createLocalNet(riftNet, {
+      players: [],
+      config: { mode: 'boss', roster, botLevel: 'normal', bossTier: tier, bossRush: true },
+      deviceId: 'solo',
+      onFinish() {}, // 디버그: 전적·코인·전리품·업적 일절 기록하지 않는다
+    })
+    netRef.current = n
+    if (typeof window !== 'undefined') window.__soloNet = n
+    setCoinMsg(null)
+    setNet(n)
+    setScreen('play')
+  }
+
   function exitBattle() {
+    if (BOSS_DEBUG) { // 디버그 판 종료 → 디버그 화면으로 복귀(한 판 더 굴리기 흐름)
+      netRef.current?.close()
+      netRef.current = null
+      setNet(null)
+      setScreen('bossdebug')
+      return
+    }
     if (mode === 'arena' && tour) {
       if (arenaViewRef.current) { finishArenaRound(false); return } // 정상 종료 — 결과 반영
       forfeitColosseum() // 경기 중 이탈 = 기권 — 토너먼트 완전 종료(유저 결정: 다음 라운드 진행 없음)
@@ -481,6 +553,7 @@ export default function SoloApp() {
       {screen === 'profile' && (
         <ProfileScreen current={profile} onPick={pickProfile} onBack={profile ? () => go('menu') : null} />
       )}
+      {screen === 'bossdebug' && <BossDebugScreen onStart={startDebugBoss} />}
       {screen === 'menu' && (
         <MainMenu
           profile={profile}

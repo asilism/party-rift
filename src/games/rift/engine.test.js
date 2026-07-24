@@ -3755,3 +3755,27 @@ test('봇 피신: 도약 예고 중 안전지대(초록 원)로 달려간다', (
   const d = Math.hypot(bot.x - (bf.x + 12), bot.z - bf.z)
   assert.ok(d < SLAM_SAFE_R, `봇이 안전지대 안으로 들어왔다 (거리 ${d.toFixed(1)})`)
 })
+
+test('보스 디버그 러시(bossRush): 아군 10레벨·군자금 + 개전 즉시 진군', () => {
+  const g = createGame([
+    { id: 'p1', name: 'P1', zodiacId: 'rat', color: '#abc', cls: 'warrior', team: 'blue' },
+    { id: 'boss', name: '카르곤', zodiacId: 'boss_colossus', color: '#f55', cls: 'boss_colossus', team: 'red', isBot: true },
+  ], { mode: 'boss', rng: () => 0.5, bossRush: true })
+  const me = g.heroes.find((h) => !h.isBoss)
+  const boss = g.heroes.find((h) => h.isBoss)
+  assert.equal(me.lvl, 10, '아군은 10레벨로 시작')
+  assert.ok(me.gold >= 3000, '개전 장비 군자금')
+  assert.ok(boss.bossAddsDone, '정예 소환 생략 — 보스 본체 기믹에 집중')
+  startPlaying(g)
+  run(g, 2)
+  assert.ok(boss.bossMarching, '수면·소환 국면 없이 즉시 진군')
+})
+
+test('bossRush 없는 보통 판은 그대로: 1레벨 시작 + 보스 수면', () => {
+  const g = createGame([
+    { id: 'p1', name: 'P1', zodiacId: 'rat', color: '#abc', cls: 'warrior', team: 'blue' },
+    { id: 'boss', name: '카르곤', zodiacId: 'boss_colossus', color: '#f55', cls: 'boss_colossus', team: 'red', isBot: true },
+  ], { mode: 'boss', rng: () => 0.5 })
+  assert.equal(g.heroes.find((h) => !h.isBoss).lvl, 1)
+  assert.equal(g.time, 0)
+})
