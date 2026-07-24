@@ -5388,13 +5388,15 @@ function buildBossZone(z) {
       shape.lineTo(-0.25, 0)
       shape.closePath()
       const geo = new THREE.ShapeGeometry(shape)
-      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })
+      // 화살표 전용(arrowOnly)이면 원이 없는 만큼 화살표가 유일한 경고 — 더 크고 또렷하게
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: z.arrowOnly ? 0.95 : 0.85, side: THREE.DoubleSide, depthWrite: false })
       chevrons = new THREE.Group()
       for (let i = 0; i < n; i++) {
         const c = new THREE.Mesh(geo, mat)
         c.rotation.x = -Math.PI / 2
         // 눕힌 평면(shape +y → 월드 -z)에서 월드 yaw d를 내려면 z축 회전은 -d
         c.rotation.z = -dirA
+        if (z.arrowOnly) c.scale.setScalar(1.4)
         chevrons.add(c)
       }
       chevrons.position.y = 0.34
@@ -5450,10 +5452,36 @@ function buildBossZone(z) {
     beacon.position.y = 13
     g.add(beacon)
   }
+  // 경로 화살표 흐름 — 일반(원+화살표)과 화살표 전용(돌진)이 공유한다
+  const flowChevrons = (zz) => {
+    if (!chevrons) return
+    const pending = zz.t < (zz.delay || 1)
+    chevrons.visible = pending
+    if (!pending) return
+    const { lx, lz, pathLen, spacing, ux, uz } = chevInfo
+    const flow = (zz.t * 7) % spacing
+    chevrons.children.forEach((c, i) => {
+      const d = 1.5 + i * spacing + flow
+      if (d > pathLen - 0.5) {
+        c.visible = false
+        return
+      }
+      c.visible = true
+      c.position.set(lx + ux * d, 0, lz + uz * d)
+      c.material.opacity = 0.45 + 0.45 * Math.min(1, d / 6) // 착지점에 가까울수록 또렷
+    })
+  }
   g.userData.update = (zz) => {
     if (beacon) {
       beacon.rotation.y = zz.t * 1.1
       beacon.material.opacity = 0.13 + 0.07 * Math.sin(zz.t * 3.4) // 숨쉬는 초대 신호
+    }
+    // 화살표 전용(돌진): 원·조준 십자 없이 경로 화살표가 곧 경고 — 카르곤 원 과밀 해소
+    if (zz.arrowOnly) {
+      mark.visible = disc.visible = spin.visible = false
+      under.visible = false
+      flowChevrons(zz)
+      return
     }
     const delay = zz.delay || 1
     if (zz.t < delay) {
@@ -5473,27 +5501,12 @@ function buildBossZone(z) {
         aimTicks.scale.setScalar(1.4 - 0.4 * f) // 조여들며 확정되는 조준
         aimDot.scale.setScalar(1 + 0.35 * Math.sin(zz.t * 16)) // 다급한 고동
       }
-      if (chevrons) {
-        // 화살표가 경로를 따라 착지점 쪽으로 흐른다 — "이 방향으로 온다"
-        chevrons.visible = true
-        const { lx, lz, pathLen, spacing, ux, uz } = chevInfo
-        const flow = (zz.t * 7) % spacing
-        chevrons.children.forEach((c, i) => {
-          const d = 1.5 + i * spacing + flow
-          if (d > pathLen - 0.5) {
-            c.visible = false
-            return
-          }
-          c.visible = true
-          c.position.set(lx + ux * d, 0, lz + uz * d)
-          c.material.opacity = 0.45 + 0.45 * Math.min(1, d / 6) // 착지점에 가까울수록 또렷
-        })
-      }
+      flowChevrons(zz) // 화살표가 경로를 따라 착지점 쪽으로 흐른다 — "이 방향으로 온다"
     } else {
       // 잔류 장판: 웅덩이 — 사라지기 0.5초 전부터 페이드. 조준 표식·경로 화살표는 폭발과 함께 걷는다
       mark.visible = spin.visible = false
       if (aimTicks) aimTicks.visible = aimDot.visible = false
-      if (chevrons) chevrons.visible = false
+      flowChevrons(zz)
       const left = (zz.life || 0) - (zz.t - delay)
       const fade = Math.max(0, Math.min(1, left / 0.5))
       disc.material.color.setHex(hue.pool)
