@@ -8,7 +8,7 @@ import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import {
   NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, RESPAWN_ARC_HALF, buildMap,
 } from './map.js'
-import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP, GAZE_R, GAZE_SAFE_COS, STACK_R, BEAM_LEN, BEAM_HALF, trophySetOf } from './engine.js'
+import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP, GAZE_R, GAZE_SAFE_COS, STACK_R, BEAM_LEN, BEAM_HALF, beamOffsets, CONE_R, CONE_HALF, trophySetOf } from './engine.js'
 import { ZODIAC_FACES } from './zodiacFaces.js'
 
 // ── 그래픽 품질 프리셋 ──
@@ -3749,9 +3749,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   let thornArmor = null // 가시갑옷 💢 — 반사창 동안 "때리지 마" 신호
   let gazeMark = null // 공포의 응시 👁️ — 채널 중 보스를 "바라보는" 동안만 켜진다(등 돌리면 즉시 꺼짐)
   let gazeEye = null // 보스 전용: 채널 동안 가슴께에 부릅뜨는 거대한 눈
-  let beamG = null // 아르케인 섬멸의 광선(경고 띠+섬광) — 보스 전용
-  let beamTele = null
-  let beamFlash = null
+  // (섬멸의 광선·서리 숨결 예고는 히어로 객체가 아니라 씬 오버레이 풀 — 안개 속에서도 보여야 한다)
   let stackMark = null // 성좌 낙인 🤝 — "나한테 모여!" (파란 링과 세트)
   let stackRing = null // 성좌 낙인 파란 링 — 나눠 맞기 판정 반경(STACK_R)을 바닥에 그대로 그린다
   if (!CLASSES[h.cls]?.boss) {
@@ -3790,25 +3788,6 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     gazeEye.visible = false
     alwaysOnTop(gazeEye, 10)
     g.add(gazeEye)
-    // 아르케인 섬멸의 광선 — 조준 경고 띠(노랑→빨강 점멸 가속) + 발사 섬광. 엔진 판정과 같은 크기
-    beamG = new THREE.Group()
-    const beamGeo = new THREE.PlaneGeometry(BEAM_LEN, BEAM_HALF * 2)
-    beamGeo.translate(BEAM_LEN / 2, 0, 0) // 원점 = 보스, +x로 뻗는다
-    beamTele = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({
-      color: 0xffdf6a, transparent: true, opacity: 0.25, side: THREE.DoubleSide,
-      depthWrite: false, blending: THREE.AdditiveBlending,
-    }))
-    beamTele.rotation.x = -Math.PI / 2
-    beamTele.position.y = 0.35
-    beamFlash = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({
-      color: 0xfff6d8, transparent: true, opacity: 0, side: THREE.DoubleSide,
-      depthWrite: false, blending: THREE.AdditiveBlending,
-    }))
-    beamFlash.rotation.x = -Math.PI / 2
-    beamFlash.position.y = 0.6
-    beamG.add(beamTele, beamFlash)
-    beamG.visible = false
-    g.add(beamG)
   }
   // 보스 전리품 풀세트 오라 — 장착 3피스가 한 보스 세트일 때만(명예 표시, 씬 전용 코스메틱).
   // 인게임(내 영웅)과 꾸미기 쇼케이스가 같은 경로로 얻는다 — 넘겨받은 장착 id로 판정.
@@ -3959,9 +3938,9 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
     costume, // 옷 — FX(fxUpdate) 애니메이션용 참조
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, beamG, beamTele, beamFlash, stackMark, stackRing, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, stackMark, stackRing, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     // 보스 전용 모션·연출 시퀀스 스냅샷 — 접속 시점 값으로 초기화해야 빌드 직후 유령 스윙이 안 난다
-    ...(CLASSES[h.cls]?.boss ? { lastFanSeq: h.bossFanSeq || 0, lastSmashSeq: h.bossSmashSeq || 0, lastSlamSeq: h.bossSlamSeq || 0, lastBeamSeq: h.bossBeamSeq || 0, beamFlashT: 0 } : null),
+    ...(CLASSES[h.cls]?.boss ? { lastFanSeq: h.bossFanSeq || 0, lastSmashSeq: h.bossSmashSeq || 0, lastSlamSeq: h.bossSlamSeq || 0 } : null),
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
   return g
@@ -4007,7 +3986,6 @@ function setHeroDead(u, dead) {
     if (u.gazeEye) u.gazeEye.visible = false // 보스의 부릅뜬 눈
     if (u.stackMark) u.stackMark.visible = false // 성좌 낙인 🤝
     if (u.stackRing) u.stackRing.visible = false
-    if (u.beamG) u.beamG.visible = false // 섬멸의 광선 경고 띠
   }
   if (u.setAura) u.setAura.visible = !dead // 전리품 세트 오라도 시체에 남지 않게
 }
@@ -5256,6 +5234,57 @@ function buildMeteorZone(z) {
   return g
 }
 
+// 섬멸의 광선 오버레이 — 최대 3가닥 경고 띠 + 발사 섬광. 히어로 객체 밖(씬 직속)이라
+// 보스가 안개 속이어도 항상 보인다(즉사급 예고는 돌벽과 같은 원칙).
+function buildBeamOverlay() {
+  const g = new THREE.Group()
+  const geo = new THREE.PlaneGeometry(BEAM_LEN, BEAM_HALF * 2)
+  geo.translate(BEAM_LEN / 2, 0, 0) // 원점 = 보스, +x로 뻗는다
+  const lanes = []
+  const flashes = []
+  const laneGroups = []
+  for (let i = 0; i < 3; i++) {
+    const lane = new THREE.Group()
+    const tele = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: 0xffdf6a, transparent: true, opacity: 0.25, side: THREE.DoubleSide,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    tele.rotation.x = -Math.PI / 2
+    tele.position.y = 0.35
+    const flash = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: 0xfff6d8, transparent: true, opacity: 0, side: THREE.DoubleSide,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    flash.rotation.x = -Math.PI / 2
+    flash.position.y = 0.6
+    lane.add(tele, flash)
+    lane.visible = false
+    g.add(lane)
+    lanes.push(tele)
+    flashes.push(flash)
+    laneGroups.push(lane)
+  }
+  g.userData = { lanes, flashes, laneGroups, flashT: 0, lastSeq: 0 }
+  return g
+}
+
+// 서리 숨결 부채꼴 예고 — 반각 CONE_HALF의 부채꼴이 청백으로 점멸 가속
+function buildConeOverlay() {
+  const g = new THREE.Group()
+  const tele = new THREE.Mesh(
+    new THREE.CircleGeometry(CONE_R, 26, -CONE_HALF, CONE_HALF * 2),
+    new THREE.MeshBasicMaterial({
+      color: 0x9fe4ff, transparent: true, opacity: 0.25, side: THREE.DoubleSide,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    })
+  )
+  tele.rotation.x = -Math.PI / 2
+  tele.position.y = 0.35
+  g.add(tele)
+  g.userData = { tele }
+  return g
+}
+
 // 보스 예고 장판 — 경고(닫혀 들어오는 링 + 고동치는 원판 + 도는 내곽 링) → 폭발(fx가 그림)
 //  → 잔류 장판(용암/서리/어둠 웅덩이, 사라지기 전 페이드). hue로 색조를 정한다.
 // 발구르기 착지 화면 진동 — bossSlamSeq 변화로 무장, 실시간 시계로 감쇠(뷰 주기와 무관하게 매끈)
@@ -6431,6 +6460,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const stoneWallPool = new Map() // 대지술사 임시 돌벽
   const fxPool = new Map()
   const bindPool = new Map() // 결속 끈: 묶인 아군 id → 수호기사에게 잇는 선
+  const bossAimPool = new Map() // 보스 조준 예고(섬멸 광선 띠·서리 숨결 부채꼴) — 안개 무관(즉사급 예고)
   const particles = makeParticles(scene) // 타격 스파크·발자국 먼지·투사체 꼬리 공용
 
   // 시간술사 역행 미리보기: 내 영웅이 되돌아갈 과거 지점을 반투명 그림자로 보여 준다(궁극기 켜졌을 때만)
@@ -6805,7 +6835,9 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         // 발구르기 도약(카르곤): 포물선으로 크게 솟았다 내리꽂는다 — 착지 순간 화면 진동(bossSlamSeq)
         const leap = (h.bossLeapT || 0) > 0 && (h.bossLeapT0 || 0) > 0
           ? Math.sin(Math.min(1, 1 - h.bossLeapT / h.bossLeapT0) * Math.PI) : 0
-        obj.position.set(h.x, air * 3.2 + leap * 15, h.z)
+        // 섬멸의 광선 비행: 빛에 쏘아져 날아가는 동안 붕 뜬 채 맹렬히 돈다
+        const fling = (h.beamFlingT || 0) > 0 ? 2.6 : 0
+        obj.position.set(h.x, air * 3.2 + leap * 15 + fling, h.z)
         if (u.lastSlamSeq !== undefined && (h.bossSlamSeq || 0) !== u.lastSlamSeq) {
           u.lastSlamSeq = h.bossSlamSeq || 0
           camShakeUntil = performance.now() / 1000 + CAM_SHAKE_T // 착지 쿵 — 전장 전체가 흔들린다
@@ -6819,7 +6851,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           if (fp >= 1) obj.visible = false
         }
         // 회전베기(궁극기) 중엔 팽이처럼 빠르게 돈다, 띄워지면 허우적, 평소엔 바라보는 방향
-        u.body.rotation.y = h.whirlT > 0 ? -view.time * 16 : h.airT > 0 ? -view.time * 8 : -h.dir
+        u.body.rotation.y = h.whirlT > 0 ? -view.time * 16 : (h.airT > 0 || h.beamFlingT > 0) ? -view.time * 8 : -h.dir
         // 걷기: 서 있으면 숨쉬기 둥실, 움직이면 통통 튀며 좌우로 뒤뚱(속도에 따라 걸음 빨라짐)
         const wk = walkBounce(u, h.x, h.z, dt)
         const idleBob = Math.sin(view.time * 2.2 + u.bobPhase) * 0.12 * (1 - wk.amt)
@@ -7039,29 +7071,6 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           u.shield.material.color.setHex(ritual ? 0x6fb6ff : 0xa06bff)
           u.shield.material.opacity = 0.32 + Math.abs(Math.sin(view.time * 3)) * 0.12
           u.shield.scale.setScalar(1 + Math.sin(view.time * 2.2) * 0.04)
-        }
-        // 아르케인 섬멸의 광선: 경고 띠(다급해질수록 빨갛게 점멸 가속) + 발사 섬광 + 화면 진동
-        if (u.beamG) {
-          const aiming = (h.bossBeamT || 0) > 0
-          if ((h.bossBeamSeq || 0) !== u.lastBeamSeq) {
-            u.lastBeamSeq = h.bossBeamSeq || 0
-            u.beamFlashT = 0.55
-            camShakeUntil = performance.now() / 1000 + 0.5 // 광선 발사 — 짧은 진동
-          }
-          if (u.beamFlashT > 0) u.beamFlashT = Math.max(0, u.beamFlashT - dt)
-          u.beamG.visible = aiming || u.beamFlashT > 0
-          if (u.beamG.visible) {
-            u.beamG.rotation.y = -(h.bossBeamDir || 0)
-            u.beamTele.visible = aiming
-            if (aiming) {
-              const urg = 1 - Math.min(1, h.bossBeamT / (h.bossBeamT0 || 2.4))
-              u.beamTele.material.color.setHex(urg > 0.65 ? 0xff5a3a : 0xffdf6a)
-              u.beamTele.material.opacity = 0.15 + urg * 0.25 + 0.1 * Math.abs(Math.sin(view.time * (6 + urg * 16)))
-            }
-            const bf = u.beamFlashT / 0.55
-            u.beamFlash.visible = bf > 0
-            u.beamFlash.material.opacity = bf * 0.9
-          }
         }
         // 각성 휴지기 💤 — 둥실 떠오르며 깜빡여 "웅크려 힘을 모으는 중"을 알린다
         if (u.dormant) {
@@ -7367,6 +7376,71 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       u.halo.scale.set(u.haloBase * pulse, u.haloBase * pulse, 1)
       u.core?.scale.setScalar(0.85 + Math.sin(view.time * 22 + p.z) * 0.15) // 화살형은 코어 구체가 없다
     })
+    // 보스 조준 예고 오버레이(섬멸의 광선·서리 숨결) — 즉사급 예고는 안개와 무관하게 항상 보인다
+    {
+      const seen = new Set()
+      for (const h of view.heroes) {
+        if (h.bossBeamT == null) continue // 보스 뷰만 이 필드를 갖는다
+        const beamKey = 'beam:' + h.id
+        let bo = bossAimPool.get(beamKey)
+        if (bo && (h.bossBeamSeq || 0) !== bo.userData.lastSeq) {
+          bo.userData.lastSeq = h.bossBeamSeq || 0
+          bo.userData.flashT = 0.55
+          camShakeUntil = performance.now() / 1000 + 0.5 // 발사 — 짧은 진동
+        }
+        const aiming = (h.bossBeamT || 0) > 0
+        if (aiming || (bo && bo.userData.flashT > 0)) {
+          if (!bo) {
+            bo = buildBeamOverlay()
+            bo.userData.lastSeq = h.bossBeamSeq || 0
+            bossAimPool.set(beamKey, bo)
+            scene.add(bo)
+          }
+          seen.add(beamKey)
+          bo.position.set(h.x, 0, h.z)
+          if (bo.userData.flashT > 0) bo.userData.flashT = Math.max(0, bo.userData.flashT - dt)
+          const offs = beamOffsets(h.bossBeamN || 1)
+          bo.userData.laneGroups.forEach((lg, i) => {
+            const on = i < offs.length
+            lg.visible = on
+            if (!on) return
+            lg.rotation.y = -(h.bossBeamDir + offs[i])
+            const tele = bo.userData.lanes[i]
+            const flash = bo.userData.flashes[i]
+            tele.visible = aiming
+            if (aiming) {
+              const urg = 1 - Math.min(1, h.bossBeamT / (h.bossBeamT0 || 1.2))
+              tele.material.color.setHex(urg > 0.6 ? 0xff5a3a : 0xffdf6a)
+              tele.material.opacity = 0.16 + urg * 0.28 + 0.1 * Math.abs(Math.sin(view.time * (7 + urg * 18)))
+            }
+            const bf = bo.userData.flashT / 0.55
+            flash.visible = bf > 0
+            flash.material.opacity = bf * 0.9
+          })
+        }
+        const coneKey = 'cone:' + h.id
+        if ((h.bossConeT || 0) > 0) {
+          let co = bossAimPool.get(coneKey)
+          if (!co) {
+            co = buildConeOverlay()
+            bossAimPool.set(coneKey, co)
+            scene.add(co)
+          }
+          seen.add(coneKey)
+          co.position.set(h.x, 0, h.z)
+          co.rotation.y = -(h.bossConeDir || 0)
+          const urg = 1 - Math.min(1, h.bossConeT / (h.bossConeT0 || 1.1))
+          co.userData.tele.material.color.setHex(urg > 0.6 ? 0xcfe8ff : 0x9fe4ff)
+          co.userData.tele.material.opacity = 0.16 + urg * 0.3 + 0.1 * Math.abs(Math.sin(view.time * (7 + urg * 16)))
+        }
+      }
+      for (const [k, o] of bossAimPool) {
+        if (seen.has(k)) continue
+        scene.remove(o)
+        o.traverse((c) => { c.geometry?.dispose?.(); c.material?.dispose?.() })
+        bossAimPool.delete(k)
+      }
+    }
     // 대지술사 임시 돌벽 — 물리적 지형이라 안개와 무관하게 항상 보인다(안 보이는 벽에 막히면 억울하다)
     syncPool(scene, stoneWallPool, view.stoneWalls || [], buildStoneWall, (obj, w) => {
       obj.userData.update?.(w)
