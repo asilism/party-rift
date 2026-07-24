@@ -3344,6 +3344,14 @@ body {
   .hat-card { padding: 6px 4px; }
 }
 
+/* ── 보스 디버그(웹 ?boss) — 보스·티어 골라 즉시 진군전 ── */
+.bossdebug-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+.bossdebug-card { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; max-width: min(560px, 94vw); }
+.bossdebug-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.bossdebug-pick { font-size: clamp(12px, 2.4vh, 15px); padding: 8px 12px; }
+.bossdebug-go { font-size: clamp(14px, 2.8vh, 18px); padding: 12px; }
+.bossdebug-note { margin: 0; text-align: center; color: #8a80ad; font-size: clamp(10px, 2vh, 12px); }
+
 /* ── 조디악 코인 ── */
 .char-screen__coins {
   font-family: var(--toy-font); font-weight: 800; font-size: clamp(13px, 2.6vh, 17px);
