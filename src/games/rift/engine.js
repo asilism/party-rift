@@ -5364,13 +5364,19 @@ export function bossInvuln(state, h) {
 }
 
 // ── 보스전 난이도 티어 ──
-// 보통은 현행 그대로(전부 1.0) — 기존 밸런스(클리어율 30~45% 밴드)를 기준선으로 보존한다.
+// 티어별 목표 밴드(봇 5인 시뮬 클리어율 — 봇은 "학습 상한 프록시", 사람은 이보다 잘 깬다):
+//   쉬움(normal) 35~50% · 악몽(hard) 20~35% · 지옥(nightmare) 10~20%(중심 15%)
+// 보스 킷을 바꿀 때마다 세 티어를 실측해 이 밴드에 맞춘다(?boss 디버그 + boss-sim).
 // 해금 순서(보통 클리어 → 어려움 → 악몽)는 UI가 강제하고, 엔진은 주어진 티어를 그대로 적용.
 // tele(예고 시간 배율)는 악몽만 줄인다 — "배우면 깬다" 원칙상 어려움까지는 읽기 난도 불변.
+// 2026-07-25 재보정: 기믹 중심 신규 킷에선 쿨 배율이 페이즈 가속과 곱으로 중첩돼 과폭주
+//  (구 배율로 악몽 0~6%·지옥 0% — 밴드 이탈). 실측으로 밴드에 맞춘 값.
+//  tele는 전 티어 1 고정 — 예고(기믹 도달 시간)를 줄이면 난이도가 곡선이 아니라 절벽이 된다
+//  (지옥 tele 0.9만으로 카르곤 44%→6%: 안전지대 도달이 시간 임계라서). 압박은 스탯·쿨로만.
 export const BOSS_TIERS = {
   normal: { hp: 1, atk: 1, cd: 1, adds: 0, wave: 0, tele: 1 },
-  hard: { hp: 1.25, atk: 1.15, cd: 0.85, adds: 1, wave: 1, tele: 1 },
-  nightmare: { hp: 1.55, atk: 1.35, cd: 0.7, adds: 2, wave: 2, tele: 0.85 },
+  hard: { hp: 1.15, atk: 1.1, cd: 0.9, adds: 1, wave: 1, tele: 1 },
+  nightmare: { hp: 1.38, atk: 1.26, cd: 0.82, adds: 1, wave: 2, tele: 1 },
 }
 const bossTierOf = (state) => BOSS_TIERS[state.bossTier] || BOSS_TIERS.normal
 
@@ -5627,6 +5633,7 @@ function bossThink(state, h, dt) {
   if (h.bossConeAt && state.time >= h.bossConeAt) {
     h.bossConeAt = null
     h.bossConeSeq = (h.bossConeSeq || 0) + 1
+    const trim = 1 / bossTierOf(state).atk // 스킬 칩딜의 티어 가중 상쇄(아르케인 방침과 동일)
     for (const e of state.heroes) {
       if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
       if (dist(h, e) > (h.bossConeR || CONE_R)) continue
@@ -5634,7 +5641,7 @@ function bossThink(state, h, dt) {
       while (dd > Math.PI) dd -= 2 * Math.PI
       while (dd < -Math.PI) dd += 2 * Math.PI
       if (Math.abs(dd) > (h.bossConeHalf || CONE_HALF)) continue
-      damageHero(state, e, skillDmg(h, 75, 1.4), h)
+      damageHero(state, e, skillDmg(h, 75, 1.4) * trim, h)
       e.freezeT = Math.max(e.freezeT, 1.2)
     }
     pushFxDir(state, 'frost', h.x, h.z, h.bossConeR || CONE_R, h.bossConeDir, h.team)
@@ -6151,12 +6158,19 @@ function bossColossus(state, h, foe) {
 function bossArchmage(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd // 페이즈 가속 × 난이도 티어
+  // 아르케인 전용 완충: 대기믹(의식·광선·숨결·감옥)은 티어 가속을 40%만 받는다 —
+  //  기믹 빈도가 티어에서 그대로 빨라지면 처형 나선이 재점화(실측 악몽 13%·지옥 0%).
+  //  페이즈 가속은 온전히 유지(국면 상승의 발악은 살린다). 압박은 스탯(hp·atk)이 담당.
+  const gimMul = BOSS_PHASE_CD[p - 1] * (1 - (1 - bossTierOf(state).cd) * 0.4)
+  // 스킬 피해의 티어 가중 상쇄(아르케인 전용): 티어 압박은 체력·평타가 담당 —
+  //  회오리·숨결·운석 칩딜까지 티어로 커지면 처형 나선 없이도 말라 죽는다(실측 악몽 13%)
+  const trim = 1 / bossTierOf(state).atk
   // 소환 의식(시그니처 · 보스전 전용): 소환석 3/4/5개를 부유시키고 무적 채널 —
   //  STONE_TIME 안에 전부 부수면 의식이 역류해 그로기(딜 타임), 남기면 남은 수만큼 즉결 처형.
   //  성립/해소는 bossThink 펜딩 섹션이 관리한다.
   if (!h.defenseBoss && (h.bossCd.stones ?? 1) <= 0
     && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss && isHeroVisible(state, e, h.team) && dist(h, e) < 26)) {
-    h.bossCd.stones = STONES_CD * cdMul
+    h.bossCd.stones = STONES_CD * gimMul
     h.stonesAt = state.time + STONE_TIME
     const count = STONE_COUNT[p - 1]
     // 소환석 체력은 "부술 수 있는 손"(생존 인원)에 비례 — 아군이 줄어든 상태에서 의식이 돌면
@@ -6192,7 +6206,7 @@ function bossArchmage(state, h, foe) {
       if (d2v < bd2) { bd2 = d2v; bt = e }
     }
     if (bt) {
-      h.bossCd.d = BEAM_CD * cdMul
+      h.bossCd.d = BEAM_CD * gimMul
       h.bossBeamDir = Math.atan2(bt.z - h.z, bt.x - h.x)
       h.bossBeamN = p >= 3 ? 3 : p === 2 ? 2 : 1 // 국면별 방사 가닥 수
       const charge = BEAM_CHARGE * bossTierOf(state).tele
@@ -6217,7 +6231,7 @@ function bossArchmage(state, h, foe) {
     if (near >= 1) {
       h.bossCd.c = 10 * cdMul
       pushBossZone(state, h, {
-        x: h.x, z: h.z, r: 12, delay: 0.8, dmg: skillDmg(h, 70, 1.2),
+        x: h.x, z: h.z, r: 12, delay: 0.8, dmg: skillDmg(h, 70, 1.2) * trim,
         knock: 15, knockStun: 0.5, vfx: 'repulse', hue: 'frost',
       })
     }
@@ -6240,7 +6254,7 @@ function bossArchmage(state, h, foe) {
       if (n > best) { best = n; mark = e }
     }
     if (mark) {
-      h.bossCd.a = PRISON_CD * cdMul
+      h.bossCd.a = PRISON_CD * gimMul
       raiseWallRing(state, mark.x, mark.z, PRISON_R, 12, 3.6)
       let caged = 0
       for (const e of state.heroes) { // 링 안 전원 잠깐 속박 — 최소 표적 포함 갇힘을 보장
@@ -6252,7 +6266,7 @@ function bossArchmage(state, h, foe) {
       for (let i = 0; i < 3; i++) {
         state.zones.push({
           id: state.nextId++, kind: 'meteor', team: h.team, owner: h.id,
-          x: mark.x, z: mark.z, r: PRISON_R + 0.5, t: 0, delay: 1.2 + i * 0.7, dmg: skillDmg(h, 115, 2.2),
+          x: mark.x, z: mark.z, r: PRISON_R + 0.5, t: 0, delay: 1.2 + i * 0.7, dmg: skillDmg(h, 115, 2.2) * trim,
         })
       }
       h.comboRestUntil = state.time + 3.6 // 운석 3연타가 끝날 때까지 다른 대기술 없음
@@ -6263,7 +6277,7 @@ function bossArchmage(state, h, foe) {
   // 서리 숨결(한빙술사 콘 크게): 부채꼴 예고 1.1초 → 전방 부채꼴 전체 빙결 —
   //  원(빠져)·직선(비켜)과 다른 "각도" 회피. 집행은 펜딩 섹션.
   if (h.bossCd.b <= 0 && foe && dist(h, foe) < CONE_R - 2 && !h.bossConeAt && bigReady) {
-    h.bossCd.b = CONE_CD * cdMul
+    h.bossCd.b = CONE_CD * gimMul
     h.bossConeDir = Math.atan2(foe.z - h.z, foe.x - h.x)
     h.bossConeR = p >= 3 ? 26 : p === 2 ? 23 : CONE_R // 국면이 오르면 숨결이 길고 넓어진다
     h.bossConeHalf = p >= 3 ? 0.75 : p === 2 ? 0.65 : CONE_HALF
@@ -6288,7 +6302,7 @@ function bossArchmage(state, h, foe) {
         id: state.nextId++, kind: 'tornado', team: h.team, owner: h.id,
         x: h.x + Math.cos(d) * 3, z: h.z + Math.sin(d) * 3, dir: d,
         vx: Math.cos(d) * GUST_SPEED, vz: Math.sin(d) * GUST_SPEED,
-        travel: 0, max: 34, r: gr, dmg: skillDmg(h, 45, 0.85), hit: new Set(),
+        travel: 0, max: 34, r: gr, dmg: skillDmg(h, 45, 0.85) * trim, hit: new Set(),
       })
     }
     pushFx(state, 'tornado', h.x, h.z, 5, h.team, 0.8)
