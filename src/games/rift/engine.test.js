@@ -3958,8 +3958,8 @@ test('어둠의 정적: 돌진은 순간이동이 아니라 실이동 — 페이
   boss.stillWarned = false
   boss.dashLeft = 3
   boss.stealthT = 8
-  // 경고 개시 프레임: 모습 공개(은신 해제 + 안개 무관 노출)
-  for (let i = 0; i < Math.round(0.3 / STEP) && !boss.stillWarned; i++) step(g, STEP)
+  // 경고 개시 프레임: 모습 공개(은신 해제 + 안개 무관 노출) — 경고는 vanish 0.5초 전부터
+  for (let i = 0; i < Math.round(0.6 / STEP) && !boss.stillWarned; i++) step(g, STEP)
   assert.ok(boss.stillWarned, '경고 개시')
   assert.ok(boss.stealthT <= 0, '경고와 함께 모습 공개')
   assert.ok(boss.revealT > 0, '안개 무관 노출 — 모두가 본다')

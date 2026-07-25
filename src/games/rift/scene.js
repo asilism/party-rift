@@ -7539,7 +7539,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           if (dov.userData.flashT > 0) dov.userData.flashT = Math.max(0, dov.userData.flashT - dt)
           dov.userData.tele.visible = dashAiming
           if (dashAiming) {
-            const urg = 1 - Math.min(1, h.dashWarnT / 0.65)
+            const urg = 1 - Math.min(1, h.dashWarnT / (h.dashWarnT0 || 0.5))
             const blink = Math.abs(Math.sin(view.time * 22))
             dov.userData.teleBand.material.opacity = 0.5 + urg * 0.25 + 0.15 * blink
             dov.userData.teleCore.material.opacity = 0.6 + urg * 0.3 + 0.2 * blink
