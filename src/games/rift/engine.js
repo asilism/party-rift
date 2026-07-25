@@ -269,7 +269,7 @@ export const CLASSES = {
   boss_shadow: {
     boss: true, name: '그림자 군주', icon: '👺',
     desc: '어둠을 가르는 암살자형 보스 — 습격과 공포',
-    hp: 25000, hpLvl: 680, atk: 112, atkLvl: 8, range: 13.5, atkCd: 0.7, speed: 8.8, def: 0.52, // hp·atk 상향: 야바위 개편 후 쉬움 과속 보정(티어 복리는 전용 완충으로 차단)
+    hp: 28500, hpLvl: 680, atk: 118, atkLvl: 8, range: 13.5, atkCd: 0.7, speed: 8.8, def: 0.52, // atk 118: 그림자·정적 기믹이 보스 부재 시간이라 기본 압박으로 상쇄(쉬움 63%→밴드 복귀)
     skill: { name: '그림자 습격', icon: '🌀', cd: 9, desc: '가장 약한 적 뒤로 순간이동해 벤다' },
     skill2: { name: '공포의 포효', icon: '😱', cd: 16, desc: '주변 모두에게 공포 — 통제를 잃는다' },
     ult: { name: '어둠걸음', icon: '🌫️', cd: 26, desc: '어둠에 스며 모습을 감추고 빨라진다' },
@@ -2754,14 +2754,6 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   if (victim.respawnT > 0 || state.status !== 'playing') return
   if (state.mode === 'arena' && state.arenaPhase === 'shop' && attacker) return // 준비 결계: 전투 불가
   if (victim.isBoss && bossInvuln(state, victim)) return // 무적(각성 휴지기 보호막 / 기상 전 수면)
-  // 야바위 선택: 선택 국면에 진짜(보스)를 맞히면 들통 — 분신이 걷히고 크게 휘청인다(딜 타임)
-  if (victim.shellPhase === 'guess') {
-    shellEnd(state, victim)
-    victim.bossGroggyT = SHELL_STUN // CC 저항 무시 전용 그로기
-    victim.stunT = Math.max(victim.stunT, 1) // 💫 표시용
-    pushFx(state, 'berserk', victim.x, victim.z, 8, victim.team, 1.0)
-    pushFeed(state, 'obj', '🎯 진짜를 찾았다 — 녹스가 크게 휘청인다!')
-  }
   // 봇 난이도: 봇 영웅이 주는 피해(평타·스킬 공통)를 난이도 배율로. 리다이렉트(결속 대납)엔
   // 원 피해에서 이미 적용됐으므로 다시 곱하지 않는다.
   if (!redirected && attacker?.isBot) amount *= BOT_LEVELS[state.botLevel]?.dmg ?? 1
@@ -3640,6 +3632,8 @@ function stepHero(state, h, dt) {
     pushFx(state, 'meteorhit', h.x, h.z, 5, 'red', 1.0)
     damageHero(state, h, 99999, from)
   }
+  // 죽음의 그림자(피낙인자): ☠️ 표시 시간 — 해제·처형은 보스 상태머신이 관리
+  if (h.huntT > 0) h.huntT = Math.max(0, h.huntT - dt)
   // 성좌 낙인(STACK): 시한이 다하면 낙인자 위치에 거대 운석 — 총피해를 원 안 인원수로 분할.
   //  홀로 맞으면 즉사급, 모여서 나누면 견딜 만하다 — 가시 낙인(산개)과 정확히 반대 문법.
   if (h.stackT > 0) {
@@ -4635,24 +4629,6 @@ function spawnSummon(state, owner, kind, x, z) {
 }
 
 function damageSummon(state, s, amount, attacker) {
-  // 야바위 분신: 일반 피해로는 안 죽는다 — 선택(guess) 국면의 첫 타가 "가짜 선택" 판정일 뿐.
-  //  틀리면 어둠 폭발(공포+피해)로 응징하고 그 분신은 소멸한다. 섞는 중엔 아예 무반응.
-  if (s.shellClone) {
-    const owner = state.heroes.find((b) => b.id === s.owner)
-    if (owner?.shellPhase === 'guess' && s.hp > 0) {
-      s.hp = 0 // 펑 — stepSummons가 걷는다
-      for (const e of state.heroes) {
-        if (e.team === owner.team || e.respawnT > 0 || e.isBoss) continue
-        if (dist(s, e) > 6.5) continue
-        damageHero(state, e, skillDmg(owner, 110, 2.0), owner)
-        applyFear(state, e, 1.4)
-      }
-      pushFx(state, 'shriek', s.x, s.z, 6.5, owner.team, 1.0)
-      pushFeed(state, 'obj', '💥 가짜다! 그림자가 폭발한다!')
-      if (owner.shellCloneIds) owner.shellCloneIds = owner.shellCloneIds.filter((id) => id !== s.id)
-    }
-    return
-  }
   const wasAlive = s.hp > 0
   s.hp -= amount // 제거는 stepSummons에서 hp<=0이면 처리
   // 처치 보상: 잡은 게 영웅이면 소량의 골드 (경험치는 없음 — 소환물 파밍으로 레벨이 새지 않게)
@@ -4676,7 +4652,6 @@ function stepSummons(state, dt) {
     // 환영무희 미끼 분신(기본 스킬): 직진하다 보이는 적 영웅이 인지 반경에 들어오면 쫓아가고,
     //  코앞에 오면 내리찍기 모션(slamT) — 그동안 표적을 끝까지 따라붙어(도약) 반드시 명중 후 펑 사라진다.
     //  전투형 분신(궁극기)은 아래 공용 전투 로직(적 인지 → 추격 → 평타)을 그대로 탄다 — 봇처럼 싸운다.
-    if (s.shellClone) continue // 야바위 분신: 스스로는 아무것도 안 한다 — 보스 상태머신이 움직인다
     if (s.kind === 'clone' && !s.combat) {
       if (s.slamT > 0) {
         s.slamT -= dt
@@ -5397,9 +5372,9 @@ const BOSS_LEASH = 18 // 진군 축(공성 목표)에서 이 이상 벗어난 �
 // 보스가 무적인가 — ① 각성 휴지기(어둠의 보호막) ② 기상 전 수면 ③ 소환 의식 채널(아르케인).
 // 표적·피해 판정에서 함께 쓴다. 의식 무적은 "보스 말고 소환석을 쳐라"를 시스템이 강제하는 장치.
 export function bossInvuln(state, h) {
-  // 야바위: 표식·섞기 중엔 무적(눈으로 쫓는 시간), 선택(guess) 국면에만 때릴 수 있다 — 그 첫 타가 곧 선택
+  // 그림자 추격(죽음의 그림자)·어둠 소멸(어둠의 정적) 중엔 실체가 없다 — 무적
   return h.isBoss === true && (h.bossShieldT > 0 || h.stonesAt != null
-    || (h.shellPhase != null && h.shellPhase !== 'guess') || state.time < BOSS_SLEEP_END)
+    || h.huntUntil != null || h.stillVanishAt != null || state.time < BOSS_SLEEP_END)
 }
 
 // ── 보스전 난이도 티어 ──
@@ -5428,17 +5403,30 @@ const GAZE_TELE = 2.4 // 채널(예고) 시간 — 티어 tele 배율 적용(악
 const GAZE_CD = 15 // 기본 쿨 — 페이즈 가속·티어 완충(gimMul) 적용
 const GAZE_FEAR = 2.6 // 사로잡히면 공포 질주 — 암살자 보스 옆에서 통제를 잃는 것 자체가 벌
 
-// ── 그림자 야바위(녹스 제2 시그니처): 셋 중 진짜를 눈으로 쫓아라 ──
-//  펑! 하고 녹스 셋이 등장 → 가운데 진짜에게 붉은 소환석 표식(공개) → 야바위처럼 섞는다 →
-//  진짜를 치면 들켜서 휘청(그로기 딜 타임), 가짜를 치면 어둠 폭발(공포+피해).
-//  분신은 이름·체력바·위협 링·국면 덩치까지 완전히 위장한다 — 유일한 단서는 "눈으로 쫓은 기억".
-const SHELL_CD = 30
-const SHELL_MARK_T = 1.8 // 붉은 소환석 공개 시간 — 위치를 눈에 각인할 여유
-const SHELL_GUESS_T = 7 // 선택 제한 시간 — 넘기면 연막 속으로(보스 가속)
-const SHELL_GAP = 7 // 세 자리 간격
-const SHELL_SWAPS = [4, 5, 6] // 국면별 섞기 횟수
-const SHELL_SWAP_T = [0.6, 0.5, 0.42] // 국면별 한 번 섞는 시간 — 필사엔 눈이 바빠진다
-const SHELL_STUN = 2.0 // 진짜 적중 보상 그로기
+// ── 죽음의 그림자(녹스 제2 시그니처): "도망쳐라, 네 차례다" — 개인 실행 기믹 ──
+//  녹스가 그림자(무적·바닥의 검은 웅덩이)가 되어 한 사람만 쫓는다. 그림자는 지형을 통과하고
+//  영웅의 질주보다 반 발 느리다 — 달리면 살고, 멈추면 잡혀서 처형 습격을 맞는다.
+//  시간을 끝까지 버티면 그림자를 떨쳐낸다(보스 노출+그로기).
+//  야바위의 교훈: 팀이 통계로 풀 수 있는 기믹은 봇이 대신 풀어버린다 — 낙인은 오롯이 본인 몫.
+const HUNT_CD = 26 // 시뮬 검증: 기믹은 팀에 순위협(처형+도망 DPS 이탈) — 빈도를 줄이면 오히려 쉬워진다(83%)
+const HUNT_T = 4.2 // 그림자 추격 시간
+const HUNT_SPEED = 12.9 // 그림자 이속 — 대부분 영웅 질주(13+)보다 반 발 느리다
+const HUNT_CATCH_R = 2.4 // 이 거리까지 닿으면 "잡혔다" — 처형 습격
+const HUNT_EXEC_DMG = [260, 5.0] // 처형 습격 피해(기본·계수)
+const HUNT_HUMAN_BIAS = 0.6 // 사람 우선 낙인 — 솔로 판에서 기믹이 "내 일"이 되도록
+
+// ── 어둠의 정적(녹스 제3 시그니처): 사라짐 → 암전 → 펑! 직선 돌진 ──
+//  녹스가 어둠 속으로 사라지고 화면이 짙게 어두워진다. 3~5초(랜덤) 뒤 직선 경고 0.8초 —
+//  집중해야 겨우 피한다. 피격 = 강력 피해 + 공포(즉사 아님: 랜덤 타이밍 기습에 즉사는 운빨 사망).
+//  단, 이 돌진으로 아군이 죽으면 지체 없이 즉시 한 번 더 — 죽음이 죽음을 부른다.
+const STILL_CD = 30
+const STILL_VANISH_MIN = 2.2 // 등장까지 최소(초) — 부재가 길수록 팀에겐 휴식이라 짧고 매섭게
+const STILL_VANISH_RAND = 1.6 // + 랜덤 0~1.6초
+const STILL_WARN2 = 0.8 // 직선 경고 — 집중해야 겨우 피할 시간
+export const NOXDASH_LEN = 42 // 돌진 직선 길이 — 씬(경고 띠)과 공유
+export const NOXDASH_HALF = 2.3 // 돌진 반폭
+const STILL_DASH_DMG = [200, 3.8] // 돌진 피해(+공포 1.6)
+
 
 // ── 성좌 낙인(대마도사 시그니처 STACK): 총피해를 원 안 인원수로 "나눠 맞는" 기믹 ──
 //  단순 나눗셈(반비례): 혼자 = 대상 체력 200%(즉사급) / 다섯이 모이면 각자 40%(아프지만 산다).
@@ -5551,7 +5539,7 @@ function bossThink(state, h, dt) {
   if (!h.defenseBoss && state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.004 * dt)
   }
-  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34, shell: 22 } // gaze/stomp/stones = 보스전 전용 시그니처
+  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34, hunt: 20, still: 30 } // gaze/stomp/stones = 보스전 전용 시그니처
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
   // ── 예고된 처형기 집행: 예고가 끝나는 순간 발동한다 (시전 후 취소 없음 — 읽었다면 이미 피했다) ──
   // 가시갑옷 도발 집행: 예고가 끝나는 순간 링(r9) 안의 적을 도발(강제 평타) + 반사창 개시
@@ -5589,60 +5577,109 @@ function bossThink(state, h, dt) {
     h.mz = 0
     return
   }
-  // 그림자 야바위 상태머신: 표식 공개(mark) → 섞기(shuffle) → 선택(guess).
-  //  판정은 damageHero(진짜 적중=그로기)·damageSummon(가짜 적중=어둠 폭발)이 맡는다.
-  if (h.shellPhase) {
-    const p2 = h.bossPhase || 1
-    const clones = state.summons.filter((s) => s.shellClone && s.owner === h.id && s.hp > 0)
-    for (const c of clones) { c.hp = h.hp; c.maxHp = h.maxHp; c.bossPhase = p2; c.dir = h.dir } // 완전 위장: 체력·국면 미러
-    if (h.shellPhase === 'mark' && state.time >= h.shellUntil) {
-      h.shellPhase = 'shuffle'
-      h.shellSwapsLeft = SHELL_SWAPS[p2 - 1]
-      h.shellSwapAt = state.time + 0.2
+  // 죽음의 그림자 추격: 지형을 통과하는 검은 웅덩이가 낙인자만 쫓는다 —
+  //  닿으면 처형 습격, 시간을 버티면 떨쳐냄(보스 노출+그로기)
+  if (h.huntUntil) {
+    const mark = state.heroes.find((e) => e.id === h.huntTargetId)
+    if (!mark || mark.respawnT > 0) {
+      h.huntUntil = null // 낙인자가 다른 이유로 죽었다 — 조용히 복귀
+      h.huntTargetId = null
+      h.stealthT = 0
+      h.gimRestUntil = Math.max(h.gimRestUntil || 0, state.time + 4)
+    } else if (dist(h, mark) < HUNT_CATCH_R) {
+      // 잡혔다 — 그림자에서 솟아나 처형 습격
+      h.huntUntil = null
+      h.huntTargetId = null
+      mark.huntT = 0
+      h.stealthT = 0
+      h.dir = Math.atan2(mark.z - h.z, mark.x - h.x)
+      pushFx(state, 'blink', h.x, h.z, 3, h.team)
+      pushFx(state, 'shadowexec', mark.x, mark.z, 5, h.team, 1.0)
+      damageHero(state, mark, skillDmg(h, HUNT_EXEC_DMG[0], HUNT_EXEC_DMG[1]), h)
+      applyFear(state, mark, 1.6)
+      pushFeed(state, 'obj', `⚔️ 처형 습격 — ${mark.name}이(가) 그림자에 잡혔다!`)
+      h.gimRestUntil = Math.max(h.gimRestUntil || 0, state.time + 4)
+    } else if (state.time >= h.huntUntil) {
+      // 끝까지 안 잡혔다 — 그림자를 떨쳐냈다: 보스가 튕겨 나와 휘청인다
+      h.huntUntil = null
+      h.huntTargetId = null
+      mark.huntT = 0
+      h.stealthT = 0
+      h.bossGroggyT = Math.max(h.bossGroggyT || 0, 1.2) // 판당 십수 회 떨쳐내니 짧게 — 누적 헌납 방지
+      h.stunT = Math.max(h.stunT, 1) // 💫 표시용
+      pushFx(state, 'berserk', h.x, h.z, 7, h.team, 1.0)
+      pushFeed(state, 'obj', `💨 ${mark.name}이(가) 그림자를 떨쳐냈다 — 녹스가 드러나 휘청인다!`)
+    } else {
+      // 그림자 활주: 지형 무시 직선 추격 — 도망만이 답이다
+      const d = dist(h, mark) || 0.001
+      const sp = HUNT_SPEED * dt
+      h.x += ((mark.x - h.x) / d) * sp
+      h.z += ((mark.z - h.z) / d) * sp
+      h.dir = Math.atan2(mark.z - h.z, mark.x - h.x)
+      h.mx = 0
+      h.mz = 0
+      return
     }
-    if (h.shellPhase === 'shuffle' && state.time >= h.shellSwapAt) {
-      if (h.shellSwapsLeft <= 0) {
-        h.shellPhase = 'guess'
-        h.shellUntil = state.time + SHELL_GUESS_T
-        pushFeed(state, 'obj', '🎩 어느 쪽이냐 — 진짜를 쳐라! 가짜는 터진다!')
+  }
+  // 어둠의 정적: 암전 속 랜덤 대기 → 직선 경고 0.8초 → 펑! 돌진.
+  //  돌진으로 아군이 죽으면 지체 없이 즉시 재경고·재돌진 — 죽음이 죽음을 부른다
+  if (h.stillVanishAt != null) {
+    if (!h.stillWarned && state.time >= h.stillVanishAt - STILL_WARN2) {
+      h.stillWarned = true
+      // 표적을 관통하는 돌진선 확정 — 시작점은 표적에서 랜덤 방향 16 밖(어둠 속 도약 위치)
+      const pool = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss)
+      if (!pool.length) {
+        h.stillVanishAt = null
+        h.stealthT = 0
       } else {
-        // 세 자리 중 둘을 무작위로 골라 슬롯을 교환 — 몸은 아래 이동 코드가 미끄러뜨린다
-        const i = Math.floor(state.rng() * 3)
-        let j = Math.floor(state.rng() * 2)
-        if (j >= i) j++
-        const ents = [h, ...clones]
-        const at = (slot) => ents.find((o) => (o === h ? h.shellIdx : o.slotIdx) === slot)
-        const ea = at(i)
-        const eb = at(j)
-        if (ea && eb) {
-          const set = (o, slot) => { if (o === h) h.shellIdx = slot; else o.slotIdx = slot }
-          set(ea, j)
-          set(eb, i)
-        }
-        h.shellSwapsLeft--
-        h.shellSwapAt = state.time + SHELL_SWAP_T[p2 - 1]
+        const t2 = pool[Math.floor(state.rng() * pool.length)]
+        const a = state.rng() * Math.PI * 2
+        h.x = t2.x + Math.cos(a) * 16
+        h.z = t2.z + Math.sin(a) * 16
+        h.dashDir = Math.atan2(t2.z - h.z, t2.x - h.x)
+        h.dir = h.dashDir
+        h.dashSeq = (h.dashSeq || 0) + 1 // 씬 직선 경고 트리거
+        pushFeed(state, 'obj', '💥 어둠이 요동친다 — 직선에서 비켜라!')
       }
     }
-    // 자리로 미끄러지기 — 섞는 손놀림(빠른 슬라이드)
-    const slide = (o, slot) => {
-      const t = h.shellSlots[slot]
-      const d = Math.hypot(t.x - o.x, t.z - o.z)
-      if (d < 0.05) return
-      const sp = Math.min(d, 26 * dt)
-      o.x += ((t.x - o.x) / d) * sp
-      o.z += ((t.z - o.z) / d) * sp
-    }
-    slide(h, h.shellIdx)
-    for (const c of clones) slide(c, c.slotIdx)
-    if (h.shellPhase === 'guess' && state.time >= h.shellUntil) {
-      // 시간 초과 — 연막 속으로: 아무도 못 맞혔다, 녹스가 빨라진다
-      shellEnd(state, h)
-      h.hasteT = Math.max(h.hasteT, 3)
-      pushFeed(state, 'obj', '🌫️ 그림자가 연막 속에 흩어졌다 — 녹스가 빨라진다!')
+    if (h.stillVanishAt != null && state.time >= h.stillVanishAt) {
+      // 펑! 등장하며 직선 돌진 — 경로의 모두에게 강력 피해 + 공포
+      h.stealthT = 0
+      const bx = Math.cos(h.dashDir)
+      const bz = Math.sin(h.dashDir)
+      let killed = 0
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
+        const rx = e.x - h.x
+        const rz = e.z - h.z
+        const along = rx * bx + rz * bz
+        const perp = Math.abs(-rx * bz + rz * bx)
+        if (along < 0 || along > NOXDASH_LEN || perp > NOXDASH_HALF) continue
+        damageHero(state, e, skillDmg(h, STILL_DASH_DMG[0], STILL_DASH_DMG[1]), h)
+        applyFear(state, e, 1.6)
+        if (e.respawnT > 0) killed++
+      }
+      pushFxDir(state, 'dash', h.x, h.z, NOXDASH_LEN, h.dashDir, h.team)
+      pushFx(state, 'shriek', h.x + bx * 4, h.z + bz * 4, 6, h.team, 1.0)
+      h.x += bx * NOXDASH_LEN
+      h.z += bz * NOXDASH_LEN
+      state.map.resolveTerrain(h, 2.2, colliders(state))
+      const remain = state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss)
+      if (killed > 0 && remain) {
+        // 연쇄: 사망을 봤다 — 암전 유지, 지체 없이 다음 경고로
+        h.stillVanishAt = state.time + STILL_WARN2
+        h.stillWarned = false
+        h.stealthT = Math.max(h.stealthT, STILL_WARN2 + 0.1)
+        pushFeed(state, 'obj', '☠️ 피 냄새 — 그림자가 다시 덮친다!')
+      } else {
+        h.stillVanishAt = null
+        h.stillWarned = false
+        h.gimRestUntil = Math.max(h.gimRestUntil || 0, state.time + 4)
+      }
     }
     h.mx = 0
     h.mz = 0
-    return // 야바위 동안 다른 행동 없음
+    return
   }
   // 발구르기 착지 집행: 안전지대 밖 전원 피해 + 공중 띄움 — 화면 진동은 씬이 bossSlamSeq로 감지
   if (h.bossSlamAt && state.time >= h.bossSlamAt) {
@@ -6497,57 +6534,6 @@ function bossThorn(state, h, foe) {
   }
 }
 
-// 야바위 개시: 적 무게중심을 향한 수직축으로 세 자리를 깔고, 진짜(보스)는 가운데 —
-// 좌우에 완전 위장 분신을 세운다. 진행은 bossThink 펜딩 섹션의 상태머신이 맡는다.
-function shellBegin(state, h) {
-  let cx = 0
-  let cz = 0
-  let n = 0
-  for (const e of state.heroes) {
-    if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
-    if (dist(h, e) > 30) continue
-    cx += e.x; cz += e.z; n++
-  }
-  const a = n ? Math.atan2(cz / n - h.z, cx / n - h.x) : h.dir
-  const px = -Math.sin(a) // 적을 바라보는 축의 수직 방향 — 셋이 나란히 보인다
-  const pz = Math.cos(a)
-  h.shellSlots = [-1, 0, 1].map((k) => ({ x: h.x + px * k * SHELL_GAP, z: h.z + pz * k * SHELL_GAP }))
-  h.shellIdx = 1 // 진짜는 가운데서 시작
-  h.shellCloneIds = []
-  for (const k of [0, 2]) {
-    const s = {
-      id: state.nextId++, kind: 'clone', shellClone: true, owner: h.id, team: h.team,
-      x: h.shellSlots[k].x, z: h.shellSlots[k].z, dir: h.dir, slotIdx: k,
-      hp: h.hp, maxHp: h.maxHp, bossPhase: h.bossPhase || 1,
-      atkCd: 0, dmg: 0, range: 0, aggro: 0, speed: 0, mobile: false, cd: 99, life: 9999,
-      chargeT: 0, combat: false, slamT: 0, slamTargetId: null, slamFrom: null, slamDmg: 0,
-      decoyTx: h.shellSlots[k].x, decoyTz: h.shellSlots[k].z,
-      zodiacId: h.zodiacId, cls: h.cls, name: h.name, lvl: h.lvl, isBot: true,
-    }
-    state.summons.push(s)
-    h.shellCloneIds.push(s.id)
-    pushFx(state, 'blink', s.x, s.z, 4, h.team, 0.8)
-  }
-  pushFx(state, 'blink', h.x, h.z, 4, h.team, 0.8)
-  h.shellPhase = 'mark'
-  h.shellUntil = state.time + SHELL_MARK_T
-  h.shellSeq = (h.shellSeq || 0) + 1
-  pushFeed(state, 'obj', '🎩 그림자 야바위! 붉은 소환석을 단 진짜를 눈에서 놓치지 마라!')
-}
-
-// 야바위 종료: 분신 소멸(펑) + 다음 기믹까지 한숨
-function shellEnd(state, h) {
-  for (const s of state.summons) {
-    if (s.shellClone && s.owner === h.id) {
-      s.hp = 0 // stepSummons가 펑 하고 걷는다
-      pushFx(state, 'blink', s.x, s.z, 4, h.team, 0.8)
-    }
-  }
-  h.shellPhase = null
-  h.shellCloneIds = null
-  h.gimRestUntil = state.time + 4 // 응시와 겹치지 않게 — 기믹은 한 번에 하나
-}
-
 function bossShadow(state, h, foe, siege) {
   const p = h.bossPhase || 1
   // 녹스 전용: 일반 스킬 쿨도 티어 가속을 40%만 — 기본 압박을 올린 대가로 티어 복리를 전면 차단
@@ -6555,11 +6541,36 @@ function bossShadow(state, h, foe, siege) {
   const cdMul = BOSS_PHASE_CD[p - 1] * (1 - (1 - bossTierOf(state).cd) * 0.4)
   // 기믹(응시·야바위) 쿨은 티어 가속을 40%만 — 티어에서 무적 시간이 폭증해 말라 죽는 구조 방지
   const gimMul = BOSS_PHASE_CD[p - 1] * (1 - (1 - bossTierOf(state).cd) * 0.4)
-  // 그림자 야바위(제2 시그니처 · 보스전 전용): 셋으로 갈라져 섞인다 — 집행은 펜딩 상태머신
-  if (!h.defenseBoss && (h.bossCd.shell ?? 1) <= 0 && !h.shellPhase && state.time >= (h.gimRestUntil || 0)
-    && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss && isHeroVisible(state, e, h.team) && dist(h, e) < 24)) {
-    h.bossCd.shell = SHELL_CD * gimMul
-    shellBegin(state, h)
+  // 죽음의 그림자(제2 시그니처 · 보스전 전용): 그림자가 되어 한 사람을 쫓는다 — 관리는 펜딩 섹션
+  if (!h.defenseBoss && (h.bossCd.hunt ?? 1) <= 0 && !h.huntUntil && state.time >= (h.gimRestUntil || 0)) {
+    const pool = state.heroes.filter((e) =>
+      e.team !== h.team && e.respawnT <= 0 && !e.isBoss && !(e.huntT > 0)
+      && isHeroVisible(state, e, h.team) && dist(h, e) < 30)
+    if (pool.length) {
+      const humans = pool.filter((e) => !e.isBot)
+      const mark = humans.length && state.rng() < HUNT_HUMAN_BIAS
+        ? humans[Math.floor(state.rng() * humans.length)]
+        : pool[Math.floor(state.rng() * pool.length)]
+      h.bossCd.hunt = HUNT_CD * gimMul
+      h.huntUntil = state.time + HUNT_T
+      h.huntTargetId = mark.id
+      h.stealthT = Math.max(h.stealthT, HUNT_T) // 몸을 감춘다 — 보이는 건 검은 웅덩이(씬 오버레이)뿐
+      mark.huntT = HUNT_T
+      mark.huntFrom = h.id
+      pushFx(state, 'blink', h.x, h.z, 4, h.team, 0.8)
+      pushFeed(state, 'obj', `☠️ ${mark.name}에게 죽음의 그림자 — 도망쳐라! 그림자에 잡히면 처형당한다!`)
+      return
+    }
+  }
+  // 어둠의 정적(제3 시그니처 · 보스전 전용): 사라짐 → 암전 → 랜덤 타이밍 직선 돌진 — 관리는 펜딩 섹션
+  if (!h.defenseBoss && (h.bossCd.still ?? 1) <= 0 && h.stillVanishAt == null && state.time >= (h.gimRestUntil || 0)
+    && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss && dist(h, e) < 26)) {
+    h.bossCd.still = STILL_CD * gimMul
+    h.stillVanishAt = state.time + STILL_VANISH_MIN + state.rng() * STILL_VANISH_RAND
+    h.stillWarned = false
+    h.stealthT = Math.max(h.stealthT, 8) // 등장(돌진) 때 벗긴다
+    pushFx(state, 'blink', h.x, h.z, 5, h.team, 0.9)
+    pushFeed(state, 'obj', '🌫️ 녹스가 어둠 속으로 사라졌다 — 어둠이 짙어진다... 곧 온다!')
     return
   }
   // 공포의 응시(시그니처): 반경 안에 적이 있으면 눈을 부릅뜨는 채널 개시 — 집행은 bossThink 펜딩 섹션.
@@ -6761,10 +6772,11 @@ function stepBots(state, dt) {
     // 섬멸의 광선 경로 = 즉사 — 수직 이탈이 그 무엇보다 먼저다
     if (state.mode === 'boss' && h.team === 'blue' && botDodgeBeam(state, h, dt)) continue
     if (isRaidMode(state.mode) && h.team === 'blue' && botSpreadBomb(state, h, dt)) continue
+    // 죽음의 그림자 = 도망이 최우선(본인 몫) / 어둠의 정적 = 돌진 경고 직선 이탈
+    if (state.mode === 'boss' && h.team === 'blue' && botHuntFlee(state, h)) continue
+    if (state.mode === 'boss' && h.team === 'blue' && botDodgeDash(state, h, dt)) continue
     // 공포의 응시 채널 = 제자리 등돌리기 — 장판(즉사급)이 먼저, 시선 회피는 그다음
     if (state.mode === 'boss' && h.team === 'blue' && botGazeAvert(state, h)) continue
-    // 그림자 야바위 = 지켜보다가 고른 쪽을 친다
-    if (state.mode === 'boss' && h.team === 'blue' && botShellPick(state, h, dt)) continue
     // 성좌 낙인(STACK) = 낙인 찍힌 아군에게 집결 — 나눠 맞으면 시시해진다
     if (state.mode === 'boss' && h.team === 'blue' && botStackUp(state, h, dt)) continue
     // 발구르기 도약 = 안전지대(초록 원)로 피신
@@ -7118,34 +7130,36 @@ function botGazeAvert(state, h) {
   return true
 }
 
-// 그림자 야바위 대응: 섞는 동안은 서서 지켜보고(공격 무의미 — 무적), 선택 국면이 열리면
-// 각자 고른 대상을 공격한다. 추적 성공률 55% — 사람의 '눈으로 쫓기'를 봇도 흉내낸다.
-function botShellPick(state, h, dt) {
-  let boss = null
+// 죽음의 낙인 도망: 낙인이 붙으면 만사 제치고 그림자 반대편으로 질주 — 도망 거리가 곧 해제다
+function botHuntFlee(state, h) {
+  if (!(h.huntT > 0)) return false
+  if (HUNT_T - h.huntT < 0.4) return false // 사람 같은 반응 지연 — 낙인을 알아채기까지 한 박자
+  const b = state.heroes.find((o) => o.id === h.huntFrom)
+  const a = b ? Math.atan2(h.z - b.z, h.x - b.x) : h.dir
+  steerToward(state, h, { x: h.x + Math.cos(a) * 12, z: h.z + Math.sin(a) * 12 })
+  return true // 공격하면 발이 무거워진다(ATK_SLOW) — 도망에 전념
+}
+
+// 어둠의 정적 돌진 경고: 직선 안이면 수직 이탈 — 0.8초뿐이라 자주 실패한다(의도된 압박)
+function botDodgeDash(state, h, dt) {
   for (const b of state.heroes) {
-    if (b.isBoss && b.team !== h.team && b.shellPhase && b.respawnT <= 0) { boss = b; break }
+    if (!b.isBoss || b.team === h.team || b.stillVanishAt == null || !b.stillWarned || b.respawnT > 0) continue
+    if (b.stillVanishAt - state.time > STILL_WARN2 - 0.3) continue // 반응 지연 — 경고를 읽는 데 한 박자(0.5초 안에 비켜야)
+    const bx = Math.cos(b.dashDir || 0)
+    const bz = Math.sin(b.dashDir || 0)
+    const rx = h.x - b.x
+    const rz = h.z - b.z
+    const along = rx * bx + rz * bz
+    const perp = -rx * bz + rz * bx
+    if (along < -2 || along > NOXDASH_LEN + 2 || Math.abs(perp) > NOXDASH_HALF + 2.0) continue
+    const side = perp >= 0 ? 1 : -1
+    steerToward(state, h, {
+      x: b.x + bx * Math.max(2, along) - bz * side * (NOXDASH_HALF + 4.5),
+      z: b.z + bz * Math.max(2, along) + bx * side * (NOXDASH_HALF + 4.5),
+    })
+    return true // 공포 연쇄가 무섭다 — 회피 전념
   }
-  if (!boss) return false
-  if (boss.shellPhase !== 'guess') { // 표식·섞기 — 손 떼고 눈으로 쫓는 시간
-    h.mx = 0
-    h.mz = 0
-    return true
-  }
-  if (h.botShellSeq !== boss.shellSeq) { // 선택 배정(야바위 한 판에 1회)
-    h.botShellSeq = boss.shellSeq
-    const clones = state.summons.filter((s2) => s2.shellClone && s2.owner === boss.id && s2.hp > 0)
-    h.botShellPick = state.rng() < 0.45 || !clones.length
-      ? { tk: 'hero', id: boss.id }
-      : { tk: 'summon', id: clones[Math.floor(state.rng() * clones.length)].id }
-  }
-  const tgt = h.botShellPick.tk === 'hero'
-    ? boss
-    : state.summons.find((s2) => s2.id === h.botShellPick.id && s2.hp > 0)
-  if (!tgt) { h.botShellSeq = -1; return true } // 고른 가짜가 터졌다 — 남은 것에서 다시 고른다
-  if (dist(h, tgt) > heroRange(h) * 0.92) steerToward(state, h, tgt)
-  else { h.mx = 0; h.mz = 0 }
-  castAttack(state, h.id, h.botShellPick)
-  return true
+  return false
 }
 
 // 섬멸의 광선 감지: 경고 직사각 안이면 수직으로 이탈 — 맞으면 즉사라 만사 제치고 비킨다.
@@ -7946,6 +7960,14 @@ export function makeView(state) {
       thornBombT: r2d(h.thornBombT || 0), // 가시 낙인 카운트다운(머리 위 ❗ 표시)
       thornArmorT: r2d(h.thornArmorT || 0), // 가시갑옷 반사창(💢 표시)
       stackT: r2d(h.stackT || 0), // 성좌 낙인(STACK) 카운트다운(🤝 + 파란 링 — "모여!")
+      huntT: r2d(h.huntT || 0), // 죽음의 낙인 — ☠️ + 검은 링(심장박동)
+      // 은신 사냥자의 근접도(0~1): 낙인자 링의 고동 속도 — 보이지 않는 공포를 소리 없이 알린다
+      ...(h.huntT > 0
+        ? (() => {
+          const b = state.heroes.find((o) => o.id === h.huntFrom)
+          return { huntNear: b ? r2d(Math.max(0, 1 - dist(h, b) / 30)) : 0 }
+        })()
+        : null),
       beamFlingT: r2d(h.beamFlingT || 0), // 섬멸의 광선 비행 — 씬이 몸을 띄우고 회전시킨다
       zodiacId: h.zodiacId,
       color: h.color,
@@ -8045,7 +8067,13 @@ export function makeView(state) {
         bossConeR: r2d(h.bossConeR || 0), // 국면 스케일(길이·반각) — 씬 부채꼴이 판정과 같게
         bossConeHalf: r2d(h.bossConeHalf || 0),
         bossConeSeq: h.bossConeSeq || 0,
-        shellMark: h.shellPhase === 'mark', // 야바위 붉은 소환석 — 공개 국면에만 진짜 머리 위에
+        // 죽음의 그림자: 추격 잔여(>0 = 검은 웅덩이 오버레이가 보스 좌표를 따라간다)
+        huntShadowT: r2d(h.huntUntil != null ? Math.max(0, h.huntUntil - state.time) : 0),
+        // 어둠의 정적: 소멸(암전) 여부 + 돌진 직선 경고(잔여·방향·발사 시퀀스)
+        stillDark: h.stillVanishAt != null ? 1 : 0,
+        dashWarnT: r2d(h.stillVanishAt != null && h.stillWarned ? Math.max(0, h.stillVanishAt - state.time) : 0),
+        dashDir: r2d(h.dashDir || 0),
+        dashSeq: h.dashSeq || 0,
       } : null),
       dragonT: r1(h.dragonT),
       baronT: r1(h.baronT),
@@ -8090,7 +8118,7 @@ export function makeView(state) {
       hp: Math.ceil(s.hp), maxHp: s.maxHp, charge: s.chargeT > 0 ? 1 : 0, dormant: s.dormant ? 1 : 0,
       // 분신: 렌더러가 본체와 똑같이 그리도록 겉모습을 싣는다 (atkSeq=평타 모션, slam=내리찍기 모션)
       ...(s.kind === 'clone'
-        ? { zodiacId: s.zodiacId, cls: s.cls, name: s.name, lvl: s.lvl, isBot: s.isBot, atkSeq: s.atkSeq || 0, slam: r2d(s.slamT || 0), ...(s.bossPhase ? { bossPhase: s.bossPhase } : null) }
+        ? { zodiacId: s.zodiacId, cls: s.cls, name: s.name, lvl: s.lvl, isBot: s.isBot, atkSeq: s.atkSeq || 0, slam: r2d(s.slamT || 0) }
         : null),
       // leap: 도약 진행도(1→0, 점프 모션용) · idle: 포탑 휴면까지 남은 유예 시간(타이머 표시용)
       leap: s.leapT > 0 && s.leapDur > 0 ? r2d(s.leapT / s.leapDur) : 0,
