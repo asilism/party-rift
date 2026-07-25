@@ -4005,6 +4005,60 @@ test('죽음의 그림자: 페이즈 3이면 3갈래가 서로 다른 방위에�
   assert.ok(hp0 - mark.hp > 300 || mark.respawnT > 0, '처형 습격')
 })
 
+test('죽음의 그림자: 바로 옆에서 시전해도 그림자는 최소 거리 밖에서 태어난다(2갈래=반대편)', () => {
+  const g = noxRaid2()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const b = g.heroes.find((h) => h.id === 'p2')
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = bf.x + 24; a.z = bf.z
+  a.maxHp = 9000; a.hp = 9000
+  b.x = bf.x + 26; b.z = bf.z + 2
+  b.maxHp = 9000; b.hp = 9000
+  boss.x = a.x + 2; boss.z = a.z + 2 // 표적 바로 옆 — 그래도 확정 캐치가 되면 안 된다
+  boss.bossPhase = 2
+  boss.bossCd.hunt = 0
+  boss.gimRestUntil = 0
+  for (let i = 0; i < Math.round(2 / STEP) && !boss.huntUntil; i++) step(g, STEP)
+  assert.ok(boss.huntUntil != null, '추격 시전')
+  const mark = g.heroes.find((h) => h.id === boss.huntTargetId)
+  assert.ok(Math.hypot(boss.x - mark.x, boss.z - mark.z) > 11, `본체도 최소 거리 밖 스폰 (${Math.hypot(boss.x - mark.x, boss.z - mark.z).toFixed(1)})`)
+  assert.equal((boss.huntShadows || []).length, 1, '페이즈 2 = 2갈래')
+  // 반대편 포위: 표적 기준 본체·보조의 방위가 서로 정반대
+  const s1 = boss.huntShadows[0]
+  const u1 = Math.atan2(boss.z - mark.z, boss.x - mark.x)
+  const u2 = Math.atan2(s1.z - mark.z, s1.x - mark.x)
+  const diff = Math.abs(Math.atan2(Math.sin(u1 - u2), Math.cos(u1 - u2)))
+  assert.ok(diff > Math.PI * 0.9, `반대 방향에서 좁혀 들어온다 (${(diff * 180 / Math.PI).toFixed(0)}°)`)
+})
+
+test('어둠의 정적: 2단은 이전 돌진의 끝지점에서 이어진다(재배치 없음)', () => {
+  const g = noxRaid2()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const b = g.heroes.find((h) => h.id === 'p2')
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = bf.x + 20; a.z = bf.z
+  a.maxHp = 90000; a.hp = 90000
+  b.x = bf.x + 20; b.z = bf.z + 6
+  b.maxHp = 90000; b.hp = 90000
+  boss.bossPhase = 2
+  boss.stillVanishAt = g.time + 0.9
+  boss.stillWarned = false
+  boss.dashLeft = 2
+  boss.stealthT = 8
+  // 1단 완주 지점 포착
+  for (let i = 0; i < Math.round(2 / STEP) && (boss.dashGoSeq || 0) < 1; i++) step(g, STEP)
+  for (let i = 0; i < Math.round(1 / STEP) && boss.dashRunT != null; i++) step(g, STEP)
+  const endX = boss.x
+  const endZ = boss.z
+  // 2단 발사 직전(경고 중) — 위치가 끝지점 그대로여야 한다
+  for (let i = 0; i < Math.round(1.5 / STEP) && !(boss.stillWarned && (boss.dashGoSeq || 0) === 1); i++) step(g, STEP)
+  assert.ok(Math.hypot(boss.x - endX, boss.z - endZ) < 3, `2단 경고는 끝지점에서 (이동 ${Math.hypot(boss.x - endX, boss.z - endZ).toFixed(1)})`)
+  for (let i = 0; i < Math.round(6 / STEP) && boss.stillVanishAt != null; i++) step(g, STEP)
+  assert.equal(boss.dashGoSeq, 2, '2단 완주')
+})
+
 test('어둠의 정적: 돌진으로 사망자가 나오면 지체 없이 연쇄 재시전', () => {
   const g = noxRaid2()
   const boss = g.heroes.find((h) => h.isBoss)
