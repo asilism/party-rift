@@ -8,7 +8,7 @@ import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import {
   NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, RESPAWN_ARC_HALF, buildMap,
 } from './map.js'
-import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP, GAZE_R, GAZE_SAFE_COS, STACK_R, BEAM_LEN, BEAM_HALF, beamOffsets, CONE_R, CONE_HALF, trophySetOf } from './engine.js'
+import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP, GAZE_R, GAZE_SAFE_COS, STACK_R, BEAM_LEN, BEAM_HALF, beamOffsets, CONE_R, CONE_HALF, NOXDASH_LEN, NOXDASH_HALF, trophySetOf } from './engine.js'
 import { ZODIAC_FACES } from './zodiacFaces.js'
 
 // ── 그래픽 품질 프리셋 ──
@@ -3748,8 +3748,9 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   g.add(bombMark)
   let thornArmor = null // 가시갑옷 💢 — 반사창 동안 "때리지 마" 신호
   let gazeMark = null // 공포의 응시 👁️ — 채널 중 보스를 "바라보는" 동안만 켜진다(등 돌리면 즉시 꺼짐)
+  let huntMark = null // 죽음의 낙인 ☠️ + 검은 링(심장박동 — 은신 사냥자의 근접도)
+  let huntRing = null
   let gazeEye = null // 보스 전용: 채널 동안 가슴께에 부릅뜨는 거대한 눈
-  let shellGem = null // 야바위 붉은 소환석 — 표식 국면에만 진짜 위에
   // (섬멸의 광선·서리 숨결 예고는 히어로 객체가 아니라 씬 오버레이 풀 — 안개 속에서도 보여야 한다)
   let stackMark = null // 성좌 낙인 🤝 — "나한테 모여!" (파란 링과 세트)
   let stackRing = null // 성좌 낙인 파란 링 — 나눠 맞기 판정 반경(STACK_R)을 바닥에 그대로 그린다
@@ -3758,6 +3759,19 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     gazeMark.position.set(0, 7.6 + uiLift, 0)
     gazeMark.visible = false
     g.add(gazeMark)
+    huntMark = emojiSprite('☠️', 2.0)
+    huntMark.position.set(0, 7.6 + uiLift, 0)
+    huntMark.visible = false
+    alwaysOnTop(huntMark, 10)
+    g.add(huntMark)
+    huntRing = new THREE.Mesh(
+      new THREE.RingGeometry(2.0, 2.6, 28),
+      new THREE.MeshBasicMaterial({ color: 0x35204e, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false })
+    )
+    huntRing.rotation.x = -Math.PI / 2
+    huntRing.position.y = 0.13
+    huntRing.visible = false
+    g.add(huntRing)
     stackMark = emojiSprite('🤝', 2.0)
     stackMark.position.set(0, 7.6 + uiLift, 0)
     stackMark.visible = false
@@ -3789,19 +3803,6 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     gazeEye.visible = false
     alwaysOnTop(gazeEye, 10)
     g.add(gazeEye)
-    // 야바위 붉은 소환석 — 표식 공개 국면에만 진짜 머리 위에 떠서 고동친다.
-    // 셋이 겹쳐 보여도 단번에 읽히게 큼직한 결정 + 붉은 후광
-    shellGem = new THREE.Group()
-    const shellCore = gemMesh(0xff4444, 0.9)
-    shellCore.material.emissiveIntensity = 1.0
-    shellGem.add(shellCore)
-    const shellHalo = glowSprite(0xff5a4a, 5.5)
-    shellHalo.material.opacity = 0.55
-    shellGem.add(shellHalo)
-    shellGem.userData.core = shellCore
-    shellGem.position.set(0, 6.2 * s, 0)
-    shellGem.visible = false
-    g.add(shellGem)
   }
   // 보스 전리품 풀세트 오라 — 장착 3피스가 한 보스 세트일 때만(명예 표시, 씬 전용 코스메틱).
   // 인게임(내 영웅)과 꾸미기 쇼케이스가 같은 경로로 얻는다 — 넘겨받은 장착 id로 판정.
@@ -3952,7 +3953,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
     costume, // 옷 — FX(fxUpdate) 애니메이션용 참조
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, shellGem, stackMark, stackRing, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, huntMark, huntRing, stackMark, stackRing, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     // 보스 전용 모션·연출 시퀀스 스냅샷 — 접속 시점 값으로 초기화해야 빌드 직후 유령 스윙이 안 난다
     ...(CLASSES[h.cls]?.boss ? { lastFanSeq: h.bossFanSeq || 0, lastSmashSeq: h.bossSmashSeq || 0, lastSlamSeq: h.bossSlamSeq || 0 } : null),
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
@@ -4029,7 +4030,8 @@ function setHeroDead(u, dead) {
     if (u.gazeEye) u.gazeEye.visible = false // 보스의 부릅뜬 눈
     if (u.stackMark) u.stackMark.visible = false // 성좌 낙인 🤝
     if (u.stackRing) u.stackRing.visible = false
-    if (u.shellGem) u.shellGem.visible = false // 야바위 붉은 소환석
+    if (u.huntMark) u.huntMark.visible = false // 죽음의 낙인 ☠️
+    if (u.huntRing) u.huntRing.visible = false
   }
   if (u.setAura) u.setAura.visible = !dead // 전리품 세트 오라도 시체에 남지 않게
 }
@@ -5330,6 +5332,59 @@ function buildConeOverlay() {
   return g
 }
 
+// 어둠의 정적 돌진 경고 띠 — 좁고 길게, 짙붉은 색으로 빠르게 점멸(0.8초 반응 테스트)
+function buildDashOverlay() {
+  const g = new THREE.Group()
+  const geo = new THREE.PlaneGeometry(NOXDASH_LEN, NOXDASH_HALF * 2)
+  geo.translate(NOXDASH_LEN / 2, 0, 0)
+  // 암전 속에서도 또렷하게: 넓은 진홍 띠 + 밝은 중앙 코어의 이중 구조
+  const teleGroup = new THREE.Group()
+  const tele = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    color: 0xff4050, transparent: true, opacity: 0.55, side: THREE.DoubleSide,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }))
+  tele.rotation.x = -Math.PI / 2
+  tele.position.y = 0.36
+  const coreGeo = new THREE.PlaneGeometry(NOXDASH_LEN, NOXDASH_HALF * 0.7)
+  coreGeo.translate(NOXDASH_LEN / 2, 0, 0)
+  const core = new THREE.Mesh(coreGeo, new THREE.MeshBasicMaterial({
+    color: 0xffc0c8, transparent: true, opacity: 0.7, side: THREE.DoubleSide,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }))
+  core.rotation.x = -Math.PI / 2
+  core.position.y = 0.4
+  teleGroup.add(tele, core)
+  const flash = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    color: 0xd9b6ff, transparent: true, opacity: 0, side: THREE.DoubleSide,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }))
+  flash.rotation.x = -Math.PI / 2
+  flash.position.y = 0.6
+  g.add(teleGroup, flash)
+  g.userData = { tele: teleGroup, teleBand: tele, teleCore: core, flash, flashT: 0, lastSeq: 0 }
+  return g
+}
+
+// 죽음의 그림자 — 낙인자를 쫓는 검은 웅덩이: 짙은 원판 + 도는 보랏빛 테두리(고동)
+function buildHuntShadow() {
+  const g = new THREE.Group()
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(2.9, 28),
+    new THREE.MeshBasicMaterial({ color: 0x0c0614, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false })
+  )
+  disc.rotation.x = -Math.PI / 2
+  disc.position.y = 0.3
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(2.6, 3.1, 28, 1, 0, Math.PI * 1.5),
+    new THREE.MeshBasicMaterial({ color: 0x8a5cff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+  )
+  ring.rotation.x = -Math.PI / 2
+  ring.position.y = 0.34
+  g.add(disc, ring)
+  g.userData = { disc, ring }
+  return g
+}
+
 // 보스 예고 장판 — 경고(닫혀 들어오는 링 + 고동치는 원판 + 도는 내곽 링) → 폭발(fx가 그림)
 //  → 잔류 장판(용암/서리/어둠 웅덩이, 사라지기 전 페이드). hue로 색조를 정한다.
 // 발구르기 착지 화면 진동 — bossSlamSeq 변화로 무장, 실시간 시계로 감쇠(뷰 주기와 무관하게 매끈)
@@ -5841,7 +5896,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   camera.position.set(0, 60, 50)
 
   // 전체적으로 빛을 낮춰 음영을 깊게 (차가운 하늘빛 + 어두운 땅반사)
-  scene.add(new THREE.HemisphereLight(T.hemi[0], T.hemi[1], T.hemi[2]))
+  const hemiLight = new THREE.HemisphereLight(T.hemi[0], T.hemi[1], T.hemi[2])
+  scene.add(hemiLight)
   const sun = new THREE.DirectionalLight(T.sun[0], T.sun[1])
   sun.position.set(60, 90, 30)
   scene.add(sun)
@@ -5849,6 +5905,9 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const fill = new THREE.DirectionalLight(T.fill[0], T.fill[1])
   fill.position.set(-50, 40, -40)
   scene.add(fill)
+  // 어둠의 정적(녹스) 암전 — 원 밝기를 기억해 두고 부드럽게 절반까지 줄였다 되돌린다
+  const baseLightAmp = { hemi: hemiLight.intensity, sun: sun.intensity, fill: fill.intensity }
+  let darkAmp = 1
 
   // ── 지형 ──
   const GW = WORLD.maxX - WORLD.minX + 80
@@ -7056,7 +7115,23 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             u.gazeMark.scale.setScalar(1.9 * (1 + 0.25 * Math.abs(Math.sin(view.time * 4 * urgency))))
           }
         }
-        // 보스의 부릅뜬 눈: 채널 동안 가슴께에서 점점 크게 열린다 — "지금 등을 돌려야 한다" 카운트다운
+        // 죽음의 낙인 ☠️ + 검은 링: 은신 사냥자가 가까울수록 링이 빠르게 고동친다(심장박동)
+        if (u.huntMark) {
+          const hunted = (h.huntT || 0) > 0
+          u.huntMark.visible = hunted
+          if (u.huntRing) u.huntRing.visible = hunted
+          if (hunted) {
+            const near = h.huntNear || 0
+            const beat = 2.2 + near * 11 // 가까울수록 다급한 박동
+            u.huntMark.scale.setScalar(2.0 * (1 + 0.2 * Math.abs(Math.sin(view.time * beat))))
+            if (u.huntRing) {
+              u.huntRing.material.opacity = 0.4 + 0.4 * Math.abs(Math.sin(view.time * beat))
+              u.huntRing.material.color.setHex(near > 0.6 ? 0x8a2038 : 0x35204e) // 임박하면 핏빛
+              u.huntRing.scale.setScalar(1 + 0.12 * Math.abs(Math.sin(view.time * beat)))
+            }
+          }
+        }
+                // 보스의 부릅뜬 눈: 채널 동안 가슴께에서 점점 크게 열린다 — "지금 등을 돌려야 한다" 카운트다운
         if (u.gazeEye) {
           const gz = (h.bossGazeT || 0) > 0
           u.gazeEye.visible = gz
@@ -7064,16 +7139,6 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             const open = 1 - Math.min(1, h.bossGazeT / 2.4) // 0→1: 눈이 점점 크게 떠진다
             u.gazeEye.scale.setScalar(3.4 * (0.65 + open * 0.65) * (1 + 0.05 * Math.sin(view.time * 10)))
             u.gazeEye.material.opacity = 0.7 + 0.3 * Math.abs(Math.sin(view.time * 7))
-          }
-        }
-        // 야바위 붉은 소환석: 표식 공개 국면에만 진짜 머리 위 — 크게 고동치며 "얘가 진짜다"
-        if (u.shellGem) {
-          u.shellGem.visible = !!h.shellMark
-          if (h.shellMark) {
-            u.shellGem.position.y = 6.2 * (u.clsScale || 1) + Math.sin(view.time * 3) * 0.5
-            u.shellGem.rotation.y = view.time * 2.2
-            u.shellGem.scale.setScalar(1 + 0.25 * Math.abs(Math.sin(view.time * 5)))
-            if (u.shellGem.userData.core) u.shellGem.userData.core.material.emissiveIntensity = 0.8 + 0.5 * Math.abs(Math.sin(view.time * 5))
           }
         }
         // 성좌 낙인(STACK) 🤝 + 파란 링: "나한테 모여!" — 링(판정 반경 그대로)이 좁아지는 게 아니라
@@ -7452,7 +7517,54 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             flash.material.opacity = bf * 0.9
           })
         }
-        const coneKey = 'cone:' + h.id
+        // 어둠의 정적 — 돌진 직선 경고(0.8초, 집중해야 겨우 피한다): 짙붉은 띠가 빠르게 점멸
+        const dashKey = 'dash:' + h.id
+        let dov = bossAimPool.get(dashKey)
+        if (dov && (h.dashSeq || 0) !== dov.userData.lastSeq) {
+          dov.userData.lastSeq = h.dashSeq || 0
+          dov.userData.flashT = 0.4
+          camShakeUntil = performance.now() / 1000 + 0.35 // 펑! 돌진 진동
+        }
+        const dashAiming = (h.dashWarnT || 0) > 0
+        if (dashAiming || (dov && dov.userData.flashT > 0)) {
+          if (!dov) {
+            dov = buildDashOverlay()
+            dov.userData.lastSeq = h.dashSeq || 0
+            bossAimPool.set(dashKey, dov)
+            scene.add(dov)
+          }
+          seen.add(dashKey)
+          dov.position.set(h.x, 0, h.z)
+          dov.rotation.y = -(h.dashDir || 0)
+          if (dov.userData.flashT > 0) dov.userData.flashT = Math.max(0, dov.userData.flashT - dt)
+          dov.userData.tele.visible = dashAiming
+          if (dashAiming) {
+            const urg = 1 - Math.min(1, h.dashWarnT / 0.8)
+            const blink = Math.abs(Math.sin(view.time * 22))
+            dov.userData.teleBand.material.opacity = 0.5 + urg * 0.25 + 0.15 * blink
+            dov.userData.teleCore.material.opacity = 0.6 + urg * 0.3 + 0.2 * blink
+          }
+          const df = dov.userData.flashT / 0.4
+          dov.userData.flash.visible = df > 0
+          dov.userData.flash.material.opacity = df * 0.85
+        }
+        // 죽음의 그림자 — 낙인자를 쫓는 검은 웅덩이(고동): 은신한 보스의 좌표를 그대로 따라간다
+        const shadowKey = 'shadow:' + h.id
+        if ((h.huntShadowT || 0) > 0) {
+          let so = bossAimPool.get(shadowKey)
+          if (!so) {
+            so = buildHuntShadow()
+            bossAimPool.set(shadowKey, so)
+            scene.add(so)
+          }
+          seen.add(shadowKey)
+          so.position.set(h.x, 0, h.z)
+          const pulse = 1 + 0.16 * Math.abs(Math.sin(view.time * 6))
+          so.scale.setScalar(pulse)
+          so.userData.disc.material.opacity = 0.62 + 0.2 * Math.abs(Math.sin(view.time * 6))
+          so.userData.ring.rotation.z = view.time * 2.4
+        }
+                const coneKey = 'cone:' + h.id
         if ((h.bossConeT || 0) > 0) {
           let co = bossAimPool.get(coneKey)
           if (!co) {
@@ -7801,6 +7913,12 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     } else {
       camTarget.lerp(want, endNexus ? 0.08 : introBoss ? 0.055 : 0.12)
     }
+    // 어둠의 정적 암전: 녹스가 어둠에 스며 있으면 전장이 절반 밝기로 가라앉는다
+    const wantDark = view.heroes.some((h2) => h2.stillDark) ? 0.45 : 1
+    darkAmp += (wantDark - darkAmp) * Math.min(1, dt * 4)
+    hemiLight.intensity = baseLightAmp.hemi * darkAmp
+    sun.intensity = baseLightAmp.sun * darkAmp
+    fill.intensity = baseLightAmp.fill * darkAmp
     camera.position.set(camTarget.x, camTarget.y + offY, camTarget.z + offZ)
     // 발구르기 착지 진동: 크게 흔들렸다 빠르게 잦아든다 — 피격 연출 토글(hitFxOn)을 존중
     const shakeLeft = camShakeUntil - performance.now() / 1000

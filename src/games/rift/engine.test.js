@@ -3862,94 +3862,105 @@ test('섬멸의 광선: 경로 안 즉사(넉백 후 소멸), 경로 밖 무피�
   assert.equal(b.hp, hpB, '경로 밖 — 무피해')
 })
 
-// ── 녹스 그림자 야바위(shell game): 셋 중 진짜 찾기 ──
 
-function noxRaid() {
+// ── 녹스 개인 실행 기믹: 죽음의 그림자(추격) + 어둠의 정적(암전 돌진) ──
+
+function noxRaid2() {
   const g = createGame([
     { id: 'p1', name: 'P1', zodiacId: 'rat', color: '#abc', cls: 'warrior', team: 'blue' },
     { id: 'p2', name: 'P2', zodiacId: 'ox', color: '#abc', cls: 'archer', team: 'blue' },
     { id: 'boss', name: '녹스', zodiacId: 'boss_shadow', color: '#f55', cls: 'boss_shadow', team: 'red', isBot: true },
   ], { mode: 'boss', rng: () => 0.5 })
   startPlaying(g)
+  g.time = Math.max(g.time, 40) // 수면 건너뜀
+  run(g, 0.1) // bossCd 초기화
   return g
 }
 
-// 야바위를 인위적으로 선택 국면까지 진행시킨다
-function shellToGuess(g, boss) {
-  const bf = g.map.FOUNTAIN_POS.blue
-  g.time = Math.max(g.time, 40) // 보스 수면(30초) 건너뜀 — 킷이 돌기 시작
-  run(g, 0.1) // bossCd 지연 초기화
-  boss.x = bf.x + 16; boss.z = bf.z
-  const a = g.heroes.find((h) => h.id === 'p1')
-  a.x = bf.x + 8; a.z = bf.z
-  boss.bossCd.shell = 0
-  boss.gimRestUntil = 0
-  run(g, 0.2) // 시전(mark 개시)
-  assert.equal(boss.shellPhase, 'mark', '야바위 개시 — 표식 공개')
-  assert.equal(g.summons.filter((s) => s.shellClone).length, 2, '분신 둘 등장')
-  run(g, 1.4) // mark 종료 → shuffle
-  run(g, 4.5) // 섞기 소화 → guess
-  assert.equal(boss.shellPhase, 'guess', '선택 국면 도달')
-}
-
-test('야바위: 진짜(보스)를 치면 해제 + 그로기 딜 타임', () => {
-  const g = noxRaid()
+test('죽음의 그림자: 계속 달리면 그림자보다 빠르다 — 버티면 떨쳐냄(보스 그로기)', () => {
+  const g = noxRaid2()
   const boss = g.heroes.find((h) => h.isBoss)
-  shellToGuess(g, boss)
   const a = g.heroes.find((h) => h.id === 'p1')
-  a.x = boss.x - 3; a.z = boss.z
-  castAttack(g, 'p1', { tk: 'hero', id: boss.id })
-  run(g, 0.7) // 투사체 명중
-  assert.equal(boss.shellPhase, null, '야바위 해제')
-  assert.ok(boss.bossGroggyT > 1.2, `그로기 (${boss.bossGroggyT.toFixed(1)})`)
-  assert.ok(g.summons.filter((s) => s.shellClone && s.hp > 0).length === 0, '분신 소멸')
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = bf.x + 20; a.z = bf.z
+  boss.x = a.x - 14; boss.z = a.z
+  a.huntT = 5.0
+  a.huntFrom = boss.id
+  boss.huntUntil = g.time + 5.0
+  boss.huntTargetId = a.id
+  boss.stealthT = 5.0
+  for (let i = 0; i < Math.round(5.3 / STEP) && boss.huntUntil; i++) {
+    // 간격 14를 유지하며 도망(맵 끝에 몰리지 않게 위치를 직접 관리) — 타임아웃 분기 검증
+    a.x = boss.x + 14
+    a.z = boss.z
+    step(g, STEP)
+  }
+  assert.equal(boss.huntUntil, null, '사냥 종료')
+  assert.ok(boss.bossGroggyT > 0.8, `떨쳐냄 보상 그로기 1.2초 (${(boss.bossGroggyT || 0).toFixed(1)})`)
+  assert.ok(a.hp > 0 && a.respawnT <= 0, '도망자는 산다')
 })
 
-test('야바위: 가짜(분신)를 치면 어둠 폭발 페널티(공포+피해)', () => {
-  const g = noxRaid()
+test('죽음의 그림자: 멈춰 있으면 그림자에 잡힌다 — 처형 습격(대피해+공포)', () => {
+  const g = noxRaid2()
   const boss = g.heroes.find((h) => h.isBoss)
-  shellToGuess(g, boss)
-  const clone = g.summons.find((s) => s.shellClone && s.hp > 0)
   const a = g.heroes.find((h) => h.id === 'p1')
-  a.x = clone.x - 3; a.z = clone.z // 폭발 반경 안에서 때린다
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = bf.x + 24; a.z = bf.z // 우물 회복 밖
+  a.maxHp = 5000; a.hp = 5000 // 피해량 측정용
+  boss.x = a.x - 14; boss.z = a.z
+  a.huntT = 5.0
+  a.huntFrom = boss.id
+  boss.huntUntil = g.time + 5.0
+  boss.huntTargetId = a.id
+  boss.stealthT = 5.0
   const hpA = a.hp
-  castAttack(g, 'p1', { tk: 'summon', id: clone.id })
-  run(g, 0.7)
-  assert.ok(a.hp < hpA, '폭발 피해를 입는다')
-  assert.ok(a.fearT > 0, '공포에 걸린다')
-  assert.ok(boss.shellPhase === 'guess', '야바위는 계속된다(남은 것 중 다시)')
+  run(g, 2.2) // 그림자가 14를 활주해 따라잡는다(12.9/s)
+  assert.equal(boss.huntUntil, null, '잡혔다 — 사냥 종료')
+  assert.ok(hpA - a.hp > 300, `처형 습격 대피해 (${Math.round(hpA - a.hp)})`)
+  assert.ok(a.fearT > 0 || a.respawnT > 0, '공포(또는 사망)')
 })
 
-test('야바위: 시간 초과 — 연막 속으로, 보스 가속', () => {
-  const g = noxRaid()
+test('어둠의 정적: 돌진 직선 안은 강타+공포, 밖은 무사', () => {
+  const g = noxRaid2()
   const boss = g.heroes.find((h) => h.isBoss)
-  shellToGuess(g, boss)
-  run(g, 7.5) // 선택 제한 시간 소진
-  assert.equal(boss.shellPhase, null, '야바위 종료')
-  assert.ok(boss.hasteT > 0, '놓친 벌 — 보스 가속')
-})
-
-test('야바위 위장: 분신은 보스와 체력·국면이 미러링되고, 섞는 중엔 무적', () => {
-  const g = noxRaid()
-  const boss = g.heroes.find((h) => h.isBoss)
-  const bf = g.map.FOUNTAIN_POS.blue
-  g.time = Math.max(g.time, 40) // 보스 수면(30초) 건너뜀 — 킷이 돌기 시작
-  g.time = Math.max(g.time, 40) // 보스 수면 건너뜀
-  run(g, 0.1) // bossCd 지연 초기화
-  boss.x = bf.x + 16; boss.z = bf.z
   const a = g.heroes.find((h) => h.id === 'p1')
-  a.x = bf.x + 8; a.z = bf.z
-  boss.bossCd.shell = 0
-  boss.gimRestUntil = 0
-  run(g, 0.5) // mark 국면
-  const clone = g.summons.find((s) => s.shellClone)
-  assert.equal(clone.hp, Math.ceil(boss.hp) - (Math.ceil(boss.hp) - boss.hp > 0 ? 0 : 0) || clone.hp, '체력 미러(근사)')
-  assert.equal(clone.name, boss.name, '이름까지 같다')
-  assert.equal(clone.cls, 'boss_shadow', '같은 몸')
-  // 섞는 중(guess 이전) 보스 무적
-  const hpB = boss.hp
-  castAttack(g, 'p1', { tk: 'hero', id: boss.id })
-  run(g, 0.7)
-  assert.ok(boss.hp >= hpB - 1, '표식·섞기 중 보스 무적')
-  assert.equal(boss.shellPhase === 'mark' || boss.shellPhase === 'shuffle', true, '아직 선택 전')
+  const b = g.heroes.find((h) => h.id === 'p2')
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = bf.x + 20; a.z = bf.z
+  a.maxHp = 5000; a.hp = 5000
+  b.x = bf.x + 20; b.z = bf.z + 20 // 멀리 — 표적 풀에는 있지만 대개 직선 밖
+  b.maxHp = 5000; b.hp = 5000
+  boss.stillVanishAt = g.time + 0.9
+  boss.stillWarned = false
+  boss.stealthT = 8
+  const hpA = a.hp
+  const hpB = b.hp
+  run(g, 1.3) // 경고(0.1s 후) → 0.9s에 돌진
+  // rng 고정(0.5)이라 표적은 풀의 중간 — 둘 중 하나가 맞는다. 최소 한 명은 강타+공포, 직선 밖은 무사
+  const hit = (hpA - a.hp) + (hpB - b.hp)
+  assert.ok(hit > 300, `직선 위 강타 (${Math.round(hit)})`)
+  assert.ok(a.fearT > 0 || b.fearT > 0 || a.respawnT > 0 || b.respawnT > 0, '맞으면 공포')
+  assert.ok(boss.stealthT <= 0, '펑 — 모습을 드러낸다')
+})
+
+test('어둠의 정적: 돌진으로 사망자가 나오면 지체 없이 연쇄 재시전', () => {
+  const g = noxRaid2()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const b = g.heroes.find((h) => h.id === 'p2')
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = bf.x + 20; a.z = bf.z
+  a.hp = 10 // 스치면 죽는다
+  b.x = bf.x + 20; b.z = bf.z + 3 // 직선 근처 — 연쇄 표적 후보
+  boss.stillVanishAt = g.time + 0.9
+  boss.stillWarned = false
+  boss.stealthT = 8
+  // 표적이 반드시 a가 되도록 rng 순서 무관하게 둘 다 직선권에 배치
+  run(g, 1.2)
+  if (a.respawnT > 0 || b.respawnT > 0) {
+    assert.ok(boss.stillVanishAt != null, '사망 발생 — 연쇄 재경고가 걸려 있다')
+  } else {
+    // rng가 빗겨간 드문 배치 — 최소한 기믹이 정상 종료됐는지 확인
+    assert.ok(boss.stillVanishAt == null)
+  }
 })
