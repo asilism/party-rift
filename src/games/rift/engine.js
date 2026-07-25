@@ -2762,7 +2762,7 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   if (!redirected && attacker?.isBoss) {
     // 난이도 티어(평타·스킬·장판 공통). 녹스는 55%만 — 기본 압박을 올린 만큼 티어 복리를 눅인다
     const ta = bossTierOf(state).atk
-    amount *= attacker.cls === 'boss_shadow' ? 1 + (ta - 1) * 0.3 : ta
+    amount *= attacker.cls === 'boss_shadow' ? 1 + (ta - 1) * 0.2 : ta // 0.2: 지옥 하단 이탈 보정 — hp 완충과 달리 페이즈 조기 진입 역설이 없다
   }
   // 콜로세움 직업 보정(주는/받는 피해)
   if (state.mode === 'arena' && !redirected) {
@@ -5413,6 +5413,7 @@ const HUNT_T = 4.2 // 그림자 추격 시간
 const HUNT_SPEED = 12.9 // 그림자 이속 — 대부분 영웅 질주(13+)보다 반 발 느리다
 const HUNT_CATCH_R = 2.4 // 이 거리까지 닿으면 "잡혔다" — 처형 습격
 const HUNT_EXEC_DMG = [260, 5.0] // 처형 습격 피해(기본·계수)
+const HUNT_SPAWN_R = 15 // 그림자 최소 스폰 거리 — 바로 옆 스폰은 확정 캐치라 반응할 틈을 준다
 const HUNT_HUMAN_BIAS = 0.6 // 사람 우선 낙인 — 솔로 판에서 기믹이 "내 일"이 되도록
 
 // ── 어둠의 정적(녹스 제3 시그니처): 사라짐 → 암전 → 펑! 직선 돌진 ──
@@ -5422,11 +5423,11 @@ const HUNT_HUMAN_BIAS = 0.6 // 사람 우선 낙인 — 솔로 판에서 기믹�
 const STILL_CD = 30
 const STILL_VANISH_MIN = 2.2 // 등장까지 최소(초) — 부재가 길수록 팀에겐 휴식이라 짧고 매섭게
 const STILL_VANISH_RAND = 1.6 // + 랜덤 0~1.6초
-const STILL_WARN2 = 0.8 // 직선 경고 — 집중해야 겨우 피할 시간
+const STILL_WARN2 = 0.65 // 직선 경고 — 집중해야 겨우 피할 시간(0.8은 너무 쉽게 피해졌다)
 export const NOXDASH_LEN = 42 // 돌진 직선 길이 — 씬(경고 띠)과 공유
 export const NOXDASH_HALF = 2.3 // 돌진 반폭
 const STILL_DASH_DMG = [200, 3.8] // 돌진 피해(+공포 1.6)
-const STILL_DASH_RUN = 0.32 // 돌진 주파 시간(초) — 순간이동이 아니라 실제로 아주 빠르게 가로지른다
+const STILL_DASH_RUN = 0.18 // 돌진 주파 시간(초) — 달리기가 아니라 섬광처럼 그어져야 검객답다
 
 
 // ── 성좌 낙인(대마도사 시그니처 STACK): 총피해를 원 안 인원수로 "나눠 맞는" 기믹 ──
@@ -5600,7 +5601,7 @@ function bossThink(state, h, dt) {
         o.z += ((tz - o.z) / d) * sp
       }
       glide(h, h.huntPhi ?? Math.atan2(h.z - mark.z, h.x - mark.x), HUNT_SPEED)
-      for (const sh of h.huntShadows || []) glide(sh, sh.phi, HUNT_SPEED * 0.9)
+      for (const sh of h.huntShadows || []) glide(sh, sh.phi, HUNT_SPEED * 0.85)
       // 어느 그림자든 닿으면 잡혔다 — 본체가 그 자리에서 솟아나 처형 습격
       let caught = dist(h, mark) < HUNT_CATCH_R ? h : null
       if (!caught) caught = (h.huntShadows || []).find((sh) => dist(sh, mark) < HUNT_CATCH_R) || null
@@ -5653,15 +5654,20 @@ function bossThink(state, h, dt) {
       } else {
         h.stillWarned = true
         const t2 = pool[Math.floor(state.rng() * pool.length)]
-        const a = state.rng() * Math.PI * 2
-        h.x = t2.x + Math.cos(a) * 16
-        h.z = t2.z + Math.sin(a) * 16
-        h.dashDir = Math.atan2(t2.z - h.z, t2.x - h.x)
+        if (h.dashChained) {
+          // 2단부터: 이전 돌진이 멎은 그 자리에서 새 표적을 향해 바로 이어 벤다 — 검객의 연격
+          h.dashDir = Math.atan2(t2.z - h.z, t2.x - h.x)
+        } else {
+          const a = state.rng() * Math.PI * 2
+          h.x = t2.x + Math.cos(a) * 16
+          h.z = t2.z + Math.sin(a) * 16
+          h.dashDir = Math.atan2(t2.z - h.z, t2.x - h.x)
+          pushFx(state, 'blink', h.x, h.z, 4, h.team, 0.8)
+        }
         h.dir = h.dashDir
         h.dashSeq = (h.dashSeq || 0) + 1 // 씬 직선 경고 트리거
         h.stealthT = 0 // 모습 공개 — 돌진하는 녹스는 모두가 본다
         h.revealT = Math.max(h.revealT || 0, STILL_WARN2 + 0.6) // 안개 무관 노출
-        pushFx(state, 'blink', h.x, h.z, 4, h.team, 0.8)
         if (!h.dashFeedDone) {
           h.dashFeedDone = true
           pushFeed(state, 'obj', '💥 어둠이 요동친다 — 붉은 선이 그어진다')
@@ -5717,9 +5723,11 @@ function bossThink(state, h, dt) {
         if (h.dashLeft > 0 && remain) {
           h.stillVanishAt = state.time + STILL_WARN2 // 다음 단 — 지체 없이 바로 경고
           h.stillWarned = false
+          h.dashChained = true // 다음 단은 이 끝지점에서 이어진다
         } else {
           h.stillVanishAt = null
           h.stillWarned = false
+          h.dashChained = false
           h.dashFeedDone = false
           h.gimRestUntil = Math.max(h.gimRestUntil || 0, state.time + 4)
         }
@@ -6603,16 +6611,18 @@ function bossShadow(state, h, foe, siege) {
       h.huntUntil = state.time + HUNT_T
       h.huntTargetId = mark.id
       h.stealthT = Math.max(h.stealthT, HUNT_T) // 몸을 감춘다 — 보이는 건 검은 웅덩이(씬 오버레이)뿐
-      // 페이즈별 그림자 1/2/3갈래 — 전면 부채꼴(±52°)로 포위하듯 조여든다(서로 겹치지 않는다).
-      //  완전 균등(120°) 봉쇄는 확정 사망(회피 22%) — 등 뒤 탈출로를 남겨야 "실행하면 산다"가 성립
+      // 페이즈별 그림자 1/2/3갈래 — 전 갈래가 표적에서 최소 거리(13~16) 밖 균등 방위에서 태어나
+      //  조여든다(2갈래=서로 반대편, 3갈래=120° 포위망). 바로 옆 스폰은 확정 캐치라 금지 —
+      //  멀리서 좁혀 들어와야 링이 닫히기 전에 틈으로 빠져나갈 실행 여지가 생긴다
       const shadowN = Math.min(3, p)
       const baseA = Math.atan2(h.z - mark.z, h.x - mark.x)
-      const spread = [0, 0.9, -0.9]
+      const d0 = Math.min(18, Math.max(HUNT_SPAWN_R, dist(h, mark)))
       h.huntPhi = baseA
+      h.x = mark.x + Math.cos(baseA) * d0 // 본체(1번 갈래)도 최소 거리 밖으로 — 은신 중이라 재배치 자유
+      h.z = mark.z + Math.sin(baseA) * d0
       h.huntShadows = []
       for (let i = 1; i < shadowN; i++) {
-        const a2 = baseA + spread[i]
-        const d0 = Math.max(10, dist(h, mark))
+        const a2 = baseA + (Math.PI * 2 / shadowN) * i
         const sh = { x: mark.x + Math.cos(a2) * d0, z: mark.z + Math.sin(a2) * d0, phi: a2 }
         h.huntShadows.push(sh)
         pushFx(state, 'blink', sh.x, sh.z, 3, h.team, 0.7)
@@ -6633,6 +6643,7 @@ function bossShadow(state, h, foe, siege) {
     h.stillVanishAt = state.time + STILL_VANISH_MIN + state.rng() * STILL_VANISH_RAND
     h.stillWarned = false
     h.dashLeft = Math.min(3, p) // 페이즈별 연속 돌진 1/2/3단 — 킬이 나면 처음부터 리셋
+    h.dashChained = false // 1단은 표적 곁 16에서 등장, 2단부터는 끝지점 연계
     h.dashHits = [] // 시전 단위 피격 면제 목록 — 여기서만 비운다
     h.dashFeedDone = false
     h.stealthT = Math.max(h.stealthT, 8) // 등장(경고) 때 벗긴다
@@ -7200,7 +7211,7 @@ function botGazeAvert(state, h) {
 // 죽음의 낙인 도망: 낙인이 붙으면 만사 제치고 그림자 반대편으로 질주 — 도망 거리가 곧 해제다
 function botHuntFlee(state, h) {
   if (!(h.huntT > 0)) return false
-  if (HUNT_T - h.huntT < 0.4) return false // 사람 같은 반응 지연 — 낙인을 알아채기까지 한 박자
+  if (HUNT_T - h.huntT < 0.3) return false // 사람 같은 반응 지연 — 낙인을 알아채기까지 한 박자
   const b = state.heroes.find((o) => o.id === h.huntFrom)
   // 포위 대응: 본체+보조 그림자 전부의 반대 방향을 거리 역가중으로 합성 — 틈을 향해 달린다
   let ax = 0
@@ -7219,7 +7230,7 @@ function botHuntFlee(state, h) {
 function botDodgeDash(state, h, dt) {
   for (const b of state.heroes) {
     if (!b.isBoss || b.team === h.team || b.stillVanishAt == null || !b.stillWarned || b.respawnT > 0) continue
-    if (b.stillVanishAt - state.time > STILL_WARN2 - 0.3) continue // 반응 지연 — 경고를 읽는 데 한 박자(0.5초 안에 비켜야)
+    if (b.stillVanishAt - state.time > STILL_WARN2 - 0.22) continue // 반응 지연 — 경고를 읽는 데 한 박자(0.43초 안에 비켜야)
     const bx = Math.cos(b.dashDir || 0)
     const bz = Math.sin(b.dashDir || 0)
     const rx = h.x - b.x
@@ -8150,6 +8161,7 @@ export function makeView(state) {
         dashDir: r2d(h.dashDir || 0),
         dashSeq: h.dashSeq || 0,
         dashGoSeq: h.dashGoSeq || 0, // 발사(돌진 개시) — 씬 섬광·진동 트리거
+        dashRunning: h.dashRunT != null ? 1 : 0, // 돌진 진행 중 — 씬 잔상 트레일
         // 죽음의 그림자 보조 웅덩이(페이즈 2~3) — 반드시 복사해서 싣는다(앨리어싱 금지)
         huntShadows: (h.huntShadows || []).map((sh) => ({ x: r2d(sh.x), z: r2d(sh.z) })),
       } : null),

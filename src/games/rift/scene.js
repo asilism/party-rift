@@ -7539,7 +7539,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           if (dov.userData.flashT > 0) dov.userData.flashT = Math.max(0, dov.userData.flashT - dt)
           dov.userData.tele.visible = dashAiming
           if (dashAiming) {
-            const urg = 1 - Math.min(1, h.dashWarnT / 0.8)
+            const urg = 1 - Math.min(1, h.dashWarnT / 0.65)
             const blink = Math.abs(Math.sin(view.time * 22))
             dov.userData.teleBand.material.opacity = 0.5 + urg * 0.25 + 0.15 * blink
             dov.userData.teleCore.material.opacity = 0.6 + urg * 0.3 + 0.2 * blink
@@ -7547,6 +7547,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           const df = dov.userData.flashT / 0.4
           dov.userData.flash.visible = df > 0
           dov.userData.flash.material.opacity = df * 0.85
+        }
+        // 어둠의 정적 돌진 잔상 — 섬광처럼 그어지는 검보라 궤적(0.18초 주파)
+        if (h.dashRunning) {
+          particles.emit(h.x, 1.1, h.z, 0x2a1240, 3, { spread: 1.4, up: 0.3, gravity: 0, size: 2.0, lifeMin: 0.22, lifeMax: 0.42 })
+          particles.emit(h.x, 1.4, h.z, 0x8a5cff, 2, { spread: 0.7, up: 0.4, gravity: 0, size: 1.1, lifeMin: 0.16, lifeMax: 0.3 })
         }
         // 죽음의 그림자 — 낙인자를 포위하는 검은 웅덩이들(고동): 본체 + 보조 그림자(페이즈 2~3)
         if ((h.huntShadowT || 0) > 0) {
