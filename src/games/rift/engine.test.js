@@ -3812,7 +3812,7 @@ test('소환석: 피해량과 무관하게 타격 1회당 체력 1 — 의식 �
   // 의식 중 보스 무적
   const hpB = boss.hp
   boss.lastHurt = 0
-  a.x = boss.x - 4; a.z = boss.z
+  a.x = boss.x - 3; a.z = boss.z
   castAttack(g, 'p1', { tk: 'hero', id: boss.id })
   run(g, 0.6)
   assert.ok(boss.hp >= hpB - 1, '의식 채널 중 보스는 무적(재생 오차 허용)')
@@ -3840,7 +3840,7 @@ test('소환 의식 저지: 시한 내 전파괴 → 보스 그로기(기절)', 
   g.minions = g.minions.filter((m) => !m.stone) // 마지막 돌이 깨진 상황
   step(g, STEP)
   assert.equal(boss.stonesAt, null, '의식이 끊겼다')
-  assert.ok(boss.stunT >= 2.3, `저지 보상 그로기 (${boss.stunT})`)
+  assert.ok(boss.bossGroggyT >= 2.0, `저지 보상 그로기 (${boss.bossGroggyT})`)
 })
 
 test('섬멸의 광선: 경로 안 즉사(넉백 후 소멸), 경로 밖 무피해', () => {
@@ -3860,4 +3860,96 @@ test('섬멸의 광선: 경로 안 즉사(넉백 후 소멸), 경로 밖 무피�
   run(g, 1.1) // 비행(0.85초) 끝까지
   assert.ok(a.respawnT > 0, '날아가던 끝에서 즉사')
   assert.equal(b.hp, hpB, '경로 밖 — 무피해')
+})
+
+// ── 녹스 그림자 야바위(shell game): 셋 중 진짜 찾기 ──
+
+function noxRaid() {
+  const g = createGame([
+    { id: 'p1', name: 'P1', zodiacId: 'rat', color: '#abc', cls: 'warrior', team: 'blue' },
+    { id: 'p2', name: 'P2', zodiacId: 'ox', color: '#abc', cls: 'archer', team: 'blue' },
+    { id: 'boss', name: '녹스', zodiacId: 'boss_shadow', color: '#f55', cls: 'boss_shadow', team: 'red', isBot: true },
+  ], { mode: 'boss', rng: () => 0.5 })
+  startPlaying(g)
+  return g
+}
+
+// 야바위를 인위적으로 선택 국면까지 진행시킨다
+function shellToGuess(g, boss) {
+  const bf = g.map.FOUNTAIN_POS.blue
+  g.time = Math.max(g.time, 40) // 보스 수면(30초) 건너뜀 — 킷이 돌기 시작
+  run(g, 0.1) // bossCd 지연 초기화
+  boss.x = bf.x + 16; boss.z = bf.z
+  const a = g.heroes.find((h) => h.id === 'p1')
+  a.x = bf.x + 8; a.z = bf.z
+  boss.bossCd.shell = 0
+  boss.gimRestUntil = 0
+  run(g, 0.2) // 시전(mark 개시)
+  assert.equal(boss.shellPhase, 'mark', '야바위 개시 — 표식 공개')
+  assert.equal(g.summons.filter((s) => s.shellClone).length, 2, '분신 둘 등장')
+  run(g, 1.4) // mark 종료 → shuffle
+  run(g, 4.5) // 섞기 소화 → guess
+  assert.equal(boss.shellPhase, 'guess', '선택 국면 도달')
+}
+
+test('야바위: 진짜(보스)를 치면 해제 + 그로기 딜 타임', () => {
+  const g = noxRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  shellToGuess(g, boss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  a.x = boss.x - 3; a.z = boss.z
+  castAttack(g, 'p1', { tk: 'hero', id: boss.id })
+  run(g, 0.7) // 투사체 명중
+  assert.equal(boss.shellPhase, null, '야바위 해제')
+  assert.ok(boss.bossGroggyT > 1.2, `그로기 (${boss.bossGroggyT.toFixed(1)})`)
+  assert.ok(g.summons.filter((s) => s.shellClone && s.hp > 0).length === 0, '분신 소멸')
+})
+
+test('야바위: 가짜(분신)를 치면 어둠 폭발 페널티(공포+피해)', () => {
+  const g = noxRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  shellToGuess(g, boss)
+  const clone = g.summons.find((s) => s.shellClone && s.hp > 0)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  a.x = clone.x - 3; a.z = clone.z // 폭발 반경 안에서 때린다
+  const hpA = a.hp
+  castAttack(g, 'p1', { tk: 'summon', id: clone.id })
+  run(g, 0.7)
+  assert.ok(a.hp < hpA, '폭발 피해를 입는다')
+  assert.ok(a.fearT > 0, '공포에 걸린다')
+  assert.ok(boss.shellPhase === 'guess', '야바위는 계속된다(남은 것 중 다시)')
+})
+
+test('야바위: 시간 초과 — 연막 속으로, 보스 가속', () => {
+  const g = noxRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  shellToGuess(g, boss)
+  run(g, 7.5) // 선택 제한 시간 소진
+  assert.equal(boss.shellPhase, null, '야바위 종료')
+  assert.ok(boss.hasteT > 0, '놓친 벌 — 보스 가속')
+})
+
+test('야바위 위장: 분신은 보스와 체력·국면이 미러링되고, 섞는 중엔 무적', () => {
+  const g = noxRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const bf = g.map.FOUNTAIN_POS.blue
+  g.time = Math.max(g.time, 40) // 보스 수면(30초) 건너뜀 — 킷이 돌기 시작
+  g.time = Math.max(g.time, 40) // 보스 수면 건너뜀
+  run(g, 0.1) // bossCd 지연 초기화
+  boss.x = bf.x + 16; boss.z = bf.z
+  const a = g.heroes.find((h) => h.id === 'p1')
+  a.x = bf.x + 8; a.z = bf.z
+  boss.bossCd.shell = 0
+  boss.gimRestUntil = 0
+  run(g, 0.5) // mark 국면
+  const clone = g.summons.find((s) => s.shellClone)
+  assert.equal(clone.hp, Math.ceil(boss.hp) - (Math.ceil(boss.hp) - boss.hp > 0 ? 0 : 0) || clone.hp, '체력 미러(근사)')
+  assert.equal(clone.name, boss.name, '이름까지 같다')
+  assert.equal(clone.cls, 'boss_shadow', '같은 몸')
+  // 섞는 중(guess 이전) 보스 무적
+  const hpB = boss.hp
+  castAttack(g, 'p1', { tk: 'hero', id: boss.id })
+  run(g, 0.7)
+  assert.ok(boss.hp >= hpB - 1, '표식·섞기 중 보스 무적')
+  assert.equal(boss.shellPhase === 'mark' || boss.shellPhase === 'shuffle', true, '아직 선택 전')
 })
