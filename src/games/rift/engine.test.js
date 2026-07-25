@@ -3863,6 +3863,103 @@ test('섬멸의 광선: 경로 안 즉사(넉백 후 소멸), 경로 밖 무피�
 })
 
 
+// ── 브램블 신킷: 기생 씨앗 → 잠식 심장 → 만개 + 휘감는 채찍 + 가시벽 ──
+
+function brambleRaid() {
+  const g = createGame([
+    { id: 'p1', name: 'P1', zodiacId: 'rat', color: '#abc', cls: 'warrior', team: 'blue' },
+    { id: 'p2', name: 'P2', zodiacId: 'ox', color: '#abc', cls: 'archer', team: 'blue' },
+    { id: 'boss', name: '브램블', zodiacId: 'boss_thorn', color: '#5f5', cls: 'boss_thorn', team: 'red', isBot: true },
+  ], { mode: 'boss', rng: () => 0.5 })
+  startPlaying(g)
+  g.time = Math.max(g.time, 40)
+  run(g, 0.1)
+  return g
+}
+
+test('기생 씨앗: 발아하면 낙인자가 선 자리에 덩굴 심장이 뿌리내리고 잠식이 자란다', () => {
+  const g = brambleRaid()
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = bf.x + 24; a.z = bf.z
+  a.maxHp = 90000; a.hp = 90000
+  a.seedT = 0.3
+  run(g, 0.6)
+  const heart = g.minions.find((m) => m.heart)
+  assert.ok(heart, '심장 발아')
+  assert.ok(Math.hypot(heart.x - a.x, heart.z - a.z) < 4, '선 자리에 심어진다')
+  const r0 = heart.creepR
+  run(g, 2)
+  assert.ok(heart.creepR > r0 + 0.7, `잠식이 자란다 (${r0.toFixed(1)} → ${heart.creepR.toFixed(1)})`)
+  // 잠식 위 도트: 심장 위에 서 있으면 체력이 깎인다
+  const hp0 = a.hp
+  a.x = heart.x; a.z = heart.z
+  run(g, 2)
+  assert.ok(a.hp < hp0, `잠식 도트 (${Math.round(hp0 - a.hp)})`)
+})
+
+test('만개: 잠식 위의 적만 강타하고 심장은 전부 소모된다 — 밭 밖은 무사', () => {
+  const g = brambleRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const b = g.heroes.find((h) => h.id === 'p2')
+  const bf = g.map.FOUNTAIN_POS.blue
+  boss.bossPhase = 2
+  a.maxHp = 9000; a.hp = 9000
+  b.maxHp = 9000; b.hp = 9000
+  g.minions.push({
+    id: g.nextId++, team: 'red', heart: true, lane: 'mid', ranged: false,
+    x: bf.x + 30, z: bf.z, creepR: 8, hp: 7, maxHp: 7, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
+  })
+  a.x = bf.x + 30; a.z = bf.z // 밭 위
+  b.x = bf.x + 30; b.z = bf.z + 20 // 밭 밖
+  boss.bloomAt = g.time + 0.4
+  const hpA = a.hp
+  const hpB = b.hp
+  run(g, 1.0)
+  assert.ok(hpA - a.hp > 300, `밭 위는 개화 강타 (${Math.round(hpA - a.hp)})`)
+  assert.ok(hpB - b.hp < 60, `밭 밖은 무사 (${Math.round(hpB - b.hp)})`)
+  assert.ok(!g.minions.some((m) => m.heart), '만개는 심장을 태워 피어난다 — 전부 소모')
+})
+
+test('휘감는 채찍: 직선 위 첫 명중자를 끌어온다, 직선 밖은 무사', () => {
+  const g = brambleRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const b = g.heroes.find((h) => h.id === 'p2')
+  const bf = g.map.FOUNTAIN_POS.blue
+  boss.x = bf.x + 20; boss.z = bf.z
+  a.x = boss.x + 14; a.z = boss.z // 직선 위
+  a.maxHp = 9000; a.hp = 9000
+  b.x = boss.x + 14; b.z = boss.z + 12 // 직선 밖
+  boss.whipAt = g.time + 0.3
+  boss.whipDir = 0 // +x 방향
+  const d0 = Math.hypot(a.x - boss.x, a.z - boss.z)
+  const bx0 = b.x
+  const bz0 = b.z
+  run(g, 1.6)
+  const d1 = Math.hypot(a.x - boss.x, a.z - boss.z)
+  assert.ok(d1 < d0 - 3, `낚여 끌려온다 (${d0.toFixed(1)} → ${d1.toFixed(1)})`)
+  assert.ok(a.hp < 9000, '채찍 피해')
+  // 직선 밖은 안 끌린다 — 위치로 판정(잡몹 유탄 피해는 무관)
+  assert.ok(Math.hypot(b.x - bx0, b.z - bz0) < 6, '직선 밖은 낚이지 않는다')
+})
+
+test('가시벽: 융기 예고 후 가시 충돌 벽이 서고 수명이 다하면 시든다', () => {
+  const g = brambleRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const bf = g.map.FOUNTAIN_POS.blue
+  boss.thornWallAt = g.time + 0.3
+  boss.thornWallX = bf.x + 26
+  boss.thornWallZ = bf.z
+  boss.thornWallDir = Math.PI / 2
+  run(g, 0.6)
+  const walls = g.tempWalls.filter((w) => w.thorn)
+  assert.equal(walls.length, 5, '가시 벽 5기둥')
+  run(g, 7)
+  assert.equal(g.tempWalls.filter((w) => w.thorn).length, 0, '수명이 다하면 시든다')
+})
+
 // ── 녹스 개인 실행 기믹: 죽음의 그림자(추격) + 어둠의 정적(암전 돌진) ──
 
 function noxRaid2() {

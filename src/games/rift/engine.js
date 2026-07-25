@@ -276,11 +276,11 @@ export const CLASSES = {
   },
   boss_thorn: {
     boss: true, name: '가시군주', icon: '🌵',
-    desc: '가시와 낙인의 자연형 보스 — 뭉치면 터지고, 무턱대고 때리면 찔린다',
-    hp: 21500, hpLvl: 700, atk: 88, atkLvl: 7, range: 14.0, atkCd: 0.95, speed: 7.2, def: 0.55,
-    skill: { name: '가시 투척', icon: '🌿', cd: 8, desc: '가시덩굴이 직선으로 뻗는다 — 옆으로 비켜라' },
-    skill2: { name: '가시밭', icon: '🥀', cd: 14, desc: '발밑에 가시덤불 — 밟으면 아프고 느려진다' },
-    ult: { name: '가시 낙인', icon: '💥', cd: 20, desc: '영웅들에게 낙인 — 곧 터진다, 흩어져라!' },
+    desc: '잠식과 생장의 자연형 보스 — 방치한 가시밭이 전장을 삼킨다',
+    hp: 26000, hpLvl: 700, atk: 106, atkLvl: 8, range: 14.0, atkCd: 0.82, speed: 7.2, def: 0.55, // 신킷: 기믹은 회피 가능 — 기본 압박이 최저선을 만든다
+    skill: { name: '가시 투척', icon: '🌿', cd: 8, desc: '가시덩굴이 직선으로 뻗는다' },
+    skill2: { name: '휘감는 채찍', icon: '🌿', cd: 13, desc: '덩굴 채찍으로 먼 적을 낚아채 끌어온다' },
+    ult: { name: '만개', icon: '🌸', cd: 40, desc: '잠식된 가시밭 전체가 일제히 개화 폭발한다' },
   },
 }
 export const BOSS_IDS = Object.keys(CLASSES).filter((c) => CLASSES[c].boss)
@@ -2775,10 +2775,6 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
     if (ea.dealMul) amount *= 1 + ea.dealMul
     if (ea.execute && victim.hp < victim.maxHp * 0.3) amount *= 1 + ea.execute
   }
-  // 가시갑옷: 반사창 동안 보스를 때리면 35%를 되받는다(반사 피해는 다시 반사되지 않는다)
-  if (victim.isBoss && victim.thornArmorT > 0 && attacker && !redirected && attacker.hp > 0 && !attacker.isBoss) {
-    damageHero(state, attacker, amount * 0.35, victim, true)
-  }
   // 수호기사 결속: 묶인 아군이 받을 피해를 수호기사가 "대신" 받는다(50%+10%×인원, 최대 90% 감소).
   //  아군 자신은 피해를 전혀 받지 않는다. 리다이렉트된 피해엔 수호기사의 방어/보호막이 다시 적용된다.
   if (!redirected && amount > 0 && victim.bindT > 0) {
@@ -2971,12 +2967,13 @@ function augOnKill(state, attacker, x, z, victimMaxHp, allowExplode = true) {
 function damageMinion(state, m, amount, attacker, allowExplode = true) {
   // 소환석(아르케인 의식): 피해량 무관 타격 1회당 1 — 딜이 아니라 "손이 몇 번 갔는가"의 DPS 체크.
   // 골드·경험치 없음: 의무 기믹은 파밍 대상이 아니다.
-  if (m.stone) {
+  if (m.stone || m.heart) {
     m.hp -= 1
     pushFx(state, 'rocksplash', m.x, m.z, 1.6, m.team, 0.4)
     if (m.hp > 0) return
     state.minions = state.minions.filter((o) => o !== m)
     pushFx(state, 'meteorhit', m.x, m.z, 3, 'blue', 0.8)
+    if (m.heart) pushFeed(state, 'obj', '🥀 덩굴 심장이 부서졌다 — 가시밭이 시든다')
     return
   }
   m.hp -= amount
@@ -3170,6 +3167,31 @@ export function step(state, dt) {
   // 대지술사 임시 돌벽: 수명이 다하면 가라앉는다
   if (state.tempWalls.length) {
     state.tempWalls = state.tempWalls.filter((w) => (w.t += dt) < w.life)
+  }
+  // 브램블 잠식 덩굴밭: 심장이 뛰는 한 가시밭은 자라고, 밭 위의 적은 찔리며 느려진다
+  {
+    let creepSrc = null
+    for (const m of state.minions) {
+      if (!m.heart || m.hp <= 0) continue
+      m.creepR = Math.min(CREEP_RMAX, (m.creepR || CREEP_R0) + CREEP_GROW * dt)
+      creepSrc ||= state.heroes.find((b) => b.isBoss && b.cls === 'boss_thorn' && b.team === m.team) || null
+    }
+    if (creepSrc) {
+      for (const e of state.heroes) {
+        if (e.team === creepSrc.team || e.respawnT > 0 || e.isBoss) continue
+        let on = false
+        for (const m of state.minions) {
+          if (m.heart && m.hp > 0 && dist(m, e) <= (m.creepR || 0)) { on = true; break }
+        }
+        if (!on) continue
+        e.creepTick = (e.creepTick || 0) + dt
+        e.slowT = Math.max(e.slowT || 0, 0.3)
+        if (e.creepTick >= 0.5) {
+          e.creepTick -= 0.5
+          damageHero(state, e, skillDmg(creepSrc, CREEP_DPS[0], CREEP_DPS[1]) * 0.5, creepSrc)
+        }
+      }
+    }
   }
   state.fx = state.fx.filter((n) => (n.t += dt) < (n.life || 0.8))
   // 부활 없는 적 시체 정리: 그림자 정예/무한방어 보스는 죽으면 영영 남아(respawnT 1e9) 후반에
@@ -3610,19 +3632,19 @@ function stepHero(state, h, dt) {
   h.stealthT = Math.max(0, h.stealthT - dt)
   h.fearT = Math.max(0, h.fearT - dt)
   h.hasteT = Math.max(0, h.hasteT - dt)
-  if (h.thornArmorT > 0) h.thornArmorT = Math.max(0, h.thornArmorT - dt) // 가시갑옷 반사창
-  // 가시 낙인: 시한이 다하면 낙인자 위치에서 폭발 — 반경 안 아군 전원(본인 포함) 피해
-  if (h.thornBombT > 0) {
-    h.thornBombT -= dt
-    if (h.thornBombT <= 0) {
-      h.thornBombT = 0
-      const from = state.heroes.find((b) => b.id === h.thornBombFrom) || null
-      pushFx(state, 'quake', h.x, h.z, 4.5, 'red', 1.0)
-      for (const o of state.heroes) {
-        if (o.team !== h.team || o.respawnT > 0) continue
-        if (dist(h, o) > 4.5) continue
-        damageHero(state, o, h.thornBombDmg || 0, from)
-      }
+  // 기생 씨앗(브램블): 시한이 다하면 "그 사람이 서 있는 자리"에서 발아 — 덩굴 심장이 뿌리내린다.
+  //  씨앗이 어디서 싹트느냐는 낙인자의 발이 정한다 — 구석에 심고 오는 것이 개인 실행이다
+  if (h.seedT > 0) {
+    h.seedT -= dt
+    if (h.seedT <= 0) {
+      h.seedT = 0
+      state.minions.push({
+        id: state.nextId++, team: 'red', heart: true, lane: 'mid', ranged: false,
+        x: h.x, z: h.z, creepR: CREEP_R0,
+        hp: HEART_HP, maxHp: HEART_HP, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
+      })
+      pushFx(state, 'quake', h.x, h.z, 3.5, 'red', 0.8)
+      pushFeed(state, 'obj', `🌱 씨앗이 ${h.name}의 발밑에서 싹텄다 — 덩굴 심장이 뿌리내린다`)
     }
   }
   // 섬멸의 광선 소멸: 빛에 밀려 날아가던 끝에서 터진다 — "맞으면 무조건 즉사"의 집행부
@@ -3900,7 +3922,7 @@ function findDefendTarget(state, m) {
 
 function stepMinions(state, dt) {
   for (const m of [...state.minions]) {
-    if (m.stone) continue // 소환석: 움직이지도 때리지도 않는다 — 부수라고 있는 구조물
+    if (m.stone || m.heart) continue // 소환석·덩굴 심장: 움직이지도 때리지도 않는다 — 부수라고 있는 구조물
     m.atkCd = Math.max(0, m.atkCd - dt)
     m.returnT = Math.max(0, (m.returnT || 0) - dt)
     const spec = m.ranged ? RANGED : MELEE
@@ -5364,6 +5386,26 @@ const bossPhaseOf = (h) => (h.hp / h.maxHp > BOSS_PHASE_HP[0] ? 1 : h.hp / h.max
 const BOSS_PHASE_CD = [1, 0.8, 0.45] // 페이즈별 스킬 쿨타임 배율 — 필사(3)는 거의 논스톱 발악
 const BOSS_PHASE_SUMMON = [1, 0.78, 0.55] // 페이즈별 병사 소환 주기 배율
 const BOSS_PHASE_DMG = [1, 1.1, 1.2] // 페이즈별 영웅 피해 배율
+// ── 브램블 신킷: 잠식 덩굴밭(심장)·기생 씨앗·휘감는 채찍·가시벽·만개 ──
+//  축 = "전장 자체가 서서히 적이 된다". 반사(수동 벌칙)를 버리고 능동 압박으로.
+const CREEP_R0 = 3.2 // 심장 발아 시 잠식 반경
+const CREEP_GROW = 0.65 // 초당 잠식 성장 — 방치하면 전장이 좁아진다
+const CREEP_RMAX = 11 // 심장당 최대 반경
+const CREEP_DPS = [13, 0.24] // 잠식 위 도트(초당)
+const CREEP_SLOW = 0.35 // 잠식 위 둔화
+const HEART_HP = 9 // 심장 타격 수(소환석과 같은 "손이 몇 번 갔는가" 체크)
+const ROOT_CD = 30 // 뿌리내림(심장 심기)
+const SEED_CD = 22 // 기생 씨앗
+const SEED_T = 4.0 // 씨앗 발아까지 — 그동안 어디에 심을지는 낙인자의 발이 정한다
+const SEED_HUMAN_BIAS = 0.6
+export const WHIP_LEN = 24 // 휘감는 채찍 직선 길이 — 씬(경고 띠)과 공유
+export const WHIP_HALF = 1.7 // 채찍 반폭 — 좁아서 비키기 쉽다(자리 이탈 강요가 목적)
+const WHIP_WARN = 0.8
+const THORNWALL_CD = 24 // 가시벽
+const THORNWALL_LIFE = 6 // 벽 지속 — 돌벽(3s)보다 길게 짓누른다
+const BLOOM_CD = 38 // 만개(궁극, P2+)
+const BLOOM_WARN = 1.6 // 예고 — 잠식 밖까지 빠듯한 시간(2.2는 전원 완벽 대피)
+const BLOOM_DMG = [230, 4.2] // 잠식 위 개화 폭발
 const BOSS_HUE = { boss_colossus: 'lava', boss_archmage: 'frost', boss_shadow: 'shadow', boss_thorn: 'venom' } // 예고 장판 색조
 const BOSS_AWAKEN_T = 30 // 국면 전환 각성 휴지기(초) — 무적·정지, 아군의 재정비/파밍 시간
 const BOSS_AGGRO = 16 // 이 거리 안의 영웅을 상대한다(그 밖이면 진군)
@@ -5545,20 +5587,72 @@ function bossThink(state, h, dt) {
   if (!h.defenseBoss && state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.004 * dt)
   }
-  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34, hunt: 20, still: 30 } // gaze/stomp/stones = 보스전 전용 시그니처
+  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34, hunt: 20, still: 30, seed: 14, root: 8, wall: 20, bloom: 34 } // gaze/stomp/stones/seed/root = 보스전 전용 시그니처
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
   // ── 예고된 처형기 집행: 예고가 끝나는 순간 발동한다 (시전 후 취소 없음 — 읽었다면 이미 피했다) ──
-  // 가시갑옷 도발 집행: 예고가 끝나는 순간 링(r9) 안의 적을 도발(강제 평타) + 반사창 개시
-  if (h.thornTauntAt && state.time >= h.thornTauntAt) {
-    h.thornTauntAt = null
-    h.thornArmorT = 6
+  // 휘감는 채찍 집행: 예고가 끝나는 순간 직선의 첫 명중자를 낚아채 끌어온다(갈고리 규칙)
+  if (h.whipAt && state.time >= h.whipAt) {
+    h.whipAt = null
+    h.whipGoSeq = (h.whipGoSeq || 0) + 1
+    const bx = Math.cos(h.whipDir || 0)
+    const bz = Math.sin(h.whipDir || 0)
+    let caught = null
+    let bestAlong = Infinity
     for (const e of state.heroes) {
       if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
-      if (dist(h, e) > 9) continue
-      e.tauntT = 2.2
-      e.tauntBy = h.id
+      const rx = e.x - h.x
+      const rz = e.z - h.z
+      const along = rx * bx + rz * bz
+      const perp = Math.abs(-rx * bz + rz * bx)
+      if (along < 2 || along > WHIP_LEN || perp > WHIP_HALF) continue
+      if (along < bestAlong) { bestAlong = along; caught = e }
     }
-    pushFx(state, 'berserk', h.x, h.z, 6, h.team, 1.0)
+    if (caught) {
+      caught.pullT = 1.0
+      caught.pullBy = h.id
+      caught.stunT = Math.max(caught.stunT, 1.0)
+      caught.slowT = Math.max(caught.slowT || 0, 1.5)
+      damageHero(state, caught, skillDmg(h, 90, 1.8), h)
+      pushFx(state, 'blink', caught.x, caught.z, 2.5, h.team)
+      pushFeed(state, 'obj', `🌿 덩굴 채찍이 ${caught.name}을(를) 휘감아 끌어당긴다`)
+    }
+  }
+  // 가시벽 융기 집행: 예고 라인 자리에 가시 벽이 솟는다 — 퇴로가 막힌다
+  if (h.thornWallAt && state.time >= h.thornWallAt) {
+    h.thornWallAt = null
+    const nx = Math.cos(h.thornWallDir || 0)
+    const nz = Math.sin(h.thornWallDir || 0)
+    for (let i = 0; i < 5; i++) {
+      const off = (i - 2) * QUAKE_WALL_SPAN
+      state.tempWalls.push({
+        id: state.nextId++, x: h.thornWallX + nx * off, z: h.thornWallZ + nz * off,
+        alive: true, t: 0, life: THORNWALL_LIFE, thorn: true,
+      })
+    }
+    pushFx(state, 'quake', h.thornWallX, h.thornWallZ, 5, h.team, 0.9)
+  }
+  // 만개 집행: 예고가 끝나는 순간 잠식된 가시밭 전체가 개화 폭발 — 밭 위의 적만 강타,
+  //  그리고 심장이 전부 소모된다(만개는 잠식을 태워 피어난다 — 리듬이 리셋된다)
+  if (h.bloomAt && state.time >= h.bloomAt) {
+    h.bloomAt = null
+    const hearts = state.minions.filter((m) => m.heart && m.hp > 0)
+    let hit = 0
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
+      if (!hearts.some((m) => dist(m, e) <= (m.creepR || 0))) continue
+      damageHero(state, e, skillDmg(h, BLOOM_DMG[0], BLOOM_DMG[1]), h)
+      e.airT = Math.max(e.airT || 0, 0.5)
+      hit++
+    }
+    for (const m of hearts) {
+      pushFx(state, 'meteorhit', m.x, m.z, Math.min(6, 2 + (m.creepR || 3) * 0.3), 'red', 0.9)
+      state.minions = state.minions.filter((o) => o !== m)
+    }
+    pushFx(state, 'berserk', h.x, h.z, 7, h.team, 1.0)
+    pushFeed(state, 'obj', hit
+      ? `🌸 만개 — 가시밭이 일제히 피어나 ${hit}명을 삼켰다`
+      : '🌸 만개 — 가시밭이 피어났지만 아무도 서 있지 않았다')
+    h.gimRestUntil = Math.max(h.gimRestUntil || 0, state.time + 4)
   }
   // 공포의 응시 집행: 채널이 끝나는 순간 — 반경 안에서 보스를 "바라보던" 적만 공포+피해.
   //  등/옆을 돌린 영웅은 완전 회피(피해 0) — 회피 판정은 위치가 아니라 각자의 시선(dir)이다.
@@ -6531,6 +6625,8 @@ function bossArchmage(state, h, foe) {
 function bossThorn(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd // 페이즈 가속 × 난이도 티어
+  // 기믹(씨앗·뿌리·벽·만개) 쿨은 티어 가속을 40%만 — 기믹 킷의 티어 복리 차단(아르케인 방식)
+  const gimMul = BOSS_PHASE_CD[p - 1] * (1 - (1 - bossTierOf(state).cd) * 0.4)
   // 가시 투척: 표적 방향 직선 예고 — 국면이 오르면 부챗살(1→2→3줄)로 빠질 각이 좁아진다
   if (h.bossCd.a <= 0 && foe && dist(h, foe) < 20) {
     h.bossCd.a = CLASSES[h.cls].skill.cd * cdMul
@@ -6544,53 +6640,98 @@ function bossThorn(state, h, foe) {
       })
     }
   }
-  // 가시밭: 제일 멀리서 쏘는 적 발밑 — 잔류 덤불(도트+둔화)로 원거리 자리를 갈아엎는다
-  if (h.bossCd.b <= 0) {
+  // 휘감는 채찍: 가장 멀리서 쏘는 적을 겨눠 직선 예고 — 명중하면 낚아채 끌어온다.
+  //  폭이 좁아 비키기는 쉽다 — "안전한 원거리 자리"라는 개념 자체를 지운다
+  if (h.bossCd.b <= 0 && !h.whipAt) {
     let far = null
     for (const e of state.heroes) {
       if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
-      if (!isHeroVisible(state, e, h.team) || dist(h, e) > 24) continue
-      if (!far || dist(h, e) > dist(h, far)) far = e
+      if (!isHeroVisible(state, e, h.team)) continue
+      const d = dist(h, e)
+      if (d < 8 || d > WHIP_LEN) continue
+      if (!far || d > dist(h, far)) far = e
     }
     if (far) {
       h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
-      pushBossZone(state, h, {
-        x: far.x, z: far.z, r: 6.5, delay: 1.2, dmg: skillDmg(h, 130, 2.4), aim: true,
-        vfx: 'quake', hue: 'venom', life: 4, dps: skillDmg(h, 16, 0.28), slow: 0.45,
-      })
+      h.whipAt = state.time + WHIP_WARN
+      h.whipDir = Math.atan2(far.z - h.z, far.x - h.x)
+      h.whipSeq = (h.whipSeq || 0) + 1
+      h.dir = h.whipDir
     }
   }
-  // 가시 낙인(시그니처): 보이는 영웅들에게 낙인 — 2.6초 뒤 각자 자리에서 폭발(반경이 겹치면 중첩).
-  //  낙인자는 아군에게서 떨어져야 한다 — "흩어져!"를 가르친다. 국면 2→3→4명.
-  if (h.bossCd.c <= 0) {
-    const want = p === 3 ? 4 : p === 2 ? 3 : 2
-    const marks = []
+  // 기생 씨앗(시그니처 · 보스전 전용): 한 명에게 씨앗 — 발아 자리는 낙인자의 발이 정한다
+  if (!h.defenseBoss && (h.bossCd.seed ?? 1) <= 0 && state.time >= (h.gimRestUntil || 0)) {
+    const pool = state.heroes.filter((e) =>
+      e.team !== h.team && e.respawnT <= 0 && !e.isBoss && !(e.seedT > 0)
+      && isHeroVisible(state, e, h.team) && dist(h, e) < 28)
+    if (pool.length) {
+      const humans = pool.filter((e) => !e.isBot)
+      const mark = humans.length && state.rng() < SEED_HUMAN_BIAS
+        ? humans[Math.floor(state.rng() * humans.length)]
+        : pool[Math.floor(state.rng() * pool.length)]
+      h.bossCd.seed = SEED_CD * gimMul
+      mark.seedT = SEED_T
+      pushFx(state, 'quake', mark.x, mark.z, 2.5, h.team, 0.6)
+      pushFeed(state, 'obj', `🌱 기생 씨앗이 ${mark.name}에게 붙었다 — ${SEED_T}초 뒤 선 자리에서 싹튼다`)
+      return
+    }
+  }
+  // 뿌리내림(보스전 전용): 제 곁에 덩굴 심장을 심는다 — 심장이 뛰는 한 가시밭은 자란다
+  if (!h.defenseBoss && (h.bossCd.root ?? 1) <= 0 && state.time >= (h.gimRestUntil || 0)
+    && state.minions.filter((m) => m.heart && m.hp > 0).length < 3
+    && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss && dist(h, e) < 26)) {
+    h.bossCd.root = ROOT_CD * gimMul
+    const a = state.rng() * Math.PI * 2
+    const d = 5 + state.rng() * 4
+    state.minions.push({
+      id: state.nextId++, team: h.team, heart: true, lane: 'mid', ranged: false,
+      x: h.x + Math.cos(a) * d, z: h.z + Math.sin(a) * d, creepR: CREEP_R0,
+      hp: HEART_HP, maxHp: HEART_HP, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
+    })
+    pushFx(state, 'quake', h.x + Math.cos(a) * d, h.z + Math.sin(a) * d, 3.5, h.team, 0.8)
+    pushFeed(state, 'obj', '🌵 덩굴 심장이 뿌리내린다 — 심장이 뛰는 한 가시밭은 자란다')
+    return
+  }
+  // 가시벽(P2+ · 보스전 전용): 뭉친 적 무리를 가로질러 벽을 세운다 — 전장이 갈라진다
+  if (!h.defenseBoss && p >= 2 && (h.bossCd.wall ?? 1) <= 0 && state.time >= (h.gimRestUntil || 0)) {
+    let cx = 0
+    let cz = 0
+    let n = 0
     for (const e of state.heroes) {
-      if (marks.length >= want) break
-      if (e.team === h.team || e.respawnT > 0 || e.thornBombT > 0) continue
-      if (!isHeroVisible(state, e, h.team) || dist(h, e) > 26) continue
-      marks.push(e)
+      if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
+      if (!isHeroVisible(state, e, h.team) || dist(h, e) > 24) continue
+      cx += e.x
+      cz += e.z
+      n++
     }
-    if (marks.length >= 2) {
-      h.bossCd.c = 20 * cdMul
-      for (const e of marks) {
-        e.thornBombT = 2.6
-        e.thornBombDmg = skillDmg(h, 180, 3.4)
-        e.thornBombFrom = h.id
-      }
-      pushFeed(state, 'obj', '💥 가시 낙인이 새겨졌다 — 뭉친 만큼 크게 터진다')
+    if (n >= 2) {
+      cx /= n
+      cz /= n
+      h.bossCd.wall = THORNWALL_CD * gimMul
+      h.thornWallAt = state.time + 0.9
+      h.thornWallX = cx
+      h.thornWallZ = cz
+      h.thornWallDir = Math.atan2(cz - h.z, cx - h.x) + Math.PI / 2 // 브램블→무리 방향의 수직 = 길을 끊는다
+      pushBossLine(state, h, h.thornWallDir, {
+        count: 5, r: 2.2, gap: QUAKE_WALL_SPAN, delay: 0.9, dmg: 0, vfx: 'quake', hue: 'venom',
+      })
+      // 예고 라인은 벽 중심에서 양방향 — pushBossLine은 전방 일렬이라 중심을 뒤로 당겨 맞춘다
+      h.thornWallX = cx
+      h.thornWallZ = cz
+      pushFeed(state, 'obj', '🌿 가시 넝쿨이 융기한다 — 길이 막힌다')
+      return
     }
   }
-  // 가시갑옷(도발형): 0.8초 예고 링 → 못 빠져나간 적을 도발(브램블 강제 평타) + 6초 반사창.
-  //  걸리면 반사갑옷을 제 손으로 두드리게 된다 — "링이 보이면 빠져나와라"가 유일한 해법.
-  if (h.bossCd.d <= 0 && p >= 2) {
-    const near = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && dist(h, e) < 9).length
-    if (near >= 2) {
-      h.bossCd.d = 26 * cdMul
-      h.thornTauntAt = state.time + 0.8 // 집행은 bossThink 펜딩 섹션에서
-      pushBossZone(state, h, { x: h.x, z: h.z, r: 9, delay: 0.8, dmg: 0, vfx: 'quake', hue: 'venom' })
-      pushFeed(state, 'obj', '🌵 브램블이 가시를 곤두세운다 — 가시 링 안의 무기는 주인을 배신한다')
-    }
+  // 만개(궁극 · P2+ · 보스전 전용): 잠식이 있어야 피어난다 — 예고 동안 밭 밖으로 나가면 무사
+  const bigReady = state.time >= (h.comboRestUntil || 0)
+  if (!h.defenseBoss && p >= 2 && (h.bossCd.bloom ?? 1) <= 0 && !h.bloomAt && bigReady
+    && state.minions.some((m) => m.heart && m.hp > 0)) {
+    h.bossCd.bloom = BLOOM_CD * gimMul
+    h.bloomAt = state.time + BLOOM_WARN * bossTierOf(state).tele
+    h.comboRestUntil = state.time + BLOOM_WARN + 2.2
+    pushFx(state, 'abszero', h.x, h.z, 5, h.team, 0.8)
+    pushFeed(state, 'obj', '🌸 가시밭이 일제히 꽃봉오리를 연다 — 밭 위는 곧 무덤이 된다')
+    return
   }
 }
 
@@ -6853,7 +6994,9 @@ function stepBots(state, dt) {
     if (isRaidMode(state.mode) && h.team === 'blue' && botDodgeBossZone(state, h, dt)) continue
     // 섬멸의 광선 경로 = 즉사 — 수직 이탈이 그 무엇보다 먼저다
     if (state.mode === 'boss' && h.team === 'blue' && botDodgeBeam(state, h, dt)) continue
-    if (isRaidMode(state.mode) && h.team === 'blue' && botSpreadBomb(state, h, dt)) continue
+    // 만개 예고 = 잠식 밖으로 전력 이탈(밭 위는 무덤) / 기생 씨앗 = 구석에 심고 온다(본인 몫)
+    if (state.mode === 'boss' && h.team === 'blue' && botBloomFlee(state, h)) continue
+    if (state.mode === 'boss' && h.team === 'blue' && botSeedCarry(state, h)) continue
     // 죽음의 그림자 = 도망이 최우선(본인 몫) / 어둠의 정적 = 돌진 경고 직선 이탈
     if (state.mode === 'boss' && h.team === 'blue' && botHuntFlee(state, h)) continue
     if (state.mode === 'boss' && h.team === 'blue' && botDodgeDash(state, h, dt)) continue
@@ -6865,6 +7008,10 @@ function stepBots(state, dt) {
     if (state.mode === 'boss' && h.team === 'blue' && botSeekSafe(state, h, dt)) continue
     // 소환 의식 = 소환석 철거가 유일한 임무(보스는 무적)
     if (state.mode === 'boss' && h.team === 'blue' && botBreakStones(state, h, dt)) continue
+    // 휘감는 채찍 경고 = 직선 수직 이탈 / 덩굴 심장 = 담당 봇이 철거 / 잠식 위 = 걸어 나온다
+    if (state.mode === 'boss' && h.team === 'blue' && botDodgeWhip(state, h)) continue
+    if (state.mode === 'boss' && h.team === 'blue' && botBreakHearts(state, h, dt)) continue
+    if (state.mode === 'boss' && h.team === 'blue' && botCreepOut(state, h)) continue
     // 도발당한 봇: 후퇴/임무보다 우선 — 도발한 탱커에게 끌려가 평타친다
     if (h.tauntT > 0) {
       const tk = state.heroes.find((o) => o.id === h.tauntBy && o.team !== h.team && o.respawnT <= 0)
@@ -7006,7 +7153,7 @@ function stepBots(state, dt) {
           if (foe.isBoss) {
             // 체력이 넉넉한 동안(60%+)은 사거리 끝 트레이드, 그 아래는 일찍 빠져 회복 —
             // 치명 패턴 메타에선 히트앤런 사이클이 정답이다(늦게 빠지면 패턴 한 방에 죽는다)
-            h.botLose = h.hp < h.maxHp * 0.6 || foe.thornArmorT > 0 // 가시갑옷 반사창엔 물러난다
+            h.botLose = h.hp < h.maxHp * 0.6
           }
           if (h.isBossAdd) {
             h.botWin = true
@@ -7174,24 +7321,96 @@ function stepBots(state, dt) {
 // 보스 예고 장판 회피 — '공략을 아는 플레이어'처럼 경고를 읽고 가장 가까운 바깥으로 빠진다.
 // 여러 장판이 겹치면(융단/파문) 가장 먼저 터질 것부터 피한다.
 // (도넛 안전지대 패턴은 전부 폐기됨 — 이제 장판은 전부 '바깥으로 나가면 산다'는 규칙이다)
-// 가시 낙인 대응: 낙인이 붙으면 제일 가까운 아군에게서 떨어진다 — 겹폭발 방지.
-//  (사람이 배우는 '흩어져!'를 봇도 흉내 — 봇 밴드가 학습 상한을 대변한다)
-function botSpreadBomb(state, h, dt) {
-  if (!(h.thornBombT > 0)) return false
-  let near = null
-  let bd = 6 * 6
+// 기생 씨앗 운반: 아군 무게중심 반대편으로 달려가 구석에 심는다 — 요지에 심으면 팀이 갚는다
+function botSeedCarry(state, h) {
+  if (!(h.seedT > 0)) return false
+  if (SEED_T - h.seedT < 0.4) return false // 반응 지연 — 씨앗을 알아채기까지 한 박자
+  let cx = 0
+  let cz = 0
+  let n = 0
   for (const e of state.heroes) {
     if (e === h || e.team !== h.team || e.respawnT > 0) continue
-    const d2 = dist2(h, e)
-    if (d2 < bd) { bd = d2; near = e }
+    cx += e.x
+    cz += e.z
+    n++
   }
-  if (!near) return false // 이미 홀로 — 그냥 싸운다
-  const dx = h.x - near.x
-  const dz = h.z - near.z
-  const d = Math.hypot(dx, dz) || 0.001
-  steerToward(state, h, { x: h.x + (dx / d) * 7, z: h.z + (dz / d) * 7 })
-  botAttack(state, h, dt) // 떨어지면서도 사거리 안이면 계속 때린다
+  const a = n ? Math.atan2(h.z - cz / n, h.x - cx / n) : h.dir
+  steerToward(state, h, { x: h.x + Math.cos(a) * 10, z: h.z + Math.sin(a) * 10 })
+  return true // 심고 오는 동안은 운반에 전념
+}
+
+// 만개 예고 대피: 잠식(가시밭) 위에 서 있으면 가장 가까운 밭 경계 밖으로 전력 이탈
+function botBloomFlee(state, h) {
+  let boss = null
+  for (const e of state.heroes) {
+    if (e.isBoss && e.team !== h.team && e.bloomAt != null && e.respawnT <= 0) { boss = e; break }
+  }
+  if (!boss) return false
+  if (boss.bloomAt - state.time > BLOOM_WARN - 0.45) return false // 반응 지연 — 예고를 읽는 한 박자
+  let inm = null
+  for (const m of state.minions) {
+    if (m.heart && m.hp > 0 && dist(m, h) <= (m.creepR || 0) + 0.5) { inm = m; break }
+  }
+  if (!inm) return false // 밭 밖 — 하던 일 계속
+  const a = Math.atan2(h.z - inm.z, h.x - inm.x)
+  steerToward(state, h, { x: inm.x + Math.cos(a) * ((inm.creepR || 3) + 3), z: inm.z + Math.sin(a) * ((inm.creepR || 3) + 3) })
   return true
+}
+
+// 휘감는 채찍 경고: 직선 안이면 수직 이탈 — 폭이 좁아 한 발이면 빠진다
+function botDodgeWhip(state, h) {
+  for (const b of state.heroes) {
+    if (!b.isBoss || b.team === h.team || b.whipAt == null || b.respawnT > 0) continue
+    if (b.whipAt - state.time > WHIP_WARN - 0.25) continue // 반응 지연
+    const bx = Math.cos(b.whipDir || 0)
+    const bz = Math.sin(b.whipDir || 0)
+    const rx = h.x - b.x
+    const rz = h.z - b.z
+    const along = rx * bx + rz * bz
+    const perp = -rx * bz + rz * bx
+    if (along < 0 || along > WHIP_LEN + 2 || Math.abs(perp) > WHIP_HALF + 1.6) continue
+    const side = perp >= 0 ? 1 : -1
+    steerToward(state, h, {
+      x: b.x + bx * Math.max(2, along) - bz * side * (WHIP_HALF + 3.5),
+      z: b.z + bz * Math.max(2, along) + bx * side * (WHIP_HALF + 3.5),
+    })
+    return true
+  }
+  return false
+}
+
+// 덩굴 심장 철거: 심장에 가장 가까운 아군 봇이 전담한다(전원이 몰리면 보스가 공짜 딜을 번다)
+function botBreakHearts(state, h, dt) {
+  let best = null
+  let bd = Infinity
+  for (const m of state.minions) {
+    if (!m.heart || m.hp <= 0) continue
+    const d2v = dist2(h, m)
+    if (d2v < bd) { bd = d2v; best = m }
+  }
+  if (!best) return false
+  // 나보다 심장에 가까운 아군 봇이 있으면 그 친구 몫 — 나는 보스에 전념
+  for (const e of state.heroes) {
+    if (e === h || e.team !== h.team || e.respawnT > 0 || !e.isBot) continue
+    if (dist2(e, best) < bd) return false
+  }
+  if (Math.sqrt(bd) > heroRange(h) * 0.92) steerToward(state, h, best)
+  else { h.mx = 0; h.mz = 0 }
+  castAttack(state, h.id, { tk: 'minion', id: best.id })
+  return true
+}
+
+// 잠식(가시밭) 위 = 걸어 나온다 — 잔류 도트 장판 위에 서서 맞아 죽던 교훈의 재적용
+function botCreepOut(state, h) {
+  for (const m of state.minions) {
+    if (!(m.heart && m.hp > 0)) continue
+    const d = dist(m, h)
+    if (d > (m.creepR || 0)) continue
+    const a = Math.atan2(h.z - m.z, h.x - m.x)
+    steerToward(state, h, { x: m.x + Math.cos(a) * ((m.creepR || 3) + 2.5), z: m.z + Math.sin(a) * ((m.creepR || 3) + 2.5) })
+    return true
+  }
+  return false
 }
 
 // 공포의 응시 채널 감지: 집행 직전(GAZE_TURN_W)에만 제자리에서 등을 돌린다 — 레이드 정석
@@ -8047,8 +8266,7 @@ export function makeView(state) {
       id: h.id,
       name: h.name,
       title: h.title || null, // 장착 칭호 — 이름표 표시용
-      thornBombT: r2d(h.thornBombT || 0), // 가시 낙인 카운트다운(머리 위 ❗ 표시)
-      thornArmorT: r2d(h.thornArmorT || 0), // 가시갑옷 반사창(💢 표시)
+      seedT: r2d(h.seedT || 0), // 기생 씨앗 카운트다운(머리 위 🌱 표시)
       stackT: r2d(h.stackT || 0), // 성좌 낙인(STACK) 카운트다운(🤝 + 파란 링 — "모여!")
       huntT: r2d(h.huntT || 0), // 죽음의 낙인 — ☠️ + 검은 링(심장박동)
       // 은신 사냥자의 근접도(0~1): 낙인자 링의 고동 속도 — 보이지 않는 공포를 소리 없이 알린다
@@ -8164,6 +8382,11 @@ export function makeView(state) {
         dashWarnT: r2d(h.stillVanishAt != null && h.stillWarned ? Math.max(0, h.stillVanishAt - state.time) : 0),
         dashDir: r2d(h.dashDir || 0),
         dashSeq: h.dashSeq || 0,
+        whipWarnT: r2d(h.whipAt != null ? Math.max(0, h.whipAt - state.time) : 0), // 휘감는 채찍 직선 경고
+        whipDir: r2d(h.whipDir || 0),
+        whipSeq: h.whipSeq || 0,
+        whipGoSeq: h.whipGoSeq || 0,
+        bloomT: r2d(h.bloomAt != null ? Math.max(0, h.bloomAt - state.time) : 0), // 만개 예고 — 잠식 원 점멸
         dashWarnT0: r2d(stillWarnOf(state)), // 경고 총시간(티어별) — 씬 긴급도 분모
         dashGoSeq: h.dashGoSeq || 0, // 발사(돌진 개시) — 씬 섬광·진동 트리거
         dashRunning: h.dashRunT != null ? 1 : 0, // 돌진 진행 중 — 씬 잔상 트레일
@@ -8193,6 +8416,7 @@ export function makeView(state) {
       hp: Math.ceil(m.hp),
       maxHp: Math.ceil(m.maxHp),
       ...(m.stone ? { stone: true } : null), // 소환석(아르케인 의식) — 씬이 부유 결정으로 그린다
+      ...(m.heart ? { heart: true, creepR: r1(m.creepR || 0) } : null), // 덩굴 심장 — 씬이 심장+잠식 원으로 그린다
     })),
     monsters: state.monsters.map((m) => ({
       id: m.id,
@@ -8258,7 +8482,7 @@ export function makeView(state) {
     // 사냥매가 걷어 둔 시야 흔적 — 렌더러 시야/안개 + isHeroVisible(inSight)가 함께 본다
     reveals: state.reveals.map((rv) => ({ team: rv.team, x: r1(rv.x), z: r1(rv.z), r: rv.r })),
     // 예고 범위는 운석(조준점)만 클라에 보낸다 — 대지균열 파는 거의 즉발이라 fx로만 보인다
-    stoneWalls: state.tempWalls.map((w) => ({ id: w.id, x: r1(w.x), z: r1(w.z), t: r2d(w.t), life: w.life })),
+    stoneWalls: state.tempWalls.map((w) => ({ id: w.id, x: r1(w.x), z: r1(w.z), t: r2d(w.t), life: w.life, thorn: w.thorn ? 1 : 0 })),
     zones: state.zones.filter((z) => z.kind === 'meteor' || z.kind === 'venom' || z.kind === 'bosszone').map((z) => ({
       id: z.id, kind: z.kind, team: z.team, x: r1(z.x), z: r1(z.z),
       r: z.r, t: r2d(z.t), delay: z.delay,

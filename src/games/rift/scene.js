@@ -8,7 +8,7 @@ import { ZODIAC, getZodiac } from '../../shared/zodiac.js'
 import {
   NEXUS_RADIUS, FOUNTAIN_RADIUS, LANE_IDS, WALL_RADIUS, RESPAWN_ARC_HALF, buildMap,
 } from './map.js'
-import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP, GAZE_R, GAZE_SAFE_COS, STACK_R, BEAM_LEN, BEAM_HALF, beamOffsets, CONE_R, CONE_HALF, NOXDASH_LEN, NOXDASH_HALF, trophySetOf } from './engine.js'
+import { CLASSES, isHeroVisible, isUnitVisible, SIGHT_RANGE, TOWER_RANGE, BOSS_PHASE_HP, GAZE_R, GAZE_SAFE_COS, STACK_R, BEAM_LEN, BEAM_HALF, beamOffsets, CONE_R, CONE_HALF, NOXDASH_LEN, NOXDASH_HALF, WHIP_LEN, WHIP_HALF, trophySetOf } from './engine.js'
 import { ZODIAC_FACES } from './zodiacFaces.js'
 
 // ── 그래픽 품질 프리셋 ──
@@ -3290,6 +3290,35 @@ function buildWeapon(cls, skinId = null) {
         mote.scale.setScalar(mote.userData.base)
       }
     })(g)
+  } else if (cls === 'boss_thorn') {
+    // 브램블 전용 덩굴 채찍 — 마디마다 휘어지는 긴 덩굴 + 가시 + 끝의 붉은 꽃눈.
+    // 평타 스윙이 채찍을 크게 후려치는 인상을 준다
+    const vineMat = new THREE.MeshLambertMaterial({ color: 0x3f6b25 })
+    const segs = []
+    let px = 0.6
+    let bend = 0
+    for (let i = 0; i < 4; i++) {
+      const len = 1.1 - i * 0.12
+      const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.16 - i * 0.03, 0.2 - i * 0.03, len, 6), vineMat)
+      seg.rotation.z = -Math.PI / 2 + bend
+      seg.position.set(px + Math.cos(bend) * len * 0.5, Math.sin(bend) * len * 0.5, 0.2)
+      g.add(seg)
+      segs.push(seg)
+      px += Math.cos(bend) * len
+      bend += 0.28
+      const thorn = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.34, 5), lamb(0x74c24a))
+      thorn.position.set(seg.position.x, seg.position.y + 0.25, 0.2)
+      g.add(thorn)
+    }
+    const bud = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 7),
+      new THREE.MeshLambertMaterial({ color: 0xa8253a, emissive: 0x5a0d1a, emissiveIntensity: 0.5 }))
+    bud.position.set(px + 0.2, Math.sin(bend) * 0.4, 0.2)
+    g.add(bud)
+    g.userData.pose = (t) => {
+      const p2 = swing(t)
+      g.rotation.y = 0.3 - p2 * 1.3 // 크게 후려친다
+      g.rotation.z = 0.25 - p2 * 0.5
+    }
   } else if (cls === 'assassin') {
     // 쌍단검: 빠른 찌르기
     for (const side of [0.55, -0.55]) {
@@ -3742,11 +3771,10 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   let threat = null
   let dormant = null // 각성 휴지기(보호막) 중 💤 — "지금은 웅크려 힘을 모으는 중"이 읽히게
   // 가시 낙인 ❗ — 낙인이 붙은 영웅 머리 위에서 다급하게 고동친다: "나한테서 떨어져!"
-  const bombMark = emojiSprite('❗', 1.7)
-  bombMark.position.set(0, 7.6 + uiLift, 0)
-  bombMark.visible = false
-  g.add(bombMark)
-  let thornArmor = null // 가시갑옷 💢 — 반사창 동안 "때리지 마" 신호
+  const seedMark = emojiSprite('🌱', 1.7)
+  seedMark.position.set(0, 7.6 + uiLift, 0)
+  seedMark.visible = false
+  g.add(seedMark)
   let gazeMark = null // 공포의 응시 👁️ — 채널 중 보스를 "바라보는" 동안만 켜진다(등 돌리면 즉시 꺼짐)
   let huntMark = null // 죽음의 낙인 ☠️ + 검은 링(심장박동 — 은신 사냥자의 근접도)
   let huntRing = null
@@ -3794,10 +3822,6 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     dormant.position.set(1.6 * s, 5.9 * s, 0)
     dormant.visible = false
     g.add(dormant)
-    thornArmor = emojiSprite('💢', 2.2)
-    thornArmor.position.set(-1.6 * s, 5.9 * s, 0)
-    thornArmor.visible = false
-    g.add(thornArmor)
     gazeEye = emojiSprite('👁️', 3.4)
     gazeEye.position.set(0, 3.0 * s, 0) // 가슴께 — "보스가 나를 노려본다"가 정면으로 읽힌다
     gazeEye.visible = false
@@ -3953,7 +3977,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
     costume, // 옷 — FX(fxUpdate) 애니메이션용 참조
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, huntMark, huntRing, stackMark, stackRing, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, threat, dormant, seedMark, gazeMark, gazeEye, huntMark, huntRing, stackMark, stackRing, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     // 보스 전용 모션·연출 시퀀스 스냅샷 — 접속 시점 값으로 초기화해야 빌드 직후 유령 스윙이 안 난다
     ...(CLASSES[h.cls]?.boss ? { lastFanSeq: h.bossFanSeq || 0, lastSmashSeq: h.bossSmashSeq || 0, lastSlamSeq: h.bossSlamSeq || 0 } : null),
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
@@ -4022,8 +4046,7 @@ function setHeroDead(u, dead) {
     u.recall.visible = false
     u.recallBeam.visible = false
     // 상태 아이콘도 시체에 남지 않게 (특히 가시갑옷 💢가 허공에 떠 있던 버그)
-    if (u.thornArmor) u.thornArmor.visible = false
-    if (u.bombMark) u.bombMark.visible = false
+    if (u.seedMark) u.seedMark.visible = false
     if (u.threat) u.threat.visible = false
     if (u.dormant) u.dormant.visible = false
     if (u.gazeMark) u.gazeMark.visible = false // 공포의 응시 👁️ 경고
@@ -4076,6 +4099,40 @@ function buildMinion(m, barColor) {
     const shadow = blobShadow(1.1)
     g.add(shadow, bar)
     g.userData = { bar, stone: true, crystal, bits, halo, bobPhase: (m.id % 97) / 97 * Math.PI * 2 }
+    return g
+  }
+  // 덩굴 심장(브램블 잠식): 붉게 고동치는 심장 + 발밑에서 자라나는 가시밭(잠식 원) —
+  // "이걸 부수면 밭이 시든다"가 실루엣만으로 읽혀야 한다
+  if (m.heart) {
+    const g = new THREE.Group()
+    const core = new THREE.Mesh(new THREE.SphereGeometry(1.05, 12, 10),
+      new THREE.MeshLambertMaterial({ color: 0xa8253a, emissive: 0x5a0d1a, emissiveIntensity: 0.6 }))
+    core.position.y = 1.5
+    core.scale.y = 1.2
+    g.add(core)
+    // 심장을 휘감는 덩굴 고리
+    for (const [ry, tilt] of [[0.4, 0.5], [1.6, -0.4], [2.6, 0.9]]) {
+      const vine = new THREE.Mesh(new THREE.TorusGeometry(1.15, 0.12, 6, 14),
+        new THREE.MeshLambertMaterial({ color: 0x3f6b25 }))
+      vine.position.y = 1.5
+      vine.rotation.set(tilt, ry, 0.3)
+      g.add(vine)
+    }
+    // 잠식 원: 어두운 독색 원판 + 밝은 테두리 — creepR을 스케일로 따라간다(반지름 1 기준)
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(1, 30),
+      new THREE.MeshBasicMaterial({ color: 0x2e5518, transparent: true, opacity: 0.55, depthWrite: false }))
+    disc.rotation.x = -Math.PI / 2
+    disc.position.y = 0.1
+    const rim = new THREE.Mesh(new THREE.RingGeometry(0.88, 1, 30),
+      new THREE.MeshBasicMaterial({ color: 0x8fe060, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false }))
+    rim.rotation.x = -Math.PI / 2
+    rim.position.y = 0.12
+    g.add(disc, rim)
+    const bar = makeHpBar(2.2, barColor)
+    bar.position.y = 4.4
+    alwaysOnTop(bar, 11)
+    g.add(bar)
+    g.userData = { bar, heart: true, core, disc, rim, bobPhase: (m.id % 97) / 97 * Math.PI * 2 }
     return g
   }
   const g = new THREE.Group()
@@ -5178,6 +5235,31 @@ function buildStoneWall(w) {
   const g = new THREE.Group()
   g.position.set(w.x, 0, w.z)
   const rnd = lcg(((w.id | 0) + 5) * 2246822519 >>> 0)
+  if (w.thorn) {
+    // 브램블 가시벽: 뒤엉킨 덩굴 기둥 + 사방으로 뻗친 가시 — 돌벽과 실루엣부터 다르다
+    const vineMat = new THREE.MeshLambertMaterial({ color: 0x3f6b25, flatShading: true })
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 2.1, 4.8, 6), vineMat)
+    pillar.position.y = 2.4
+    pillar.rotation.y = rnd() * 3
+    g.add(pillar)
+    for (let i = 0; i < 6; i++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.28, 1.6, 5),
+        new THREE.MeshLambertMaterial({ color: 0x74c24a }))
+      const a = rnd() * Math.PI * 2
+      const y = 1.2 + rnd() * 3.2
+      spike.position.set(Math.cos(a) * 1.7, y, Math.sin(a) * 1.7)
+      spike.rotation.z = -Math.cos(a) * 1.2
+      spike.rotation.x = Math.sin(a) * 1.2
+      g.add(spike)
+    }
+    g.userData.update = (ww) => {
+      const rise = Math.min(1, ww.t / 0.18)
+      const rem = (ww.life ?? 6) - ww.t
+      const k = Math.max(0.001, rem < 0.5 ? (rem / 0.5) * rise : rise) // 마지막 0.5초에 시든다
+      g.scale.y = k
+    }
+    return g
+  }
   const stone = new THREE.MeshLambertMaterial({ color: 0x9a8f7c, flatShading: true })
   const pillar = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.3, 4.6, 7), stone)
   pillar.position.y = 2.3
@@ -5382,6 +5464,28 @@ function buildHuntShadow() {
   ring.position.y = 0.34
   g.add(disc, ring)
   g.userData = { disc, ring }
+  return g
+}
+
+// 휘감는 채찍 경고 띠 — 독록색 가는 직선(폭 1.7×2): 자리 이탈을 압박하는 원거리 견제
+function buildWhipOverlay() {
+  const g = new THREE.Group()
+  const geo = new THREE.PlaneGeometry(WHIP_LEN, WHIP_HALF * 2)
+  geo.translate(WHIP_LEN / 2, 0, 0)
+  const tele = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    color: 0x74e04a, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }))
+  tele.rotation.x = -Math.PI / 2
+  tele.position.y = 0.36
+  const flash = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    color: 0xd8ffb0, transparent: true, opacity: 0, side: THREE.DoubleSide,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }))
+  flash.rotation.x = -Math.PI / 2
+  flash.position.y = 0.6
+  g.add(tele, flash)
+  g.userData = { tele, flash, flashT: 0, lastSeq: 0 }
   return g
 }
 
@@ -7084,19 +7188,13 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           u.recallBeam.rotation.y = view.time * 1.2
           u.recallBeam.material.opacity = 0.22 + Math.abs(Math.sin(view.time * 4)) * 0.22 // 깜빡이는 빛
         }
-        // 가시 낙인 ❗: 남은 시간이 줄수록 빠르게 고동친다 — 터지기 직전의 다급함
-        if (u.bombMark) {
-          u.bombMark.visible = (h.thornBombT || 0) > 0
-          if (u.bombMark.visible) {
-            const urgency = 1 + Math.max(0, 2.6 - h.thornBombT) * 3
-            u.bombMark.scale.setScalar(1.7 * (1 + 0.25 * Math.abs(Math.sin(view.time * 6 * urgency))))
+        // 기생 씨앗 🌱: 발아가 다가올수록 다급하게 고동친다 — "구석으로 옮겨 심어라"
+        if (u.seedMark) {
+          u.seedMark.visible = (h.seedT || 0) > 0
+          if (u.seedMark.visible) {
+            const urgency = 1 + Math.max(0, 4 - h.seedT) * 2
+            u.seedMark.scale.setScalar(1.7 * (1 + 0.25 * Math.abs(Math.sin(view.time * 5 * urgency))))
           }
-        }
-        // 가시갑옷 💢: 반사창 표시 — "지금은 때리지 마"
-        if (u.thornArmor) {
-          const armored = (h.thornArmorT || 0) > 0
-          u.thornArmor.visible = armored
-          if (armored) u.thornArmor.material.rotation = Math.sin(view.time * 5) * 0.2
         }
         // 공포의 응시 👁️ 경고: 채널 중 보스를 "바라보는" 동안만 머리 위에 뜬다 —
         // 등을 돌리면 즉시 꺼진다: 회피 성공이 실시간으로 손에 잡히는 피드백
@@ -7250,6 +7348,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         bindPool.delete(id)
       }
     }
+    // 만개 예고(브램블) — 잠식 원 전체가 점멸해야 하므로 미니언 갱신 전에 한 번만 찾는다
+    let bloomWarnT = 0
+    for (const h of view.heroes) {
+      if ((h.bloomT || 0) > 0 && h.respawnT <= 0) { bloomWarnT = h.bloomT; break }
+    }
     // 병사 — 시야 밖 적 병사는 안 보인다
     syncPool(
       scene, minionPool, view.minions,
@@ -7259,6 +7362,33 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         obj.position.set(m.x, 0, m.z)
         const u = obj.userData
         setHpBar(u.bar, m.hp / m.maxHp)
+        // 덩굴 심장: 고동 + 잠식 원 성장 — 물리 정보라 안개 무관 표시, 만개 예고 땐 분홍 점멸
+        if (u.heart) {
+          obj.visible = true
+          const beat = 1 + 0.12 * Math.abs(Math.sin(view.time * 3.2 + u.bobPhase)) + 0.06 * Math.abs(Math.sin(view.time * 6.4 + u.bobPhase))
+          u.core.scale.set(beat, beat * 1.2, beat)
+          const cr = Math.max(0.5, m.creepR || 1)
+          u.disc.scale.setScalar(cr)
+          u.rim.scale.setScalar(cr)
+          if (bloomWarnT > 0) {
+            const urg = 1 - Math.min(1, bloomWarnT / 2.2)
+            const blink = Math.abs(Math.sin(view.time * (6 + urg * 14)))
+            u.disc.material.color.setHex(blink > 0.5 ? 0xa8306a : 0x2e5518) // 독색↔진분홍 — 밭 위는 무덤
+            u.disc.material.opacity = 0.5 + 0.3 * blink
+            u.rim.material.color.setHex(0xff7ab0)
+          } else {
+            u.disc.material.color.setHex(0x2e5518)
+            u.disc.material.opacity = 0.55
+            u.rim.material.color.setHex(0x8fe060)
+          }
+          const hdHp = (u.lastHp == null ? m.hp : u.lastHp) - m.hp
+          u.lastHp = m.hp
+          if (hdHp > 0) {
+            popDamage(m.x, m.z, 1, 'dmg')
+            particles.emit(m.x, 1.5, m.z, 0x74c24a, 6, { spread: 6, up: 6, gravity: 16, size: 1.1, hard: true, lifeMin: 0.14, lifeMax: 0.3 })
+          }
+          return
+        }
         // 소환석: 위아래 부유 + 자전 + 타격 시 반짝 — 병사 로직(걷기·공격 모션)은 안 탄다
         if (u.stone) {
           const bob = Math.sin(view.time * 2.1 + u.bobPhase) * 0.4
@@ -7552,6 +7682,34 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         if (h.dashRunning) {
           particles.emit(h.x, 1.1, h.z, 0x2a1240, 3, { spread: 1.4, up: 0.3, gravity: 0, size: 2.0, lifeMin: 0.22, lifeMax: 0.42 })
           particles.emit(h.x, 1.4, h.z, 0x8a5cff, 2, { spread: 0.7, up: 0.4, gravity: 0, size: 1.1, lifeMin: 0.16, lifeMax: 0.3 })
+        }
+        // 휘감는 채찍(브램블) — 독록색 가는 직선 경고: 폭이 좁아 한 발이면 빠진다
+        const whipKey = 'whip:' + h.id
+        let wov = bossAimPool.get(whipKey)
+        if (wov && (h.whipGoSeq || 0) !== wov.userData.lastSeq) {
+          wov.userData.lastSeq = h.whipGoSeq || 0
+          wov.userData.flashT = 0.3
+        }
+        const whipAiming = (h.whipWarnT || 0) > 0
+        if (whipAiming || (wov && wov.userData.flashT > 0)) {
+          if (!wov) {
+            wov = buildWhipOverlay()
+            wov.userData.lastSeq = h.whipGoSeq || 0
+            bossAimPool.set(whipKey, wov)
+            scene.add(wov)
+          }
+          seen.add(whipKey)
+          wov.position.set(h.x, 0, h.z)
+          wov.rotation.y = -(h.whipDir || 0)
+          if (wov.userData.flashT > 0) wov.userData.flashT = Math.max(0, wov.userData.flashT - dt)
+          wov.userData.tele.visible = whipAiming
+          if (whipAiming) {
+            const urg = 1 - Math.min(1, h.whipWarnT / 0.8)
+            wov.userData.tele.material.opacity = 0.4 + urg * 0.3 + 0.15 * Math.abs(Math.sin(view.time * 18))
+          }
+          const wf = wov.userData.flashT / 0.3
+          wov.userData.flash.visible = wf > 0
+          wov.userData.flash.material.opacity = wf * 0.8
         }
         // 죽음의 그림자 — 낙인자를 포위하는 검은 웅덩이들(고동): 본체 + 보조 그림자(페이즈 2~3)
         if ((h.huntShadowT || 0) > 0) {
