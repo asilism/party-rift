@@ -3749,6 +3749,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   let thornArmor = null // 가시갑옷 💢 — 반사창 동안 "때리지 마" 신호
   let gazeMark = null // 공포의 응시 👁️ — 채널 중 보스를 "바라보는" 동안만 켜진다(등 돌리면 즉시 꺼짐)
   let gazeEye = null // 보스 전용: 채널 동안 가슴께에 부릅뜨는 거대한 눈
+  let shellGem = null // 야바위 붉은 소환석 — 표식 국면에만 진짜 위에
   // (섬멸의 광선·서리 숨결 예고는 히어로 객체가 아니라 씬 오버레이 풀 — 안개 속에서도 보여야 한다)
   let stackMark = null // 성좌 낙인 🤝 — "나한테 모여!" (파란 링과 세트)
   let stackRing = null // 성좌 낙인 파란 링 — 나눠 맞기 판정 반경(STACK_R)을 바닥에 그대로 그린다
@@ -3788,6 +3789,19 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     gazeEye.visible = false
     alwaysOnTop(gazeEye, 10)
     g.add(gazeEye)
+    // 야바위 붉은 소환석 — 표식 공개 국면에만 진짜 머리 위에 떠서 고동친다.
+    // 셋이 겹쳐 보여도 단번에 읽히게 큼직한 결정 + 붉은 후광
+    shellGem = new THREE.Group()
+    const shellCore = gemMesh(0xff4444, 0.9)
+    shellCore.material.emissiveIntensity = 1.0
+    shellGem.add(shellCore)
+    const shellHalo = glowSprite(0xff5a4a, 5.5)
+    shellHalo.material.opacity = 0.55
+    shellGem.add(shellHalo)
+    shellGem.userData.core = shellCore
+    shellGem.position.set(0, 6.2 * s, 0)
+    shellGem.visible = false
+    g.add(shellGem)
   }
   // 보스 전리품 풀세트 오라 — 장착 3피스가 한 보스 세트일 때만(명예 표시, 씬 전용 코스메틱).
   // 인게임(내 영웅)과 꾸미기 쇼케이스가 같은 경로로 얻는다 — 넘겨받은 장착 id로 판정.
@@ -3938,7 +3952,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     hat, hatBaseY, // 모자는 얼굴을 따라간다 — 프레임마다 leanX·bob 동기화
     costume, // 옷 — FX(fxUpdate) 애니메이션용 참조
     bodyBaseY: 2.2 * s, faceBaseY: (4.4 + (zspec.dy || 0)) * s, bobPhase: (hashStr(h.id) % 628) / 100,
-    bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, stackMark, stackRing, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
+    bar, ring, threat, dormant, bombMark, thornArmor, gazeMark, gazeEye, shellGem, stackMark, stackRing, setAura, buff, shield, barrier, bindSphere, stun, freeze, fear, recall, recallBeam, weapon, legs, arms: [armR, armL], lastAtkSeq: h.atkSeq, animT: 1,
     // 보스 전용 모션·연출 시퀀스 스냅샷 — 접속 시점 값으로 초기화해야 빌드 직후 유령 스윙이 안 난다
     ...(CLASSES[h.cls]?.boss ? { lastFanSeq: h.bossFanSeq || 0, lastSmashSeq: h.bossSmashSeq || 0, lastSlamSeq: h.bossSlamSeq || 0 } : null),
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
@@ -3954,6 +3968,35 @@ function hashStr(str) {
     h = Math.imul(h, 16777619)
   }
   return h >>> 0
+}
+
+// 보스 위협 링 색 + 국면 덩치(×1.15/×1.3)·달아오름 — 본체(영웅)와 야바위 분신(소환물)이 공유.
+// 같은 함수를 쓰는 것 자체가 위장의 핵심: 국면 2·3에서도 셋의 겉모습이 완전히 같아야 한다.
+function applyBossPhaseLook(u, ph, time) {
+  u.threat.material.color.setHex(ph === 3 ? 0xb266ff : ph === 2 ? 0xff7d2a : 0xff4444)
+  u.threat.material.opacity = ph === 3 ? 0.5 + Math.sin(time * 6) * 0.25 : 0.55
+  // 국면이 오르면 몸이 드라마틱하게 커지고(×1.15/×1.3) 붉게 달아오른다.
+  // 얼굴·이름표·체력바·모자 기준선도 커진 몸에 맞춰 올린다(발밑 기준 유지).
+  if (u.bossPhaseShown !== ph) {
+    u.bossPhaseShown = ph
+    const k = ph === 3 ? 1.3 : ph === 2 ? 1.15 : 1
+    u.bossBaseBodyY ??= u.bodyBaseY
+    u.bossBaseFaceY ??= u.faceBaseY
+    u.bossBaseHatY ??= u.hatBaseY
+    u.bossBaseNameY ??= u.name.position.y
+    u.bossBaseBarY ??= u.bar.position.y
+    u.body.scale.setScalar(k)
+    u.bodyBaseY = u.bossBaseBodyY * k // 커진 반신만큼 띄워 발이 땅을 뚫지 않게
+    u.faceBaseY = u.bossBaseFaceY * k
+    u.hatBaseY = u.bossBaseHatY * k
+    u.name.position.y = u.bossBaseNameY * k
+    u.bar.position.y = u.bossBaseBarY * k
+    u.body.traverse((o) => {
+      if (o.isMesh && o.material?.emissive) {
+        o.material.emissive.setHex(ph === 3 ? 0x5a1010 : ph === 2 ? 0x380a0a : 0x000000)
+      }
+    })
+  }
 }
 
 // 사망 시: 일반 부위는 숨기고 파티클만, 부활 시: 반대로
@@ -3986,6 +4029,7 @@ function setHeroDead(u, dead) {
     if (u.gazeEye) u.gazeEye.visible = false // 보스의 부릅뜬 눈
     if (u.stackMark) u.stackMark.visible = false // 성좌 낙인 🤝
     if (u.stackRing) u.stackRing.visible = false
+    if (u.shellGem) u.shellGem.visible = false // 야바위 붉은 소환석
   }
   if (u.setAura) u.setAura.visible = !dead // 전리품 세트 오라도 시체에 남지 않게
 }
@@ -6926,34 +6970,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
         setHpBar(u.bar, h.hp / h.maxHp)
         setHpBarSegments(u.bar, h.maxHp) // 100단위 칸 — 최대 체력이 큰 캐릭터는 칸이 많다
-        // 보스 위협 링: 국면 색 (1: 빨강 → 2: 주황 → 3: 보라 + 다급한 맥동)
-        if (u.threat) {
-          const ph = h.bossPhase || 1
-          u.threat.material.color.setHex(ph === 3 ? 0xb266ff : ph === 2 ? 0xff7d2a : 0xff4444)
-          u.threat.material.opacity = ph === 3 ? 0.5 + Math.sin(view.time * 6) * 0.25 : 0.55
-          // 국면이 오르면 몸이 드라마틱하게 커지고(×1.15/×1.3) 붉게 달아오른다.
-          // 얼굴·이름표·체력바·모자 기준선도 커진 몸에 맞춰 올린다(발밑 기준 유지).
-          if (u.bossPhaseShown !== ph) {
-            u.bossPhaseShown = ph
-            const k = ph === 3 ? 1.3 : ph === 2 ? 1.15 : 1
-            u.bossBaseBodyY ??= u.bodyBaseY
-            u.bossBaseFaceY ??= u.faceBaseY
-            u.bossBaseHatY ??= u.hatBaseY
-            u.bossBaseNameY ??= u.name.position.y
-            u.bossBaseBarY ??= u.bar.position.y
-            u.body.scale.setScalar(k)
-            u.bodyBaseY = u.bossBaseBodyY * k // 커진 반신만큼 띄워 발이 땅을 뚫지 않게
-            u.faceBaseY = u.bossBaseFaceY * k
-            u.hatBaseY = u.bossBaseHatY * k
-            u.name.position.y = u.bossBaseNameY * k
-            u.bar.position.y = u.bossBaseBarY * k
-            u.body.traverse((o) => {
-              if (o.isMesh && o.material?.emissive) {
-                o.material.emissive.setHex(ph === 3 ? 0x5a1010 : ph === 2 ? 0x380a0a : 0x000000)
-              }
-            })
-          }
-        }
+        // 보스 위협 링·국면 덩치 — 분신(야바위)도 같은 룩을 써야 진짜와 구분되지 않는다
+        if (u.threat) applyBossPhaseLook(u, h.bossPhase || 1, view.time)
         // ── 타격감: 체력이 줄면 데미지 숫자 + 피격 섬광/움찔, 내 영웅이면 화면 흔들림 ──
         const dHp = (u.lastHp == null ? h.hp : u.lastHp) - h.hp
         u.lastHp = h.hp
@@ -7046,6 +7064,16 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             const open = 1 - Math.min(1, h.bossGazeT / 2.4) // 0→1: 눈이 점점 크게 떠진다
             u.gazeEye.scale.setScalar(3.4 * (0.65 + open * 0.65) * (1 + 0.05 * Math.sin(view.time * 10)))
             u.gazeEye.material.opacity = 0.7 + 0.3 * Math.abs(Math.sin(view.time * 7))
+          }
+        }
+        // 야바위 붉은 소환석: 표식 공개 국면에만 진짜 머리 위 — 크게 고동치며 "얘가 진짜다"
+        if (u.shellGem) {
+          u.shellGem.visible = !!h.shellMark
+          if (h.shellMark) {
+            u.shellGem.position.y = 6.2 * (u.clsScale || 1) + Math.sin(view.time * 3) * 0.5
+            u.shellGem.rotation.y = view.time * 2.2
+            u.shellGem.scale.setScalar(1 + 0.25 * Math.abs(Math.sin(view.time * 5)))
+            if (u.shellGem.userData.core) u.shellGem.userData.core.material.emissiveIntensity = 0.8 + 0.5 * Math.abs(Math.sin(view.time * 5))
           }
         }
         // 성좌 낙인(STACK) 🤝 + 파란 링: "나한테 모여!" — 링(판정 반경 그대로)이 좁아지는 게 아니라
@@ -7265,6 +7293,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           obj.position.set(s.x, 0, s.z)
           u.body.rotation.y = -(s.dir || 0)
           setHpBar(u.bar, s.hp / s.maxHp)
+          // 보스 분신(야바위): 위협 링 색·국면 덩치·체력 눈금까지 본체와 똑같이 — 겉으론 구분 불가
+          if (u.threat && s.bossPhase) {
+            applyBossPhaseLook(u, s.bossPhase, view.time)
+            setHpBarSegments(u.bar, s.maxHp)
+          }
           const stride = Math.sin(view.time * 9 + s.id) * 0.55
           if (u.legs) {
             u.legs[0].rotation.z = stride * 0.65
