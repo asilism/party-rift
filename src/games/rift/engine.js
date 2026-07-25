@@ -5423,7 +5423,11 @@ const HUNT_HUMAN_BIAS = 0.6 // 사람 우선 낙인 — 솔로 판에서 기믹�
 const STILL_CD = 30
 const STILL_VANISH_MIN = 2.2 // 등장까지 최소(초) — 부재가 길수록 팀에겐 휴식이라 짧고 매섭게
 const STILL_VANISH_RAND = 1.6 // + 랜덤 0~1.6초
-const STILL_WARN2 = 0.65 // 직선 경고 — 집중해야 겨우 피할 시간(0.8은 너무 쉽게 피해졌다)
+// 직선 경고 시간 — 티어별 테이블(유저: 더 타이트하게, 과난이면 난이도별 조정 허용).
+//  0.8→0.65→0.5 순으로 조여 왔다 — 집중해야 겨우 피하는 긴장감이 목표
+//  일괄 0.5는 상위 티어 붕괴(악몽 17·지옥 8) — 상위는 hp·atk·정예 압박이 이미 커 예고만 소폭 완화
+const STILL_WARN_TIER = { normal: 0.5, hard: 0.62, nightmare: 0.62 }
+const stillWarnOf = (state) => STILL_WARN_TIER[state.bossTier] || 0.5
 export const NOXDASH_LEN = 42 // 돌진 직선 길이 — 씬(경고 띠)과 공유
 export const NOXDASH_HALF = 2.3 // 돌진 반폭
 const STILL_DASH_DMG = [200, 3.8] // 돌진 피해(+공포 1.6)
@@ -5645,7 +5649,7 @@ function bossThink(state, h, dt) {
   //  돌진으로 아군이 죽으면 단수를 처음부터 리셋해 다시 시작 — 죽음이 죽음을 부른다
   if (h.stillVanishAt != null) {
     // ① 경고 개시: 등장 위치로 이동해 모습을 드러낸다(안개 무관 노출) + 표적 관통선 확정
-    if (!h.stillWarned && h.dashRunT == null && state.time >= h.stillVanishAt - STILL_WARN2) {
+    if (!h.stillWarned && h.dashRunT == null && state.time >= h.stillVanishAt - stillWarnOf(state)) {
       const pool = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss)
       if (!pool.length) {
         h.stillVanishAt = null
@@ -5667,7 +5671,7 @@ function bossThink(state, h, dt) {
         h.dir = h.dashDir
         h.dashSeq = (h.dashSeq || 0) + 1 // 씬 직선 경고 트리거
         h.stealthT = 0 // 모습 공개 — 돌진하는 녹스는 모두가 본다
-        h.revealT = Math.max(h.revealT || 0, STILL_WARN2 + 0.6) // 안개 무관 노출
+        h.revealT = Math.max(h.revealT || 0, stillWarnOf(state) + 0.6) // 안개 무관 노출
         if (!h.dashFeedDone) {
           h.dashFeedDone = true
           pushFeed(state, 'obj', '💥 어둠이 요동친다 — 붉은 선이 그어진다')
@@ -5721,7 +5725,7 @@ function bossThink(state, h, dt) {
         }
         h.dashKilled = false
         if (h.dashLeft > 0 && remain) {
-          h.stillVanishAt = state.time + STILL_WARN2 // 다음 단 — 지체 없이 바로 경고
+          h.stillVanishAt = state.time + stillWarnOf(state) // 다음 단 — 지체 없이 바로 경고
           h.stillWarned = false
           h.dashChained = true // 다음 단은 이 끝지점에서 이어진다
         } else {
@@ -7230,7 +7234,7 @@ function botHuntFlee(state, h) {
 function botDodgeDash(state, h, dt) {
   for (const b of state.heroes) {
     if (!b.isBoss || b.team === h.team || b.stillVanishAt == null || !b.stillWarned || b.respawnT > 0) continue
-    if (b.stillVanishAt - state.time > STILL_WARN2 - 0.22) continue // 반응 지연 — 경고를 읽는 데 한 박자(0.43초 안에 비켜야)
+    if (b.stillVanishAt - state.time > stillWarnOf(state) - 0.22) continue // 반응 지연 — 경고를 읽고 몸을 트는 데 한 박자
     const bx = Math.cos(b.dashDir || 0)
     const bz = Math.sin(b.dashDir || 0)
     const rx = h.x - b.x
@@ -8160,6 +8164,7 @@ export function makeView(state) {
         dashWarnT: r2d(h.stillVanishAt != null && h.stillWarned ? Math.max(0, h.stillVanishAt - state.time) : 0),
         dashDir: r2d(h.dashDir || 0),
         dashSeq: h.dashSeq || 0,
+        dashWarnT0: r2d(stillWarnOf(state)), // 경고 총시간(티어별) — 씬 긴급도 분모
         dashGoSeq: h.dashGoSeq || 0, // 발사(돌진 개시) — 씬 섬광·진동 트리거
         dashRunning: h.dashRunT != null ? 1 : 0, // 돌진 진행 중 — 씬 잔상 트레일
         // 죽음의 그림자 보조 웅덩이(페이즈 2~3) — 반드시 복사해서 싣는다(앨리어싱 금지)
