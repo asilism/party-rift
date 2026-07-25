@@ -898,7 +898,7 @@ export function createGame(players, opts = {}) {
     //  불면 악몽·지옥이 절벽이 된다(실측 31%→13% 추락). 실효 체력은 개편 전과 동급으로 유지.
     if (h.isBoss) {
       const thp = BOSS_TIERS[o.bossTier]?.hp || 1
-      const hpMul = h.cls === 'boss_shadow' ? 1 + (thp - 1) * 0.15 : thp
+      const hpMul = h.cls === 'boss_shadow' ? 1 + (thp - 1) * 0.15 : thp // 주의: 더 눅이면 P2/P3(포위·다단) 진입이 빨라져 오히려 어려워진다
       h.maxHp = Math.round(h.maxHp * hpMul)
     }
     // 콜로세움 이월: 라운드 사이 레벨·골드·아이템을 들고 온다(체력·쿨은 리셋)
@@ -3647,7 +3647,7 @@ function stepHero(state, h, dt) {
       for (const o of share) damageHero(state, o, each, from)
       pushFeed(state, 'obj', share.length >= 2
         ? `🌠 ${share.length}명이 성좌 낙인을 나눠 맞았다!`
-        : '🌠 성좌 낙인을 홀로 받아냈다 — 다음엔 모여서 나눠 맞아라!')
+        : '🌠 성좌 낙인을 홀로 받아냈다 — 나눠 맞으면 그만큼 가벼워진다')
     }
   }
   if (h.tauntT > 0 && (h.tauntT = Math.max(0, h.tauntT - dt)) === 0) h.tauntBy = null
@@ -5408,7 +5408,7 @@ const GAZE_FEAR = 2.6 // 사로잡히면 공포 질주 — 암살자 보스 옆�
 //  영웅의 질주보다 반 발 느리다 — 달리면 살고, 멈추면 잡혀서 처형 습격을 맞는다.
 //  시간을 끝까지 버티면 그림자를 떨쳐낸다(보스 노출+그로기).
 //  야바위의 교훈: 팀이 통계로 풀 수 있는 기믹은 봇이 대신 풀어버린다 — 낙인은 오롯이 본인 몫.
-const HUNT_CD = 26 // 시뮬 검증: 기믹은 팀에 순위협(처형+도망 DPS 이탈) — 빈도를 줄이면 오히려 쉬워진다(83%)
+const HUNT_CD = 26 // 쿨 ±2s 탐색은 노이즈(±10pp)에 파묻힌다 — 26/30이 실측 데이터가 가장 두터운 지점
 const HUNT_T = 4.2 // 그림자 추격 시간
 const HUNT_SPEED = 12.9 // 그림자 이속 — 대부분 영웅 질주(13+)보다 반 발 느리다
 const HUNT_CATCH_R = 2.4 // 이 거리까지 닿으면 "잡혔다" — 처형 습격
@@ -5426,6 +5426,7 @@ const STILL_WARN2 = 0.8 // 직선 경고 — 집중해야 겨우 피할 시간
 export const NOXDASH_LEN = 42 // 돌진 직선 길이 — 씬(경고 띠)과 공유
 export const NOXDASH_HALF = 2.3 // 돌진 반폭
 const STILL_DASH_DMG = [200, 3.8] // 돌진 피해(+공포 1.6)
+const STILL_DASH_RUN = 0.32 // 돌진 주파 시간(초) — 순간이동이 아니라 실제로 아주 빠르게 가로지른다
 
 
 // ── 성좌 낙인(대마도사 시그니처 STACK): 총피해를 원 안 인원수로 "나눠 맞는" 기믹 ──
@@ -5530,7 +5531,7 @@ function pushBossLine(state, h, dir, { count = 5, r = 4.2, gap = 3.4, delay = 1.
 function bossThink(state, h, dt) {
   if (!h.bossIntro) {
     h.bossIntro = true
-    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name} ${h.name} 등장! 힘을 합쳐 쓰러뜨리세요!`)
+    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name} ${h.name} 등장 — 전설의 사냥이 시작된다`)
   }
   // 보스는 레벨 개념이 없다 — 시간 자동 레벨업 없음(위협은 국면 전환으로 강해진다).
   //  체력바가 최대치와 함께 훅 오르던 혼란을 없앤다. 스탯은 개전부터 고정(BOSS_LEVEL로 고정 계산).
@@ -5584,54 +5585,73 @@ function bossThink(state, h, dt) {
     if (!mark || mark.respawnT > 0) {
       h.huntUntil = null // 낙인자가 다른 이유로 죽었다 — 조용히 복귀
       h.huntTargetId = null
+      h.huntShadows = null
       h.stealthT = 0
       h.gimRestUntil = Math.max(h.gimRestUntil || 0, state.time + 4)
-    } else if (dist(h, mark) < HUNT_CATCH_R) {
-      // 잡혔다 — 그림자에서 솟아나 처형 습격
-      h.huntUntil = null
-      h.huntTargetId = null
-      mark.huntT = 0
-      h.stealthT = 0
-      h.dir = Math.atan2(mark.z - h.z, mark.x - h.x)
-      pushFx(state, 'blink', h.x, h.z, 3, h.team)
-      pushFx(state, 'shadowexec', mark.x, mark.z, 5, h.team, 1.0)
-      damageHero(state, mark, skillDmg(h, HUNT_EXEC_DMG[0], HUNT_EXEC_DMG[1]), h)
-      applyFear(state, mark, 1.6)
-      pushFeed(state, 'obj', `⚔️ 처형 습격 — ${mark.name}이(가) 그림자에 잡혔다!`)
-      h.gimRestUntil = Math.max(h.gimRestUntil || 0, state.time + 4)
-    } else if (state.time >= h.huntUntil) {
-      // 끝까지 안 잡혔다 — 그림자를 떨쳐냈다: 보스가 튕겨 나와 휘청인다
-      h.huntUntil = null
-      h.huntTargetId = null
-      mark.huntT = 0
-      h.stealthT = 0
-      h.bossGroggyT = Math.max(h.bossGroggyT || 0, 1.2) // 판당 십수 회 떨쳐내니 짧게 — 누적 헌납 방지
-      h.stunT = Math.max(h.stunT, 1) // 💫 표시용
-      pushFx(state, 'berserk', h.x, h.z, 7, h.team, 1.0)
-      pushFeed(state, 'obj', `💨 ${mark.name}이(가) 그림자를 떨쳐냈다 — 녹스가 드러나 휘청인다!`)
     } else {
-      // 그림자 활주: 지형 무시 직선 추격 — 도망만이 답이다
-      const d = dist(h, mark) || 0.001
-      const sp = HUNT_SPEED * dt
-      h.x += ((mark.x - h.x) / d) * sp
-      h.z += ((mark.z - h.z) / d) * sp
-      h.dir = Math.atan2(mark.z - h.z, mark.x - h.x)
-      h.mx = 0
-      h.mz = 0
-      return
+      // 포위 활주: 본체·보조 그림자가 각자 다른 방위의 근접점(표적 곁 1.2)으로 조여든다 — 겹치지 않는다.
+      //  보조는 본체보다 한 발 느리다 — 포위 압박은 주되 확정 사망은 안 만든다(실행하면 산다)
+      const glide = (o, phi, spd) => {
+        const tx = mark.x + Math.cos(phi) * 1.2
+        const tz = mark.z + Math.sin(phi) * 1.2
+        const d = Math.hypot(tx - o.x, tz - o.z) || 0.001
+        const sp = Math.min(d, spd * dt)
+        o.x += ((tx - o.x) / d) * sp
+        o.z += ((tz - o.z) / d) * sp
+      }
+      glide(h, h.huntPhi ?? Math.atan2(h.z - mark.z, h.x - mark.x), HUNT_SPEED)
+      for (const sh of h.huntShadows || []) glide(sh, sh.phi, HUNT_SPEED * 0.9)
+      // 어느 그림자든 닿으면 잡혔다 — 본체가 그 자리에서 솟아나 처형 습격
+      let caught = dist(h, mark) < HUNT_CATCH_R ? h : null
+      if (!caught) caught = (h.huntShadows || []).find((sh) => dist(sh, mark) < HUNT_CATCH_R) || null
+      if (caught) {
+        h.x = caught.x
+        h.z = caught.z
+        h.huntUntil = null
+        h.huntTargetId = null
+        h.huntShadows = null
+        mark.huntT = 0
+        h.stealthT = 0
+        h.dir = Math.atan2(mark.z - h.z, mark.x - h.x)
+        pushFx(state, 'blink', h.x, h.z, 3, h.team)
+        pushFx(state, 'shadowexec', mark.x, mark.z, 5, h.team, 1.0)
+        damageHero(state, mark, skillDmg(h, HUNT_EXEC_DMG[0], HUNT_EXEC_DMG[1]), h)
+        applyFear(state, mark, 1.6)
+        pushFeed(state, 'obj', `⚔️ 처형 습격 — ${mark.name}이(가) 그림자에 잡혔다!`)
+        h.gimRestUntil = Math.max(h.gimRestUntil || 0, state.time + 4)
+      } else if (state.time >= h.huntUntil) {
+        // 끝까지 안 잡혔다 — 그림자를 떨쳐냈다: 보스가 튕겨 나와 휘청인다
+        h.huntUntil = null
+        h.huntTargetId = null
+        h.huntShadows = null
+        mark.huntT = 0
+        h.stealthT = 0
+        h.bossGroggyT = Math.max(h.bossGroggyT || 0, 1.2) // 판당 십수 회 떨쳐내니 짧게 — 누적 헌납 방지
+        h.stunT = Math.max(h.stunT, 1) // 💫 표시용
+        pushFx(state, 'berserk', h.x, h.z, 7, h.team, 1.0)
+        pushFeed(state, 'obj', `💨 ${mark.name}이(가) 그림자를 떨쳐냈다 — 녹스가 드러나 휘청인다!`)
+      } else {
+        h.dir = Math.atan2(mark.z - h.z, mark.x - h.x)
+        h.mx = 0
+        h.mz = 0
+        return
+      }
     }
   }
   // 어둠의 정적: 암전 속 랜덤 대기 → 직선 경고 0.8초 → 펑! 돌진.
   //  돌진으로 아군이 죽으면 지체 없이 즉시 재경고·재돌진 — 죽음이 죽음을 부른다
+  // 어둠의 정적: 암전 속 랜덤 대기 → 등장(전원 공개)·직선 경고 0.8초 → 실제 고속 돌진 — 페이즈별 1/2/3단 연속.
+  //  돌진으로 아군이 죽으면 단수를 처음부터 리셋해 다시 시작 — 죽음이 죽음을 부른다
   if (h.stillVanishAt != null) {
-    if (!h.stillWarned && state.time >= h.stillVanishAt - STILL_WARN2) {
-      h.stillWarned = true
-      // 표적을 관통하는 돌진선 확정 — 시작점은 표적에서 랜덤 방향 16 밖(어둠 속 도약 위치)
+    // ① 경고 개시: 등장 위치로 이동해 모습을 드러낸다(안개 무관 노출) + 표적 관통선 확정
+    if (!h.stillWarned && h.dashRunT == null && state.time >= h.stillVanishAt - STILL_WARN2) {
       const pool = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss)
       if (!pool.length) {
         h.stillVanishAt = null
+        h.dashLeft = 0
         h.stealthT = 0
       } else {
+        h.stillWarned = true
         const t2 = pool[Math.floor(state.rng() * pool.length)]
         const a = state.rng() * Math.PI * 2
         h.x = t2.x + Math.cos(a) * 16
@@ -5639,42 +5659,70 @@ function bossThink(state, h, dt) {
         h.dashDir = Math.atan2(t2.z - h.z, t2.x - h.x)
         h.dir = h.dashDir
         h.dashSeq = (h.dashSeq || 0) + 1 // 씬 직선 경고 트리거
-        pushFeed(state, 'obj', '💥 어둠이 요동친다 — 직선에서 비켜라!')
+        h.stealthT = 0 // 모습 공개 — 돌진하는 녹스는 모두가 본다
+        h.revealT = Math.max(h.revealT || 0, STILL_WARN2 + 0.6) // 안개 무관 노출
+        pushFx(state, 'blink', h.x, h.z, 4, h.team, 0.8)
+        if (!h.dashFeedDone) {
+          h.dashFeedDone = true
+          pushFeed(state, 'obj', '💥 어둠이 요동친다 — 붉은 선이 그어진다')
+        }
       }
     }
-    if (h.stillVanishAt != null && state.time >= h.stillVanishAt) {
-      // 펑! 등장하며 직선 돌진 — 경로의 모두에게 강력 피해 + 공포
-      h.stealthT = 0
+    // ② 발사: 예고가 다 되면 실제 고속 돌진 개시(순간이동이 아니다).
+    //  dashHits는 시전 전체(다단·연쇄 포함)로 유지 — 다단 간격(1.12s)이 공포(1.6s)보다 짧아
+    //  같은 사람이 제어를 잃은 채 연타당하는 히트락을 막는다(한 시전에 한 번만 아프다)
+    if (h.stillWarned && h.dashRunT == null && h.stillVanishAt != null && state.time >= h.stillVanishAt) {
+      h.dashRunT = 0
+      h.dashFromX = h.x
+      h.dashFromZ = h.z
+      h.dashHits = h.dashHits || []
+      h.dashKilled = false
+      h.dashGoSeq = (h.dashGoSeq || 0) + 1 // 씬 발사 섬광·진동 트리거
+      pushFxDir(state, 'dash', h.x, h.z, NOXDASH_LEN, h.dashDir, h.team)
+      pushFx(state, 'shriek', h.x + Math.cos(h.dashDir) * 4, h.z + Math.sin(h.dashDir) * 4, 6, h.team, 1.0)
+    }
+    // ③ 돌진 진행: 0.32초에 직선 42를 주파 — 지나온 경로 위의 적을 그때그때 강타
+    if (h.dashRunT != null) {
+      h.dashRunT += dt
+      const frac = Math.min(1, h.dashRunT / STILL_DASH_RUN)
       const bx = Math.cos(h.dashDir)
       const bz = Math.sin(h.dashDir)
-      let killed = 0
+      h.x = h.dashFromX + bx * NOXDASH_LEN * frac
+      h.z = h.dashFromZ + bz * NOXDASH_LEN * frac
+      h.revealT = Math.max(h.revealT || 0, 0.4)
       for (const e of state.heroes) {
-        if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
-        const rx = e.x - h.x
-        const rz = e.z - h.z
+        if (e.team === h.team || e.respawnT > 0 || e.isBoss || h.dashHits.includes(e.id)) continue
+        const rx = e.x - h.dashFromX
+        const rz = e.z - h.dashFromZ
         const along = rx * bx + rz * bz
         const perp = Math.abs(-rx * bz + rz * bx)
-        if (along < 0 || along > NOXDASH_LEN || perp > NOXDASH_HALF) continue
+        if (along < 0 || along > NOXDASH_LEN * frac || perp > NOXDASH_HALF) continue
+        h.dashHits.push(e.id)
         damageHero(state, e, skillDmg(h, STILL_DASH_DMG[0], STILL_DASH_DMG[1]), h)
         applyFear(state, e, 1.6)
-        if (e.respawnT > 0) killed++
+        if (e.respawnT > 0) h.dashKilled = true
       }
-      pushFxDir(state, 'dash', h.x, h.z, NOXDASH_LEN, h.dashDir, h.team)
-      pushFx(state, 'shriek', h.x + bx * 4, h.z + bz * 4, 6, h.team, 1.0)
-      h.x += bx * NOXDASH_LEN
-      h.z += bz * NOXDASH_LEN
-      state.map.resolveTerrain(h, 2.2, colliders(state))
-      const remain = state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss)
-      if (killed > 0 && remain) {
-        // 연쇄: 사망을 봤다 — 암전 유지, 지체 없이 다음 경고로
-        h.stillVanishAt = state.time + STILL_WARN2
-        h.stillWarned = false
-        h.stealthT = Math.max(h.stealthT, STILL_WARN2 + 0.1)
-        pushFeed(state, 'obj', '☠️ 피 냄새 — 그림자가 다시 덮친다!')
-      } else {
-        h.stillVanishAt = null
-        h.stillWarned = false
-        h.gimRestUntil = Math.max(h.gimRestUntil || 0, state.time + 4)
+      if (frac >= 1) {
+        // 단 완료 — 킬이 났으면 단수를 페이즈 단수로 리셋해 다시 시작, 아니면 한 단 소모
+        state.map.resolveTerrain(h, 2.2, colliders(state))
+        h.dashRunT = null
+        const remain = state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss)
+        if (h.dashKilled && remain) {
+          h.dashLeft = Math.min(3, h.bossPhase || 1)
+          pushFeed(state, 'obj', '☠️ 피 냄새 — 어둠의 정적이 처음부터 다시 덮친다')
+        } else {
+          h.dashLeft = (h.dashLeft || 1) - 1
+        }
+        h.dashKilled = false
+        if (h.dashLeft > 0 && remain) {
+          h.stillVanishAt = state.time + STILL_WARN2 // 다음 단 — 지체 없이 바로 경고
+          h.stillWarned = false
+        } else {
+          h.stillVanishAt = null
+          h.stillWarned = false
+          h.dashFeedDone = false
+          h.gimRestUntil = Math.max(h.gimRestUntil || 0, state.time + 4)
+        }
       }
     }
     h.mx = 0
@@ -5717,7 +5765,7 @@ function bossThink(state, h, dt) {
       h.bossGroggyT = 2.2 // 역류 그로기(CC 저항 무시) — 부순 보람이 손에 잡히는 보상
       h.stunT = Math.max(h.stunT, 1) // 💫 표시용
       pushFx(state, 'berserk', h.x, h.z, 8, h.team, 1.0)
-      pushFeed(state, 'obj', '✨ 소환석 전파괴 — 의식이 역류한다! 지금이 딜 타임이다!')
+      pushFeed(state, 'obj', `✨ 소환석 전파괴 — 역류한 마력에 ${h.name}이(가) 휘청인다`)
     } else if (state.time >= h.stonesAt) {
       h.stonesAt = null
       const pool = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss)
@@ -5824,18 +5872,18 @@ function bossThink(state, h, dt) {
     h.mz = 0
     if (!h.bossWakeWarned && state.time > BOSS_SLEEP_END - 15) {
       h.bossWakeWarned = true
-      pushFeed(state, 'obj', '⚠️ 보스가 곧 깨어납니다 — 전열을 갖추세요!')
+      pushFeed(state, 'obj', '⚠️ 보스가 곧 깨어난다 — 어둠이 낮게 술렁인다')
     }
     return
   }
   if (!h.bossAwake) {
     h.bossAwake = true
-    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name}이(가) 깨어나 어둠의 병력을 소환한다 — 파도를 막아라!`)
+    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name}이(가) 깨어나 어둠의 병력을 소환한다`)
   }
   // 광폭화(엔레이지): 진군 후 11분이 지나면 CC를 무시하고 피해가 1.5배 — 무한 대치 방지
   if (!h.bossEnraged && state.time - (h.bossShieldTotal || 0) > BOSS_MARCH_AT + 660) {
     h.bossEnraged = true
-    pushFeed(state, 'obj', '🔥 보스가 광폭화했다! 더는 버틸 수 없다 — 지금 끝내야 한다!')
+    pushFeed(state, 'obj', '🔥 보스가 광폭화했다 — 남은 시간이 많지 않다')
   }
   if (h.bossEnraged) {
     h.stunT = 0; h.freezeT = 0; h.fearT = 0; h.airT = 0; h.rootT = 0; h.pullT = 0
@@ -5854,7 +5902,7 @@ function bossThink(state, h, dt) {
       h.stunT = 0; h.freezeT = 0; h.fearT = 0; h.airT = 0; h.rootT = 0; h.pullT = 0
       pushFx(state, 'berserk', h.x, h.z, 6, h.team, 1.0)
       pushFeed(state, 'obj', wantPhase === 3
-        ? `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 몰아쳐라!`
+        ? `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다`
         : `💢 ${h.name}의 분노가 끓어오른다 — 공격이 거세진다!`)
     } else {
     // 각성 휴지기: 어둠의 보호막에 감싸여 30초 무적·정지 — 게임의 시계가 잠시 멈추고,
@@ -5869,8 +5917,8 @@ function bossThink(state, h, dt) {
     })
     pushFeed(state, 'obj', wantPhase === 2
       ? `💢 ${h.name}의 분노가 끓어오른다 — 공격이 거세진다!`
-      : `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다, 몰아쳐라!`)
-    pushFeed(state, 'obj', `🛡️ ${h.name}이(가) 어둠의 보호막에 감싸여 힘을 모은다(${BOSS_AWAKEN_T}초 무적) — 정비하고 맞을 준비를 하라!`)
+      : `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다`)
+    pushFeed(state, 'obj', `🛡️ ${h.name}이(가) 어둠의 보호막에 감싸여 힘을 모은다 — ${BOSS_AWAKEN_T}초의 정적`)
     // 필사 국면: 그림자 영웅들이 다시 일어난다 — 보스가 힘을 모으는 동안 최후의 군세가 앞장선다
     if (wantPhase === 3 && !h.bossAddsDone2) {
       h.bossAddsDone2 = true
@@ -5914,7 +5962,7 @@ function bossThink(state, h, dt) {
   if (!h.defenseBoss && stage !== 'mass' && !h.bossAddsDone) {
     h.bossAddsDone = true
     bossSummonAdds(state, h)
-    pushFeed(state, 'obj', `⚔️ ${h.name}이(가) 정예 그림자 영웅들을 불러냈다 — 진군 전에 쓰러뜨려라!`)
+    pushFeed(state, 'obj', `⚔️ ${h.name}이(가) 정예 그림자 영웅들을 불러냈다 — 진군의 선봉이다`)
   }
   // 병사 소환 — 스킬과 독립으로, 어느 국면이든 끊기지 않는다(정예를 빨리 정리해도
   // 파밍이 붕 뜨지 않게). 대량 국면 14마리/10초 → 정예 국면 10마리 → 진군 후 14마리.
@@ -5970,7 +6018,7 @@ function bossThink(state, h, dt) {
   }
   if (!h.bossMarching) {
     h.bossMarching = true
-    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name}이(가) 진군을 시작했다 — 방어선을 사수하라!`)
+    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name}이(가) 진군을 시작했다`)
   }
   // 공성 목표: 미드 라인의 다음 방어선을 순서대로 — 외곽 타워 → 내곽 → 최후 포탑 → 수호석.
   // 보스의 진군로가 곧 게임의 시계다: 방어선이 하나씩 무너지며 압박이 조여 온다.
@@ -6005,7 +6053,7 @@ function bossThink(state, h, dt) {
   const focus = h.bossSiegeT > BOSS_FOCUS_AFTER
   if (focus && !h.bossFocusWarned) {
     h.bossFocusWarned = true
-    pushFeed(state, 'obj', '💢 보스가 방어선 파괴에 집중합니다 — 막아설 수 없다!')
+    pushFeed(state, 'obj', '💢 보스가 방어선 파괴에 몰두한다 — 다른 것은 눈에 없다')
   }
   // 표적: 공성 목표 근처(BOSS_LEASH 안)의 보이는 적 중 "가장 약한" 영웅 — 우물 캠핑·낚시 방지.
   // 최약체를 노리는 이유: 보스가 마음먹으면 하나는 반드시 죽는다는 처형압이 난이도의 심장이다.
@@ -6226,7 +6274,7 @@ function bossColossus(state, h, foe) {
       dmg: 0, safe: true, vfx: 'quake', hue: 'safe',
     })
     pushFx(state, 'rocksplash', h.x, h.z, 6, h.team, 0.8)
-    pushFeed(state, 'obj', `🦶 ${h.name}이(가) 하늘로 솟구친다 — 초록 안전지대로 피해라!`)
+    pushFeed(state, 'obj', `🦶 ${h.name}이(가) 하늘로 솟구친다 — 초록빛 안쪽만이 무사하다`)
     return // 도약 개시 틱 — 같은 틱에 다른 기술이 겹치지 않게(쿨이 모두 차 있는 첫 교전 버스트 방지)
   }
   if (h.bossCd.a <= 0 && nearFoe) {
@@ -6340,7 +6388,7 @@ function bossArchmage(state, h, foe) {
       })
     }
     pushFx(state, 'abszero', h.x, h.z, 8, h.team, 1.0)
-    pushFeed(state, 'obj', `🔮 소환 의식! ${STONE_TIME}초 안에 소환석 ${count}개를 모두 부숴라 — 남는 수만큼 처형당한다!`)
+    pushFeed(state, 'obj', `🔮 소환 의식 — 소환석 ${count}개가 떠오른다. ${STONE_TIME}초 뒤 남은 수만큼 처형이 집행된다`)
     return
   }
   // ── 대기술 공용 한숨: 감옥·숨결·광선은 서로 겹치지 않는다(직전 대기술 후 2.2초) —
@@ -6369,8 +6417,8 @@ function bossArchmage(state, h, foe) {
       h.comboRestUntil = state.time + charge + 2.2 // 발사 후에도 한숨 — 즉사기 연속 금지
       pushFx(state, 'abszero', h.x, h.z, 4, h.team, 0.8)
       pushFeed(state, 'obj', h.bossBeamN > 1
-        ? `☀️ 섬멸의 광선 ${h.bossBeamN}가닥 — 가닥 사이로 비켜라! 맞으면 소멸한다!`
-        : '☀️ 섬멸의 광선 — 빛의 경로에서 벗어나라! 맞으면 소멸한다!')
+        ? `☀️ 섬멸의 광선 ${h.bossBeamN}가닥 — 빛에 닿는 것은 소멸한다`
+        : '☀️ 섬멸의 광선 — 빛에 닿는 것은 소멸한다')
       return
     }
   }
@@ -6424,7 +6472,7 @@ function bossArchmage(state, h, foe) {
       }
       h.comboRestUntil = state.time + 3.6 // 운석 3연타가 끝날 때까지 다른 대기술 없음
       pushFx(state, 'rocksplash', mark.x, mark.z, 5, h.team, 0.8)
-      pushFeed(state, 'obj', `🪨 ${caged}명이 바위감옥에 갇혔다 — 운석이 떨어진다! 탈출하거나 버텨라!`)
+      pushFeed(state, 'obj', `🪨 ${caged}명이 바위감옥에 갇혔다 — 하늘이 무너져 내린다`)
     }
   }
   // 서리 숨결(한빙술사 콘 크게): 부채꼴 예고 1.1초 → 전방 부채꼴 전체 빙결 —
@@ -6518,7 +6566,7 @@ function bossThorn(state, h, foe) {
         e.thornBombDmg = skillDmg(h, 180, 3.4)
         e.thornBombFrom = h.id
       }
-      pushFeed(state, 'obj', '💥 가시 낙인이 새겨졌다 — 서로에게서 떨어져라!')
+      pushFeed(state, 'obj', '💥 가시 낙인이 새겨졌다 — 뭉친 만큼 크게 터진다')
     }
   }
   // 가시갑옷(도발형): 0.8초 예고 링 → 못 빠져나간 적을 도발(브램블 강제 평타) + 6초 반사창.
@@ -6529,7 +6577,7 @@ function bossThorn(state, h, foe) {
       h.bossCd.d = 26 * cdMul
       h.thornTauntAt = state.time + 0.8 // 집행은 bossThink 펜딩 섹션에서
       pushBossZone(state, h, { x: h.x, z: h.z, r: 9, delay: 0.8, dmg: 0, vfx: 'quake', hue: 'venom' })
-      pushFeed(state, 'obj', '🌵 브램블이 가시를 곤두세운다 — 링 밖으로! 걸리면 강제로 때리게 된다!')
+      pushFeed(state, 'obj', '🌵 브램블이 가시를 곤두세운다 — 가시 링 안의 무기는 주인을 배신한다')
     }
   }
 }
@@ -6555,10 +6603,26 @@ function bossShadow(state, h, foe, siege) {
       h.huntUntil = state.time + HUNT_T
       h.huntTargetId = mark.id
       h.stealthT = Math.max(h.stealthT, HUNT_T) // 몸을 감춘다 — 보이는 건 검은 웅덩이(씬 오버레이)뿐
+      // 페이즈별 그림자 1/2/3갈래 — 전면 부채꼴(±52°)로 포위하듯 조여든다(서로 겹치지 않는다).
+      //  완전 균등(120°) 봉쇄는 확정 사망(회피 22%) — 등 뒤 탈출로를 남겨야 "실행하면 산다"가 성립
+      const shadowN = Math.min(3, p)
+      const baseA = Math.atan2(h.z - mark.z, h.x - mark.x)
+      const spread = [0, 0.9, -0.9]
+      h.huntPhi = baseA
+      h.huntShadows = []
+      for (let i = 1; i < shadowN; i++) {
+        const a2 = baseA + spread[i]
+        const d0 = Math.max(10, dist(h, mark))
+        const sh = { x: mark.x + Math.cos(a2) * d0, z: mark.z + Math.sin(a2) * d0, phi: a2 }
+        h.huntShadows.push(sh)
+        pushFx(state, 'blink', sh.x, sh.z, 3, h.team, 0.7)
+      }
       mark.huntT = HUNT_T
       mark.huntFrom = h.id
       pushFx(state, 'blink', h.x, h.z, 4, h.team, 0.8)
-      pushFeed(state, 'obj', `☠️ ${mark.name}에게 죽음의 그림자 — 도망쳐라! 그림자에 잡히면 처형당한다!`)
+      pushFeed(state, 'obj', shadowN > 1
+        ? `☠️ 죽음의 그림자 ${shadowN}갈래가 ${mark.name}을(를) 뒤쫓는다`
+        : `☠️ 죽음의 그림자가 ${mark.name}을(를) 뒤쫓는다`)
       return
     }
   }
@@ -6568,9 +6632,12 @@ function bossShadow(state, h, foe, siege) {
     h.bossCd.still = STILL_CD * gimMul
     h.stillVanishAt = state.time + STILL_VANISH_MIN + state.rng() * STILL_VANISH_RAND
     h.stillWarned = false
-    h.stealthT = Math.max(h.stealthT, 8) // 등장(돌진) 때 벗긴다
+    h.dashLeft = Math.min(3, p) // 페이즈별 연속 돌진 1/2/3단 — 킬이 나면 처음부터 리셋
+    h.dashHits = [] // 시전 단위 피격 면제 목록 — 여기서만 비운다
+    h.dashFeedDone = false
+    h.stealthT = Math.max(h.stealthT, 8) // 등장(경고) 때 벗긴다
     pushFx(state, 'blink', h.x, h.z, 5, h.team, 0.9)
-    pushFeed(state, 'obj', '🌫️ 녹스가 어둠 속으로 사라졌다 — 어둠이 짙어진다... 곧 온다!')
+    pushFeed(state, 'obj', '🌫️ 녹스가 어둠 속으로 사라졌다 — 어둠이 짙어진다')
     return
   }
   // 공포의 응시(시그니처): 반경 안에 적이 있으면 눈을 부릅뜨는 채널 개시 — 집행은 bossThink 펜딩 섹션.
@@ -6585,7 +6652,7 @@ function bossShadow(state, h, foe, siege) {
       h.bossCd.gaze = GAZE_CD * gimMul
       h.bossGazeAt = state.time + GAZE_TELE * bossTierOf(state).tele
       pushFx(state, 'shriek', h.x, h.z, 5, h.team, 0.8)
-      pushFeed(state, 'obj', `👁️ ${h.name}이(가) 공포의 응시를 시전한다 — 등을 돌려라! 바라보면 공포에 사로잡힌다!`)
+      pushFeed(state, 'obj', `👁️ ${h.name}의 눈이 크게 뜨인다 — 마주 보는 시선은 공포에 삼켜진다`)
       return // 채널 개시 틱 — 다른 기술과 겹치지 않는다
     }
   }
@@ -7135,7 +7202,15 @@ function botHuntFlee(state, h) {
   if (!(h.huntT > 0)) return false
   if (HUNT_T - h.huntT < 0.4) return false // 사람 같은 반응 지연 — 낙인을 알아채기까지 한 박자
   const b = state.heroes.find((o) => o.id === h.huntFrom)
-  const a = b ? Math.atan2(h.z - b.z, h.x - b.x) : h.dir
+  // 포위 대응: 본체+보조 그림자 전부의 반대 방향을 거리 역가중으로 합성 — 틈을 향해 달린다
+  let ax = 0
+  let az = 0
+  for (const sh of b ? [b, ...(b.huntShadows || [])] : []) {
+    const d = Math.max(1, dist(h, sh))
+    ax += (h.x - sh.x) / (d * d)
+    az += (h.z - sh.z) / (d * d)
+  }
+  const a = ax || az ? Math.atan2(az, ax) : h.dir
   steerToward(state, h, { x: h.x + Math.cos(a) * 12, z: h.z + Math.sin(a) * 12 })
   return true // 공격하면 발이 무거워진다(ATK_SLOW) — 도망에 전념
 }
@@ -8074,6 +8149,9 @@ export function makeView(state) {
         dashWarnT: r2d(h.stillVanishAt != null && h.stillWarned ? Math.max(0, h.stillVanishAt - state.time) : 0),
         dashDir: r2d(h.dashDir || 0),
         dashSeq: h.dashSeq || 0,
+        dashGoSeq: h.dashGoSeq || 0, // 발사(돌진 개시) — 씬 섬광·진동 트리거
+        // 죽음의 그림자 보조 웅덩이(페이즈 2~3) — 반드시 복사해서 싣는다(앨리어싱 금지)
+        huntShadows: (h.huntShadows || []).map((sh) => ({ x: r2d(sh.x), z: r2d(sh.z) })),
       } : null),
       dragonT: r1(h.dragonT),
       baronT: r1(h.baronT),

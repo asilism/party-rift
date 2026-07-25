@@ -3943,6 +3943,68 @@ test('어둠의 정적: 돌진 직선 안은 강타+공포, 밖은 무사', () =
   assert.ok(boss.stealthT <= 0, '펑 — 모습을 드러낸다')
 })
 
+test('어둠의 정적: 돌진은 순간이동이 아니라 실이동 — 페이즈 3이면 3단 연속', () => {
+  const g = noxRaid2()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const b = g.heroes.find((h) => h.id === 'p2')
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = bf.x + 20; a.z = bf.z
+  a.maxHp = 90000; a.hp = 90000 // 킬 리셋이 안 끼어들게
+  b.x = bf.x + 20; b.z = bf.z + 6
+  b.maxHp = 90000; b.hp = 90000
+  boss.bossPhase = 3
+  boss.stillVanishAt = g.time + 0.9
+  boss.stillWarned = false
+  boss.dashLeft = 3
+  boss.stealthT = 8
+  // 경고 개시 프레임: 모습 공개(은신 해제 + 안개 무관 노출)
+  for (let i = 0; i < Math.round(0.3 / STEP) && !boss.stillWarned; i++) step(g, STEP)
+  assert.ok(boss.stillWarned, '경고 개시')
+  assert.ok(boss.stealthT <= 0, '경고와 함께 모습 공개')
+  assert.ok(boss.revealT > 0, '안개 무관 노출 — 모두가 본다')
+  // 발사 대기 → 돌진 중 실이동 확인(한 프레임에 일부만 전진)
+  for (let i = 0; i < Math.round(1.2 / STEP) && boss.dashRunT == null; i++) step(g, STEP)
+  assert.ok(boss.dashRunT != null, '돌진 개시')
+  const x0 = boss.x
+  const z0 = boss.z
+  step(g, STEP)
+  const moved = Math.hypot(boss.x - x0, boss.z - z0)
+  assert.ok(moved > 0.5 && moved < 6, `실이동 — 프레임당 일부만 전진 (${moved.toFixed(1)})`)
+  // 끝까지: 3단을 모두 소모하고 종료
+  for (let i = 0; i < Math.round(6 / STEP) && boss.stillVanishAt != null; i++) step(g, STEP)
+  assert.equal(boss.stillVanishAt, null, '정적 종료')
+  assert.equal(boss.dashGoSeq, 3, `페이즈 3 = 3단 연속 돌진 (${boss.dashGoSeq})`)
+})
+
+test('죽음의 그림자: 페이즈 3이면 3갈래가 서로 다른 방위에서 포위한다', () => {
+  const g = noxRaid2()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const b = g.heroes.find((h) => h.id === 'p2')
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = bf.x + 24; a.z = bf.z
+  a.maxHp = 9000; a.hp = 9000
+  b.x = bf.x + 26; b.z = bf.z + 2
+  b.maxHp = 9000; b.hp = 9000
+  boss.x = a.x - 14; boss.z = a.z
+  boss.bossPhase = 3
+  boss.bossCd.hunt = 0
+  boss.gimRestUntil = 0
+  for (let i = 0; i < Math.round(2 / STEP) && !boss.huntUntil; i++) step(g, STEP)
+  assert.ok(boss.huntUntil != null, '추격 시전')
+  assert.equal((boss.huntShadows || []).length, 2, '보조 그림자 2 — 본체까지 3갈래')
+  const [s1, s2] = boss.huntShadows
+  assert.ok(Math.hypot(s1.x - s2.x, s1.z - s2.z) > 3, '그림자끼리 겹치지 않는다')
+  assert.ok(Math.hypot(s1.x - boss.x, s1.z - boss.z) > 3, '본체와도 겹치지 않는다')
+  // 표적이 멈춰 있으면 포위망이 조여 잡힌다
+  const mark = g.heroes.find((h) => h.id === boss.huntTargetId)
+  const hp0 = mark.hp
+  for (let i = 0; i < Math.round(3 / STEP) && boss.huntUntil; i++) step(g, STEP)
+  assert.equal(boss.huntUntil, null, '포위 종료')
+  assert.ok(hp0 - mark.hp > 300 || mark.respawnT > 0, '처형 습격')
+})
+
 test('어둠의 정적: 돌진으로 사망자가 나오면 지체 없이 연쇄 재시전', () => {
   const g = noxRaid2()
   const boss = g.heroes.find((h) => h.isBoss)
