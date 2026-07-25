@@ -7520,16 +7520,16 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         // 어둠의 정적 — 돌진 직선 경고(0.8초, 집중해야 겨우 피한다): 짙붉은 띠가 빠르게 점멸
         const dashKey = 'dash:' + h.id
         let dov = bossAimPool.get(dashKey)
-        if (dov && (h.dashSeq || 0) !== dov.userData.lastSeq) {
-          dov.userData.lastSeq = h.dashSeq || 0
+        if (dov && (h.dashGoSeq || 0) !== dov.userData.lastSeq) {
+          dov.userData.lastSeq = h.dashGoSeq || 0
           dov.userData.flashT = 0.4
-          camShakeUntil = performance.now() / 1000 + 0.35 // 펑! 돌진 진동
+          camShakeUntil = performance.now() / 1000 + 0.35 // 발사! 돌진 진동
         }
         const dashAiming = (h.dashWarnT || 0) > 0
         if (dashAiming || (dov && dov.userData.flashT > 0)) {
           if (!dov) {
             dov = buildDashOverlay()
-            dov.userData.lastSeq = h.dashSeq || 0
+            dov.userData.lastSeq = h.dashGoSeq || 0
             bossAimPool.set(dashKey, dov)
             scene.add(dov)
           }
@@ -7548,21 +7548,24 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           dov.userData.flash.visible = df > 0
           dov.userData.flash.material.opacity = df * 0.85
         }
-        // 죽음의 그림자 — 낙인자를 쫓는 검은 웅덩이(고동): 은신한 보스의 좌표를 그대로 따라간다
-        const shadowKey = 'shadow:' + h.id
+        // 죽음의 그림자 — 낙인자를 포위하는 검은 웅덩이들(고동): 본체 + 보조 그림자(페이즈 2~3)
         if ((h.huntShadowT || 0) > 0) {
-          let so = bossAimPool.get(shadowKey)
-          if (!so) {
-            so = buildHuntShadow()
-            bossAimPool.set(shadowKey, so)
-            scene.add(so)
-          }
-          seen.add(shadowKey)
-          so.position.set(h.x, 0, h.z)
-          const pulse = 1 + 0.16 * Math.abs(Math.sin(view.time * 6))
-          so.scale.setScalar(pulse)
-          so.userData.disc.material.opacity = 0.62 + 0.2 * Math.abs(Math.sin(view.time * 6))
-          so.userData.ring.rotation.z = view.time * 2.4
+          const pts = [{ x: h.x, z: h.z }, ...(h.huntShadows || [])]
+          pts.forEach((pt, si) => {
+            const shadowKey = 'shadow:' + h.id + ':' + si
+            let so = bossAimPool.get(shadowKey)
+            if (!so) {
+              so = buildHuntShadow()
+              bossAimPool.set(shadowKey, so)
+              scene.add(so)
+            }
+            seen.add(shadowKey)
+            so.position.set(pt.x, 0, pt.z)
+            const pulse = 1 + 0.16 * Math.abs(Math.sin(view.time * 6 + si * 1.7))
+            so.scale.setScalar(pulse)
+            so.userData.disc.material.opacity = 0.62 + 0.2 * Math.abs(Math.sin(view.time * 6 + si * 1.7))
+            so.userData.ring.rotation.z = view.time * 2.4 + si
+          })
         }
                 const coneKey = 'cone:' + h.id
         if ((h.bossConeT || 0) > 0) {
