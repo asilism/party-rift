@@ -3669,7 +3669,7 @@ function stepHero(state, h, dt) {
       for (const o of share) damageHero(state, o, each, from)
       pushFeed(state, 'obj', share.length >= 2
         ? `🌠 ${share.length}명이 성좌 낙인을 나눠 맞았다!`
-        : '🌠 성좌 낙인을 홀로 받아냈다 — 나눠 맞으면 그만큼 가벼워진다')
+        : '🌠 성좌 낙인을 홀로 받아냈다')
     }
   }
   if (h.tauntT > 0 && (h.tauntT = Math.max(0, h.tauntT - dt)) === 0) h.tauntBy = null
@@ -5768,7 +5768,7 @@ function bossThink(state, h, dt) {
         h.revealT = Math.max(h.revealT || 0, stillWarnOf(state) + 0.6) // 안개 무관 노출
         if (!h.dashFeedDone) {
           h.dashFeedDone = true
-          pushFeed(state, 'obj', '💥 어둠이 요동친다 — 붉은 선이 그어진다')
+          pushFeed(state, 'obj', '💥 어둠이 요동친다')
         }
       }
     }
@@ -5813,7 +5813,7 @@ function bossThink(state, h, dt) {
         const remain = state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss)
         if (h.dashKilled && remain) {
           h.dashLeft = Math.min(3, h.bossPhase || 1)
-          pushFeed(state, 'obj', '☠️ 피 냄새 — 어둠의 정적이 처음부터 다시 덮친다')
+          pushFeed(state, 'obj', '☠️ 피 냄새 — 정적이 다시 덮친다')
         } else {
           h.dashLeft = (h.dashLeft || 1) - 1
         }
@@ -5989,7 +5989,7 @@ function bossThink(state, h, dt) {
   // 광폭화(엔레이지): 진군 후 11분이 지나면 CC를 무시하고 피해가 1.5배 — 무한 대치 방지
   if (!h.bossEnraged && state.time - (h.bossShieldTotal || 0) > BOSS_MARCH_AT + 660) {
     h.bossEnraged = true
-    pushFeed(state, 'obj', '🔥 보스가 광폭화했다 — 남은 시간이 많지 않다')
+    pushFeed(state, 'obj', '🔥 보스가 광폭화했다')
   }
   if (h.bossEnraged) {
     h.stunT = 0; h.freezeT = 0; h.fearT = 0; h.airT = 0; h.rootT = 0; h.pullT = 0
@@ -6009,7 +6009,7 @@ function bossThink(state, h, dt) {
       pushFx(state, 'berserk', h.x, h.z, 6, h.team, 1.0)
       pushFeed(state, 'obj', wantPhase === 3
         ? `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다`
-        : `💢 ${h.name}의 분노가 끓어오른다 — 공격이 거세진다!`)
+        : `💢 ${h.name}의 분노가 끓어오른다`)
     } else {
     // 각성 휴지기: 어둠의 보호막에 감싸여 30초 무적·정지 — 게임의 시계가 잠시 멈추고,
     // 아군은 재정비·회복·짤막한 파밍(병사 소환은 계속 돈다)으로 다음 국면을 준비한다.
@@ -6022,9 +6022,9 @@ function bossThink(state, h, dt) {
       vfx: 'quake', hue: BOSS_HUE[h.cls] || 'lava',
     })
     pushFeed(state, 'obj', wantPhase === 2
-      ? `💢 ${h.name}의 분노가 끓어오른다 — 공격이 거세진다!`
+      ? `💢 ${h.name}의 분노가 끓어오른다`
       : `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다`)
-    pushFeed(state, 'obj', `🛡️ ${h.name}이(가) 어둠의 보호막에 감싸여 힘을 모은다 — ${BOSS_AWAKEN_T}초의 정적`)
+    pushFeed(state, 'obj', `🛡️ ${h.name}이(가) 어둠의 보호막에 감싸여 힘을 모은다`)
     // 필사 국면: 그림자 영웅들이 다시 일어난다 — 보스가 힘을 모으는 동안 최후의 군세가 앞장선다
     if (wantPhase === 3 && !h.bossAddsDone2) {
       h.bossAddsDone2 = true
@@ -6380,7 +6380,7 @@ function bossColossus(state, h, foe) {
       dmg: 0, safe: true, vfx: 'quake', hue: 'safe',
     })
     pushFx(state, 'rocksplash', h.x, h.z, 6, h.team, 0.8)
-    pushFeed(state, 'obj', `🦶 ${h.name}이(가) 하늘로 솟구친다 — 초록빛 안쪽만이 무사하다`)
+    pushFeed(state, 'obj', `🦶 ${h.name}이(가) 하늘로 솟구친다`)
     return // 도약 개시 틱 — 같은 틱에 다른 기술이 겹치지 않게(쿨이 모두 차 있는 첫 교전 버스트 방지)
   }
   if (h.bossCd.a <= 0 && nearFoe) {
@@ -6494,7 +6494,7 @@ function bossArchmage(state, h, foe) {
       })
     }
     pushFx(state, 'abszero', h.x, h.z, 8, h.team, 1.0)
-    pushFeed(state, 'obj', `🔮 소환 의식 — 소환석 ${count}개가 떠오른다. ${STONE_TIME}초 뒤 남은 수만큼 처형이 집행된다`)
+    pushFeed(state, 'obj', `🔮 소환 의식 — 소환석 ${count}개가 떠오른다`)
     return
   }
   // ── 대기술 공용 한숨: 감옥·숨결·광선은 서로 겹치지 않는다(직전 대기술 후 2.2초) —
@@ -6523,8 +6523,8 @@ function bossArchmage(state, h, foe) {
       h.comboRestUntil = state.time + charge + 2.2 // 발사 후에도 한숨 — 즉사기 연속 금지
       pushFx(state, 'abszero', h.x, h.z, 4, h.team, 0.8)
       pushFeed(state, 'obj', h.bossBeamN > 1
-        ? `☀️ 섬멸의 광선 ${h.bossBeamN}가닥 — 빛에 닿는 것은 소멸한다`
-        : '☀️ 섬멸의 광선 — 빛에 닿는 것은 소멸한다')
+        ? `☀️ 섬멸의 광선 ${h.bossBeamN}가닥이 차오른다`
+        : '☀️ 섬멸의 광선이 차오른다')
       return
     }
   }
@@ -6672,7 +6672,7 @@ function bossThorn(state, h, foe) {
       h.bossCd.seed = SEED_CD * gimMul
       mark.seedT = SEED_T
       pushFx(state, 'quake', mark.x, mark.z, 2.5, h.team, 0.6)
-      pushFeed(state, 'obj', `🌱 기생 씨앗이 ${mark.name}에게 붙었다 — ${SEED_T}초 뒤 선 자리에서 싹튼다`)
+      pushFeed(state, 'obj', `🌱 기생 씨앗이 ${mark.name}에게 붙었다`)
       return
     }
   }
@@ -6689,7 +6689,7 @@ function bossThorn(state, h, foe) {
       hp: HEART_HP, maxHp: HEART_HP, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
     })
     pushFx(state, 'quake', h.x + Math.cos(a) * d, h.z + Math.sin(a) * d, 3.5, h.team, 0.8)
-    pushFeed(state, 'obj', '🌵 덩굴 심장이 뿌리내린다 — 심장이 뛰는 한 가시밭은 자란다')
+    pushFeed(state, 'obj', '🌵 덩굴 심장이 뿌리내린다')
     return
   }
   // 가시벽(P2+ · 보스전 전용): 뭉친 적 무리를 가로질러 벽을 세운다 — 전장이 갈라진다
@@ -6730,7 +6730,7 @@ function bossThorn(state, h, foe) {
     h.bloomAt = state.time + BLOOM_WARN * bossTierOf(state).tele
     h.comboRestUntil = state.time + BLOOM_WARN + 2.2
     pushFx(state, 'abszero', h.x, h.z, 5, h.team, 0.8)
-    pushFeed(state, 'obj', '🌸 가시밭이 일제히 꽃봉오리를 연다 — 밭 위는 곧 무덤이 된다')
+    pushFeed(state, 'obj', '🌸 가시밭이 일제히 꽃봉오리를 연다')
     return
   }
 }
@@ -6808,7 +6808,7 @@ function bossShadow(state, h, foe, siege) {
       h.bossCd.gaze = GAZE_CD * gimMul
       h.bossGazeAt = state.time + GAZE_TELE * bossTierOf(state).tele
       pushFx(state, 'shriek', h.x, h.z, 5, h.team, 0.8)
-      pushFeed(state, 'obj', `👁️ ${h.name}의 눈이 크게 뜨인다 — 마주 보는 시선은 공포에 삼켜진다`)
+      pushFeed(state, 'obj', `👁️ ${h.name}의 눈이 크게 뜨인다`)
       return // 채널 개시 틱 — 다른 기술과 겹치지 않는다
     }
   }
