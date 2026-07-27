@@ -3960,6 +3960,82 @@ test('가시벽: 융기 예고 후 가시 충돌 벽이 서고 수명이 다하�
   assert.equal(g.tempWalls.filter((w) => w.thorn).length, 0, '수명이 다하면 시든다')
 })
 
+test('브램블 페이즈 스케일: 씨앗은 P3에서 3명 동시, 심장 상한은 P1에서 1개', () => {
+  const g = brambleRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const b = g.heroes.find((h) => h.id === 'p2')
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = bf.x + 24; a.z = bf.z
+  a.maxHp = 90000; a.hp = 90000
+  b.x = bf.x + 26; b.z = bf.z + 3
+  b.maxHp = 90000; b.hp = 90000
+  boss.x = a.x + 10; boss.z = a.z
+  boss.bossPhase = 3
+  boss.bossCd.seed = 0
+  boss.gimRestUntil = 0
+  for (let i = 0; i < Math.round(2 / STEP) && !(a.seedT > 0 || b.seedT > 0); i++) step(g, STEP)
+  // 적이 2명뿐이라 2명 다 붙는다(P3 요구 3명 > 풀)
+  assert.ok(a.seedT > 0 && b.seedT > 0, 'P3 씨앗은 가능한 전원에게 동시 부착')
+  // 심장 상한: P1이면 1개 — 이미 1개면 뿌리내림이 더 심지 않는다
+  const g2 = brambleRaid()
+  const boss2 = g2.heroes.find((h) => h.isBoss)
+  const a2 = g2.heroes.find((h) => h.id === 'p1')
+  a2.x = boss2.x - 12; a2.z = boss2.z
+  a2.maxHp = 90000; a2.hp = 90000
+  g2.minions.push({
+    id: g2.nextId++, team: 'red', heart: true, lane: 'mid', ranged: false,
+    x: boss2.x + 4, z: boss2.z, creepR: 4, hp: 9, maxHp: 9, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
+  })
+  boss2.bossCd.root = 0
+  boss2.gimRestUntil = 0
+  run(g2, 1.5)
+  assert.equal(g2.minions.filter((m) => m.heart && m.hp > 0).length, 1, 'P1 심장 상한 1 — 추가로 안 심는다')
+})
+
+test('브램블 휘감는 채찍: P2는 2가닥 — 서로 다른 두 표적을 동시에 낚아챈다', () => {
+  const g = brambleRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const b = g.heroes.find((h) => h.id === 'p2')
+  const bf = g.map.FOUNTAIN_POS.blue
+  boss.x = bf.x + 20; boss.z = bf.z
+  boss.bossPhase = 2
+  a.x = boss.x + 15; a.z = boss.z // +x 가닥
+  a.maxHp = 90000; a.hp = 90000
+  b.x = boss.x; b.z = boss.z + 15 // +z 가닥
+  b.maxHp = 90000; b.hp = 90000
+  boss.whipAt = g.time + 0.3
+  boss.whipDirs = [0, Math.PI / 2]
+  const dA = Math.hypot(a.x - boss.x, a.z - boss.z)
+  const dB = Math.hypot(b.x - boss.x, b.z - boss.z)
+  run(g, 1.6)
+  assert.ok(Math.hypot(a.x - boss.x, a.z - boss.z) < dA - 3, '1가닥이 a를 낚았다')
+  assert.ok(Math.hypot(b.x - boss.x, b.z - boss.z) < dB - 3, '2가닥이 b를 낚았다')
+})
+
+test('브램블 P3 만개: 밭 위 무리의 퇴로에 가시벽이 함께 융기한다', () => {
+  const g = brambleRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const bf = g.map.FOUNTAIN_POS.blue
+  boss.bossPhase = 3
+  a.x = bf.x + 30; a.z = bf.z
+  a.maxHp = 90000; a.hp = 90000
+  g.minions.push({
+    id: g.nextId++, team: 'red', heart: true, lane: 'mid', ranged: false,
+    x: bf.x + 30, z: bf.z, creepR: 8, hp: 9, maxHp: 9, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
+  })
+  boss.bossCd.bloom = 0
+  boss.comboRestUntil = 0
+  boss.gimRestUntil = 0
+  for (let i = 0; i < Math.round(3 / STEP) && !boss.bloomAt; i++) step(g, STEP)
+  assert.ok(boss.bloomAt != null, '만개 시전')
+  assert.ok(boss.thornWallAt != null, 'P3 연계 — 가시벽 예고가 함께 걸린다')
+  run(g, 1.2)
+  assert.ok(g.tempWalls.filter((w) => w.thorn).length >= 5, '밭 위 무리 곁에 가시벽 융기')
+})
+
 // ── 녹스 개인 실행 기믹: 죽음의 그림자(추격) + 어둠의 정적(암전 돌진) ──
 
 function noxRaid2() {

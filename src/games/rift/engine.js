@@ -2762,7 +2762,7 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
   if (!redirected && attacker?.isBoss) {
     // 난이도 티어(평타·스킬·장판 공통). 녹스는 55%만 — 기본 압박을 올린 만큼 티어 복리를 눅인다
     const ta = bossTierOf(state).atk
-    amount *= attacker.cls === 'boss_shadow' ? 1 + (ta - 1) * 0.2 : ta // 0.2: 지옥 하단 이탈 보정 — hp 완충과 달리 페이즈 조기 진입 역설이 없다
+    amount *= attacker.cls === 'boss_shadow' ? 1 + (ta - 1) * 0.2 : attacker.cls === 'boss_thorn' ? 1 + (ta - 1) * 0.35 : ta // 완충: hp와 달리 페이즈 조기 진입 역설이 없는 안전 레버
   }
   // 콜로세움 직업 보정(주는/받는 피해)
   if (state.mode === 'arena' && !redirected) {
@@ -3638,13 +3638,21 @@ function stepHero(state, h, dt) {
     h.seedT -= dt
     if (h.seedT <= 0) {
       h.seedT = 0
-      state.minions.push({
-        id: state.nextId++, team: 'red', heart: true, lane: 'mid', ranged: false,
-        x: h.x, z: h.z, creepR: CREEP_R0,
-        hp: HEART_HP, maxHp: HEART_HP, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
-      })
-      pushFx(state, 'quake', h.x, h.z, 3.5, 'red', 0.8)
-      pushFeed(state, 'obj', `🌱 씨앗이 ${h.name}의 발밑에서 싹텄다 — 덩굴 심장이 뿌리내린다`)
+      // 발아도 심장 상한(페이즈별 1/2/3)을 존중 — 씨앗 멀티가 상한을 우회하면 잠식 총량이
+      // 통제를 잃는다(전 티어 4/0/0% 붕괴 실측). 밭이 가득이면 씨앗은 불발로 스러진다
+      const bramble = state.heroes.find((b) => b.isBoss && b.cls === 'boss_thorn' && b.respawnT <= 0)
+      const heartCap = Math.min(3, bramble?.bossPhase || 1)
+      if (state.minions.filter((m) => m.heart && m.hp > 0).length >= heartCap) {
+        pushFx(state, 'rocksplash', h.x, h.z, 2, 'red', 0.5)
+      } else {
+        state.minions.push({
+          id: state.nextId++, team: 'red', heart: true, lane: 'mid', ranged: false,
+          x: h.x, z: h.z, creepR: CREEP_R0,
+          hp: HEART_HP, maxHp: HEART_HP, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
+        })
+        pushFx(state, 'quake', h.x, h.z, 3.5, 'red', 0.8)
+        pushFeed(state, 'obj', `🌱 씨앗이 ${h.name}의 발밑에서 싹텄다 — 덩굴 심장이 뿌리내린다`)
+      }
     }
   }
   // 섬멸의 광선 소멸: 빛에 밀려 날아가던 끝에서 터진다 — "맞으면 무조건 즉사"의 집행부
@@ -5393,9 +5401,9 @@ const CREEP_GROW = 0.65 // 초당 잠식 성장 — 방치하면 전장이 좁�
 const CREEP_RMAX = 11 // 심장당 최대 반경
 const CREEP_DPS = [13, 0.24] // 잠식 위 도트(초당)
 const CREEP_SLOW = 0.35 // 잠식 위 둔화
-const HEART_HP = 9 // 심장 타격 수(소환석과 같은 "손이 몇 번 갔는가" 체크)
-const ROOT_CD = 30 // 뿌리내림(심장 심기)
-const SEED_CD = 22 // 기생 씨앗
+const HEART_HP = 7 // 심장 타격 수 — 철거 '노동 총량'이 지배 변수(9=붕괴 0%·6=과이 42~63%의 중간)
+const ROOT_CD = 34 // 뿌리내림(심장 심기)
+const SEED_CD = 28 // 기생 씨앗 — 멀티 부착이 된 만큼 빈도는 완화
 const SEED_T = 4.0 // 씨앗 발아까지 — 그동안 어디에 심을지는 낙인자의 발이 정한다
 const SEED_HUMAN_BIAS = 0.6
 export const WHIP_LEN = 24 // 휘감는 채찍 직선 길이 — 씬(경고 띠)과 공유
@@ -5594,20 +5602,23 @@ function bossThink(state, h, dt) {
   if (h.whipAt && state.time >= h.whipAt) {
     h.whipAt = null
     h.whipGoSeq = (h.whipGoSeq || 0) + 1
-    const bx = Math.cos(h.whipDir || 0)
-    const bz = Math.sin(h.whipDir || 0)
-    let caught = null
-    let bestAlong = Infinity
-    for (const e of state.heroes) {
-      if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
-      const rx = e.x - h.x
-      const rz = e.z - h.z
-      const along = rx * bx + rz * bz
-      const perp = Math.abs(-rx * bz + rz * bx)
-      if (along < 2 || along > WHIP_LEN || perp > WHIP_HALF) continue
-      if (along < bestAlong) { bestAlong = along; caught = e }
-    }
-    if (caught) {
+    const grabbed = new Set()
+    for (const wd of h.whipDirs || [h.whipDir || 0]) {
+      const bx = Math.cos(wd)
+      const bz = Math.sin(wd)
+      let caught = null
+      let bestAlong = Infinity
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.isBoss || grabbed.has(e.id)) continue
+        const rx = e.x - h.x
+        const rz = e.z - h.z
+        const along = rx * bx + rz * bz
+        const perp = Math.abs(-rx * bz + rz * bx)
+        if (along < 2 || along > WHIP_LEN || perp > WHIP_HALF) continue
+        if (along < bestAlong) { bestAlong = along; caught = e }
+      }
+      if (!caught) continue
+      grabbed.add(caught.id)
       caught.pullT = 1.0
       caught.pullBy = h.id
       caught.stunT = Math.max(caught.stunT, 1.0)
@@ -6625,8 +6636,9 @@ function bossArchmage(state, h, foe) {
 function bossThorn(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd // 페이즈 가속 × 난이도 티어
-  // 기믹(씨앗·뿌리·벽·만개) 쿨은 티어 가속을 40%만 — 기믹 킷의 티어 복리 차단(아르케인 방식)
-  const gimMul = BOSS_PHASE_CD[p - 1] * (1 - (1 - bossTierOf(state).cd) * 0.4)
+  // 기믹(씨앗·뿌리·벽·만개) 쿨은 티어 가속을 15%만 — 잠식·멀티는 시간 복리 킷이라
+  // 티어 가속이 조금만 붙어도 폭주한다(악몽 0~4% 붕괴 실측)
+  const gimMul = BOSS_PHASE_CD[p - 1] * (1 - (1 - bossTierOf(state).cd) * 0.15)
   // 가시 투척: 표적 방향 직선 예고 — 국면이 오르면 부챗살(1→2→3줄)로 빠질 각이 좁아진다
   if (h.bossCd.a <= 0 && foe && dist(h, foe) < 20) {
     h.bossCd.a = CLASSES[h.cls].skill.cd * cdMul
@@ -6640,21 +6652,23 @@ function bossThorn(state, h, foe) {
       })
     }
   }
-  // 휘감는 채찍: 가장 멀리서 쏘는 적을 겨눠 직선 예고 — 명중하면 낚아채 끌어온다.
+  // 휘감는 채찍: 먼 순서대로 페이즈별 1/2/3가닥 — 각 가닥이 서로 다른 원거리 표적을 겨눈다.
   //  폭이 좁아 비키기는 쉽다 — "안전한 원거리 자리"라는 개념 자체를 지운다
   if (h.bossCd.b <= 0 && !h.whipAt) {
-    let far = null
-    for (const e of state.heroes) {
-      if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
-      if (!isHeroVisible(state, e, h.team)) continue
-      const d = dist(h, e)
-      if (d < 8 || d > WHIP_LEN) continue
-      if (!far || d > dist(h, far)) far = e
-    }
-    if (far) {
+    const fars = state.heroes
+      .filter((e) => {
+        if (e.team === h.team || e.respawnT > 0 || e.isBoss) return false
+        if (!isHeroVisible(state, e, h.team)) return false
+        const d = dist(h, e)
+        return d >= 8 && d <= WHIP_LEN
+      })
+      .sort((a, b) => dist(h, b) - dist(h, a))
+      .slice(0, Math.min(3, p))
+    if (fars.length) {
       h.bossCd.b = CLASSES[h.cls].skill2.cd * cdMul
       h.whipAt = state.time + WHIP_WARN
-      h.whipDir = Math.atan2(far.z - h.z, far.x - h.x)
+      h.whipDirs = fars.map((e) => Math.atan2(e.z - h.z, e.x - h.x))
+      h.whipDir = h.whipDirs[0]
       h.whipSeq = (h.whipSeq || 0) + 1
       h.dir = h.whipDir
     }
@@ -6665,20 +6679,29 @@ function bossThorn(state, h, foe) {
       e.team !== h.team && e.respawnT <= 0 && !e.isBoss && !(e.seedT > 0)
       && isHeroVisible(state, e, h.team) && dist(h, e) < 28)
     if (pool.length) {
+      h.bossCd.seed = SEED_CD * gimMul
       const humans = pool.filter((e) => !e.isBot)
-      const mark = humans.length && state.rng() < SEED_HUMAN_BIAS
+      const first = humans.length && state.rng() < SEED_HUMAN_BIAS
         ? humans[Math.floor(state.rng() * humans.length)]
         : pool[Math.floor(state.rng() * pool.length)]
-      h.bossCd.seed = SEED_CD * gimMul
-      mark.seedT = SEED_T
-      pushFx(state, 'quake', mark.x, mark.z, 2.5, h.team, 0.6)
-      pushFeed(state, 'obj', `🌱 기생 씨앗이 ${mark.name}에게 붙었다`)
+      const marks = [first]
+      const rest = pool.filter((e) => e !== first)
+      while (marks.length < Math.min(3, p) && rest.length) {
+        marks.push(rest.splice(Math.floor(state.rng() * rest.length), 1)[0])
+      }
+      for (const mk of marks) {
+        mk.seedT = SEED_T
+        pushFx(state, 'quake', mk.x, mk.z, 2.5, h.team, 0.6)
+      }
+      pushFeed(state, 'obj', marks.length > 1
+        ? `🌱 기생 씨앗이 ${marks.length}명에게 붙었다`
+        : `🌱 기생 씨앗이 ${marks[0].name}에게 붙었다`)
       return
     }
   }
   // 뿌리내림(보스전 전용): 제 곁에 덩굴 심장을 심는다 — 심장이 뛰는 한 가시밭은 자란다
   if (!h.defenseBoss && (h.bossCd.root ?? 1) <= 0 && state.time >= (h.gimRestUntil || 0)
-    && state.minions.filter((m) => m.heart && m.hp > 0).length < 3
+    && state.minions.filter((m) => m.heart && m.hp > 0).length < Math.min(3, p) // 상한도 페이즈를 따른다
     && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss && dist(h, e) < 26)) {
     h.bossCd.root = ROOT_CD * gimMul
     const a = state.rng() * Math.PI * 2
@@ -6731,6 +6754,33 @@ function bossThorn(state, h, foe) {
     h.comboRestUntil = state.time + BLOOM_WARN + 2.2
     pushFx(state, 'abszero', h.x, h.z, 5, h.team, 0.8)
     pushFeed(state, 'obj', '🌸 가시밭이 일제히 꽃봉오리를 연다')
+    // P3 트위스트: 밭 위에 선 무리의 퇴로를 가시벽으로 끊고 피운다 — 최후 국면의 그림
+    if (p >= 3 && !h.thornWallAt) {
+      const hearts2 = state.minions.filter((m) => m.heart && m.hp > 0)
+      let cx = 0
+      let cz = 0
+      let n = 0
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
+        if (!hearts2.some((m) => dist(m, e) <= (m.creepR || 0) + 2)) continue
+        cx += e.x
+        cz += e.z
+        n++
+      }
+      if (n >= 1) {
+        cx /= n
+        cz /= n
+        h.thornWallAt = state.time + 0.7
+        h.thornWallX = cx
+        h.thornWallZ = cz
+        h.thornWallDir = Math.atan2(cz - h.z, cx - h.x) + Math.PI / 2
+        pushBossLine(state, h, h.thornWallDir, {
+          count: 5, r: 2.2, gap: QUAKE_WALL_SPAN, delay: 0.7, dmg: 0, vfx: 'quake', hue: 'venom',
+        })
+        h.thornWallX = cx
+        h.thornWallZ = cz
+      }
+    }
     return
   }
 }
@@ -7334,9 +7384,13 @@ function botSeedCarry(state, h) {
     cz += e.z
     n++
   }
-  const a = n ? Math.atan2(h.z - cz / n, h.x - cx / n) : h.dir
+  if (!n) return false
+  // 이미 충분히 떨어졌으면 그 자리에서 하던 일 계속 — 씨앗 멀티 시대에 전원이
+  // 구석까지 완주하면 팀 DPS가 증발한다(4/0/0% 붕괴의 사인: 운반 이탈)
+  if (dist(h, { x: cx / n, z: cz / n }) > 9) return false
+  const a = Math.atan2(h.z - cz / n, h.x - cx / n)
   steerToward(state, h, { x: h.x + Math.cos(a) * 10, z: h.z + Math.sin(a) * 10 })
-  return true // 심고 오는 동안은 운반에 전념
+  return true
 }
 
 // 만개 예고 대피: 잠식(가시밭) 위에 서 있으면 가장 가까운 밭 경계 밖으로 전력 이탈
@@ -8384,6 +8438,8 @@ export function makeView(state) {
         dashSeq: h.dashSeq || 0,
         whipWarnT: r2d(h.whipAt != null ? Math.max(0, h.whipAt - state.time) : 0), // 휘감는 채찍 직선 경고
         whipDir: r2d(h.whipDir || 0),
+        whipDirs: (h.whipDirs || []).map((d) => r2d(d)), // 페이즈별 1~3가닥 — 반드시 복사
+
         whipSeq: h.whipSeq || 0,
         whipGoSeq: h.whipGoSeq || 0,
         bloomT: r2d(h.bloomAt != null ? Math.max(0, h.bloomAt - state.time) : 0), // 만개 예고 — 잠식 원 점멸

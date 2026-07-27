@@ -5469,23 +5469,35 @@ function buildHuntShadow() {
 
 // 휘감는 채찍 경고 띠 — 독록색 가는 직선(폭 1.7×2): 자리 이탈을 압박하는 원거리 견제
 function buildWhipOverlay() {
+  // 페이즈별 1~3가닥 — 광선 오버레이와 같은 레인 구조
   const g = new THREE.Group()
   const geo = new THREE.PlaneGeometry(WHIP_LEN, WHIP_HALF * 2)
   geo.translate(WHIP_LEN / 2, 0, 0)
-  const tele = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-    color: 0x74e04a, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
-    depthWrite: false, blending: THREE.AdditiveBlending,
-  }))
-  tele.rotation.x = -Math.PI / 2
-  tele.position.y = 0.36
-  const flash = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-    color: 0xd8ffb0, transparent: true, opacity: 0, side: THREE.DoubleSide,
-    depthWrite: false, blending: THREE.AdditiveBlending,
-  }))
-  flash.rotation.x = -Math.PI / 2
-  flash.position.y = 0.6
-  g.add(tele, flash)
-  g.userData = { tele, flash, flashT: 0, lastSeq: 0 }
+  const lanes = []
+  const flashes = []
+  const laneGroups = []
+  for (let i = 0; i < 3; i++) {
+    const lane = new THREE.Group()
+    const tele = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: 0x74e04a, transparent: true, opacity: 0.4, side: THREE.DoubleSide,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    tele.rotation.x = -Math.PI / 2
+    tele.position.y = 0.36
+    const flash = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      color: 0xd8ffb0, transparent: true, opacity: 0, side: THREE.DoubleSide,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    flash.rotation.x = -Math.PI / 2
+    flash.position.y = 0.6
+    lane.add(tele, flash)
+    lane.visible = false
+    g.add(lane)
+    lanes.push(tele)
+    flashes.push(flash)
+    laneGroups.push(lane)
+  }
+  g.userData = { lanes, flashes, laneGroups, flashT: 0, lastSeq: 0 }
   return g
 }
 
@@ -7700,16 +7712,24 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           }
           seen.add(whipKey)
           wov.position.set(h.x, 0, h.z)
-          wov.rotation.y = -(h.whipDir || 0)
           if (wov.userData.flashT > 0) wov.userData.flashT = Math.max(0, wov.userData.flashT - dt)
-          wov.userData.tele.visible = whipAiming
-          if (whipAiming) {
-            const urg = 1 - Math.min(1, h.whipWarnT / 0.8)
-            wov.userData.tele.material.opacity = 0.4 + urg * 0.3 + 0.15 * Math.abs(Math.sin(view.time * 18))
-          }
-          const wf = wov.userData.flashT / 0.3
-          wov.userData.flash.visible = wf > 0
-          wov.userData.flash.material.opacity = wf * 0.8
+          const wdirs = (h.whipDirs && h.whipDirs.length ? h.whipDirs : [h.whipDir || 0])
+          wov.userData.laneGroups.forEach((lg, i) => {
+            const on = i < wdirs.length && (whipAiming || wov.userData.flashT > 0)
+            lg.visible = on
+            if (!on) return
+            lg.rotation.y = -wdirs[i]
+            const tele = wov.userData.lanes[i]
+            const flash = wov.userData.flashes[i]
+            tele.visible = whipAiming
+            if (whipAiming) {
+              const urg = 1 - Math.min(1, h.whipWarnT / 0.8)
+              tele.material.opacity = 0.4 + urg * 0.3 + 0.15 * Math.abs(Math.sin(view.time * 18))
+            }
+            const wf = wov.userData.flashT / 0.3
+            flash.visible = wf > 0
+            flash.material.opacity = wf * 0.8
+          })
         }
         // 죽음의 그림자 — 낙인자를 포위하는 검은 웅덩이들(고동): 본체 + 보조 그림자(페이즈 2~3)
         if ((h.huntShadowT || 0) > 0) {
