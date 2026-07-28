@@ -15,7 +15,7 @@ import {
   loadEquippedTitle, saveEquippedTitle, loadDefenseRecords, recordDefenseRun, loadArenaRecords, recordArenaRun,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
-import { unlockedClassIds, unlockedCount, migrateWinUnlocks, STARTER_COUNT, unlockPrice } from './unlocks.js'
+import { unlockedClassIds, unlockedCount, STARTER_COUNT, unlockPrice } from './unlocks.js'
 import { buildSoloRoster, BOSS_NAMES } from './roster.js'
 import { missionRows, recordMissionProgress, claimMission, allClearState, claimAllClear, ALL_CLEAR_REWARD } from './missions.js'
 import { recordMatchForAchievements, achievementRows, evaluateAchievements } from './achievements.js'
@@ -930,11 +930,6 @@ function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
   }
   const saved = loadSoloPick()
   const records = loadRiftRecords()
-  const total = Object.values(records).reduce(
-    (a, r) => ({ games: a.games + r.games, wins: a.wins + r.wins }),
-    { games: 0, wins: 0 }
-  )
-  migrateWinUnlocks(total.wins) // 승리 해금 폐지(v72) — 기존 승수 해금분을 코인 목록으로 굳힌다(멱등)
   const unlocked = new Set(unlockedClassIds())
   const price = unlockPrice()
   const [seenCount] = useState(loadUnlockSeen)

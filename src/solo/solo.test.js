@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { CLASS_IDS, TEAM_SIZES } from '../games/rift/engine.js'
-import { STARTER_COUNT, unlockedCount, unlockedClassIds, migrateWinUnlocks, unlockPrice, UNLOCK_PRICES } from './unlocks.js'
+import { STARTER_COUNT, unlockedCount, unlockedClassIds, unlockPrice, UNLOCK_PRICES } from './unlocks.js'
+import { addCoinUnlock } from '../shared/storage.js'
 import { buildSoloRoster } from './roster.js'
 
 test('해금: 승리 해금 폐지 — 기본 6종 + 코인 해금, 가격은 열수록 오른다', () => {
@@ -15,15 +16,17 @@ test('해금: 승리 해금 폐지 — 기본 6종 + 코인 해금, 가격은 �
     assert.equal(unlockedCount(), STARTER_COUNT)
     assert.deepEqual(unlockedClassIds(), CLASS_IDS.slice(0, STARTER_COUNT))
     assert.equal(unlockPrice(), UNLOCK_PRICES[0])
-    // 기존 유저 마이그레이션: 통산 3승이면 폐지 전 규칙 그대로 3종이 굳는다 — 다시 잠기지 않는다
-    migrateWinUnlocks(3)
+    // 코인 해금이 쌓일수록 다음 가격이 오른다
+    addCoinUnlock(CLASS_IDS[STARTER_COUNT])
+    assert.equal(unlockedCount(), STARTER_COUNT + 1)
+    assert.equal(unlockPrice(), UNLOCK_PRICES[1])
+    addCoinUnlock(CLASS_IDS[STARTER_COUNT + 1])
+    addCoinUnlock(CLASS_IDS[STARTER_COUNT + 2])
     assert.equal(unlockedCount(), STARTER_COUNT + 3)
-    assert.deepEqual(unlockedClassIds().slice(STARTER_COUNT), CLASS_IDS.slice(STARTER_COUNT, STARTER_COUNT + 3))
-    // 1회성: 다시 돌려도(승수가 더 커져도) 추가로 열리지 않는다
-    migrateWinUnlocks(999)
-    assert.equal(unlockedCount(), STARTER_COUNT + 3)
-    // 가격 곡선: 이미 3종이 열려 있으니 다음 가격은 4번째 칸
     assert.equal(unlockPrice(), UNLOCK_PRICES[3])
+    // 중복 해금은 안 쌓인다
+    addCoinUnlock(CLASS_IDS[STARTER_COUNT])
+    assert.equal(unlockedCount(), STARTER_COUNT + 3)
   } finally {
     delete globalThis.localStorage
   }
