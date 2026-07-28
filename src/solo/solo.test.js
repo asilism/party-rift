@@ -27,6 +27,9 @@ test('해금: 승리 해금 폐지 — 기본 6종 + 코인 해금, 가격은 �
     // 중복 해금은 안 쌓인다
     addCoinUnlock(CLASS_IDS[STARTER_COUNT])
     assert.equal(unlockedCount(), STARTER_COUNT + 3)
+    // 올인원 구매(유료): 전 캐릭터 해금
+    globalThis.localStorage.setItem('bgp.rift.unlockall.v1', 'on')
+    assert.equal(unlockedCount(), CLASS_IDS.length)
   } finally {
     delete globalThis.localStorage
   }
