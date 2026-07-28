@@ -21,7 +21,8 @@ import { missionRows, recordMissionProgress, claimMission, allClearState, claimA
 import { recordMatchForAchievements, achievementRows, evaluateAchievements } from './achievements.js'
 import { createTournament, nextRound, resolveRound, userPlacement, arenaLevelFor, ARENA_PLACE_COIN, ARENA_ROUND_GOLD, ARENA_LAYOUT_META } from './colosseum.js'
 import Fireworks from '../shared/Fireworks.jsx'
-import { adsAvailable, showRewarded } from '../shared/ads.js'
+import { adsAvailable, showRewarded, hasNoAds } from '../shared/ads.js'
+import { IAP_NOADS, IAP_UNLOCK_ALL, hasUnlockAll, iapAvailable, initIap, iapPrice, buyIap, restoreIap } from '../shared/iap.js'
 import MenuStage, { ArenaStage, ChampionStage } from './MenuStage.jsx'
 import HatPreview from './HatPreview.jsx'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
@@ -430,6 +431,10 @@ export default function SoloApp() {
   }, [screen, profile, helpOpen, exitAsk])
 
   // 안드로이드 하드웨어 뒤로가기 → zodiac-back 이벤트로 위 핸들러에 합류
+  // 앱 시작 시 스토어 초기화 — 이미 산 상품(owned)이 자동 재지급되어 재설치·기기 이전에서 복원된다
+  useEffect(() => {
+    initIap()
+  }, [])
   useEffect(() => {
     if (!window.Capacitor?.isNativePlatform?.()) return undefined
     let handle = null
@@ -734,6 +739,7 @@ function MissionWidget() {
 
 // ── 2. 메인 메뉴 ──
 function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings, onHats }) {
+  const [premOpen, setPremOpen] = useState(false)
   const z = getZodiac(profile)
   const coins = loadCoins() // 메뉴 진입 때마다 최신 잔액을 읽는다(경기·꾸미기 후 갱신)
   const title = loadEquippedTitle() // 장착 칭호 — 업적 탭에서 달았다면 프로필 칩에 표시
@@ -774,8 +780,74 @@ function MainMenu({ profile, onPlay, onRecords, onHelp, onProfile, onSettings, o
       {/* 보조 기능은 우하단 원형 아이콘으로 — 메뉴 리스트를 핵심 3개로 유지 */}
       <div className="menu-screen__corner">
         <FullscreenButton />
+        <button className="menu-fab menu-fab--prem" onClick={() => { sound.step(); setPremOpen(true) }} title={t('💎 프리미엄')} aria-label={t('💎 프리미엄')}>💎</button>
         <button className="menu-fab" onClick={onHelp} title={t('❓ 조작법')} aria-label={t('❓ 조작법')}>❓</button>
         <button className="menu-fab" onClick={onSettings} title={t('⚙️ 설정')} aria-label={t('⚙️ 설정')}>⚙️</button>
+      </div>
+      {premOpen && <PremiumShop onClose={() => setPremOpen(false)} />}
+    </div>
+  )
+}
+
+// ── 💎 프리미엄 상점 — 유료 상품 2종(광고 제거 / 올인원). 가격은 스토어에서 로드 ──
+function PremiumShop({ onClose }) {
+  const [, refresh] = useState(0)
+  useEffect(() => {
+    initIap(() => refresh((n) => n + 1)) // 가격 로드·구매 승인·복원 때 다시 그린다
+  }, [])
+  const native = iapAvailable()
+  const ownedNoads = hasNoAds()
+  const ownedAll = hasUnlockAll()
+  const items = [
+    {
+      id: IAP_NOADS, icon: '🚫', name: t('광고 제거'), owned: ownedNoads,
+      desc: t('광고 없이 모든 보상이 항상 2배'),
+    },
+    {
+      id: IAP_UNLOCK_ALL, icon: '👑', name: t('올인원 패키지'), owned: ownedAll,
+      desc: t('광고 제거 + 모든 캐릭터·모드·꾸미기 해금'),
+      note: t('보스 전리품은 토벌의 증표 — 직접 쓰러뜨려야 얻어요'),
+    },
+  ]
+  async function buy(id) {
+    sound.step()
+    await buyIap(id) // 지급·갱신은 approved 리스너가 처리
+  }
+  return (
+    <div className="solo-help" onClick={onClose}>
+      <div className="toy-card solo-help__card prem-card" onClick={(e) => e.stopPropagation()}>
+        <h2 className="toy-heading">💎 {t('프리미엄')}</h2>
+        <div className="prem-list">
+          {items.map((it) => (
+            <div key={it.id} className={`prem-item ${it.owned ? 'prem-item--owned' : ''}`}>
+              <span className="prem-item__icon">{it.icon}</span>
+              <div className="prem-item__body">
+                <b>{it.name}</b>
+                <small>{it.desc}</small>
+                {it.note && <small className="prem-item__note">{it.note}</small>}
+              </div>
+              {it.owned ? (
+                <span className="prem-item__owned">✓ {t('적용 중')}</span>
+              ) : (
+                <button
+                  className="toy-btn toy-btn--yellow prem-item__buy"
+                  disabled={!native}
+                  onClick={() => buy(it.id)}
+                >
+                  {native ? (iapPrice(it.id) || t('구매')) : t('앱에서 구매')}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="prem-foot">
+          {native && !ownedAll && (
+            <button className="toy-btn toy-btn--ghost prem-restore" onClick={() => { sound.step(); restoreIap() }}>
+              {t('구매 복원')}
+            </button>
+          )}
+          <button className="toy-btn toy-btn--blue" onClick={onClose}>{t('닫기')}</button>
+        </div>
       </div>
     </div>
   )
@@ -857,7 +929,7 @@ function ModeScreen({ diff, onDiff, onPick, onBack }) {
           // 유료 모드(보스전): 코인으로 1회 해금 — 해금 전엔 자물쇠와 가격을 보여준다.
           // 개발자 모드(HAT_DEV: dev 서버/?devhat)에서는 꾸미기처럼 바로 열린다.
           // (보스별 토벌 타임은 여기가 아니라 📊 전적 화면에서 본다)
-          const locked = m.price && !HAT_DEV && !modeUnlocks.includes(`mode:${m.id}`)
+          const locked = m.price && !HAT_DEV && !hasUnlockAll() && !modeUnlocks.includes(`mode:${m.id}`)
           return (
             <button
               key={m.id}
@@ -1570,10 +1642,11 @@ function HatScreen({ profile, onBack }) {
   const T = WARDROBE_TABS[tab]
   const previewDef = T.items.find((it) => (it.id || null) === (preview[tab] || null))
   const previewOwned = preview[tab] === null || HAT_DEV || owned[tab].includes(preview[tab])
+    || (hasUnlockAll() && !!previewDef && !previewDef.trophy) // 올인원 구매 — 전리품(토벌 증표)만은 예외
 
   function pick(item) {
     setPreview((p) => ({ ...p, [tab]: item.id })) // 누르면 일단 걸쳐 본다
-    if (item.id === null || HAT_DEV || owned[tab].includes(item.id)) {
+    if (item.id === null || HAT_DEV || owned[tab].includes(item.id) || (hasUnlockAll() && !item.trophy)) {
       T.saveEquipped(item.id) // 보유품 → 장착 (기본/맨머리 = 해제)
       setEquipped((e) => ({ ...e, [tab]: item.id }))
     }
@@ -1839,7 +1912,7 @@ function SoloHelp({ onClose }) {
           <h3>{t('💡 꿀팁')}</h3>
           {en
             ? <p>🌿 Bushes hide you · 🐉 Dragon / 👹 Imugi grant team buffs · in danger, 🏠 recall! · 🏆 Wins & coins unlock new classes — check <b>Records → Achievements</b> for goals & titles</p>
-            : <p>🌿 수풀에 숨으면 안 보여요 · 🐉 용/👹 이무기는 팀 버프 · 위험하면 🏠 귀환! · 🏆 승리·코인으로 새 캐릭터가 열리고, <b>전적 → 업적</b>에서 목표와 칭호를 확인해요</p>}
+            : <p>🌿 수풀에 숨으면 안 보여요 · 🐉 용/👹 이무기는 팀 버프 · 위험하면 🏠 귀환! · 🏆 코인으로 새 캐릭터가 열리고, <b>전적 → 업적</b>에서 목표와 칭호를 확인해요</p>}
         </div>
 
         <button className="toy-btn toy-btn--yellow solo-help__ok" onClick={onClose}>{t('알겠어, 가보자!')}</button>

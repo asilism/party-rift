@@ -3768,3 +3768,22 @@ body {
   background: var(--toy-yellow, #ffd34d); border-color: rgba(60, 40, 20, 0.45);
   box-shadow: 0 3px 0 rgba(60, 40, 20, 0.18); transform: translateY(-1px);
 }
+
+/* ── 💎 프리미엄 상점 ── */
+.prem-card { max-width: 480px; }
+.prem-list { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+.prem-item {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  background: rgba(20, 28, 51, 0.55); border: 1px solid var(--line);
+  border-radius: 14px; padding: 12px 14px;
+}
+.prem-item--owned { border-color: rgba(122, 224, 138, 0.55); }
+.prem-item__icon { font-size: 28px; flex-shrink: 0; }
+.prem-item__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.prem-item__body small { color: var(--muted); }
+.prem-item__note { font-size: 11px; opacity: 0.75; }
+.prem-item__owned { color: #7ae08a; font-weight: 900; white-space: nowrap; }
+.prem-item__buy { white-space: nowrap; flex-shrink: 0; }
+.prem-foot { display: flex; justify-content: center; gap: 10px; }
+.prem-restore { opacity: 0.85; }
+.menu-fab--prem { background: linear-gradient(135deg, #2a3f7a, #5a3f8a); }

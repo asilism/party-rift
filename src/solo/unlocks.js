@@ -1,13 +1,15 @@
 import { CLASS_IDS } from '../games/rift/engine.js'
 import { loadCoinUnlocks } from '../shared/storage.js'
+import { hasUnlockAll } from '../shared/iap.js'
 
 // 솔로 모드 캐릭터 해금 — 시작은 기본 6종(역할 골고루: 전사·궁수·마법사·힐러·암살자·탱커),
 // 나머지는 코인 해금만(승리 해금 폐지, v72). 캐릭터가 "기다리면 공짜"인 동안은 코인을 쓸
 // 이유가 없다 — 코인의 쓸 곳이 곧 광고 2배·플레이의 동기다.
 export const STARTER_COUNT = 6
 
-// 해금된 직업 집합: 기본 6종 + 코인 해금
+// 해금된 직업 집합: 기본 6종 + 코인 해금 (올인원 구매자는 전부)
 export function unlockedClassIds() {
+  if (hasUnlockAll()) return [...CLASS_IDS]
   const coins = loadCoinUnlocks().filter((id) => CLASS_IDS.includes(id))
   return [...new Set([...CLASS_IDS.slice(0, STARTER_COUNT), ...coins])]
 }
