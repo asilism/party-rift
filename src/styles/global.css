@@ -2063,7 +2063,8 @@ body {
   pointer-events: none;
 }
 .rift-minimap {
-  width: clamp(150px, 30vh, 240px); height: auto;
+  /* 낮은 화면(vh)뿐 아니라 좁은 화면(vw)에서도 줄어든다 — 640px 폭에서 상단 HUD와 공존 */
+  width: clamp(110px, min(30vh, 20vw), 240px); height: auto;
   filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.35));
 }
 
@@ -3510,7 +3511,7 @@ body {
 .boss-bar-slot {
   flex: 1 1 auto; min-width: 0;
   display: flex; justify-content: center;
-  margin-left: calc(clamp(150px, 30vh, 240px) + 8px); /* 미니맵 폭만큼 — 상점 버튼은 미니맵 아래로 이사 */
+  margin-left: calc(clamp(110px, min(30vh, 20vw), 240px) + 8px); /* 미니맵 폭만큼(rift-minimap과 같은 식) */
 }
 /* 한 줄 필: [😈 카르곤 ▬▬▬▬47% 💤] — 킬스코어 행과 같은 높이로 상단 UI를 밀지 않는다 */
 .boss-bar {
@@ -3553,11 +3554,20 @@ body {
   0%, 100% { box-shadow: 0 0 6px rgba(178, 102, 255, 0.35); }
   50% { box-shadow: 0 0 16px rgba(178, 102, 255, 0.75); }
 }
-/* 좁은 화면: 바를 컴팩트하게 (폭은 flex 슬롯이 알아서 줄인다) */
-@media (max-width: 640px) {
+/* 좁은 화면: 상단 HUD 전체 다이어트 — 640x480(4:3 소형)에서 보스바 트랙이 0폭까지
+   짜부되던 것을 방지한다. 우선순위: 보스 체력 트랙 > KDA > 골드·시계 > 핑(숨김) */
+@media (max-width: 720px) {
+  .rift__topbar { padding: 8px 8px; gap: 6px; }
+  .rift__topbar .btn { padding: 5px 9px; font-size: 14px; }
+  .rift__stats { gap: 6px; padding: 4px 9px; font-size: 11px; }
+  .rift__stats-kda { gap: 4px; }
+  .rift__stats-ping { display: none; } /* 좁으면 핑은 접는다 — 설정에서 볼 일 */
+  .boss-bar-slot { margin-left: calc(clamp(110px, min(30vh, 20vw), 240px) + 4px); }
   .boss-bar { padding: 2px 9px; gap: 5px; }
-  .boss-bar__name { font-size: 11px; max-width: 72px; }
-  .boss-bar__track { height: 11px; }
+  .boss-bar__name { font-size: 11px; max-width: 56px; }
+  .boss-bar__tier { font-size: 11px; }
+  .boss-bar__track { height: 11px; min-width: 56px; }
+  .boss-bar__pct { font-size: 9.5px; }
 }
 
 /* ── 보스전 인트로 타이틀 카드 ── */
