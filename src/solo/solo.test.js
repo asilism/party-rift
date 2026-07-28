@@ -1,21 +1,32 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { CLASS_IDS, TEAM_SIZES } from '../games/rift/engine.js'
-import { STARTER_COUNT, unlockedCount, unlockedClassIds, nextUnlock } from './unlocks.js'
+import { STARTER_COUNT, unlockedCount, unlockedClassIds, migrateWinUnlocks, unlockPrice, UNLOCK_PRICES } from './unlocks.js'
 import { buildSoloRoster } from './roster.js'
 
-test('해금: 기본 6종에서 승리마다 1종씩, 정의 순서대로 열린다', () => {
-  assert.equal(unlockedCount(0), STARTER_COUNT)
-  assert.deepEqual(unlockedClassIds(0), CLASS_IDS.slice(0, STARTER_COUNT))
-  assert.equal(unlockedCount(3), STARTER_COUNT + 3)
-  assert.equal(nextUnlock(0), CLASS_IDS[STARTER_COUNT])
-  assert.equal(nextUnlock(2), CLASS_IDS[STARTER_COUNT + 2])
-  // 전부 열린 뒤엔 더 늘지 않고 다음 해금도 없다
-  assert.equal(unlockedCount(999), CLASS_IDS.length)
-  assert.equal(nextUnlock(999), null)
-  // 음수/비정상 입력은 기본 6종
-  assert.equal(unlockedCount(-5), STARTER_COUNT)
-  assert.equal(unlockedCount(undefined), STARTER_COUNT)
+test('해금: 승리 해금 폐지 — 기본 6종 + 코인 해금, 가격은 열수록 오른다', () => {
+  const store = new Map()
+  globalThis.localStorage = {
+    getItem: (k) => store.get(k) ?? null,
+    setItem: (k, v) => store.set(k, String(v)),
+    removeItem: (k) => store.delete(k),
+  }
+  try {
+    assert.equal(unlockedCount(), STARTER_COUNT)
+    assert.deepEqual(unlockedClassIds(), CLASS_IDS.slice(0, STARTER_COUNT))
+    assert.equal(unlockPrice(), UNLOCK_PRICES[0])
+    // 기존 유저 마이그레이션: 통산 3승이면 폐지 전 규칙 그대로 3종이 굳는다 — 다시 잠기지 않는다
+    migrateWinUnlocks(3)
+    assert.equal(unlockedCount(), STARTER_COUNT + 3)
+    assert.deepEqual(unlockedClassIds().slice(STARTER_COUNT), CLASS_IDS.slice(STARTER_COUNT, STARTER_COUNT + 3))
+    // 1회성: 다시 돌려도(승수가 더 커져도) 추가로 열리지 않는다
+    migrateWinUnlocks(999)
+    assert.equal(unlockedCount(), STARTER_COUNT + 3)
+    // 가격 곡선: 이미 3종이 열려 있으니 다음 가격은 4번째 칸
+    assert.equal(unlockPrice(), UNLOCK_PRICES[3])
+  } finally {
+    delete globalThis.localStorage
+  }
 })
 
 test('솔로 로스터: 매치 전체에서 직업이 겹치지 않는다 (내 직업 포함)', () => {
