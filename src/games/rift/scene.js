@@ -7147,6 +7147,12 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         setHpBarSegments(u.bar, h.maxHp) // 100단위 칸 — 최대 체력이 큰 캐릭터는 칸이 많다
         // 보스 위협 링·국면 덩치 — 분신(야바위)도 같은 룩을 써야 진짜와 구분되지 않는다
         if (u.threat) applyBossPhaseLook(u, h.bossPhase || 1, view.time)
+        if (u.threat && (h.bossEnrage || 0) > 0) {
+          // 소프트 인레이지: 위협 링이 핏빛으로 물들고 단계가 오를수록 다급하게 맥동한다
+          const rl = h.bossEnrage
+          u.threat.material.color.setHex(rl >= 3 ? 0xff1a1a : rl === 2 ? 0xff3524 : 0xff5a35)
+          u.threat.material.opacity = 0.5 + Math.abs(Math.sin(view.time * (3 + rl * 3))) * 0.35
+        }
         // ── 타격감: 체력이 줄면 데미지 숫자 + 피격 섬광/움찔, 내 영웅이면 화면 흔들림 ──
         const dHp = (u.lastHp == null ? h.hp : u.lastHp) - h.hp
         u.lastHp = h.hp

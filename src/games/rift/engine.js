@@ -2750,14 +2750,14 @@ function healHero(h, amount) {
 
 // ── 피해 처리 ──
 //  redirected=true 는 결속 리다이렉트로 수호기사가 대신 맞는 호출(무한 연쇄 방지 플래그).
-function damageHero(state, victim, amount, attacker, redirected = false) {
+function damageHero(state, victim, amount, attacker, redirected = false, tag = null) {
   if (victim.respawnT > 0 || state.status !== 'playing') return
   if (state.mode === 'arena' && state.arenaPhase === 'shop' && attacker) return // 준비 결계: 전투 불가
   if (victim.isBoss && bossInvuln(state, victim)) return // 무적(각성 휴지기 보호막 / 기상 전 수면)
   // 봇 난이도: 봇 영웅이 주는 피해(평타·스킬 공통)를 난이도 배율로. 리다이렉트(결속 대납)엔
   // 원 피해에서 이미 적용됐으므로 다시 곱하지 않는다.
   if (!redirected && attacker?.isBot) amount *= BOT_LEVELS[state.botLevel]?.dmg ?? 1
-  if (attacker?.bossEnraged) amount *= 1.5 // 보스 광폭화
+  if (attacker?.bossEnrage) amount *= [1, 1.15, 1.3, 1.5][attacker.bossEnrage] // 소프트 인레이지 — 단계별 점층
   if (attacker?.isBoss && attacker.bossPhase > 1) amount *= BOSS_PHASE_DMG[attacker.bossPhase - 1] // 페이즈 분노
   if (!redirected && attacker?.isBoss) {
     // 난이도 티어(평타·스킬·장판 공통). 녹스는 55%만 — 기본 압박을 올린 만큼 티어 복리를 눅인다
@@ -2921,7 +2921,11 @@ function damageHero(state, victim, amount, attacker, redirected = false) {
     augOnKill(state, killer, victim.x, victim.z, victim.maxHp) // 증강: 킬 골드 + 연쇄 폭발
     const bountyTag = bountyBonus > 0 ? ` 💰현상금 +${bountyBonus}!` : ''
     const assistTag = assisters.length ? ` (도움: ${assisters.map((a) => emojiOf(a.zodiacId)).join('')})` : ''
-    pushFeed(state, 'kill', `${emojiOf(killer.zodiacId)} ${killer.name} ⚔️ ${emojiOf(victim.zodiacId)} ${victim.name} 처치!${bountyTag}${assistTag}`)
+    // 사망 리캡: 보스 기술에 죽으면 "무엇에 스러졌는지"를 남긴다 — 힌트를 걷어낸 대신
+    // 사후에 배우는 통로(사전 공략 안내가 아니라 벌어진 일의 기록이다)
+    pushFeed(state, 'kill', killer.isBoss && tag
+      ? `💀 ${emojiOf(victim.zodiacId)} ${victim.name} — ${tag}에 스러지다`
+      : `${emojiOf(killer.zodiacId)} ${killer.name} ⚔️ ${emojiOf(victim.zodiacId)} ${victim.name} 처치!${bountyTag}${assistTag}`)
   } else {
     state.kills[enemyOf(victim.team)]++
     pushFeed(state, 'kill', `${emojiOf(victim.zodiacId)} ${victim.name} 쓰러짐!`)
@@ -3188,7 +3192,7 @@ export function step(state, dt) {
         e.slowT = Math.max(e.slowT || 0, 0.3)
         if (e.creepTick >= 0.5) {
           e.creepTick -= 0.5
-          damageHero(state, e, skillDmg(creepSrc, CREEP_DPS[0], CREEP_DPS[1]) * 0.5, creepSrc)
+          damageHero(state, e, skillDmg(creepSrc, CREEP_DPS[0], CREEP_DPS[1]) * 0.5, creepSrc, false, '가시밭')
         }
       }
     }
@@ -3647,7 +3651,7 @@ function stepHero(state, h, dt) {
         for (const o of state.heroes) {
           if (o.team === bramble.team || o.respawnT > 0 || o.isBoss) continue
           if (dist(h, o) > 3.5) continue
-          damageHero(state, o, skillDmg(bramble, SEED_BURST[0], SEED_BURST[1]), bramble)
+          damageHero(state, o, skillDmg(bramble, SEED_BURST[0], SEED_BURST[1]), bramble, false, '기생 씨앗')
         }
       }
       const heartCap = Math.min(3, bramble?.bossPhase || 1)
@@ -3669,7 +3673,7 @@ function stepHero(state, h, dt) {
     h.beamDeathAt = null
     const from = state.heroes.find((b) => b.id === h.beamDeathFrom) || null
     pushFx(state, 'meteorhit', h.x, h.z, 5, 'red', 1.0)
-    damageHero(state, h, 99999, from)
+    damageHero(state, h, 99999, from, false, '섬멸의 광선')
   }
   // 죽음의 그림자(피낙인자): ☠️ 표시 시간 — 해제·처형은 보스 상태머신이 관리
   if (h.huntT > 0) h.huntT = Math.max(0, h.huntT - dt)
@@ -3683,7 +3687,7 @@ function stepHero(state, h, dt) {
       pushFx(state, 'meteorhit', h.x, h.z, STACK_R + 2, 'red', 1.2)
       const share = state.heroes.filter((o) => o.team === h.team && o.respawnT <= 0 && dist(h, o) <= STACK_R)
       const each = (h.stackDmg || 0) / Math.max(1, share.length)
-      for (const o of share) damageHero(state, o, each, from)
+      for (const o of share) damageHero(state, o, each, from, false, '성좌 낙인')
       pushFeed(state, 'obj', share.length >= 2
         ? `🌠 ${share.length}명이 성좌 낙인을 나눠 맞았다!`
         : '🌠 성좌 낙인을 홀로 받아냈다')
@@ -4536,7 +4540,7 @@ function stepZones(state, dt) {
           if (e.team === z.team || e.respawnT > 0) continue
           const d2v = (e.x - z.x) ** 2 + (e.z - z.z) ** 2
           if (d2v > r2 || d2v < rIn2) continue // 도넛 안쪽(안전지대)은 무사하다
-          damageHero(state, e, z.dmg, owner.id ? owner : null)
+          damageHero(state, e, z.dmg, owner.id ? owner : null, false, z.tag)
           if (z.stun) e.stunT = Math.max(e.stunT, z.stun)
           if (z.freeze) e.freezeT = Math.max(e.freezeT, z.freeze)
           if (z.fear) applyFear(state, e, z.fear)
@@ -4557,7 +4561,7 @@ function stepZones(state, dt) {
             if (e.team === z.team || e.respawnT > 0) continue
             const d2v = (e.x - z.x) ** 2 + (e.z - z.z) ** 2
             if (d2v > r2 || d2v < rIn2) continue
-            if (z.dps) damageHero(state, e, z.dps * 0.5, owner.id ? owner : null)
+            if (z.dps) damageHero(state, e, z.dps * 0.5, owner.id ? owner : null, false, z.tag)
             if (z.slow) e.freezeT = Math.max(e.freezeT, z.slow)
           }
         }
@@ -5565,6 +5569,7 @@ function pushBossZone(state, h, opts) {
     safe: opts.safe || false, // 안전지대(발구르기): 피해 없음 — "여기로 피해!" 표식. 봇 회피에서 제외
     arrowOnly: opts.arrowOnly || false, // 돌진: 원 없이 경로 화살표만 — 카르곤 원 과밀 해소(유저 피드백)
     vfx: opts.vfx || 'quake', hue: opts.hue || 'lava', exploded: false,
+    tag: opts.tag || null, // 사망 리캡용 — 이 장판에 죽으면 무엇이었는지
     // 소환 장판: delay가 끝나면 피해 대신 이 정예를 하늘빛과 함께 강림시킨다
     spawnAdd: opts.spawnAdd || null,
   })
@@ -5589,12 +5594,12 @@ function bossFan(state, h, foe) {
 
 // 두꺼운 직선 장판: 표적 방향으로 원형 장판을 일렬로 깔아 굵은 일직선 참격/격류를 만든다.
 // 가까운 쪽부터 순차 폭발(파도 문법) — 옆으로 반 발짝이 정답이다.
-function pushBossLine(state, h, dir, { count = 5, r = 4.2, gap = 3.4, delay = 1.0, step = 0.12, dmg, effect = null, vfx = 'quake', hue = 'lava' }) {
+function pushBossLine(state, h, dir, { count = 5, r = 4.2, gap = 3.4, delay = 1.0, step = 0.12, dmg, effect = null, vfx = 'quake', hue = 'lava', tag = null }) {
   for (let k = 0; k < count; k++) {
     const d = 4 + k * gap
     pushBossZone(state, h, {
       x: h.x + Math.cos(dir) * d, z: h.z + Math.sin(dir) * d, r,
-      delay: delay + k * step, dmg, ...effect, vfx, hue,
+      delay: delay + k * step, dmg, ...effect, vfx, hue, tag,
     })
   }
 }
@@ -5655,7 +5660,7 @@ function bossThink(state, h, dt) {
       caught.pullBy = h.id
       caught.stunT = Math.max(caught.stunT, 1.0)
       caught.slowT = Math.max(caught.slowT || 0, 1.5)
-      damageHero(state, caught, skillDmg(h, 90, 1.8), h)
+      damageHero(state, caught, skillDmg(h, 90, 1.8), h, false, '휘감는 채찍')
       pushFx(state, 'blink', caught.x, caught.z, 2.5, h.team)
       pushFeed(state, 'obj', `🌿 덩굴 채찍이 ${caught.name}을(를) 휘감아 끌어당긴다`)
     }
@@ -5683,7 +5688,7 @@ function bossThink(state, h, dt) {
     for (const e of state.heroes) {
       if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
       if (!hearts.some((m) => dist(m, e) <= (m.creepR || 0))) continue
-      damageHero(state, e, skillDmg(h, BLOOM_DMG[0], BLOOM_DMG[1]), h)
+      damageHero(state, e, skillDmg(h, BLOOM_DMG[0], BLOOM_DMG[1]), h, false, '만개')
       e.airT = Math.max(e.airT || 0, 0.5)
       hit++
     }
@@ -5706,7 +5711,7 @@ function bossThink(state, h, dt) {
       if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
       if (dist(h, e) > GAZE_R) continue
       if (Math.cos((e.dir || 0) - Math.atan2(h.z - e.z, h.x - e.x)) < GAZE_SAFE_COS) continue // 시선을 뗐다 — 회피
-      damageHero(state, e, skillDmg(h, 140, 2.6), h)
+      damageHero(state, e, skillDmg(h, 140, 2.6), h, false, '공포의 응시')
       applyFear(state, e, GAZE_FEAR)
       caught++
     }
@@ -5757,7 +5762,7 @@ function bossThink(state, h, dt) {
         h.dir = Math.atan2(mark.z - h.z, mark.x - h.x)
         pushFx(state, 'blink', h.x, h.z, 3, h.team)
         pushFx(state, 'shadowexec', mark.x, mark.z, 5, h.team, 1.0)
-        damageHero(state, mark, skillDmg(h, HUNT_EXEC_DMG[0], HUNT_EXEC_DMG[1]), h)
+        damageHero(state, mark, skillDmg(h, HUNT_EXEC_DMG[0], HUNT_EXEC_DMG[1]), h, false, '처형 습격')
         applyFear(state, mark, 1.6)
         pushFeed(state, 'obj', `⚔️ 처형 습격 — ${mark.name}이(가) 그림자에 잡혔다!`)
         h.gimRestUntil = Math.max(h.gimRestUntil || 0, state.time + 4)
@@ -5845,7 +5850,7 @@ function bossThink(state, h, dt) {
         const perp = Math.abs(-rx * bz + rz * bx)
         if (along < 0 || along > NOXDASH_LEN * frac || perp > NOXDASH_HALF) continue
         h.dashHits.push(e.id)
-        damageHero(state, e, skillDmg(h, STILL_DASH_DMG[0], STILL_DASH_DMG[1]), h)
+        damageHero(state, e, skillDmg(h, STILL_DASH_DMG[0], STILL_DASH_DMG[1]), h, false, '어둠의 정적')
         applyFear(state, e, 1.6)
         if (e.respawnT > 0) h.dashKilled = true
       }
@@ -5890,7 +5895,7 @@ function bossThink(state, h, dt) {
       if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
       if (dist(h, e) > SLAM_R) continue
       if (safe && Math.hypot(e.x - safe.x, e.z - safe.z) <= SLAM_SAFE_R) continue // 피신 성공 — 무피해
-      damageHero(state, e, skillDmg(h, 195, 3.7), h)
+      damageHero(state, e, skillDmg(h, 195, 3.7), h, false, '도약 강타')
       e.airT = Math.max(e.airT, SLAM_AIR)
       hit++
     }
@@ -5925,7 +5930,7 @@ function bossThink(state, h, dt) {
         if (!pool.length) continue
         const v = pool.splice(Math.floor(state.rng() * pool.length), 1)[0]
         pushFx(state, 'shadowexec', v.x, v.z, 5, 'red', 1.0)
-        damageHero(state, v, 99999, h) // 즉결 처형 — 남은 소환석 하나당 한 명
+        damageHero(state, v, 99999, h, false, '소환 의식') // 즉결 처형 — 남은 소환석 하나당 한 명
         executed++
       }
       pushFeed(state, 'obj', executed
@@ -5983,7 +5988,7 @@ function bossThink(state, h, dt) {
       while (dd > Math.PI) dd -= 2 * Math.PI
       while (dd < -Math.PI) dd += 2 * Math.PI
       if (Math.abs(dd) > (h.bossConeHalf || CONE_HALF)) continue
-      damageHero(state, e, skillDmg(h, 75, 1.4) * trim, h)
+      damageHero(state, e, skillDmg(h, 75, 1.4) * trim, h, false, '서리 숨결')
       e.freezeT = Math.max(e.freezeT, 1.2)
     }
     pushFxDir(state, 'frost', h.x, h.z, h.bossConeR || CONE_R, h.bossConeDir, h.team)
@@ -6029,12 +6034,22 @@ function bossThink(state, h, dt) {
     h.bossAwake = true
     pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name}이(가) 깨어나 어둠의 병력을 소환한다`)
   }
-  // 광폭화(엔레이지): 진군 후 11분이 지나면 CC를 무시하고 피해가 1.5배 — 무한 대치 방지
-  if (!h.bossEnraged && state.time - (h.bossShieldTotal || 0) > BOSS_MARCH_AT + 660) {
-    h.bossEnraged = true
-    pushFeed(state, 'obj', '🔥 보스가 광폭화했다')
+  // 소프트 인레이지: 진군이 길어지면 살기가 단계적으로 짙어진다(8분 ×1.15 → 10분 ×1.3 → 12분 ×1.5+CC무시).
+  //  구 11분 하드 스위치(한 번에 ×1.5)는 예고 없는 절벽 — 점층이라야 "슬슬 조여온다"가 읽힌다
+  {
+    const marchT = state.time - (h.bossShieldTotal || 0) - BOSS_MARCH_AT
+    const wantRage = marchT > 720 ? 3 : marchT > 600 ? 2 : marchT > 480 ? 1 : 0
+    if ((h.bossEnrage || 0) < wantRage) {
+      h.bossEnrage = wantRage
+      pushFx(state, 'berserk', h.x, h.z, 6, h.team, 1.0)
+      pushFeed(state, 'obj', wantRage === 1
+        ? '💢 보스의 살기가 짙어진다'
+        : wantRage === 2
+          ? '🔥 보스의 분노가 끓는점을 넘는다'
+          : '🔥 보스가 광폭화했다')
+    }
   }
-  if (h.bossEnraged) {
+  if ((h.bossEnrage || 0) >= 3) {
     h.stunT = 0; h.freezeT = 0; h.fearT = 0; h.airT = 0; h.rootT = 0; h.pullT = 0
     pushFx(state, 'berserk', h.x, h.z, 4, h.team, 0.4)
   }
@@ -6680,7 +6695,7 @@ function bossThorn(state, h, foe) {
     for (const d of dirs) {
       pushBossLine(state, h, d, {
         count: 5, r: 3.8, gap: 3.2, delay: 1.0, dmg: skillDmg(h, 150, 2.8),
-        effect: { slow: 0.4 }, vfx: 'quake', hue: 'venom',
+        effect: { slow: 0.4 }, vfx: 'quake', hue: 'venom', tag: '가시 투척',
       })
     }
   }
@@ -6783,7 +6798,7 @@ function bossThorn(state, h, foe) {
         pushBossZone(state, h, {
           x: h.burrowX, z: h.burrowZ, r: 5, delay: BURROW_DIVE + BURROW_WARN,
           dmg: skillDmg(h, BURROW_DMG[0], BURROW_DMG[1]), effect: { slow: 0.4 },
-          vfx: 'quake', hue: 'venom', aim: true,
+          vfx: 'quake', hue: 'venom', aim: true, tag: '뿌리 잠행',
         })
         pushFeed(state, 'obj', '🌿 브램블이 덩굴 속으로 스며든다')
         return
@@ -8485,6 +8500,7 @@ export function makeView(state) {
       //  bossFanSeq/bossSmashSeq: 부채꼴=횡베기 / 대지 강타=종내리찍기 모션 트리거
       ...(h.isBoss ? {
         bossPhase: h.bossPhase || 1, bossShieldT: r2d(h.bossShieldT || 0),
+        bossEnrage: h.bossEnrage || 0, // 인레이지 단계(0~3) — 위협 링이 핏빛으로 물든다
         bossGazeT: r2d(Math.max(0, (h.bossGazeAt || 0) - state.time)),
         bossLeapT: r2d(Math.max(0, (h.bossSlamAt || 0) - state.time)),
         bossLeapT0: r2d(h.bossSlamT0 || 0),
