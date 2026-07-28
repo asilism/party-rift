@@ -3641,6 +3641,15 @@ function stepHero(state, h, dt) {
       // 발아도 심장 상한(페이즈별 1/2/3)을 존중 — 씨앗 멀티가 상한을 우회하면 잠식 총량이
       // 통제를 잃는다(전 티어 4/0/0% 붕괴 실측). 밭이 가득이면 씨앗은 불발로 스러진다
       const bramble = state.heroes.find((b) => b.isBoss && b.cls === 'boss_thorn' && b.respawnT <= 0)
+      // 발아 폭발: 심장 성립 여부와 무관하게 그 자리는 터진다 — "붙는 순간 뛰어야 한다"
+      if (bramble) {
+        pushFx(state, 'quake', h.x, h.z, 3.5, 'red', 0.9)
+        for (const o of state.heroes) {
+          if (o.team === bramble.team || o.respawnT > 0 || o.isBoss) continue
+          if (dist(h, o) > 3.5) continue
+          damageHero(state, o, skillDmg(bramble, SEED_BURST[0], SEED_BURST[1]), bramble)
+        }
+      }
       const heartCap = Math.min(3, bramble?.bossPhase || 1)
       if (state.minions.filter((m) => m.heart && m.hp > 0).length >= heartCap) {
         pushFx(state, 'rocksplash', h.x, h.z, 2, 'red', 0.5)
@@ -3648,7 +3657,7 @@ function stepHero(state, h, dt) {
         state.minions.push({
           id: state.nextId++, team: 'red', heart: true, lane: 'mid', ranged: false,
           x: h.x, z: h.z, creepR: CREEP_R0,
-          hp: HEART_HP, maxHp: HEART_HP, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
+          hp: heartHpOf(state), maxHp: heartHpOf(state), atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
         })
         pushFx(state, 'quake', h.x, h.z, 3.5, 'red', 0.8)
         pushFeed(state, 'obj', `🌱 씨앗이 ${h.name}의 발밑에서 싹텄다 — 덩굴 심장이 뿌리내린다`)
@@ -5402,13 +5411,20 @@ const CREEP_RMAX = 11 // 심장당 최대 반경
 const CREEP_DPS = [13, 0.24] // 잠식 위 도트(초당)
 const CREEP_SLOW = 0.35 // 잠식 위 둔화
 const HEART_HP = 7 // 심장 타격 수 — 철거 '노동 총량'이 지배 변수(9=붕괴 0%·6=과이 42~63%의 중간)
+// 티어 완충: 상위 티어는 기본 압박(hp·atk·정예)이 이미 크다 — 노동 총량은 오히려 줄여 상쇄
+const heartHpOf = (state) => (state.bossTier && state.bossTier !== 'normal' ? HEART_HP - 2 : HEART_HP) // 악몽·지옥 5타 — 노동 총량이 티어 지배 변수
 const ROOT_CD = 34 // 뿌리내림(심장 심기)
-const SEED_CD = 28 // 기생 씨앗 — 멀티 부착이 된 만큼 빈도는 완화
-const SEED_T = 4.0 // 씨앗 발아까지 — 그동안 어디에 심을지는 낙인자의 발이 정한다
+const SEED_CD = 32 // 기생 씨앗 — 즉각 발아(2.2s)가 된 만큼 빈도는 더 완화
+const SEED_T = 2.2 // 발아까지 — 붙는 순간 뛰어야 한다(4초는 산책이었다)
+const SEED_BURST = [80, 1.6] // 발아 순간 소폭발(반경 3.5) — 불발이어도 그 자리는 터진다
 const SEED_HUMAN_BIAS = 0.6
 export const WHIP_LEN = 24 // 휘감는 채찍 직선 길이 — 씬(경고 띠)과 공유
 export const WHIP_HALF = 1.7 // 채찍 반폭 — 좁아서 비키기 쉽다(자리 이탈 강요가 목적)
 const WHIP_WARN = 0.8
+const BURROW_CD = 24 // 뿌리 잠행 — 잠식 밭이 곧 이동로: 심장을 부수는 것이 이동로를 끊는 것
+const BURROW_DIVE = 0.5 // 잠수(사라짐)
+const BURROW_WARN = 0.7 // 등장 예고 — 솟구침 지점 원형 경고
+const BURROW_DMG = [140, 2.6] // 솟구침 가시 폭발(r5)
 const THORNWALL_CD = 24 // 가시벽
 const THORNWALL_LIFE = 6 // 벽 지속 — 돌벽(3s)보다 길게 짓누른다
 const BLOOM_CD = 38 // 만개(궁극, P2+)
@@ -5424,7 +5440,7 @@ const BOSS_LEASH = 18 // 진군 축(공성 목표)에서 이 이상 벗어난 �
 export function bossInvuln(state, h) {
   // 그림자 추격(죽음의 그림자)·어둠 소멸(어둠의 정적) 중엔 실체가 없다 — 무적
   return h.isBoss === true && (h.bossShieldT > 0 || h.stonesAt != null
-    || h.huntUntil != null || h.stillVanishAt != null || state.time < BOSS_SLEEP_END)
+    || h.huntUntil != null || h.stillVanishAt != null || h.burrowAt != null || state.time < BOSS_SLEEP_END)
 }
 
 // ── 보스전 난이도 티어 ──
@@ -5595,9 +5611,25 @@ function bossThink(state, h, dt) {
   if (!h.defenseBoss && state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.004 * dt)
   }
-  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34, hunt: 20, still: 30, seed: 14, root: 8, wall: 20, bloom: 34 } // gaze/stomp/stones/seed/root = 보스전 전용 시그니처
+  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34, hunt: 20, still: 30, seed: 14, root: 8, wall: 20, bloom: 34, burrow: 16 } // gaze/stomp/stones/seed/root = 보스전 전용 시그니처
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
   // ── 예고된 처형기 집행: 예고가 끝나는 순간 발동한다 (시전 후 취소 없음 — 읽었다면 이미 피했다) ──
+  // 뿌리 잠행 집행: 잠수해 있다가 예고가 끝나는 순간 심장 곁에서 솟구친다(가시 폭발은 존이 집행)
+  if (h.burrowAt != null) {
+    if (state.time >= h.burrowAt) {
+      h.x = h.burrowX
+      h.z = h.burrowZ
+      state.map.resolveTerrain(h, 2.2, colliders(state))
+      h.burrowAt = null
+      h.stealthT = 0
+      pushFx(state, 'berserk', h.x, h.z, 5, h.team, 0.9)
+      pushFeed(state, 'obj', '🌵 브램블이 가시밭을 뚫고 솟구친다')
+    } else {
+      h.mx = 0
+      h.mz = 0
+      return
+    }
+  }
   // 휘감는 채찍 집행: 예고가 끝나는 순간 직선의 첫 명중자를 낚아채 끌어온다(갈고리 규칙)
   if (h.whipAt && state.time >= h.whipAt) {
     h.whipAt = null
@@ -6709,11 +6741,54 @@ function bossThorn(state, h, foe) {
     state.minions.push({
       id: state.nextId++, team: h.team, heart: true, lane: 'mid', ranged: false,
       x: h.x + Math.cos(a) * d, z: h.z + Math.sin(a) * d, creepR: CREEP_R0,
-      hp: HEART_HP, maxHp: HEART_HP, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
+      hp: heartHpOf(state), maxHp: heartHpOf(state), atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
     })
     pushFx(state, 'quake', h.x + Math.cos(a) * d, h.z + Math.sin(a) * d, 3.5, h.team, 0.8)
     pushFeed(state, 'obj', '🌵 덩굴 심장이 뿌리내린다')
     return
+  }
+  // 뿌리 잠행(보스전 전용): 덩굴 속으로 잠수해 "적 무게중심에 가장 가까운 심장" 곁에서 솟구친다.
+  //  잠식 밭이 곧 이동로 — 밭이 넓을수록 브램블이 신출귀몰해진다(심장 철거 = 이동로 차단)
+  if (!h.defenseBoss && (h.bossCd.burrow ?? 1) <= 0 && !h.burrowAt && state.time >= (h.gimRestUntil || 0)) {
+    let cx = 0
+    let cz = 0
+    let n = 0
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
+      if (!isHeroVisible(state, e, h.team) || dist(h, e) > 30) continue
+      cx += e.x
+      cz += e.z
+      n++
+    }
+    if (n) {
+      cx /= n
+      cz /= n
+      let best = null
+      let bd = Infinity
+      for (const m of state.minions) {
+        if (!m.heart || m.hp <= 0) continue
+        if (dist(h, m) < 10) continue // 제자리 잠행은 무의미 — 먼 밭으로만
+        const d = Math.hypot(m.x - cx, m.z - cz)
+        if (d < bd) { bd = d; best = m }
+      }
+      if (best) {
+        h.bossCd.burrow = BURROW_CD * gimMul
+        const a = state.rng() * Math.PI * 2
+        h.burrowX = best.x + Math.cos(a) * 2
+        h.burrowZ = best.z + Math.sin(a) * 2
+        h.burrowAt = state.time + BURROW_DIVE + BURROW_WARN
+        h.stealthT = Math.max(h.stealthT, BURROW_DIVE + BURROW_WARN + 0.1) // 덩굴 속 — 사라진다
+        h.revealT = 0 // 직전 평타의 공격 노출이 은신을 뚫지 않게 — 잠수는 확실히 사라져야 한다
+        pushFx(state, 'quake', h.x, h.z, 4, h.team, 0.8)
+        pushBossZone(state, h, {
+          x: h.burrowX, z: h.burrowZ, r: 5, delay: BURROW_DIVE + BURROW_WARN,
+          dmg: skillDmg(h, BURROW_DMG[0], BURROW_DMG[1]), effect: { slow: 0.4 },
+          vfx: 'quake', hue: 'venom', aim: true,
+        })
+        pushFeed(state, 'obj', '🌿 브램블이 덩굴 속으로 스며든다')
+        return
+      }
+    }
   }
   // 가시벽(P2+ · 보스전 전용): 뭉친 적 무리를 가로질러 벽을 세운다 — 전장이 갈라진다
   if (!h.defenseBoss && p >= 2 && (h.bossCd.wall ?? 1) <= 0 && state.time >= (h.gimRestUntil || 0)) {
@@ -7374,7 +7449,7 @@ function stepBots(state, dt) {
 // 기생 씨앗 운반: 아군 무게중심 반대편으로 달려가 구석에 심는다 — 요지에 심으면 팀이 갚는다
 function botSeedCarry(state, h) {
   if (!(h.seedT > 0)) return false
-  if (SEED_T - h.seedT < 0.4) return false // 반응 지연 — 씨앗을 알아채기까지 한 박자
+  if (SEED_T - h.seedT < 0.2) return false // 반응 지연 — 2.2초 발아엔 한 박자도 길다
   let cx = 0
   let cz = 0
   let n = 0

@@ -7204,7 +7204,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         if (u.seedMark) {
           u.seedMark.visible = (h.seedT || 0) > 0
           if (u.seedMark.visible) {
-            const urgency = 1 + Math.max(0, 4 - h.seedT) * 2
+            const urgency = 1 + Math.max(0, 2.2 - h.seedT) * 3 // 2.2초 발아 — 처음부터 다급하다
             u.seedMark.scale.setScalar(1.7 * (1 + 0.25 * Math.abs(Math.sin(view.time * 5 * urgency))))
           }
         }

@@ -5,7 +5,7 @@ import {
   towerVulnerable, nexusVulnerable, isHeroVisible, isUnitVisible, buyItem, sellItem, resetShop, canShop, useItem,
   enhanceItem, enhanceCost, enhanceRate, ENHANCE_MAX, pickAugment,
   STEP, COUNTDOWN_TIME, ULT_LEVEL, SKILL2_LEVEL, TEAM_SIZE, MAX_LEVEL, RECALL_TIME, CLASS_IDS, CLASSES,
-  ITEM_SLOTS, BOT_STUCK_T, HP_SCALE, GAZE_SAFE_COS, SLAM_SAFE_R, trophySetOf,
+  ITEM_SLOTS, BOT_STUCK_T, HP_SCALE, GAZE_SAFE_COS, SLAM_SAFE_R, trophySetOf, bossInvuln,
 } from './engine.js'
 import { ITEMS_BY_ID, sumStats, buildQuote } from './items.js'
 import {
@@ -4034,6 +4034,47 @@ test('브램블 P3 만개: 밭 위 무리의 퇴로에 가시벽이 함께 융�
   assert.ok(boss.thornWallAt != null, 'P3 연계 — 가시벽 예고가 함께 걸린다')
   run(g, 1.2)
   assert.ok(g.tempWalls.filter((w) => w.thorn).length >= 5, '밭 위 무리 곁에 가시벽 융기')
+})
+
+test('기생 씨앗: 발아 순간 그 자리가 터진다 — 곁에 있으면 아프다', () => {
+  const g = brambleRaid()
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const b = g.heroes.find((h) => h.id === 'p2')
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = bf.x + 24; a.z = bf.z
+  a.maxHp = 90000; a.hp = 90000
+  b.x = a.x + 2; b.z = a.z // 발아 폭발 반경(3.5) 안
+  b.maxHp = 90000; b.hp = 90000
+  a.seedT = 0.3
+  const hpB = b.hp
+  run(g, 0.8)
+  assert.ok(hpB - b.hp > 60, `발아 폭발 피해 (${Math.round(hpB - b.hp)})`)
+})
+
+test('뿌리 잠행: 덩굴로 잠수해 심장 곁에서 솟구친다 — 잠수 중엔 무적', () => {
+  const g = brambleRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = boss.x - 12; a.z = boss.z
+  a.maxHp = 90000; a.hp = 90000
+  // 적 무게중심(a) 근처, 브램블에게서 10 이상 떨어진 심장
+  const hx = a.x - 8
+  const hz = a.z
+  g.minions.push({
+    id: g.nextId++, team: 'red', heart: true, lane: 'mid', ranged: false,
+    x: hx, z: hz, creepR: 4, hp: 7, maxHp: 7, atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
+  })
+  boss.bossCd.burrow = 0
+  boss.gimRestUntil = 0
+  for (let i = 0; i < Math.round(2 / STEP) && boss.burrowAt == null; i++) step(g, STEP)
+  assert.ok(boss.burrowAt != null, '잠행 개시')
+  assert.ok(boss.stealthT > 0, '덩굴 속 — 사라진다')
+  // 잠수 중 무적: 실체가 없다
+  assert.ok(bossInvuln(g, boss), '잠수 중 무적')
+  run(g, 1.5)
+  assert.equal(boss.burrowAt, null, '솟구침 완료')
+  assert.ok(Math.hypot(boss.x - hx, boss.z - hz) < 5, `심장 곁 등장 (${Math.hypot(boss.x - hx, boss.z - hz).toFixed(1)})`)
 })
 
 // ── 녹스 개인 실행 기믹: 죽음의 그림자(추격) + 어둠의 정적(암전 돌진) ──
