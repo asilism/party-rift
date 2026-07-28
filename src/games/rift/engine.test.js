@@ -4077,6 +4077,35 @@ test('뿌리 잠행: 덩굴로 잠수해 심장 곁에서 솟구친다 — 잠�
   assert.ok(Math.hypot(boss.x - hx, boss.z - hz) < 5, `심장 곁 등장 (${Math.hypot(boss.x - hx, boss.z - hz).toFixed(1)})`)
 })
 
+test('소프트 인레이지: 진군이 길어지면 1→2→3단계로 점층한다(구 하드 스위치 아님)', () => {
+  const g = brambleRaid()
+  const boss = g.heroes.find((h) => h.isBoss)
+  assert.ok(!(boss.bossEnrage > 0), '초반엔 평온')
+  g.time = 240 + 481 // 진군(240s) 후 8분+ — 1단계
+  run(g, 0.2)
+  assert.equal(boss.bossEnrage, 1, '1단계 ×1.15')
+  g.time = 240 + 601
+  run(g, 0.2)
+  assert.equal(boss.bossEnrage, 2, '2단계 ×1.3')
+  g.time = 240 + 721
+  run(g, 0.2)
+  assert.equal(boss.bossEnrage, 3, '3단계 ×1.5 — 광폭화')
+})
+
+test('사망 리캡: 보스 즉사기에 죽으면 "무엇에 스러졌는지"가 킬 피드에 남는다', () => {
+  const g = brambleRaid()
+  const a = g.heroes.find((h) => h.id === 'p1')
+  const bf = g.map.FOUNTAIN_POS.blue
+  a.x = bf.x + 24; a.z = bf.z
+  a.maxHp = 5000
+  a.hp = 10 // 발아 폭발(기생 씨앗)에 스러진다
+  a.seedT = 0.3
+  run(g, 0.8)
+  assert.ok(a.respawnT > 0, '사망')
+  const recap = (g.feed || []).some((f) => (f.msg || '').includes('기생 씨앗에 스러지다'))
+  assert.ok(recap, `리캡 피드 존재 (${(g.feed || []).slice(-3).map((f) => f.msg).join(' / ')})`)
+})
+
 // ── 녹스 개인 실행 기믹: 죽음의 그림자(추격) + 어둠의 정적(암전 돌진) ──
 
 function noxRaid2() {
