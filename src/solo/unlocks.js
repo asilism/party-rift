@@ -1,37 +1,51 @@
 import { CLASS_IDS } from '../games/rift/engine.js'
-import { loadCoinUnlocks } from '../shared/storage.js'
+import { loadCoinUnlocks, addCoinUnlock } from '../shared/storage.js'
 
 // 솔로 모드 캐릭터 해금 — 시작은 기본 6종(역할 골고루: 전사·궁수·마법사·힐러·암살자·탱커),
-// 승리(클리어) 1회마다 CLASS_IDS 정의 순서대로 1종씩 열린다.
-// 별도 저장 없이 통산 승수(전적)에서 유도한다 — 상태가 꼬일 일이 없고, 과거 승수도 소급 인정.
+// 나머지는 코인 해금만(승리 해금 폐지, v72). 캐릭터가 "기다리면 공짜"인 동안은 코인을 쓸
+// 이유가 없다 — 코인의 쓸 곳이 곧 광고 2배·플레이의 동기다.
 export const STARTER_COUNT = 6
 
-// 해금된 직업 집합: 기본 6종 + 코인 선행 해금(임의 직업) + 승리 해금.
-//  승리 해금은 CLASS_IDS 순서대로 "아직 안 열린" 직업을 승수만큼 연다 — 코인으로 미리 연
-//  직업은 건너뛴다. 그래야 코인 해금이 승리 해금과 충돌하지 않고, "한 번 더 이기면 X 해금"
-//  안내도 실제로 다음에 열릴 직업을 정확히 가리킨다.
-export function unlockedClassIds(totalWins) {
-  const coins = loadCoinUnlocks().filter((id) => CLASS_IDS.includes(id))
-  const unlocked = new Set([...CLASS_IDS.slice(0, STARTER_COUNT), ...coins])
+// 승리 해금 폐지 마이그레이션: 폐지 시점까지 통산 승수로 열려 있던 직업을 코인 해금
+// 목록으로 굳힌다(폐지 전과 같은 순서·같은 규칙). 이미 열린 직업은 건너뛰므로 멱등 —
+// 기존 유저가 쓰던 캐릭터가 다시 잠기는 일은 없어야 한다.
+const MIGRATE_KEY = 'bgp.rift.winunlock.migrated.v1'
+export function migrateWinUnlocks(totalWins) {
+  // 1회성: 저장식이라 재호출하면 "다음 직업"을 계속 열어버린다(가산) — 플래그로 한 번만
+  try {
+    if (localStorage.getItem(MIGRATE_KEY) === 'done') return
+    localStorage.setItem(MIGRATE_KEY, 'done')
+  } catch {
+    return // 저장이 안 되는 환경이면 마이그레이션도 하지 않는다(재실행 가산 방지)
+  }
   let wins = Math.max(0, totalWins || 0)
+  const owned = new Set([...CLASS_IDS.slice(0, STARTER_COUNT), ...loadCoinUnlocks()])
   for (const id of CLASS_IDS) {
     if (wins <= 0) break
-    if (unlocked.has(id)) continue // 이미 열림(기본/코인) — 승리 슬롯을 낭비하지 않는다
-    unlocked.add(id)
+    if (owned.has(id)) continue
+    addCoinUnlock(id)
     wins--
   }
-  return [...unlocked]
 }
 
-export function unlockedCount(totalWins) {
-  return unlockedClassIds(totalWins).length
+// 해금된 직업 집합: 기본 6종 + 코인 해금
+export function unlockedClassIds() {
+  const coins = loadCoinUnlocks().filter((id) => CLASS_IDS.includes(id))
+  return [...new Set([...CLASS_IDS.slice(0, STARTER_COUNT), ...coins])]
 }
 
-// 코인 선행 해금 가격 — 캐릭터 1종 300코인 고정(승 30코인 기준 약 10판, 광고 2배면 절반).
-export const UNLOCK_PRICE = 300
+export function unlockedCount() {
+  return unlockedClassIds().length
+}
 
-// 다음 승리로 열릴 직업 id — CLASS_IDS 순서상 아직 안 열린 첫 직업(코인 해금 반영). 전부 열렸으면 null
-export function nextUnlock(totalWins) {
-  const unlocked = new Set(unlockedClassIds(totalWins))
-  return CLASS_IDS.find((id) => !unlocked.has(id)) || null
+// 가격 곡선: 열수록 다음 캐릭터가 비싸진다(승 30코인 기준 10판 → 18판).
+// 첫 해금은 가볍게 손이 가고, 전 캐릭터 완주는 긴 여정이 되도록.
+export const UNLOCK_PRICES = [300, 350, 400, 450, 500, 550]
+
+// 다음 해금 가격 — 기본 6종 밖에서 이미 열린 수(코인+마이그레이션)에 따라 오른다
+export function unlockPrice() {
+  const opened = loadCoinUnlocks().filter(
+    (id) => CLASS_IDS.includes(id) && CLASS_IDS.indexOf(id) >= STARTER_COUNT
+  ).length
+  return UNLOCK_PRICES[Math.min(opened, UNLOCK_PRICES.length - 1)]
 }

@@ -15,7 +15,7 @@ import {
   loadEquippedTitle, saveEquippedTitle, loadDefenseRecords, recordDefenseRun, loadArenaRecords, recordArenaRun,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
-import { unlockedClassIds, unlockedCount, nextUnlock, STARTER_COUNT, UNLOCK_PRICE } from './unlocks.js'
+import { unlockedClassIds, unlockedCount, migrateWinUnlocks, STARTER_COUNT, unlockPrice } from './unlocks.js'
 import { buildSoloRoster, BOSS_NAMES } from './roster.js'
 import { missionRows, recordMissionProgress, claimMission, allClearState, claimAllClear, ALL_CLEAR_REWARD } from './missions.js'
 import { recordMatchForAchievements, achievementRows, evaluateAchievements } from './achievements.js'
@@ -920,9 +920,10 @@ function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
   const [, forceUnlockRefresh] = useState(0)
   const [buyAsk, setBuyAsk] = useState(null) // 해금 확인 대기 중인 직업 id — 실수 차감 방지
   function buyUnlock(id) {
-    if (loadCoins() < UNLOCK_PRICE) return
+    const price = unlockPrice()
+    if (loadCoins() < price) return
     sound.go()
-    addCoins(-UNLOCK_PRICE)
+    addCoins(-price)
     addCoinUnlock(id)
     setCoins(loadCoins())
     forceUnlockRefresh((n) => n + 1)
@@ -933,12 +934,13 @@ function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
     (a, r) => ({ games: a.games + r.games, wins: a.wins + r.wins }),
     { games: 0, wins: 0 }
   )
-  const unlocked = new Set(unlockedClassIds(total.wins))
-  const next = nextUnlock(total.wins)
+  migrateWinUnlocks(total.wins) // 승리 해금 폐지(v72) — 기존 승수 해금분을 코인 목록으로 굳힌다(멱등)
+  const unlocked = new Set(unlockedClassIds())
+  const price = unlockPrice()
   const [seenCount] = useState(loadUnlockSeen)
   const seenBase = Math.max(seenCount, STARTER_COUNT)
   useEffect(() => {
-    saveUnlockSeen(unlockedCount(total.wins))
+    saveUnlockSeen(unlockedCount())
     // 첫 캐릭터 선택 진입이면 조작 가이드를 한 번 띄운다
     if (!loadGuideSeen()) onHelp()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1024,11 +1026,6 @@ function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
         </aside>
 
         <section className="char-screen__pick">
-          {next && (
-            <p className="char-screen__unlock">
-              {t('🔓 승리하면')} <b>{CLASSES[next].icon} {t(CLASSES[next].name)}</b> {t('열려요!')}
-            </p>
-          )}
           <div className="char-grid">
             {CLASS_IDS.map((id, idx) => {
               const cc = CLASSES[id]
@@ -1039,9 +1036,9 @@ function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
                 <button
                   key={id}
                   className={`char-card ${cls === id ? 'is-on' : ''} ${locked ? 'is-locked' : ''}`}
-                  disabled={locked && coins < UNLOCK_PRICE}
+                  disabled={locked && coins < price}
                   title={locked
-                    ? `${t('승리할 때마다 새 캐릭터가 하나씩 열려요')}${coins >= UNLOCK_PRICE ? ` · ${t('눌러서 코인으로 바로 열기')}` : ''}`
+                    ? `${t('코인으로 해금할 수 있어요')}${coins >= price ? ` · ${t('눌러서 바로 열기')}` : ''}`
                     : t(cc.desc)}
                   onClick={() => {
                     if (locked) { sound.step(); setBuyAsk(id); return } // 코인 선행 해금 — 확인 후 차감
@@ -1051,8 +1048,8 @@ function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
                   <span className="char-card__icon">{cc.icon}</span>
                   <span className="char-card__name">{t(cc.name)}</span>
                   {locked && (
-                    <span className={`char-card__lock ${coins >= UNLOCK_PRICE ? 'char-card__lock--buyable' : ''}`}>
-                      {coins >= UNLOCK_PRICE ? `🪙${UNLOCK_PRICE}` : '🔒'}
+                    <span className={`char-card__lock ${coins >= price ? 'char-card__lock--buyable' : ''}`}>
+                      {coins >= price ? `🪙${price}` : `🔒 🪙${price}`}
                     </span>
                   )}
                   {isNew && <span className="char-card__new">NEW</span>}
@@ -1068,8 +1065,8 @@ function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
       {buyAsk && CLASSES[buyAsk] && (
         <BuyConfirm
           title={`${CLASSES[buyAsk].icon} ${t(CLASSES[buyAsk].name)} ${t('열기')}`}
-          desc={`🪙 ${UNLOCK_PRICE} ${t('코인을 사용해서 열어줄까요?')}`}
-          price={UNLOCK_PRICE}
+          desc={`🪙 ${unlockPrice()} ${t('코인을 사용해서 열어줄까요?')}`}
+          price={unlockPrice()}
           okLabel={t('열기')}
           onOk={() => { buyUnlock(buyAsk); setBuyAsk(null) }}
           onCancel={() => { sound.step(); setBuyAsk(null) }}
