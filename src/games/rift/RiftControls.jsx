@@ -75,7 +75,7 @@ function CdButton({ className, icon, label, name, desc, lines, cd, cdMax, locked
   return (
     <button
       // 키보드/게임패드 모드에서도 마우스 오버 툴팁은 보이게 한다(클릭 발동만 막음).
-      className={`rift-btn ${className} ${ready ? 'rift-btn--ready' : ''} ${pressed ? 'rift-btn--press' : ''} ${tipOn ? 'rift-btn--tip-on' : ''}`}
+      className={`rift-btn ${className} ${ready ? 'rift-btn--ready' : ''} ${locked ? 'rift-btn--locked' : ''} ${pressed ? 'rift-btn--press' : ''} ${tipOn ? 'rift-btn--tip-on' : ''}`}
       style={interactive ? undefined : { opacity: 0.82 }}
       onPointerDown={(e) => {
         if (e.pointerType !== 'mouse') {
@@ -390,7 +390,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
         cd={me?.ultCd ?? 0}
         cdMax={cls.ult.cd}
         locked={me?.ultLocked}
-        lockText={t('Lv5부터')}
+        lockText={me?.arenaPrep ? t('전투 전') : t('Lv5부터')}
         onPress={onUlt}
         interactive={mobile}
         pulse={pulses.ult || 0}
@@ -406,7 +406,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
           cd={me?.skill2Cd ?? 0}
           cdMax={cls.skill2.cd}
           locked={me?.skill2Locked}
-          lockText={t('Lv3부터')}
+          lockText={me?.arenaPrep ? t('전투 전') : t('Lv3부터')}
           onPress={onSkill2}
           interactive={mobile}
           pulse={pulses.skill2 || 0}
@@ -421,6 +421,8 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
         lines={abilityLines(me?.cls, 'skill', me)}
         cd={me?.skillCd ?? 0}
         cdMax={cls.skill.cd}
+        locked={me?.skillLocked}
+        lockText={t('전투 전')}
         stock={me?.cls === 'engineer' ? me?.turretStock ?? 0 : null}
         onPress={onSkill}
         interactive={mobile}
