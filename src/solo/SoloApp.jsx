@@ -11,6 +11,7 @@ import {
   loadEquippedHat, saveEquippedHat, loadOwnedHats, addOwnedHat,
   loadEquippedCostume, saveEquippedCostume, loadOwnedCostumes, addOwnedCostume,
   loadEquippedWeapon, saveEquippedWeapon, loadOwnedWeapons, addOwnedWeapon,
+  loadEquippedTrail, saveEquippedTrail, loadOwnedTrails, addOwnedTrail,
   loadBossRecords, recordBossClear, bossTierUnlocked, loadRiftGfx, saveRiftGfx,
   loadEquippedTitle, saveEquippedTitle, loadDefenseRecords, recordDefenseRun, loadArenaRecords, recordArenaRun,
 } from '../shared/storage.js'
@@ -1562,6 +1563,20 @@ const WEAPONS = [
   { id: 'bramblesword', name: '가시 대검', trophy: { boss: 'boss_thorn', tier: 'nightmare' }, fx: true },
 ]
 
+// 이동 트레일 — 달릴 때 발밑에 흘리는 파티클 자취(scene.js TRAIL_STYLES와 id 일치).
+//  swatch: 미리보기 견본용 대표색(파티클 색과 맞춘다). 전 모드 공통·순수 장식(밸런스 무관).
+const TRAILS = [
+  { id: null, name: '없음', price: 0 },
+  { id: 'bubble', name: '물방울 자국', price: 250, swatch: ['#7fe3ff', '#c9f4ff'] },
+  { id: 'petal', name: '꽃잎 자국', price: 300, swatch: ['#ff9ecb', '#ffd6e8'] },
+  { id: 'sparkle', name: '별가루 자국', price: 350, swatch: ['#ffe27a', '#fff6c8'], fx: true },
+  { id: 'frost', name: '서리 자국', price: 400, swatch: ['#a8e0ff', '#e8f7ff'], fx: true },
+  { id: 'flame', name: '불꽃 자국', price: 450, swatch: ['#ff7a2a', '#ffd34d'], fx: true },
+  { id: 'shadow', name: '그림자 자국', price: 500, swatch: ['#6a4a9a', '#2a1240'], fx: true },
+  { id: 'lightning', name: '번개 자국', price: 600, swatch: ['#eaf24d', '#fff6a8'], fx: true },
+  { id: 'rainbow', name: '무지개 자국', price: 800, swatch: ['#ff6b6b', '#4f8cff'], fx: true },
+]
+
 // 보스전 클리어 타임 표기 (m:ss)
 const fmtClearTime = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
@@ -1606,6 +1621,11 @@ const WARDROBE_TABS = {
     loadOwned: loadOwnedWeapons, addOwned: addOwnedWeapon,
     loadEquipped: loadEquippedWeapon, saveEquipped: saveEquippedWeapon,
   },
+  trail: {
+    label: '✨ 이펙트', items: TRAILS,
+    loadOwned: loadOwnedTrails, addOwned: addOwnedTrail,
+    loadEquipped: loadEquippedTrail, saveEquipped: saveEquippedTrail,
+  },
 }
 
 // ── 보스 전리품(비매품) — 코인 구매 불가, 해당 보스·난이도 토벌로만 지급 ──
@@ -1632,11 +1652,11 @@ function HatScreen({ profile, onBack }) {
   const [tab, setTab] = useState('hat')
   const [coins, setCoins] = useState(loadCoins)
   const [buyAsk, setBuyAsk] = useState(null) // 구매 확인 대기 중인 아이템 — 실수 차감 방지
-  const [owned, setOwned] = useState(() => ({ hat: loadOwnedHats(), costume: loadOwnedCostumes(), weapon: loadOwnedWeapons() }))
-  const [equipped, setEquipped] = useState(() => ({ hat: loadEquippedHat(), costume: loadEquippedCostume(), weapon: loadEquippedWeapon() }))
+  const [owned, setOwned] = useState(() => ({ hat: loadOwnedHats(), costume: loadOwnedCostumes(), weapon: loadOwnedWeapons(), trail: loadOwnedTrails() }))
+  const [equipped, setEquipped] = useState(() => ({ hat: loadEquippedHat(), costume: loadEquippedCostume(), weapon: loadEquippedWeapon(), trail: loadEquippedTrail() }))
   // 미리 입어보기 — 아무거나 눌러 공짜로 걸쳐 본다(저장 안 함). 보유품을 누르면 장착.
   // 미리보기는 탭별로 따로 들고, 무대에는 모자+옷을 함께 입혀 조합을 보여준다.
-  const [preview, setPreview] = useState(() => ({ hat: loadEquippedHat(), costume: loadEquippedCostume(), weapon: loadEquippedWeapon() }))
+  const [preview, setPreview] = useState(() => ({ hat: loadEquippedHat(), costume: loadEquippedCostume(), weapon: loadEquippedWeapon(), trail: loadEquippedTrail() }))
   const saved = loadSoloPick()
   const previewCls = CLASSES[saved?.cls] ? saved.cls : 'warrior'
   const T = WARDROBE_TABS[tab]
@@ -1671,6 +1691,16 @@ function HatScreen({ profile, onBack }) {
       <div className="hats-screen__body">
         <aside className="toy-card hats-preview">
           <HatPreview cls={previewCls} zodiacId={profile} hat={preview.hat} costume={preview.costume} weapon={preview.weapon} />
+          {/* 이펙트(트레일)는 3D 미리보기에 담기 어려워 대표색 견본으로 대신 보여준다 */}
+          {tab === 'trail' && previewDef?.swatch && (
+            <div className="trail-swatch" aria-hidden="true">
+              <span className="trail-swatch__label">{t('자취 미리보기')}</span>
+              <span
+                className="trail-swatch__bar"
+                style={{ background: `linear-gradient(90deg, transparent, ${previewDef.swatch[0]}, ${previewDef.swatch[1]}, ${previewDef.swatch[0]})` }}
+              />
+            </div>
+          )}
           <span className="char-screen__coins">🪙 {coins}</span>
           {!previewOwned && previewDef && (
             previewDef.trophy
