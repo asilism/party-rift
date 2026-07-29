@@ -1,8 +1,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import * as THREE from 'three'
-import { buildClassParts, CLS_SCALE, PROJ_BUILDERS } from './scene.js'
+import { buildClassParts, CLS_SCALE, PROJ_BUILDERS, TRAIL_STYLES } from './scene.js'
 import { CLASS_IDS } from './engine.js'
+
+// 이동 트레일: SoloApp TRAILS 항목과 scene TRAIL_STYLES 키가 일치해야 한다(id 불일치 함정 방지).
+//  TRAILS 데이터는 SoloApp(React)에 있어 여기서 직접 못 읽으니, 스타일 표의 무결성을 못박는다.
+test('이동 트레일 스타일: 8종 전부 유효한 파라미터를 갖는다', () => {
+  const ids = ['bubble', 'petal', 'sparkle', 'frost', 'flame', 'shadow', 'lightning', 'rainbow']
+  for (const id of ids) {
+    const st = TRAIL_STYLES[id]
+    assert.ok(st, `${id} 스타일이 등록돼 있다`)
+    assert.ok(Array.isArray(st.life) && st.life.length === 2 && st.life[0] < st.life[1], `${id} 수명 범위 유효`)
+    const col = typeof st.color === 'function' ? st.color(1.23) : st.color
+    assert.ok(Number.isFinite(col) && col >= 0 && col <= 0xffffff, `${id} 색이 유효한 hex(무지개는 시간 함수)`)
+    assert.ok(st.size > 0 && Number.isFinite(st.y), `${id} 크기·높이 유효`)
+  }
+})
 
 // 직업 파츠는 몸통의 정적 자식이라 렌더 루프 검증이 없다 — 대신 여기서
 // "만들어진다 + 좌표가 유한하다 + 얼굴 이모지 스프라이트 영역(로컬 y>2.1s)을 안 침범한다"를 못박는다.

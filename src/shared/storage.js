@@ -359,6 +359,49 @@ export function addOwnedWeapon(weaponId) {
   }
 }
 
+// ── 이동 트레일 꾸미기 — 보유 목록과 장착 상태(모자·옷·무기와 같은 구조) ──
+//  순수 로컬 시각 효과: 씬이 equippedTrail()로 직접 읽어 내 영웅 발밑에 파티클을 흘린다.
+const TRAIL_EQUIP_KEY = 'bgp.rift.trail.v1'
+const TRAILS_OWNED_KEY = 'bgp.rift.trails.v1'
+
+export function loadEquippedTrail() {
+  try {
+    return localStorage.getItem(TRAIL_EQUIP_KEY) || null
+  } catch {
+    return null
+  }
+}
+
+export function saveEquippedTrail(trailId) {
+  try {
+    if (trailId) localStorage.setItem(TRAIL_EQUIP_KEY, trailId)
+    else localStorage.removeItem(TRAIL_EQUIP_KEY)
+  } catch {
+    /* 무시 */
+  }
+}
+
+export function loadOwnedTrails() {
+  try {
+    const v = JSON.parse(localStorage.getItem(TRAILS_OWNED_KEY))
+    return Array.isArray(v) ? v : []
+  } catch {
+    return []
+  }
+}
+
+export function addOwnedTrail(trailId) {
+  const list = loadOwnedTrails()
+  if (!list.includes(trailId)) {
+    list.push(trailId)
+    try {
+      localStorage.setItem(TRAILS_OWNED_KEY, JSON.stringify(list))
+    } catch {
+      /* 무시 */
+    }
+  }
+}
+
 // ── 전투 버튼 크기 배율(0.7~1.3) — 설정 메뉴 슬라이더로 조절 ──
 const RIFT_BTNSCALE_KEY = 'bgp.rift.btnscale.v1'
 

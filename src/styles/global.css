@@ -3300,6 +3300,15 @@ body {
 }
 .hat-preview__holder { flex: 1; width: 100%; min-height: 160px; position: relative; }
 .hat-preview__holder canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* 이동 트레일 미리보기 견본 — 3D 무대엔 안 보여서 대표색 흐름 막대로 대신 */
+.trail-swatch { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 100%; }
+.trail-swatch__label { font-size: 11px; color: var(--muted); }
+.trail-swatch__bar {
+  width: 90%; height: 12px; border-radius: 99px;
+  background-size: 200% 100%; animation: trailSwatchFlow 1.6s linear infinite;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
+}
+@keyframes trailSwatchFlow { from { background-position: 200% 0; } to { background-position: 0 0; } }
 .hats-grid-card {
   flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;
   padding: 12px; max-height: 74vh; overflow-y: auto; transform: rotate(0.4deg);

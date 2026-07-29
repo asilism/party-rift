@@ -6,9 +6,24 @@ const store = new Map()
 globalThis.localStorage = {
   getItem: (k) => (store.has(k) ? store.get(k) : null),
   setItem: (k, v) => store.set(k, String(v)),
+  removeItem: (k) => store.delete(k),
 }
 
-const { addRiftRecord, loadRiftRecords, loadRiftRecordsByMode } = await import('./storage.js')
+const S = await import('./storage.js')
+const { addRiftRecord, loadRiftRecords, loadRiftRecordsByMode } = S
+
+test('이동 트레일 꾸미기: 보유 목록·장착 상태 라운드트립(모자와 같은 구조)', () => {
+  assert.deepEqual(S.loadOwnedTrails(), [])
+  assert.equal(S.loadEquippedTrail(), null)
+  S.addOwnedTrail('flame')
+  S.addOwnedTrail('flame') // 중복은 안 쌓인다
+  S.addOwnedTrail('rainbow')
+  assert.deepEqual(S.loadOwnedTrails(), ['flame', 'rainbow'])
+  S.saveEquippedTrail('flame')
+  assert.equal(S.loadEquippedTrail(), 'flame')
+  S.saveEquippedTrail(null) // 해제
+  assert.equal(S.loadEquippedTrail(), null)
+})
 
 test('전적: 직업별로 승패·KDA가 누적되고 localStorage에 남는다', () => {
   addRiftRecord('warrior', { win: true, kills: 5, deaths: 2, assists: 3 })

@@ -2640,6 +2640,44 @@ function equippedWeaponSkin() {
   }
 }
 
+function equippedTrail() {
+  try {
+    return localStorage.getItem('bgp.rift.trail.v1') || null
+  } catch {
+    return null
+  }
+}
+
+// 이동 트레일 스타일 — 내 영웅이 달릴 때 발밑에 흘리는 파티클 자취(SoloApp TRAILS와 id 일치).
+//  color: 고정색 또는 (time)=>hex 함수(무지개). hard: 각진 조각 여부. y: 방출 높이.
+export const TRAIL_STYLES = {
+  bubble: { color: 0x7fe3ff, size: 1.0, y: 0.6, spread: 0.7, up: 0.9, gravity: -1.2, life: [0.3, 0.55] },
+  petal: { color: 0xff9ecb, size: 0.9, y: 0.9, spread: 0.9, up: 0.3, gravity: 2, life: [0.35, 0.6] },
+  sparkle: { color: 0xffe27a, size: 0.7, y: 1.0, spread: 0.8, up: 0.6, gravity: -0.4, life: [0.3, 0.5], hard: true },
+  frost: { color: 0xa8e0ff, size: 0.85, y: 0.5, spread: 0.6, up: 0.2, gravity: 0.5, life: [0.4, 0.7] },
+  flame: { color: 0xff7a2a, size: 1.0, y: 0.7, spread: 0.5, up: 1.4, gravity: -2.2, life: [0.22, 0.4] },
+  shadow: { color: 0x4a2f78, size: 1.3, y: 0.4, spread: 0.9, up: 0.1, gravity: 0.2, life: [0.4, 0.7] },
+  lightning: { color: 0xeaf24d, size: 0.7, y: 0.8, spread: 1.1, up: 0.7, gravity: 0, life: [0.16, 0.3], hard: true },
+  rainbow: { color: (tm) => rainbowHex(tm), size: 0.9, y: 0.7, spread: 0.7, up: 0.6, gravity: -0.5, life: [0.34, 0.6] },
+}
+// 무지개: 시간에 따라 색상환을 도는 hex — 간단 HSV→RGB(S=V=1)
+function rainbowHex(tm) {
+  const h = (tm * 0.5) % 1
+  const i = Math.floor(h * 6)
+  const f = h * 6 - i
+  const q = 1 - f
+  let r = 0
+  let g = 0
+  let b = 0
+  if (i % 6 === 0) { r = 1; g = f; b = 0 }
+  else if (i % 6 === 1) { r = q; g = 1; b = 0 }
+  else if (i % 6 === 2) { r = 0; g = 1; b = f }
+  else if (i % 6 === 3) { r = 0; g = q; b = 1 }
+  else if (i % 6 === 4) { r = f; g = 0; b = 1 }
+  else { r = 1; g = 0; b = q }
+  return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255)
+}
+
 // 검신 글로우 셸 — 같은 지오메트리를 살짝 키워 가산 블렌딩으로 덧그린다(네온 발광).
 // 부모 메시의 변환을 그대로 상속하므로 스케일만 축별로 부풀린다.
 function bladeGlow(mesh, color, opacity = 0.3, sx = 1.05, sy = 2.0, sz = 1.8) {
@@ -7138,6 +7176,27 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         // 발 딛는 순간 발밑에서 흙먼지가 퍼진다
         if (wk.step && obj.visible) {
           particles.emit(h.x, 0.2, h.z, 0xcbb894, 4, { spread: 2, up: 0.9, gravity: 4, size: 1.1, lifeMin: 0.22, lifeMax: 0.4 })
+        }
+        // 이동 트레일(내 영웅 전용 코스메틱): 달린 거리에 비례해 발밑에 자취 파티클을 흘린다.
+        //  코스메틱은 로컬 설정을 직접 읽고(스냅샷 무관), 저사양(low) 티어에선 생략한다.
+        if (h.id === myId && quality !== 'low' && obj.visible && h.respawnT <= 0) {
+          if (u.trailId === undefined) u.trailId = equippedTrail()
+          const st = u.trailId && TRAIL_STYLES[u.trailId]
+          if (st) {
+            const lx = u.trailLastX ?? h.x
+            const lz = u.trailLastZ ?? h.z
+            u.trailAccum = (u.trailAccum || 0) + Math.hypot(h.x - lx, h.z - lz)
+            u.trailLastX = h.x
+            u.trailLastZ = h.z
+            if (u.trailAccum >= 0.7) { // 0.7월드유닛마다 한 점 — 프레임레이트 무관 균일 간격
+              u.trailAccum = 0
+              const col = typeof st.color === 'function' ? st.color(view.time) : st.color
+              particles.emit(h.x, st.y, h.z, col, 1, {
+                spread: st.spread, up: st.up, gravity: st.gravity, size: st.size,
+                hard: !!st.hard, lifeMin: st.life[0], lifeMax: st.life[1],
+              })
+            }
+          }
         }
         if (h.lvl !== u.nameLvl) {
           u.nameLvl = h.lvl
