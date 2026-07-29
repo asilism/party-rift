@@ -17,6 +17,8 @@
 //   execute                체력 30% 이하 적에게 주는 피해 +
 //   ultCdMul               궁극기 쿨다운 배율(0.55 = 45% 단축) — 곱연산
 //   skillRefund            스킬 시전 시 궁극기 쿨다운 이 초만큼 감소
+//   summonMul              소환물(펫/포탑) 체력·피해 배율(+0.2 = +20%) — 소환 시점 적용
+//   killHeal               적 처치 시 최대 체력의 이 비율만큼 회복
 
 export const RARITY_ORDER = { common: 0, rare: 1, legendary: 2 }
 export const RARITY_META = {
@@ -56,6 +58,19 @@ export const AUGMENTS = [
   { id: 'l_immortal', rarity: 'legendary', icon: '👑', name: '불사의 군주', desc: '최대 체력 +40% · 받는 피해 -15% · 초당 +2% 회복', effect: { hpMul: 0.4, def: 0.15, regen: 0.02 } },
   { id: 'l_skill', rarity: 'legendary', icon: '🌀', name: '연쇄 시전', desc: '스킬을 쓸 때마다 궁극기 쿨다운 -3초', effect: { skillRefund: 3 } },
 
+  // ── 확장(2026-07-30): 소환물 시너지 축 + 처치 흡혈 축 + 브루저/과부하 조합 ──
+  //  cls: 이 직업에게만 뜬다(소환물 증강은 소환사에게만 — 죽은 픽 방지). 없으면 전원.
+  { id: 'c_summon', rarity: 'common', icon: '⚙️', name: '소환물 강화', desc: '소환물 체력·피해 +20%', cls: ['beastmaster', 'engineer'], effect: { summonMul: 0.2 } },
+  { id: 'c_thorns', rarity: 'common', icon: '🌵', name: '가시 살갗', desc: '받은 피해의 15%를 되돌린다', effect: { thorns: 0.15 } },
+  { id: 'c_exec', rarity: 'common', icon: '🗡️', name: '마무리 일격', desc: '체력 30% 이하 적에게 주는 피해 +20%', effect: { execute: 0.2 } },
+  { id: 'r_summon', rarity: 'rare', icon: '🐺', name: '야수의 군세', desc: '소환물 체력·피해 +35% · 이동 속도 +2', cls: ['beastmaster', 'engineer'], effect: { summonMul: 0.35, speed: 2 } },
+  { id: 'r_lifesteal', rarity: 'rare', icon: '🩸', name: '피의 향연', desc: '처치 시 최대 체력의 12% 회복', effect: { killHeal: 0.12 } },
+  { id: 'r_juggernaut', rarity: 'rare', icon: '🐗', name: '저돌맹진', desc: '최대 체력 +18% · 이동 속도 +2 · 주는 피해 +8%', effect: { hpMul: 0.18, speed: 2, dealMul: 0.08 } },
+  { id: 'r_overclock', rarity: 'rare', icon: '⚡', name: '과부하', desc: '스킬 쿨다운 -12% · 스킬 시전 시 궁 쿨 -2초', effect: { cdr: 0.12, skillRefund: 2 } },
+  { id: 'l_summon', rarity: 'legendary', icon: '🐻', name: '소환술의 극의', desc: '소환물 체력·피해 +65% · 처치 시 광역 폭발', cls: ['beastmaster', 'engineer'], effect: { summonMul: 0.65, explode: 0.4 } },
+  { id: 'l_bloodlord', rarity: 'legendary', icon: '🧛', name: '피의 군주', desc: '처치 시 최대 체력의 22% 회복 · 주는 피해 +20%', effect: { killHeal: 0.22, dealMul: 0.2 } },
+  { id: 'l_titan', rarity: 'legendary', icon: '🗿', name: '불괴의 거신', desc: '최대 체력 +35% · 받는 피해 -12% · 25% 반사', effect: { hpMul: 0.35, def: 0.12, thorns: 0.25 } },
+
   // ── 조디악 시그니처 (그 지신에게만 등장 — 정체성 축) ──
   { id: 'z_rat', rarity: 'rare', icon: '🐭', name: '교활한 수집가', desc: '[쥐] 처치 시 +20골드 · 이동 속도 +2', zodiac: 'rat', effect: { killGold: 20, speed: 2 } },
   { id: 'z_ox', rarity: 'rare', icon: '🐮', name: '황소의 뚝심', desc: '[소] 최대 체력 +25% · 받는 피해 25% 반사', zodiac: 'ox', effect: { hpMul: 0.25, thorns: 0.25 } },
@@ -76,7 +91,10 @@ export const AUG_BY_ID = Object.fromEntries(AUGMENTS.map((a) => [a.id, a]))
 // 이 영웅이 뽑을 수 있는 후보 풀 — 조디악 시그니처는 본인 것만, 이미 가진 유니크 카드는 제외.
 function candidatePool(hero) {
   const owned = new Set(hero.augments || [])
-  return AUGMENTS.filter((a) => (!a.zodiac || a.zodiac === hero.zodiacId) && !owned.has(a.id))
+  return AUGMENTS.filter((a) =>
+    (!a.zodiac || a.zodiac === hero.zodiacId) // 조디악 시그니처는 본인만
+    && (!a.cls || a.cls.includes(hero.cls)) // 직업 전용(소환물 증강 등)은 해당 직업만 — 죽은 픽 방지
+    && !owned.has(a.id))
 }
 
 // 가중 무작위로 서로 다른 n장을 뽑는다.
