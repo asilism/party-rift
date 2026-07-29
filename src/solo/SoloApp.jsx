@@ -17,6 +17,7 @@ import {
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, STARTER_COUNT, unlockPrice } from './unlocks.js'
+import { weeklyShop } from './weeklyShop.js'
 import { buildSoloRoster, BOSS_NAMES } from './roster.js'
 import { missionRows, recordMissionProgress, claimMission, allClearState, claimAllClear, ALL_CLEAR_REWARD } from './missions.js'
 import { recordMatchForAchievements, achievementRows, evaluateAchievements } from './achievements.js'
@@ -1628,6 +1629,14 @@ const WARDROBE_TABS = {
   },
 }
 
+// 주간 상점 카탈로그 — 살 수 있는 코스메틱만(전리품·기본(null)·가격0 제외).
+//  탭 라벨의 앞 이모지를 뽑아 상점 카드에서 카테고리 표시로 쓴다.
+const WARDROBE_CATALOG = Object.entries(WARDROBE_TABS).flatMap(([tabId, def]) =>
+  def.items
+    .filter((it) => it.id && !it.trophy && it.price > 0)
+    .map((it) => ({ tab: tabId, id: it.id, name: it.name, price: it.price, fx: it.fx, icon: def.label.split(' ')[0] }))
+)
+
 // ── 보스 전리품(비매품) — 코인 구매 불가, 해당 보스·난이도 토벌로만 지급 ──
 // 잠금 문구: "🏆 녹스 · 악몽 토벌" — 티어 표기는 승리 배너와 같은 BOSS_TIER_OPTS를 쓴다
 const trophyLockLabel = (trophy) =>
@@ -1684,10 +1693,26 @@ function HatScreen({ profile, onBack }) {
     setEquipped((e) => ({ ...e, [tab]: preview[tab] }))
   }
 
+  // 주간 상점 구매 — 진열가(할인가)로 사서 해당 탭에 소유·장착. 실수 방지 확인은 buyAsk 재사용.
+  function buyWeekly(entry) {
+    const price = entry.discPrice ?? entry.price
+    if (coins < price) return
+    sound.go()
+    addCoins(-price)
+    const D = WARDROBE_TABS[entry.tab]
+    D.addOwned(entry.id)
+    D.saveEquipped(entry.id) // 사면 바로 장착
+    setCoins(loadCoins())
+    setOwned((o) => ({ ...o, [entry.tab]: D.loadOwned() }))
+    setEquipped((e) => ({ ...e, [entry.tab]: entry.id }))
+    if (entry.tab === tab) setPreview((p) => ({ ...p, [tab]: entry.id }))
+  }
+
   return (
     <div className="screen hats-screen">
       <BackButton onBack={onBack} />
       <h2 className="toy-heading toy-heading--screen">{t('꾸미기')}</h2>
+      <WeeklyShopStrip owned={owned} coins={coins} onBuy={(e) => setBuyAsk({ ...e, weekly: true })} />
       <div className="hats-screen__body">
         <aside className="toy-card hats-preview">
           <HatPreview cls={previewCls} zodiacId={profile} hat={preview.hat} costume={preview.costume} weapon={preview.weapon} />
@@ -1759,13 +1784,60 @@ function HatScreen({ profile, onBack }) {
       {buyAsk && (
         <BuyConfirm
           title={`${t(buyAsk.name)}${buyAsk.fx ? ' ✨' : ''}`}
-          desc={`🪙 ${buyAsk.price} ${t('코인을 사용해서 사고 바로 입어볼까요?')}`}
-          price={buyAsk.price}
+          desc={`🪙 ${buyAsk.weekly ? (buyAsk.discPrice ?? buyAsk.price) : buyAsk.price} ${t('코인을 사용해서 사고 바로 입어볼까요?')}`}
+          price={buyAsk.weekly ? (buyAsk.discPrice ?? buyAsk.price) : buyAsk.price}
           okLabel={t('구매·장착')}
-          onOk={() => { buyPreview(); setBuyAsk(null) }}
+          onOk={() => { if (buyAsk.weekly) buyWeekly(buyAsk); else buyPreview(); setBuyAsk(null) }}
           onCancel={() => { sound.step(); setBuyAsk(null) }}
         />
       )}
+    </div>
+  )
+}
+
+// ── 주간 한정 상점 띠 — 꾸미기 화면 상단. 이번 주 진열(결정론)에서 미보유 5칸 + 할인. ──
+function fmtResetIn(ms) {
+  const days = Math.floor(ms / (24 * 3600 * 1000))
+  const hours = Math.floor((ms % (24 * 3600 * 1000)) / (3600 * 1000))
+  if (days >= 1) return `${days}${t('일')} ${hours}${t('시간')}`
+  const mins = Math.floor((ms % (3600 * 1000)) / 60000)
+  return `${hours}${t('시간')} ${mins}${t('분')}`
+}
+
+function WeeklyShopStrip({ owned, coins, onBuy }) {
+  // 올인원 구매·개발자 모드는 전부 보유 취급 → 진열이 비어 섹션이 숨는다(살 게 없으니 자연스럽다)
+  const shop = weeklyShop({
+    catalog: WARDROBE_CATALOG,
+    owned: (tab, id) => hasUnlockAll() || HAT_DEV || (owned[tab] || []).includes(id),
+  })
+  if (!shop.items.length) return null // 다 사면 이번 주 진열이 빈다 — 섹션 자체를 숨긴다
+  return (
+    <div className="toy-card weekly-shop">
+      <div className="weekly-shop__head">
+        <b className="weekly-shop__title">🛒 {t('이번 주 상점')}</b>
+        <span className="weekly-shop__timer">⏳ {fmtResetIn(shop.resetInMs)} {t('후 교체')}</span>
+      </div>
+      <div className="weekly-shop__list">
+        {shop.items.map((it) => {
+          const price = it.discPrice ?? it.price
+          const canBuy = coins >= price
+          return (
+            <button
+              key={`${it.tab}:${it.id}`}
+              className={`weekly-item ${it.discPrice != null ? 'weekly-item--sale' : ''} ${canBuy ? '' : 'weekly-item--poor'}`}
+              onClick={() => { if (canBuy) { sound.step(); onBuy(it) } else sound.step() }}
+            >
+              {it.discPrice != null && <span className="weekly-item__sale-tag">SALE</span>}
+              <span className="weekly-item__icon">{it.icon}</span>
+              <span className="weekly-item__name">{t(it.name)}{it.fx ? ' ✨' : ''}</span>
+              <span className="weekly-item__price">
+                {it.discPrice != null && <s className="weekly-item__was">🪙{it.price}</s>}
+                <b className={it.discPrice != null ? 'weekly-item__now' : ''}>🪙{price}</b>
+              </span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }

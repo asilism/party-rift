@@ -3309,6 +3309,28 @@ body {
   box-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
 }
 @keyframes trailSwatchFlow { from { background-position: 200% 0; } to { background-position: 0 0; } }
+/* ── 주간 한정 상점 띠 ── */
+.weekly-shop { padding: 10px 12px; margin: 0 auto 8px; max-width: min(920px, 96vw); transform: rotate(-0.3deg); }
+.weekly-shop__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 8px; }
+.weekly-shop__title { font-size: 15px; }
+.weekly-shop__timer { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.weekly-shop__list { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.weekly-item {
+  position: relative; flex: 0 0 auto; min-width: 96px; display: flex; flex-direction: column;
+  align-items: center; gap: 3px; padding: 8px 10px; border-radius: 12px;
+  background: rgba(20, 28, 51, 0.5); border: 1px solid var(--line); cursor: pointer;
+}
+.weekly-item--sale { border-color: rgba(255, 120, 80, 0.7); box-shadow: 0 0 10px rgba(255, 120, 80, 0.25); }
+.weekly-item--poor { opacity: 0.5; }
+.weekly-item__sale-tag {
+  position: absolute; top: -7px; right: -6px; font-size: 9px; font-weight: 900; color: #fff;
+  background: #ff6a3a; padding: 1px 6px; border-radius: 99px; transform: rotate(8deg);
+}
+.weekly-item__icon { font-size: 22px; line-height: 1; }
+.weekly-item__name { font-size: 12px; font-weight: 700; text-align: center; white-space: nowrap; }
+.weekly-item__price { font-size: 12px; display: flex; gap: 5px; align-items: baseline; }
+.weekly-item__was { color: var(--muted); font-size: 10.5px; }
+.weekly-item__now { color: #ffca4d; }
 .hats-grid-card {
   flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px;
   padding: 12px; max-height: 74vh; overflow-y: auto; transform: rotate(0.4deg);
