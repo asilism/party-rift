@@ -1743,6 +1743,7 @@ export function castAttack(state, id, forceRef = null) {
 // ── 직업 스킬 ──
 export function castSkill(state, id) {
   if (state.status !== 'playing') return state
+  if (state.mode === 'arena' && state.arenaPhase === 'shop') return state // 준비 중 프리캐스트 봉인
   const h = getHero(state, id)
   if (!h || !canAct(h) || h.castT > 0) return state
   // 엔지니어 포탑: 쿨다운제가 아니라 재고제 — 재고가 있으면 쿨다운 중에도 즉시 설치한다.
@@ -2049,6 +2050,7 @@ const SKILLS = {
 // ── 궁극기 (레벨 3부터) ──
 export function castUlt(state, id) {
   if (state.status !== 'playing') return state
+  if (state.mode === 'arena' && state.arenaPhase === 'shop') return state // 준비 중 프리캐스트 봉인
   const h = getHero(state, id)
   if (!h || !canAct(h) || h.ultCd > 0 || h.lvl < ULT_LEVEL || h.castT > 0) return state
   const ok = ULTS[h.cls](state, h)
@@ -2361,6 +2363,7 @@ function fireLightArrow(state, h) {
 // ── 보조 스킬 (레벨 3부터) — 마법사를 뺀 5직업이 직업색에 맞는 한 가지씩 ──
 export function castSkill2(state, id) {
   if (state.status !== 'playing') return state
+  if (state.mode === 'arena' && state.arenaPhase === 'shop') return state // 준비 중 프리캐스트 봉인
   const h = getHero(state, id)
   if (!h || h.respawnT > 0 || h.skill2Cd > 0 || h.lvl < SKILL2_LEVEL || h.castT > 0) return state
   // 광폭화는 상태이상을 떨쳐내는 용도라 기절/빙결/공포 중에도 쓸 수 있다(자가 해제).
@@ -8385,6 +8388,7 @@ const r2d = (v) => Math.round(v * 100) / 100
 
 // 게스트에게 보낼 직렬화 스냅샷 (렌더러도 이 형태만 본다)
 export function makeView(state) {
+  const arenaPrep = state.mode === 'arena' && state.arenaPhase === 'shop' // 콜로세움 준비 — 전 스킬 잠금 표시
   return {
     phase: 'play',
     status: state.status,
@@ -8455,12 +8459,15 @@ export function makeView(state) {
       atkCd: r2d(h.atkCd),
       atkSeq: h.atkSeq,
       skillCd: r2d(h.skillCd),
+      // 콜로세움 준비 중엔 전 스킬 잠금 표시(프리캐스트 봉인과 짝) — arenaPrep은 문구 분기용
+      skillLocked: arenaPrep,
+      arenaPrep,
       skill2Cd: r2d(h.skill2Cd),
-      skill2Locked: h.lvl < SKILL2_LEVEL,
+      skill2Locked: h.lvl < SKILL2_LEVEL || arenaPrep,
       // 엔지니어 포탑 재고 (스킬 버튼에 갯수 배지로 표시)
       ...(h.cls === 'engineer' ? { turretStock: h.turretStock || 0 } : null),
       ultCd: r2d(h.ultCd),
-      ultLocked: h.lvl < ULT_LEVEL,
+      ultLocked: h.lvl < ULT_LEVEL || arenaPrep,
       stunT: r2d(h.stunT),
       freezeT: r2d(h.freezeT),
       fearT: r2d(h.fearT),

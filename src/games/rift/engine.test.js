@@ -4106,6 +4106,32 @@ test('사망 리캡: 보스 즉사기에 죽으면 "무엇에 스러졌는지"�
   assert.ok(recap, `리캡 피드 존재 (${(g.feed || []).slice(-3).map((f) => f.msg).join(' / ')})`)
 })
 
+test('콜로세움 준비 중엔 스킬 봉인 — 프리캐스트+쿨 리셋 공짜 한 번 방지', () => {
+  const g = createGame([
+    { id: 'p1', name: 'P1', zodiacId: 'rat', color: '#abc', cls: 'mage', team: 'blue' },
+    { id: 'p2', name: 'P2', zodiacId: 'ox', color: '#abc', cls: 'archer', team: 'blue' },
+    { id: 'r1', name: 'R1', zodiacId: 'pig', color: '#f55', cls: 'tank', team: 'red', isBot: true },
+    { id: 'r2', name: 'R2', zodiacId: 'dog', color: '#f55', cls: 'healer', team: 'red', isBot: true },
+  ], { mode: 'arena', rng: () => 0.5 })
+  startPlaying(g)
+  assert.equal(g.arenaPhase, 'shop', '시작은 준비 페이즈')
+  const a = g.heroes.find((h) => h.id === 'p1')
+  a.lvl = 10
+  castSkill(g, 'p1')
+  castSkill2(g, 'p1')
+  castUlt(g, 'p1')
+  assert.equal(a.skillCd, 0, '준비 중 기본 스킬 봉인')
+  assert.equal(a.skill2Cd, 0, '준비 중 보조 스킬 봉인')
+  assert.equal(a.ultCd, 0, '준비 중 궁극기 봉인')
+  const v = makeView(g)
+  const va = v.heroes.find((h) => h.id === 'p1')
+  assert.ok(va.skillLocked && va.skill2Locked && va.ultLocked && va.arenaPrep, '뷰도 전 스킬 잠금 표시')
+  // 전투가 열리면 시전 가능
+  g.arenaPhase = 'fight'
+  castSkill(g, 'p1')
+  assert.ok(a.skillCd > 0, '전투 중엔 시전')
+})
+
 // ── 녹스 개인 실행 기믹: 죽음의 그림자(추격) + 어둠의 정적(암전 돌진) ──
 
 function noxRaid2() {

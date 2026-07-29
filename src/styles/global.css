@@ -3787,3 +3787,6 @@ body {
 .prem-foot { display: flex; justify-content: center; gap: 10px; }
 .prem-restore { opacity: 0.85; }
 .menu-fab--prem { background: linear-gradient(135deg, #2a3f7a, #5a3f8a); }
+
+/* 잠긴 스킬 버튼(레벨 미달·콜로세움 준비 중) — 회색으로 확실히 '아직 못 씀'을 보인다 */
+.rift-btn--locked { filter: grayscale(1) brightness(0.75); opacity: 0.6; }
