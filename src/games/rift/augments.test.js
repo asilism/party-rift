@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { AUGMENTS, AUG_BY_ID, rollAugmentChoices, AUG_PITY_LIMIT } from './augments.js'
 
 const lcg = (seed) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296)
-const hero = (zodiacId = 'rat', augments = []) => ({ zodiacId, augments })
+const hero = (zodiacId = 'rat', augments = [], cls = 'warrior') => ({ zodiacId, augments, cls })
 
 test('증강 데이터: id 유일 · 효과 존재 · 시그니처 12지신 각 1장', () => {
   const ids = AUGMENTS.map((a) => a.id)
@@ -79,5 +79,29 @@ test('드로우: 이미 가진 카드는 다시 안 나온다', () => {
   for (let i = 0; i < 200; i++) {
     const { choices } = rollAugmentChoices(rng, hero('horse', owned), 10, 0)
     for (const c of choices) assert.ok(!owned.includes(c.id), `${c.id} 중복 미출현`)
+  }
+})
+
+test('직업 게이트: 소환물 증강은 소환사(야수조련사·엔지니어)에게만 등장', () => {
+  const rng = lcg(55)
+  const summonIds = new Set(['c_summon', 'r_summon', 'l_summon'])
+  let warriorSaw = false
+  let beastSaw = false
+  for (let i = 0; i < 400; i++) {
+    if (rollAugmentChoices(rng, hero('rat', [], 'warrior'), 10, 0).choices.some((c) => summonIds.has(c.id))) warriorSaw = true
+    if (rollAugmentChoices(rng, hero('rat', [], 'beastmaster'), 10, 0).choices.some((c) => summonIds.has(c.id))) beastSaw = true
+  }
+  assert.equal(warriorSaw, false, '전사에겐 소환물 증강 안 나옴')
+  assert.ok(beastSaw, '야수조련사에겐 소환물 증강 나옴')
+  // 데이터 정합: 소환물 증강은 cls 배열을 갖는다
+  for (const id of summonIds) assert.ok(Array.isArray(AUG_BY_ID[id].cls), `${id} cls 게이트 존재`)
+})
+
+test('확장 증강: 새 효과 키(summonMul·killHeal)가 유효한 값을 갖는다', () => {
+  const withKey = (k) => AUGMENTS.filter((a) => a.effect[k] != null)
+  assert.ok(withKey('summonMul').length >= 3, 'summonMul 증강 3종+')
+  assert.ok(withKey('killHeal').length >= 2, 'killHeal 증강 2종+')
+  for (const a of [...withKey('summonMul'), ...withKey('killHeal')]) {
+    for (const v of Object.values(a.effect)) assert.ok(Number.isFinite(v), `${a.id} 효과값 유한`)
   }
 })

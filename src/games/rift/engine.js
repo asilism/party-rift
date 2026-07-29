@@ -1497,6 +1497,7 @@ function teamGold(state, team, amount) {
 const AUG_ZERO = {
   atkMul: 0, powerMul: 0, hpMul: 0, speed: 0, cdr: 0, regen: 0, def: 0, dealMul: 0,
   lowHpDR: 0, killGold: 0, perWaveAtk: 0, thorns: 0, explode: 0, execute: 0, ultCdMul: 1, skillRefund: 0,
+  summonMul: 0, killHeal: 0, // 확장: 소환물 강화 / 처치 흡혈
 }
 const augOf = (h) => h.aug || AUG_ZERO
 function recomputeAugments(h) {
@@ -2956,6 +2957,10 @@ function augOnKill(state, attacker, x, z, victimMaxHp, allowExplode = true) {
   if (!attacker) return
   const a = augOf(attacker)
   if (a.killGold > 0) awardGold(state, attacker, a.killGold, x, z)
+  // 증강(처치 흡혈): 적을 잡으면 최대 체력의 killHeal만큼 회복 — 공격적 지속 빌드 축(살아 있을 때만)
+  if (a.killHeal > 0 && attacker.respawnT <= 0 && attacker.hp > 0) {
+    attacker.hp = Math.min(attacker.maxHp, attacker.hp + attacker.maxHp * a.killHeal)
+  }
   if (allowExplode && a.explode > 0) {
     const dmg = victimMaxHp * a.explode
     const r = 5.5
@@ -3314,6 +3319,8 @@ function botPickAugment(state, h, choices) {
     if (ap && (e.powerMul || e.cdr || e.skillRefund || e.ultCdMul < 1)) s += 2
     if (!ap && (e.atkMul || e.dealMul || e.execute)) s += 2
     if (e.hpMul || e.def || e.lowHpDR) s += 1
+    if (e.summonMul) s += 3 // 소환사 전용으로만 뜬다 — 소환물 빌드의 핵심이라 크게 가점
+    if (e.killHeal) s += 1 // 지속(흡혈)은 생존 효과처럼 소폭 가점
     return s
   }
   let best = choices[0]
@@ -4663,11 +4670,13 @@ function spawnSummon(state, owner, kind, x, z) {
   const spec = SUMMON_SPEC[kind]
   // 소환 시점 주인의 주력 스탯(공·주 평균)을 계수만큼 피해·체력에 얹는다 — 하이브리드 스케일.
   const ps = powerStat(owner)
-  const hp = spec.hp + Math.round((spec.hpCoef || 0) * ps)
+  // 증강(소환물 강화): 소환 시점 주인의 summonMul만큼 체력·피해를 함께 올린다 — 무한방어 소환사 빌드 축
+  const smul = 1 + augOf(owner).summonMul
+  const hp = Math.round((spec.hp + (spec.hpCoef || 0) * ps) * smul)
   state.summons.push({
     id: state.nextId++, kind, team: owner.team, owner: owner.id,
     x, z, dir: owner.dir, hp, maxHp: hp,
-    atkCd: 0, dmg: spec.dmg + Math.round((spec.coef || 0) * ps), range: spec.range, aggro: spec.aggro,
+    atkCd: 0, dmg: Math.round((spec.dmg + (spec.coef || 0) * ps) * smul), range: spec.range, aggro: spec.aggro,
     speed: spec.speed, mobile: spec.mobile, cd: spec.cd, life: spec.life,
     chargeT: 0, // 과부하(엔지니어) 남은 시간
     idleT: 0, // 주인 이탈 누적 시간(엔지니어 포탑 휴면 유예)

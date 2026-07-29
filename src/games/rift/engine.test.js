@@ -683,6 +683,43 @@ test('소환물은 적에게 공격받아 죽는다', () => {
   assert.ok(!g.summons.includes(pet), '체력이 다하면 소환물이 사라진다')
 })
 
+test('증강(소환물 강화): summonMul이 소환물 체력·피해를 함께 올린다', () => {
+  const base = duo('beastmaster', 'warrior')
+  startPlaying(base)
+  base.heroes[0].x = 0; base.heroes[0].z = 0
+  castSkill(base, base.heroes[0].id)
+  const petBase = base.summons[0]
+
+  const buff = duo('beastmaster', 'warrior')
+  startPlaying(buff)
+  const bm = buff.heroes[0]
+  bm.x = 0; bm.z = 0
+  bm.augDraw = { choices: ['c_summon'] } // +20% 소환물 강화
+  pickAugment(buff, bm.id, 'c_summon')
+  castSkill(buff, bm.id)
+  const petBuff = buff.summons[0]
+
+  assert.ok(petBuff.maxHp > petBase.maxHp * 1.15, `체력 +20%대 (${petBase.maxHp}→${petBuff.maxHp})`)
+  assert.ok(petBuff.dmg > petBase.dmg * 1.15, `피해 +20%대 (${petBase.dmg}→${petBuff.dmg})`)
+})
+
+test('증강(처치 흡혈): killHeal이 적 처치 시 최대 체력만큼 회복시킨다', () => {
+  const g = duo('warrior', 'mage')
+  startPlaying(g)
+  const w = g.heroes[0]
+  w.augDraw = { choices: ['r_lifesteal'] } // 처치 시 12% 회복
+  pickAugment(g, w.id, 'r_lifesteal')
+  w.hp = w.maxHp * 0.5 // 반피
+  const before = w.hp
+  // 외딴 곳에 빈사 적 병사 — 전사가 직접 평타로 잡으면 흡혈
+  w.x = 0; w.z = 0; w.dir = 0
+  plantMinion(g, 'red', 2.5, 0, 1)
+  castAttack(g, w.id)
+  run(g, 0.5) // 탄/타격 적중 + 처치
+  assert.ok(!g.minions.some((m) => m.team === 'red'), '병사 처치됨')
+  assert.ok(w.hp > before + 1, `처치 흡혈로 회복 (${Math.round(before)}→${Math.round(w.hp)})`)
+})
+
 test('전사 회전베기: 2초간 돌며 주변을 반복 타격 (이동 가능)', () => {
   const g = createGame(humans())
   startPlaying(g)
