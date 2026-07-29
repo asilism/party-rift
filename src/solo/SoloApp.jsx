@@ -831,10 +831,10 @@ function PremiumShop({ onClose }) {
               ) : (
                 <button
                   className="toy-btn toy-btn--yellow prem-item__buy"
-                  disabled={!native}
+                  disabled={!native || !iapPrice(it.id)} // 가격이 없다 = 스토어에 상품이 없다 — 눌러도 무반응인 버튼은 두지 않는다
                   onClick={() => buy(it.id)}
                 >
-                  {native ? (iapPrice(it.id) || t('구매')) : t('앱에서 구매')}
+                  {!native ? t('앱에서 구매') : iapPrice(it.id) || t('준비 중')}
                 </button>
               )}
             </div>
