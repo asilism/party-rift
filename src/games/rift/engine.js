@@ -551,14 +551,15 @@ const TIMEWARP_SLOW_T = 0.7 // 장판 안에서 갱신되는 둔화 지속(빙�
 // ── 소환물(P4 야수조련사 펫 / P5 엔지니어 포탑) 공용 시스템 ──
 // kind: 'wolfpet'(늑대) | 'bear'(곰) | 'turret'(미니포탑) | 'cannon'(거포)
 // dmg는 소환 시점에 주인의 주력 스탯(공·주 평균)×coef 만큼 더해진다(spawnSummon). 여러 번 때리므로 coef는 작게.
+// 체력 = hp + hpCoef × 주력 스탯(공·주 평균, 아이템 포함) — 전 소환물 공통.
+//  고정 체력은 후반에 평타 한두 대 감(늑대 220 = 후반 1.5대)이라 쓸모가 사라진다(2026-07-29 리밸런싱).
+//  설계 기준: "평타 몇 대를 버티는가"가 게임 내내 일정하게 — 초반 내구는 유지하고 후반만 세운다.
 const SUMMON_SPEC = {
-  wolfpet: { hp: 220, dmg: 26, coef: 0.12, range: 2.6, aggro: 16, speed: 9.5, mobile: true, cd: 0.9, life: 18 },
-  bear: { hp: 760, dmg: 64, coef: 0.3, range: 3.2, aggro: 18, speed: 8.6, mobile: true, cd: 1.1, life: 16 },
-  // 미니포탑: 기본 체력은 평타 두어 대 수준이지만 주력 스탯(hpCoef)에 비례해 단단해진다 — 후반에 평타 한 방에 안 터지게.
-  //  주인(엔지니어)이 사거리 안에 없으면 잠시 뒤 휴면(zzz).
-  // 미니포탑은 수명이 없다 — 부서지거나(4기째 설치로) 회수되기 전까지 자리를 지킨다
-  turret: { hp: 110, hpCoef: 1.0, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity },
-  cannon: { hp: 560, hpCoef: 0.8, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 },
+  wolfpet: { hp: 120, hpCoef: 1.8, dmg: 26, coef: 0.12, range: 2.6, aggro: 16, speed: 9.5, mobile: true, cd: 0.9, life: 18 }, // 초반 ~207(4.6대) → 후반 ~410(2.7대) — 야조는 3v3 59%로 이미 강해 보수 계수
+  bear: { hp: 400, hpCoef: 5.0, dmg: 64, coef: 0.3, range: 3.2, aggro: 18, speed: 8.6, mobile: true, cd: 1.1, life: 16 }, // 궁 탱커: 초반 ~640(14대) → 후반 ~1200(8대)
+  // 미니포탑: 주인이 사거리 안에 없으면 잠시 뒤 휴면(zzz). 수명 없음 — 부서지거나 회수 전까지 자리를 지킨다
+  turret: { hp: 90, hpCoef: 2.5, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity }, // 초반 ~210(4.7대) → 후반 ~490(3.3대)
+  cannon: { hp: 480, hpCoef: 3.0, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 }, // 초반 ~620(13.7대) → 후반 ~960(6.4대)
 }
 const BEAST_LEAP_DUR = 0.45 // 사냥 명령 시 야수가 적에게 달려드는(도약) 시간 — 거리 무시
 const BEAST_WOLVES = 2 // 야수조련사 늑대 소환 마릿수
