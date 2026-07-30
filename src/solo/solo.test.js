@@ -40,7 +40,7 @@ test('솔로 로스터: 매치 전체에서 직업이 겹치지 않는다 (내 �
     for (let run = 0; run < 20; run++) {
       const roster = buildSoloRoster({ zodiacId: 'tiger', cls: 'warrior', mode })
       // 보스전은 아군 5 + 보스 1, 방어전은 아군 5뿐(레드는 파도), 나머지는 팀 정원 × 2
-      const want = mode === 'boss' ? TEAM_SIZES.boss + 1 : mode === 'defense' ? TEAM_SIZES.defense : TEAM_SIZES[mode] * 2
+      const want = mode === 'boss' ? TEAM_SIZES.boss + 1 : mode === 'defense' ? TEAM_SIZES.defense : mode === 'brawl' ? 8 : TEAM_SIZES[mode] * 2
       assert.equal(roster.length, want, `${mode} 정원`)
       if (mode === 'boss') {
         const reds = roster.filter((p) => p.team === 'red')

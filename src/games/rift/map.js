@@ -106,6 +106,7 @@ const MODE_SCALE = {
   boss: { x: 1, z: 1 },
   defense: { x: 1, z: 1 }, // 무한 방어 — 보스의 협곡 재사용
   arena: { x: 1, z: 1 }, // 콜로세움 — 전용 원형 경기장
+  brawl: { x: 1, z: 1 }, // 대난투 — 넓은 원형 낭떠러지 경기장
 }
 
 // 호(弧)를 짧은 벽 선분들로 근사한다 — 보스 성곽(둥지)용. 각도는 도(°), z=+가 남쪽.
@@ -173,6 +174,31 @@ export const ARENA_LAYOUTS = {
   },
 }
 
+export const BRAWL_R = 40 // 대난투 경기장 반경 — 8인 난전+링 축소가 여유 있게
+// 대난투 스폰 8자리: 원둘레 45° 간격(반경 R-9). 팀 키 t0~t7 = 로스터의 고유 팀 id.
+const BRAWL_SPAWNS = Object.fromEntries(Array.from({ length: 8 }, (_, k) => {
+  const a = (k / 8) * Math.PI * 2
+  return [`t${k}`, { x: Math.cos(a) * (BRAWL_R - 9), z: Math.sin(a) * (BRAWL_R - 9) }]
+}))
+const BRAWL_BASE = {
+  WORLD: { minX: -60, maxX: 60, minZ: -60, maxZ: 60 },
+  // 수호석은 대난투에서 순수 배경 장식 — 경기장 밖 남북 멀리(공격 불가·동선 무관)
+  NEXUS_POS: { blue: { x: 0, z: -56 }, red: { x: 0, z: 56 } },
+  LANES: { // 더미(라인 없음) — buildMap 공용 코드가 접근만 한다
+    top: [{ x: -30, z: 0 }, { x: 30, z: 0 }],
+    mid: [{ x: -30, z: 0 }, { x: 0, z: 0 }, { x: 30, z: 0 }],
+    bot: [{ x: -30, z: 0 }, { x: 30, z: 0 }],
+  },
+  TOWER_SPOTS: [],
+  WALL_LINES: [], // 엄폐 없음 — 넉백 난타의 개활지
+  ROCKS: [ // 핀볼 바위 3개 — 넉백이 튕기는 재미 요소(중앙 비움)
+    { x: -14, z: -10, r: 2.2 }, { x: 14, z: -10, r: 2.2 }, { x: 0, z: 17, r: 2.2 },
+  ],
+  BUSHES: [], // 은신 매복은 FFA에서 과함 — 없음
+  WOLF_CAMPS: [],
+  DRAGON_PIT: { x: 0, z: 80 },
+  BARON_PIT: { x: 0, z: -80 },
+}
 export const ARENA_R = 40 // 경기장 반경 — 낙사 조각(반경 8)·스타팅 원(반경 11)이 여유 있게 들어가는 크기
 const ARENA_BASE = {
   // WORLD는 벽 밖 수호석(±54, 시각 반경 7.9)까지 미니맵에 담기게 ±60
@@ -605,7 +631,7 @@ function findPathFor(geo, sx, sz, tx, tz) {
 // 모드별 맵 객체를 만든다. 지형 데이터 + 그 지형에 묶인 헬퍼 메서드를 함께 담는다.
 export function buildMap(mode = '3v3', arenaLayout = null) {
   const raid = mode === 'boss' || mode === 'defense' // 방어전도 보스의 협곡 지형을 쓴다
-  let base = mode === 'arena' ? ARENA_BASE : raid ? BOSS_BASE : BASE // 모드별 전용 지형
+  let base = mode === 'brawl' ? BRAWL_BASE : mode === 'arena' ? ARENA_BASE : raid ? BOSS_BASE : BASE // 모드별 전용 지형
   // 콜로세움 내부 구조: 레이아웃이 지정되면 엄폐벽·바위·부쉬를 통째로 갈아 끼운다
   if (mode === 'arena' && ARENA_LAYOUTS[arenaLayout]) {
     base = { ...ARENA_BASE, ...ARENA_LAYOUTS[arenaLayout] }
@@ -622,7 +648,12 @@ export function buildMap(mode = '3v3', arenaLayout = null) {
   // 리스폰(회복) 존 — 수호석 뒤편(맵 중앙 반대쪽)으로 한 수호석만큼 떨어뜨린다.
   //  부활·귀환·HP리필이 여기서만 일어나므로, 수호석에 붙어 무한 회복하며 버티지 못한다.
   //  보스전의 레드 우물은 옥좌 바로 뒤 — 보스는 성곽 안에서 잠들고, 우물 레이저가 러시를 응징.
-  const FOUNTAIN_POS = mode === 'arena' ? {
+  const FOUNTAIN_POS = mode === 'brawl' ? {
+    // 대난투: 8인 개별 스폰(t0~t7) + blue/red 더미(공용 우물 코드가 읽지만 도달 불가 위치)
+    ...BRAWL_SPAWNS,
+    blue: { x: 0, z: -47 },
+    red: { x: 0, z: 47 },
+  } : mode === 'arena' ? {
     // 아레나: 스타팅 원(반경 FOUNTAIN_RADIUS)이 경기장 벽 안에 완전히 들어오게 — 중심 ±(R-13)
     blue: { x: -(ARENA_R - 13), z: 0 },
     red: { x: ARENA_R - 13, z: 0 },
@@ -662,8 +693,8 @@ export function buildMap(mode = '3v3', arenaLayout = null) {
     WALLS.length = 0
     WALLS.push(...wallCircles(WALL_LINES))
   }
-  if (mode !== 'arena') WALLS.push(...respawnArcCircles(FOUNTAIN_POS.blue.x, FOUNTAIN_POS.blue.z, -1))
-  if (!raid && mode !== 'arena') {
+  if (mode !== 'arena' && mode !== 'brawl') WALLS.push(...respawnArcCircles(FOUNTAIN_POS.blue.x, FOUNTAIN_POS.blue.z, -1))
+  if (!raid && mode !== 'arena' && mode !== 'brawl') {
     WALLS.push(...respawnArcCircles(FOUNTAIN_POS.red.x, FOUNTAIN_POS.red.z, 1))
   }
 
