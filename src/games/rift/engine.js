@@ -3331,7 +3331,15 @@ function botPickAugment(state, h, choices) {
 function triggerAugmentDraw(state) {
   for (const h of state.heroes) {
     if (h.team !== 'blue' || h.isBoss || h.isBossAdd || h.shadowHero) continue
-    if ((h.augments?.length || 0) >= AUG_MAX) continue // 빌드 상한 도달 — 더 안 뽑는다
+    if ((h.augments?.length || 0) >= AUG_MAX) {
+      // 빌드 상한(AUG_MAX 10장) 도달 — 더 안 뽑는다. 곱연산 폭주 방지의 의도된 상한이므로,
+      //  "증강이 왜 안 나오지?"로 오해되지 않게 사람 플레이어에게 한 번만 완성을 알린다.
+      if (!h.isBot && !h.augMaxNoticed) {
+        h.augMaxNoticed = true
+        pushFeed(state, 'obj', '⭐ 증강 빌드 완성 — 10장을 다 모았다')
+      }
+      continue
+    }
     const { choices, pity } = rollAugmentChoices(state.rng, h, state.wave, h.augPity || 0)
     if (!choices.length) continue
     h.augPity = pity // 오퍼 기준 pity 갱신(전설이 후보에 있었으면 0)

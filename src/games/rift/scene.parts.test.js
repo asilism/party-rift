@@ -6,14 +6,15 @@ import { CLASS_IDS } from './engine.js'
 
 // 이동 트레일: SoloApp TRAILS 항목과 scene TRAIL_STYLES 키가 일치해야 한다(id 불일치 함정 방지).
 //  TRAILS 데이터는 SoloApp(React)에 있어 여기서 직접 못 읽으니, 스타일 표의 무결성을 못박는다.
-test('이동 트레일 스타일: 8종 전부 유효한 무늬 스탬프 파라미터를 갖는다', () => {
+test('이동 트레일 스타일: 8종 전부 유효한 하이브리드 파라미터(발광색+무늬+크기)를 갖는다', () => {
   const ids = ['bubble', 'petal', 'sparkle', 'frost', 'flame', 'shadow', 'lightning', 'rainbow']
   for (const id of ids) {
     const st = TRAIL_STYLES[id]
     assert.ok(st, `${id} 스타일이 등록돼 있다`)
+    const col = typeof st.color === 'function' ? st.color(1.23) : st.color
+    assert.ok(Number.isFinite(col) && col >= 0 && col <= 0xffffff, `${id} 발광색 유효(무지개는 시간함수)`)
     assert.ok(typeof st.emoji === 'string' && st.emoji.length > 0, `${id} 무늬 이모지`)
-    assert.ok(st.size > 0.5, `${id} 큼직한 크기(>0.5)`) // 빛번짐이 아니라 무늬로 읽히게
-    assert.ok(st.life > 0, `${id} 잔류 시간 유효`)
+    assert.ok(st.size > 0.5, `${id} 무늬 크기 유효`)
   }
 })
 

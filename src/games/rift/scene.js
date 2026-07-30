@@ -2648,26 +2648,38 @@ function equippedTrail() {
   }
 }
 
-// 이동 트레일 스타일 — 내 영웅이 달릴 때 발밑에 눕혀 찍는 큼직한 무늬 스탬프(SoloApp TRAILS와 id 일치).
-//  emoji: 바닥에 찍히는 무늬. size: 월드 크기(얼굴 스프라이트 3.2의 약 1/4 — 큼직하게). life: 잔류(초).
+// 이동 트레일 스타일 — 내 영웅 발밑에 흘리는 자취(SoloApp TRAILS와 id 일치).
+//  하이브리드: 큼직한 발광 파티클(불빛 base) + 드문드문 섞이는 이모지 무늬 액센트.
+//  color: 파티클 발광색(hex 또는 (time)=>hex 무지개). emoji: 가끔 섞이는 무늬. size: 이모지 월드 크기.
 export const TRAIL_STYLES = {
-  bubble: { emoji: '💧', size: 2.0, life: 0.8 },
-  petal: { emoji: '🌸', size: 2.1, life: 0.9 },
-  sparkle: { emoji: '✨', size: 2.0, life: 0.65 },
-  frost: { emoji: '❄️', size: 2.0, life: 0.9 },
-  flame: { emoji: '🔥', size: 2.2, life: 0.55 },
-  shadow: { emoji: '🌑', size: 2.2, life: 0.9 },
-  lightning: { emoji: '⚡', size: 2.0, life: 0.5 },
-  rainbow: { emoji: '🌈', size: 2.2, life: 0.75 },
+  bubble: { color: 0x7fe3ff, emoji: '💧', size: 1.5 },
+  petal: { color: 0xff9ecb, emoji: '🌸', size: 1.6 },
+  sparkle: { color: 0xffe27a, emoji: '✨', size: 1.5 },
+  frost: { color: 0xbfeaff, emoji: '❄️', size: 1.5 },
+  flame: { color: 0xff7a2a, emoji: '🔥', size: 1.7 },
+  shadow: { color: 0x9a6cff, emoji: '🌑', size: 1.7 },
+  lightning: { color: 0xeaf24d, emoji: '⚡', size: 1.5 },
+  rainbow: { color: (tm) => rainbowHex(tm), emoji: '🌈', size: 1.7 },
+}
+// 무지개: 시간에 따라 색상환을 도는 hex (HSV S=V=1 → RGB)
+function rainbowHex(tm) {
+  const h = (tm * 0.5) % 1
+  const i = Math.floor(h * 6)
+  const f = h * 6 - i
+  const q = 1 - f
+  const [r, g, b] = [
+    [1, f, 0], [q, 1, 0], [0, 1, f], [0, q, 1], [f, 0, 1], [1, 0, q],
+  ][i % 6]
+  return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255)
 }
 
-// 트레일 스탬프 풀 — 바닥에 눕는 평면(이모지 텍스처)을 링버퍼로 재사용. 찍힐 때마다 살짝
-//  커지며 페이드아웃. 내 영웅 전용이라 장착 트레일 하나에 바인딩(경기 중 트레일은 안 바뀐다).
-function makeTrailStamps(scene, emoji, size, life, count = 22) {
-  const tex = emojiTexture(emoji, 128) // 큼직하게 찍히니 해상도도 넉넉히
+// 이모지 무늬 스탬프 풀 — 파티클 사이에 가끔 섞이는 액센트. 발밑 낮게(y≈0.35), 반투명으로
+//  파티클과 어우러진다. 찍힐 때마다 살짝 커지며 페이드. 내 영웅 전용이라 트레일 하나에 바인딩.
+function makeTrailStamps(scene, emoji, size, count = 10) {
+  const tex = emojiTexture(emoji, 128)
+  const LIFE = 0.55
   const items = []
   for (let i = 0; i < count; i++) {
-    // 카메라-대면 스프라이트(얼굴·마커와 같은 방식) — 어떤 각도·바닥색에서도 확실히 보인다
     const m = new THREE.Sprite(new THREE.SpriteMaterial({
       map: tex, transparent: true, opacity: 0, depthWrite: false, depthTest: false,
     }))
@@ -2682,8 +2694,8 @@ function makeTrailStamps(scene, emoji, size, life, count = 22) {
     emit(x, z) {
       const m = items[cur]
       cur = (cur + 1) % count
-      m.position.set(x, 0.9, z) // 발밑 살짝 위 — 몸에 안 가리고 자국처럼 남는다
-      m.userData.t = life
+      m.position.set(x, 0.35, z) // 발밑 낮게 — 캐릭터보다 위로 뜨지 않게
+      m.userData.t = LIFE
       m.visible = true
     },
     update(dt) {
@@ -2691,9 +2703,9 @@ function makeTrailStamps(scene, emoji, size, life, count = 22) {
         if (!m.visible) continue
         m.userData.t -= dt
         if (m.userData.t <= 0) { m.visible = false; m.material.opacity = 0; continue }
-        const k = m.userData.t / life // 1 → 0
-        m.material.opacity = Math.min(1, k * 1.5) // 초반 또렷, 끝에 페이드
-        const grow = size * (1.2 - 0.2 * k) // 찍힌 뒤 살짝 커진다
+        const k = m.userData.t / LIFE // 1 → 0
+        m.material.opacity = Math.min(0.85, k * 1.2) // 반투명 — 파티클과 어우러지게
+        const grow = size * (1.25 - 0.25 * k)
         m.scale.set(grow, grow, 1)
       }
     },
@@ -7205,20 +7217,28 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         if (wk.step && obj.visible) {
           particles.emit(h.x, 0.2, h.z, 0xcbb894, 4, { spread: 2, up: 0.9, gravity: 4, size: 1.1, lifeMin: 0.22, lifeMax: 0.4 })
         }
-        // 이동 트레일(내 영웅 전용 코스메틱): 달린 거리에 비례해 발밑에 큼직한 무늬 스탬프를 찍는다.
+        // 이동 트레일(내 영웅 전용 코스메틱): 발밑에 발광 파티클을 흘리고, 가끔 이모지 무늬를 섞는다.
         //  코스메틱은 로컬 설정을 직접 읽고(스냅샷 무관), 저사양(low) 티어에선 생략한다.
         if (h.id === myId && quality !== 'low' && obj.visible && h.respawnT <= 0) {
           if (u.trailId === undefined) u.trailId = equippedTrail()
           const st = u.trailId && TRAIL_STYLES[u.trailId]
           if (st) {
-            if (!trailStamps) trailStamps = makeTrailStamps(scene, st.emoji, st.size, st.life)
+            if (!trailStamps) trailStamps = makeTrailStamps(scene, st.emoji, st.size)
             const lx = u.trailLastX ?? h.x
             const lz = u.trailLastZ ?? h.z
             u.trailAccum = (u.trailAccum || 0) + Math.hypot(h.x - lx, h.z - lz)
             u.trailLastX = h.x
             u.trailLastZ = h.z
-            if (u.trailAccum >= 0.85) { // ~0.85월드유닛마다 한 무늬 — 큼직해서 간격도 넓힌다
+            const col = typeof st.color === 'function' ? st.color(view.time) : st.color
+            // 발광 파티클: 자주(0.5유닛마다) 발밑에서 살짝 떠오른다 — "불빛" base
+            if (u.trailAccum - (u.trailGlowAt || 0) >= 0.5) {
+              u.trailGlowAt = u.trailAccum
+              particles.emit(h.x, 0.5, h.z, col, 2, { spread: 0.9, up: 0.7, gravity: -0.6, size: 1.9, lifeMin: 0.28, lifeMax: 0.5 })
+            }
+            // 이모지 무늬: 드문드문(2.4유닛마다) 발밑에 섞인다 — 지렁이처럼 빼곡하지 않게
+            if (u.trailAccum >= 2.4) {
               u.trailAccum = 0
+              u.trailGlowAt = 0
               trailStamps.emit(h.x, h.z)
             }
           }
