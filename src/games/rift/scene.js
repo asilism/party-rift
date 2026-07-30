@@ -2673,19 +2673,22 @@ function rainbowHex(tm) {
   return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255)
 }
 
-// 이모지 무늬 스탬프 풀 — 카메라-대면 스프라이트(얼굴·마커와 같은 검증된 렌더 경로).
-//  center 하단 앵커(0.5, 0.15)로 스프라이트가 발밑에서 위로 서니, 몸 위로 붕 뜨지 않고 발밑에 붙는다.
-//  찍힐 때마다 살짝 커지며 페이드. 내 영웅 전용이라 트레일 하나에 바인딩.
+// 이모지 무늬 스탬프 풀 — 바닥에 눕는 평면(보스 장판·독 웅덩이와 같은 검증된 바닥 데칼 레시피).
+//  빌보드가 아니라 진짜 바닥에 눕으므로 발밑에 깔린다(카메라를 향해 서지 않아 몸 위로 안 뜬다).
+//  ※ 주의: 트레일은 진행 방향 뒤에 깔리므로, 카메라 쪽(화면 아래)으로 이동하면 몸 뒤라 가려 보인다(정상).
 function makeTrailStamps(scene, emoji, size, count = 10) {
   const tex = emojiTexture(emoji, 128)
+  const geo = new THREE.PlaneGeometry(1, 1)
   const LIFE = 0.6
   const items = []
   for (let i = 0; i < count; i++) {
-    const m = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: tex, transparent: true, opacity: 0, depthWrite: false, depthTest: false,
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide,
     }))
-    m.center.set(0.5, 0.15) // 하단 근처를 기준점으로 — 발밑에 앉는다(위로 안 뜬다)
-    m.renderOrder = 3
+    m.rotation.x = -Math.PI / 2 // 바닥에 눕힌다 — 발밑 지면에 깔린다
+    m.position.y = 0.2 // 바닥(독 웅덩이 0.12·장판 0.3 대역) 바로 위
+    m.frustumCulled = false // 원점 생성 후 발밑으로 옮기므로 컬링 대상에서 뺀다
+    m.renderOrder = 2
     m.visible = false
     m.userData = { t: 0 }
     scene.add(m)
@@ -2693,10 +2696,11 @@ function makeTrailStamps(scene, emoji, size, count = 10) {
   }
   let cur = 0
   return {
-    emit(x, z) {
+    emit(x, z, spin) {
       const m = items[cur]
       cur = (cur + 1) % count
-      m.position.set(x, 0.15, z) // 발밑(지면 근처) — 하단 앵커라 몸 위로 뜨지 않는다
+      m.position.set(x, 0.2, z)
+      m.rotation.set(-Math.PI / 2, 0, spin) // 눕힌 채 무작위 회전(z는 눕힌 평면의 면내 회전)
       m.userData.t = LIFE
       m.visible = true
     },
@@ -2713,7 +2717,7 @@ function makeTrailStamps(scene, emoji, size, count = 10) {
     },
     dispose() {
       for (const m of items) { scene.remove(m); m.material.dispose() }
-      tex.dispose?.()
+      geo.dispose(); tex.dispose?.()
     },
   }
 }
@@ -7242,12 +7246,12 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
               particles.emit(h.x + perpX * off, 0.5, h.z + perpZ * off, col, 2,
                 { spread: 1.1, up: 1.7, gravity: -1.6, size: 2.1, lifeMin: 0.35, lifeMax: 0.6 }) // 더 높이 떠오른다
             }
-            // 이모지 무늬: 드문드문(2.6유닛마다) 발밑에 섞인다. 좌우 무작위로 지렁이 직선을 깬다
+            // 이모지 무늬: 드문드문(2.6유닛마다) 발밑 바닥에 눕혀 찍힌다. 좌우·회전 무작위로 자연스럽게
             if (u.trailAccum >= 2.6) {
               u.trailAccum = 0
               u.trailGlowAt = 0
               const off = (Math.random() - 0.5) * 1.4
-              trailStamps.emit(h.x + perpX * off, h.z + perpZ * off)
+              trailStamps.emit(h.x + perpX * off, h.z + perpZ * off, Math.random() * Math.PI * 2)
             }
           }
         }
