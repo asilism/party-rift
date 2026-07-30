@@ -2673,16 +2673,18 @@ function rainbowHex(tm) {
   return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255)
 }
 
-// 이모지 무늬 스탬프 풀 — 파티클 사이에 가끔 섞이는 액센트. 발밑 낮게(y≈0.35), 반투명으로
-//  파티클과 어우러진다. 찍힐 때마다 살짝 커지며 페이드. 내 영웅 전용이라 트레일 하나에 바인딩.
+// 이모지 무늬 스탬프 풀 — 카메라-대면 스프라이트(얼굴·마커와 같은 검증된 렌더 경로).
+//  center 하단 앵커(0.5, 0.15)로 스프라이트가 발밑에서 위로 서니, 몸 위로 붕 뜨지 않고 발밑에 붙는다.
+//  찍힐 때마다 살짝 커지며 페이드. 내 영웅 전용이라 트레일 하나에 바인딩.
 function makeTrailStamps(scene, emoji, size, count = 10) {
   const tex = emojiTexture(emoji, 128)
-  const LIFE = 0.55
+  const LIFE = 0.6
   const items = []
   for (let i = 0; i < count; i++) {
     const m = new THREE.Sprite(new THREE.SpriteMaterial({
       map: tex, transparent: true, opacity: 0, depthWrite: false, depthTest: false,
     }))
+    m.center.set(0.5, 0.15) // 하단 근처를 기준점으로 — 발밑에 앉는다(위로 안 뜬다)
     m.renderOrder = 3
     m.visible = false
     m.userData = { t: 0 }
@@ -2694,7 +2696,7 @@ function makeTrailStamps(scene, emoji, size, count = 10) {
     emit(x, z) {
       const m = items[cur]
       cur = (cur + 1) % count
-      m.position.set(x, 0.35, z) // 발밑 낮게 — 캐릭터보다 위로 뜨지 않게
+      m.position.set(x, 0.15, z) // 발밑(지면 근처) — 하단 앵커라 몸 위로 뜨지 않는다
       m.userData.t = LIFE
       m.visible = true
     },
@@ -2704,8 +2706,8 @@ function makeTrailStamps(scene, emoji, size, count = 10) {
         m.userData.t -= dt
         if (m.userData.t <= 0) { m.visible = false; m.material.opacity = 0; continue }
         const k = m.userData.t / LIFE // 1 → 0
-        m.material.opacity = Math.min(0.85, k * 1.2) // 반투명 — 파티클과 어우러지게
-        const grow = size * (1.25 - 0.25 * k)
+        m.material.opacity = Math.min(0.9, k * 1.3)
+        const grow = size * (1.3 - 0.3 * k)
         m.scale.set(grow, grow, 1)
       }
     },
@@ -7230,16 +7232,22 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             u.trailLastX = h.x
             u.trailLastZ = h.z
             const col = typeof st.color === 'function' ? st.color(view.time) : st.color
-            // 발광 파티클: 자주(0.5유닛마다) 발밑에서 살짝 떠오른다 — "불빛" base
-            if (u.trailAccum - (u.trailGlowAt || 0) >= 0.5) {
+            // 진행 방향의 수직축(좌우) — 파티클·무늬를 이 축으로 살짝 흩어 지렁이 같은 직선을 깬다
+            const perpX = -Math.sin(h.dir || 0)
+            const perpZ = Math.cos(h.dir || 0)
+            // 발광 파티클: 자주(0.55유닛마다) 발밑에서 위로 떠오른다 — "불빛" base. 좌우로 살짝 흩어진다
+            if (u.trailAccum - (u.trailGlowAt || 0) >= 0.55) {
               u.trailGlowAt = u.trailAccum
-              particles.emit(h.x, 0.5, h.z, col, 2, { spread: 0.9, up: 0.7, gravity: -0.6, size: 1.9, lifeMin: 0.28, lifeMax: 0.5 })
+              const off = (Math.random() - 0.5) * 1.3 // 좌우 무작위 오프셋
+              particles.emit(h.x + perpX * off, 0.5, h.z + perpZ * off, col, 2,
+                { spread: 1.1, up: 1.7, gravity: -1.6, size: 2.1, lifeMin: 0.35, lifeMax: 0.6 }) // 더 높이 떠오른다
             }
-            // 이모지 무늬: 드문드문(2.4유닛마다) 발밑에 섞인다 — 지렁이처럼 빼곡하지 않게
-            if (u.trailAccum >= 2.4) {
+            // 이모지 무늬: 드문드문(2.6유닛마다) 발밑에 섞인다. 좌우 무작위로 지렁이 직선을 깬다
+            if (u.trailAccum >= 2.6) {
               u.trailAccum = 0
               u.trailGlowAt = 0
-              trailStamps.emit(h.x, h.z)
+              const off = (Math.random() - 0.5) * 1.4
+              trailStamps.emit(h.x + perpX * off, h.z + perpZ * off)
             }
           }
         }
