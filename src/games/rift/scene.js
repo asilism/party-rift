@@ -7169,6 +7169,15 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           setHeroDead(u, false) // 부활 — 파티클 제거하고 영웅 복원
           u.lastHp = h.hp // 부활 회복을 피해로 오인하지 않게 기준 갱신
         }
+        // 낙사 부활(대난투): 추락 연출이 가라앉히고 줄여 둔 몸을 원상 복구 —
+        //  콜로세움은 낙사=영구 사망이라 이 복구 경로가 없었다(외형 소실/축소 버그의 원인)
+        if (u.fell && !(h.fallT > 0)) {
+          u.fell = false
+          u.fellAt = 0
+          obj.rotation.y = 0
+          obj.scale.setScalar(1)
+          u.lastHp = h.hp
+        }
         obj.visible = isHeroVisible(view, h, myTeam)
         if (!obj.visible) return
         // 돌풍에 띄워지면(airT) 몸이 공중으로 떠오른다 — 띄운 동안 빙글빙글 + 위로 솟았다 내려온다

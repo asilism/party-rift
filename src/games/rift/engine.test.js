@@ -4214,6 +4214,19 @@ test('대난투: 링 밖 = 장외 낙사 — 목숨 1 소실 후 리스폰 무�
   assert.equal(a.hp, hp, '무적 중 피해 무효')
 })
 
+test('대난투: 부활 시 전 스킬 쿨 초기화', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  a.skillCd = 9; a.skill2Cd = 9; a.ultCd = 40
+  a.x = g.brawlR + 3 // 장외
+  run(g, 2.0) // 낙하 → 사망
+  assert.ok(a.respawnT > 0)
+  run(g, 3.5) // 부활
+  assert.ok(a.hp > 0, '부활')
+  assert.equal(a.skillCd, 0, '기본기 쿨 초기화')
+  assert.equal(a.ultCd, 0, '궁 쿨 초기화')
+})
+
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
   const g = brawl8()
   // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락

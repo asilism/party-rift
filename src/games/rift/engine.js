@@ -3807,7 +3807,14 @@ function stepHero(state, h, dt) {
       h.x = pos.x
       h.z = pos.z
       h.hp = h.maxHp
-      if (state.mode === 'brawl') h.brawlGuardT = BRAWL_GUARD_T // 대난투: 스폰킬 방지 무적
+      if (state.mode === 'brawl') {
+        h.brawlGuardT = BRAWL_GUARD_T // 스폰킬 방지 무적
+        // 대난투: 부활 시 전 스킬 쿨 초기화 — 목숨제 난전에서 맨몸 부활은 연속 처형만 부른다
+        h.skillCd = 0
+        h.skill2Cd = 0
+        h.ultCd = 0
+        h.atkCd = 0
+      }
       h.lastHitBy = null
       h.lastHitT = -99
       h.bushI = -1
