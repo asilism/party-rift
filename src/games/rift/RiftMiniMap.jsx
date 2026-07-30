@@ -21,7 +21,8 @@ function FogOverlay({ view, myTeam, pad, map }) {
   for (const t of view.towers || []) {
     if (t.team === myTeam && t.alive) vis.push({ x: t.x, z: t.z, r: SIGHT_RANGE * 0.9 })
   }
-  vis.push({ x: NEXUS_POS[myTeam].x, z: NEXUS_POS[myTeam].z, r: SIGHT_RANGE }) // 우물
+  // 대난투(FFA)는 팀 키가 t0~t7이라 진영 우물이 없다 — 있을 때만(노포그 모드라 안개 자체가 안 쓰인다)
+  if (NEXUS_POS[myTeam]) vis.push({ x: NEXUS_POS[myTeam].x, z: NEXUS_POS[myTeam].z, r: SIGHT_RANGE }) // 우물
   return (
     <g>
       <defs>

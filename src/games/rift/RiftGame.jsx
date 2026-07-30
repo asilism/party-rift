@@ -540,7 +540,11 @@ function RiftPlay({
   // 승리 메시지를 한 글자씩 나타나게 — "파랑팀 승리"를 글자 단위로 쪼갠다(공백은 자리만 차지).
   // 보스전은 토벌 서사로: "카르곤 토벌!" / "토벌 실패...", 방어전은 도달 파도가 곧 성적표.
   const raidBoss = hud.mode === 'boss' ? hud.heroes?.find((h) => h.cls?.startsWith('boss_')) : null
-  const winText = hud.mode === 'arena'
+  const myBrawlPlace = hud.mode === 'brawl'
+    ? ((hud.brawlRanks || []).find((r) => r.id === myId)?.place || null) : null
+  const winText = hud.mode === 'brawl'
+    ? (myBrawlPlace === 1 ? `🏆 ${t('우승!')}` : `${myBrawlPlace || 8}${t('위')}...`)
+    : hud.mode === 'arena'
     ? (hud.winner === (me?.team || 'blue') ? `🏟️ ${t('승리!')}` : `💥 ${t('패배')}...`)
     : hud.mode === 'defense'
     ? `${hud.wave || 0}${t('번째 파도까지 버텼다!')}`
@@ -609,6 +613,18 @@ function RiftPlay({
                     : hud.arenaPhase === 'sudden'
                       ? t('붕괴 시작!')
                       : `${Math.floor((hud.arenaT || 0) / 60)}:${String(Math.max(0, Math.floor((hud.arenaT || 0) % 60))).padStart(2, '0')}`}
+                </span>
+              </div>
+            </div>
+          )}
+          {/* 대난투: 내 목숨 + 생존자 수 + 링 축소 경고 (같은 슬롯) */}
+          {hud.mode === 'brawl' && !finished && (
+            <div className="boss-bar-slot">
+              <div className={`boss-bar arena-bar ${hud.brawlR > 0 && hud.brawlR < 39 ? 'arena-bar--sudden' : ''}`}>
+                <span className="boss-bar__face">💥</span>
+                <span className="boss-bar__name">
+                  {`❤️×${me?.brawlLives ?? '-'} · ${(hud.heroes || []).filter((h) => (h.brawlLives || 0) > 0).length}${t('명 생존')}`}
+                  {hud.brawlR > 0 && hud.brawlR < 39 ? ' ☄️' : ''}
                 </span>
               </div>
             </div>
@@ -687,7 +703,7 @@ function RiftPlay({
         {/* 좌상단: 미니맵 + (우물/사망 중) 상점 버튼 — 세로 스택이라 비율 무관 자동 정렬 */}
         <div className="rift__side">
           <RiftMiniMap view={hud} myId={myId} />
-          {me && !finished && meCanShop && !shopOpen && (hud.mode !== 'arena' || hud.arenaPhase === 'shop') && (
+          {me && !finished && meCanShop && !shopOpen && hud.mode !== 'brawl' && (hud.mode !== 'arena' || hud.arenaPhase === 'shop') && (
             <button className="rift-shop-fab" onClick={() => setShopOpen(true)}>
               🛒 <small>{me.respawnT > 0 ? t('상점 (대기중)') : t('상점')}</small>
             </button>

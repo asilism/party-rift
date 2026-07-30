@@ -61,7 +61,11 @@ const MODE_OPTS = [
   { id: 'boss', emoji: '👹', name: '보스전', desc: '5명이 거대 보스에 도전 — 잡으면 승리', tag: '도전', price: 300 },
   { id: 'defense', emoji: '🌊', name: '무한 방어', desc: '끝없는 파도에서 수호석을 지켜라 — 기록에 도전!', tag: '생존', price: 300 },
   { id: 'arena', emoji: '🏟️', name: '콜로세움', desc: '12지신 2대2 토너먼트 — 최후의 팀이 되어라!', tag: '결투', price: 300 },
+  { id: 'brawl', emoji: '💥', name: '대난투', desc: '8인 자유 결투 — 밀쳐서 떨어뜨려라! 목숨 10개', tag: '난투', price: 300 },
 ]
+
+// 대난투 순위 보상(1위→8위) — 콜로세움 순위 보상과 비슷한 곡선
+const BRAWL_PLACE_COIN = [40, 28, 20, 15, 12, 10, 8, 6]
 
 // ── 보스 디버그(웹 ?boss 전용): 보스·티어를 골라 즉시 10레벨 진군전 — 기믹 실테스트 급행 ──
 // 수면(30초)·소환 국면(240초)을 건너뛰고 곧장 진군. 기록·코인·전리품은 일절 남기지 않는다
@@ -316,7 +320,7 @@ export default function SoloApp() {
         if (!me) return
         const win = !!view.winner && view.winner === me.team
         // 직업 전적은 3v3/5v5만 쌓는다 — 보스전·방어전 결과는 전용 기록으로 따로 남긴다
-        if (view.mode !== 'boss' && view.mode !== 'defense') {
+        if (view.mode !== 'boss' && view.mode !== 'defense' && view.mode !== 'brawl') {
           addRiftRecord(me.cls, {
             win, mode: view.mode,
             kills: me.kills, deaths: me.deaths, assists: me.assists,
@@ -327,7 +331,10 @@ export default function SoloApp() {
         //  방어전은 승패가 없다 — 버틴 파도만큼 번다(5 + 파도×2).
         const tier = view.mode === 'boss' ? (view.bossTier || 'normal') : null
         const tierOpt = tier && BOSS_TIER_OPTS.find((o) => o.id === tier)
-        let earn = view.mode === 'defense' ? 5 + (view.wave || 0) * 2 : win ? (tierOpt?.coin || 30) : 10
+        // 대난투: 순위 보상(1위 40 → 8위 6). 우승만 '승'으로 취급(첫승 보너스 연동).
+        const brawlPlace = view.mode === 'brawl' ? (view.brawlRanks?.find((r) => r.id === 'solo')?.place || 8) : 0
+        let earn = view.mode === 'brawl' ? (BRAWL_PLACE_COIN[brawlPlace - 1] || 6)
+          : view.mode === 'defense' ? 5 + (view.wave || 0) * 2 : win ? (tierOpt?.coin || 30) : 10
         let firstWin = false
         if (win && claimFirstWinToday()) {
           earn += 50
@@ -1972,7 +1979,7 @@ function SoloHelp({ onClose }) {
               <li>⚔️ <b>3대3 / 5대5</b> — 위 목표 그대로의 정통 한판</li>
               <li>👹 <b>보스전</b> — 5명이 거대 보스에 도전, 난이도 3단계</li>
               <li>🌊 <b>무한 방어</b> — 끝없는 파도에서 수호석 사수</li>
-              <li>🏟️ <b>콜로세움</b> — 12지신 2대2 토너먼트</li>
+              <li>🏟️ <b>콜로세움</b> — 12지신 2대2 토너먼트 · <b>💥 대난투</b> — 8인 자유 결투</li>
             </ul>
           )}
         </div>

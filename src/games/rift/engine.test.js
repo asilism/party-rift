@@ -4143,6 +4143,94 @@ test('사망 리캡: 보스 즉사기에 죽으면 "무엇에 스러졌는지"�
   assert.ok(recap, `리캡 피드 존재 (${(g.feed || []).slice(-3).map((f) => f.msg).join(' / ')})`)
 })
 
+// ── 대난투(8인 FFA) — 고유 팀·넉백·장외·목숨·종료 ──
+function brawl8() {
+  const zs = ['rat', 'ox', 'tiger', 'rabbit', 'dragon', 'snake', 'horse', 'goat']
+  const cs = ['warrior', 'mage', 'archer', 'tank', 'assassin', 'healer', 'gladiator', 'cryomancer']
+  const players = zs.map((z, i) => ({
+    id: i === 0 ? 'solo' : `bot-${z}`, name: z, zodiacId: z, color: '#abc',
+    team: `t${i}`, cls: cs[i], isBot: false, // 전원 사람 취급 — 봇 두뇌가 위치를 오염시키지 않게
+  }))
+  const g = createGame(players, { mode: 'brawl', rng: () => 0.5 })
+  startPlaying(g)
+  return g
+}
+
+test('대난투: 8인 고유 팀 — 서로 피해가 들어가고, 고정 레벨·목숨 10', () => {
+  const g = brawl8()
+  assert.equal(g.heroes.length, 8)
+  assert.equal(new Set(g.heroes.map((h) => h.team)).size, 8, '팀 전부 고유')
+  for (const h of g.heroes) {
+    assert.equal(h.lvl, 8, '고정 레벨')
+    assert.equal(h.brawlLives, 10, '목숨 10')
+  }
+  const [a, b] = g.heroes
+  a.x = 0; a.z = 0; b.x = 3; b.z = 0
+  const hp = b.hp
+  castAttack(g, a.id)
+  run(g, 0.5)
+  assert.ok(b.hp < hp, 'FFA 상호 피해')
+})
+
+test('대난투: 잃은 체력이 많을수록 넉백이 커진다(스매시 %)', () => {
+  const g = brawl8()
+  const [a, b] = g.heroes
+  a.x = 0; a.z = 0
+  b.x = 3; b.z = 0
+  b.atkCd = 99 // b의 유휴 자동 평타 봉인 — a가 반격당해 밀려나면 측정이 오염된다
+  // 풀피에서 한 대 — 넉백 기록
+  castAttack(g, a.id)
+  run(g, 0.45)
+  const fullHpPush = b.x - 3
+  // 빈사로 만들고 같은 조건에서 다시 한 대
+  a.x = 0; a.z = 0; a.atkCd = 0; a.knockT = 0
+  b.x = 3; b.z = 0; b.knockT = 0; b.knockVx = 0
+  b.hp = b.maxHp * 0.1
+  b.atkCd = 99
+  castAttack(g, a.id)
+  run(g, 0.45)
+  const lowHpPush = b.x - 3
+  assert.ok(lowHpPush > fullHpPush + 0.5, `빈사 넉백이 더 크다 (풀피 ${fullHpPush.toFixed(1)} < 빈사 ${lowHpPush.toFixed(1)})`)
+})
+
+test('대난투: 링 밖 = 장외 낙사 — 목숨 1 소실 후 리스폰 무적', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  a.x = g.brawlR + 3 // 링 밖으로
+  run(g, 0.1) // 낙하 시작
+  assert.ok(a.fallT > 0, '장외 낙하 시작')
+  run(g, 2.0) // 낙하 완료 → 사망
+  assert.equal(a.brawlLives, 9, '목숨 1 소실')
+  assert.ok(a.respawnT > 0, '리스폰 대기')
+  run(g, 3.5) // 리스폰
+  assert.ok(a.hp > 0 && a.brawlGuardT > 0, '리스폰 + 스폰 무적')
+  // 무적 중 옆에서 때려도 무효
+  const b = g.heroes[1]
+  b.x = a.x + 2.5
+  b.z = a.z
+  const hp = a.hp
+  castAttack(g, b.id)
+  run(g, 0.4)
+  assert.equal(a.hp, hp, '무적 중 피해 무효')
+})
+
+test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
+  const g = brawl8()
+  // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락
+  for (let i = 1; i < 8; i++) {
+    const h = g.heroes[i]
+    h.brawlLives = 1
+    h.x = g.brawlR + 3
+    h.z = 0
+  }
+  run(g, 2.5) // 낙하 1.5s + 처리
+  assert.equal(g.status, 'finished')
+  assert.equal(g.winner, 't0', '생존자 우승')
+  const v = makeView(g)
+  assert.equal(v.brawlRanks.length, 8, '전원 순위 기록')
+  assert.equal(v.brawlRanks.find((r) => r.id === 'solo').place, 1, '우승자 1위')
+})
+
 test('콜로세움 준비 중엔 스킬 봉인 — 프리캐스트+쿨 리셋 공짜 한 번 방지', () => {
   const g = createGame([
     { id: 'p1', name: 'P1', zodiacId: 'rat', color: '#abc', cls: 'mage', team: 'blue' },

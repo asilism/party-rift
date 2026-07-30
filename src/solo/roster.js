@@ -32,6 +32,18 @@ export function buildSoloRoster({ zodiacId, cls, mode }) {
       trophySet: trophySetOf(loadEquippedHat(), loadEquippedCostume(), loadEquippedWeapon()),
     },
   ]
+  if (mode === 'brawl') {
+    // 대난투: 8인 FFA — 각자 고유 팀(t0~t7), 지신·직업 중복 없음. 내가 t0.
+    roster[0].team = 't0'
+    for (let i = 1; i < 8; i++) {
+      const botCls = shuffle(CLASS_IDS.filter((c) => !takenCls.has(c)))[0]
+      const z = freeZ.shift()
+      if (!botCls || !z) break
+      takenCls.add(botCls)
+      roster.push({ id: `bot-${z.id}`, name: `${t(z.name)}${t('봇')}`, zodiacId: z.id, color: z.color, team: `t${i}`, cls: botCls, isBot: true })
+    }
+    return roster
+  }
   if (mode === 'boss') {
     // 보스전: 아군 봇 4 + 무작위 타입의 보스 1 (zodiacId=클래스 id → 얼굴/피드 아이콘이 보스 아이콘)
     for (let i = 1; i < size; i++) {

@@ -6014,7 +6014,7 @@ function createFog(map) {
     for (const o of view.minions) if (o.team === myTeam) punch(o.x, o.z, SIGHT_RANGE * 0.75)
     for (const o of view.towers) if (o.team === myTeam && o.alive) punch(o.x, o.z, SIGHT_RANGE * 0.9)
     for (const rv of view.reveals || []) if (rv.team === myTeam) punch(rv.x, rv.z, rv.r) // 사냥매가 걷은 안개
-    punch(map.NEXUS_POS[myTeam].x, map.NEXUS_POS[myTeam].z, SIGHT_RANGE)
+    if (map.NEXUS_POS[myTeam]) punch(map.NEXUS_POS[myTeam].x, map.NEXUS_POS[myTeam].z, SIGHT_RANGE)
     tex.needsUpdate = true
   }
   return { plane, update }
@@ -6082,7 +6082,7 @@ const MAP_THEMES = {
 
 export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') {
   const { WORLD, NEXUS_POS, FOUNTAIN_POS, LANES, ROCKS, BUSHES, WALL_LINES, DRAGON_PIT, BARON_PIT, WOLF_CAMPS } = map
-  const T = map.mode === 'boss' ? MAP_THEMES.boss : map.mode === 'arena' ? MAP_THEMES.arena : MAP_THEMES.default
+  const T = map.mode === 'boss' ? MAP_THEMES.boss : (map.mode === 'arena' || map.mode === 'brawl') ? MAP_THEMES.arena : MAP_THEMES.default
   const Q = QUALITY[quality] || QUALITY.med
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: Q.antialias })
   renderer.setPixelRatio(Math.min(Q.pixelRatio, window.devicePixelRatio || 1))
@@ -6113,8 +6113,9 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const collapsibles = [] // 콜로세움: 붕괴 구멍과 겹치면 침몰·소멸할 구조물(성벽·수풀)
   let groundPunch = null // 콜로세움: 붕괴 구멍을 바닥 텍스처에서 실제로 뚫는 캔버스
   let ground
-  if (map.mode === 'arena') {
+  if (map.mode === 'arena' || map.mode === 'brawl') {
     // 아레나 바닥은 월드 1:1 캔버스 — 붕괴 시 destination-out으로 구멍을 실제로 뚫는다(알파 컷)
+    //  대난투도 같은 캔버스 — 낭떠러지 링 밖을 실제로 뚫어 허공을 만든다(축소 시 다시 뚫음)
     const c = document.createElement('canvas')
     c.width = c.height = 1024
     const ctx = c.getContext('2d')
@@ -6132,6 +6133,20 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       new THREE.MeshLambertMaterial({ map: tex, alphaTest: 0.4 })
     )
     groundPunch = { ctx, tex, done: new Set(), size: 1024 }
+    if (map.mode === 'brawl') {
+      // 링 밖 = 허공: destination-in으로 원 안만 남긴다. 렌더 루프가 링 축소 때마다 다시 자른다.
+      groundPunch.brawlCut = (r) => {
+        const k = 1024 / GW
+        ctx.globalCompositeOperation = 'destination-in'
+        ctx.beginPath()
+        ctx.arc(512, 512, (r + 1.6) * k, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.globalCompositeOperation = 'source-over'
+        tex.needsUpdate = true
+      }
+      groundPunch.brawlCut(40)
+      groundPunch.brawlCutR = 40
+    }
   } else {
     const groundTex = grassTexture(512, T.ground)
     groundTex.repeat.set(Math.max(4, Math.round(GW / 60)), Math.max(4, Math.round(GH / 60)))
@@ -6167,14 +6182,14 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   }
   // 레인 길 3갈래 — 어두운 흙 둑 + 그 위 흙길 텍스처 (콜로세움은 길 없는 원형 모래판)
   const laneTex = laneTexture(128, T.lane)
-  for (const lane of map.mode === 'arena' ? [] : LANE_IDS) {
+  for (const lane of (map.mode === 'arena' || map.mode === 'brawl') ? [] : LANE_IDS) {
     scene.add(buildLane(LANES[lane], 6.6, T.laneEdge, 0.025)) // 가장자리(흙 둑)
     scene.add(buildLane(LANES[lane], 5, T.laneFloor, 0.035, laneTex)) // 길 바닥
   }
   // 길가 돌멩이 — 길 양옆을 따라 작은 돌을 늘어놓아 경계를 또렷하게
   const laneStoneRnd = lcg(606)
   const laneStoneItems = []
-  for (const lane of map.mode === 'arena' ? [] : LANE_IDS) {
+  for (const lane of (map.mode === 'arena' || map.mode === 'brawl') ? [] : LANE_IDS) {
     const wps = LANES[lane]
     for (let i = 0; i < wps.length - 1; i++) {
       const a = wps[i]
@@ -6203,7 +6218,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   // 리스폰 존 (회복 지대) 표시 — 수호석 뒤편에 원판 + 빛나는 테두리 + 회복 십자.
   //  콜로세움은 "스타팅 원"으로만 쓴다: 회복 십자 없음, 경기 시작 후엔 숨긴다(렌더 루프에서 토글)
   const fountainPads = new THREE.Group()
-  for (const team of ['blue', 'red']) {
+  for (const team of map.mode === 'brawl' ? [] : ['blue', 'red']) { // 대난투: 더미 우물(링 밖)은 안 그린다
     const fp = FOUNTAIN_POS[team]
     const pad = new THREE.Mesh(
       new THREE.CircleGeometry(FOUNTAIN_RADIUS, 40),
@@ -6538,7 +6553,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   //  심연 테마: 일부가 거대한 마정석 첨탑으로 바뀐다 — 죽은 숲 사이에서 보랏빛이 새어 나온다.
   const rnd = lcg(20260612)
   for (let i = 0; i < 140; i++) {
-    if (map.mode === 'arena') break // 콜로세움: 외곽 나무·수정 없음 — 경기장이 곧 세계다
+    if (map.mode === 'arena' || map.mode === 'brawl') break // 콜로세움·대난투: 외곽 나무·수정 없음 — 경기장이 곧 세계다
     const ang = rnd() * Math.PI * 2
     const rad = 1.05 + rnd() * 0.4
     const x = Math.cos(ang) * (WORLD.maxX + 8 + rnd() * 30)
@@ -6765,6 +6780,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const bossAimPool = new Map() // 보스 조준 예고(섬멸 광선 띠·서리 숨결 부채꼴) — 안개 무관(즉사급 예고)
   const particles = makeParticles(scene) // 타격 스파크·발자국 먼지·투사체 꼬리 공용
   let trailStamps = null // 이동 트레일 스탬프 풀(내 영웅 전용) — 첫 이동에 트레일을 알고 나면 생성
+  let brawlRing = null // 대난투 낭떠러지 경계 링 — 단위원을 만들어 반경만 스케일
 
   // 시간술사 역행 미리보기: 내 영웅이 되돌아갈 과거 지점을 반투명 그림자로 보여 준다(궁극기 켜졌을 때만)
   const rewindGhost = new THREE.Group()
@@ -6845,6 +6861,27 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     moteGeo.attributes.position.needsUpdate = true
     particles.update(dt) // 타격 스파크·발자국 먼지·투사체 꼬리 전진
     trailStamps?.update(dt) // 이동 트레일 스탬프 페이드
+    // 대난투: 낭떠러지 경계 링 — 링 축소가 시작되면 붉게 다급히 맥동한다
+    if (view.brawlR > 0) {
+      if (!brawlRing) {
+        brawlRing = new THREE.Mesh(
+          new THREE.RingGeometry(0.975, 1.0, 96),
+          new THREE.MeshBasicMaterial({ color: 0xffb43a, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+        )
+        brawlRing.rotation.x = -Math.PI / 2
+        brawlRing.position.y = 0.3
+        brawlRing.frustumCulled = false
+        scene.add(brawlRing)
+      }
+      const shrinking = view.brawlR < 39
+      brawlRing.scale.set(view.brawlR + 0.8, view.brawlR + 0.8, 1)
+      if (groundPunch?.brawlCut && view.brawlR < groundPunch.brawlCutR - 0.4) {
+        groundPunch.brawlCutR = view.brawlR
+        groundPunch.brawlCut(view.brawlR) // 좁아진 만큼 바닥을 다시 잘라 허공을 넓힌다
+      }
+      brawlRing.material.color.setHex(shrinking ? 0xff4a2a : 0xffb43a)
+      brawlRing.material.opacity = shrinking ? 0.55 + Math.abs(Math.sin(view.time * 4)) * 0.35 : 0.5
+    }
     const me = view.heroes.find((h) => h.id === myId)
     const myTeam = me?.team || null // 관전이면 모든 게 보인다
     // 역행 미리보기 그림자: 궁극기가 켜져 있으면(view에 rewindGhost가 실림) 그 자리에 반투명 그림자
@@ -6872,7 +6909,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         if (t.team === myTeam && t.alive && (t.x - x) ** 2 + (t.z - z) ** 2 <= SIGHT2) return true
       }
       const nx = NEXUS_POS[myTeam]
-      if ((nx.x - x) ** 2 + (nx.z - z) ** 2 <= SIGHT2) return true
+      if (nx && (nx.x - x) ** 2 + (nx.z - z) ** 2 <= SIGHT2) return true
       // 사냥매가 걷어 둔 안개 흔적 안이면 보인다
       for (const rv of view.reveals || []) {
         if (rv.team === myTeam && (rv.x - x) ** 2 + (rv.z - z) ** 2 <= rv.r * rv.r) return true
@@ -8120,7 +8157,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
 
     // 전장의 안개 (관전자는 안개 없음 / 경기가 끝나면 걷어 폭발 연출이 또렷이 보이게)
     // 시야는 천천히 변하므로 품질에 따라 몇 프레임에 한 번만 캔버스를 다시 그려 재업로드 비용을 아낀다.
-    const fogVisible = !!myTeam && view.status !== 'finished' && view.mode !== 'arena' // 콜로세움: 노포그
+    const fogVisible = !!myTeam && view.status !== 'finished' && view.mode !== 'arena' && view.mode !== 'brawl' // 콜로세움·대난투: 노포그
     if (fogVisible) {
       if (!fog.plane.visible || frameN % Q.fogEvery === 0) fog.update(view, myTeam) // 켜진 첫 프레임엔 즉시 갱신
     }
