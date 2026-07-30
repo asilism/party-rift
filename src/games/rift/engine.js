@@ -1010,7 +1010,8 @@ export function createGame(players, opts = {}) {
     arenaDeduct: mode === 'arena' ? (o.arenaDeduct ?? 3) : 0, // 이번 라운드 패배 시 차감량(하트 펑 연출용)
     arenaRound: mode === 'arena' ? (o.arenaRound || 1) : 0,
     brawlR: mode === 'brawl' ? 40 : 0, // 대난투 링 반경(시간에 따라 축소)
-    brawlRanks: mode === 'brawl' ? [] : null, // 탈락 순위 기록 {place,id,name,zodiacId} // 토너먼트 라운드 — 봇 장보기 단계(공격→피해감소→방어)를 가른다
+    brawlRanks: mode === 'brawl' ? [] : null, // 탈락 순위 기록 {place,id,name,zodiacId}
+    brawlPickups: mode === 'brawl' ? [] : null, // 하늘 보급 아이템 {id,kind,x,z,t} // 토너먼트 라운드 — 봇 장보기 단계(공격→피해감소→방어)를 가른다
     healOrbs: [], // 콜로세움 회복 열매 {id,x,z,t} — 먹으면 체력 회복
     orbT: 6, // 다음 열매 낙하까지(전투 개시 후)
     holes: [], // 붕괴 구멍 {x,z,r} — 밟으면 추락
@@ -2863,7 +2864,9 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && attacker.x != null
       && amount >= 8 && victim.hp > 0 && !(victim.fallT > 0)) {
     const frailty = 1 + (1 - victim.hp / victim.maxHp) * 1.6 // 빈사면 2.6배 — 몸이 가벼워진다
-    const kb = Math.min(8.5, (0.7 + (amount / victim.maxHp) * 8) * frailty)
+    const hammer = (attacker.brawlHammerT || 0) > 0 ? 2.1 : 1 // 🔨 뿅망치: 홈런배트
+    const mush = (victim.brawlMushT || 0) > 0 ? 0.4 : 1 // 🍄 거대버섯: 묵직해서 잘 안 밀린다
+    const kb = Math.min(8.5 * hammer, (0.7 + (amount / victim.maxHp) * 8) * frailty * hammer * mush)
     applyKnockback(state, victim, attacker.x, attacker.z, kb)
   }
   // 증강 가시(반사): 받은 피해의 일부를 때린 적 영웅(그림자/보스)에게 되돌린다.
@@ -3458,8 +3461,74 @@ function stepBrawl(state, dt) {
     }
     state.brawlR = Math.max(BRAWL_RING_MIN, state.brawlR - BRAWL_RING_SPEED * dt)
   }
+  // ── 하늘 이벤트 디렉터: 개전 15초 후부터, 시간이 갈수록 잦아진다 ──
+  state.brawlEventT = (state.brawlEventT ?? 15) - dt
+  if (state.brawlEventT <= 0) {
+    state.brawlEventT = Math.max(6, 13 - state.time / 60)
+    const a = state.rng() * Math.PI * 2
+    const rr = Math.sqrt(state.rng()) * (state.brawlR - 5)
+    const x = Math.cos(a) * rr
+    const z = Math.sin(a) * rr
+    const roll = state.rng()
+    if (roll < 0.38) {
+      // ☄️ 심판의 광선 — 예고 원 뒤 낙뢰. 중립(team 'sky')이라 전원이 피해자, 명중 시 밖으로 밀쳐낸다
+      state.zones.push({ id: state.nextId++, kind: 'meteor', team: 'sky', owner: null, x, z, r: 6.5, t: 0, delay: 1.7, dmg: 230, tag: '심판의 광선', brawlBlast: true })
+    } else if (roll < 0.68 && state.healOrbs.length < 3) {
+      state.healOrbs.push({ id: state.nextId++, x, z, t: 0 })
+      pushFx(state, 'descend', x, z, 2.2, null, 1.0)
+    } else if (state.brawlPickups.length < 2) {
+      const kinds = ['hammer', 'mush', 'star', 'bolt']
+      state.brawlPickups.push({ id: state.nextId++, kind: kinds[Math.floor(state.rng() * kinds.length)], x, z, t: 0 })
+      pushFx(state, 'descend', x, z, 2.2, null, 1.0)
+    }
+  }
+  // 회복 열매 습득(아레나와 같은 규칙 — 먼저 밟는 쪽이 임자, 35% 회복)
+  for (let i = state.healOrbs.length - 1; i >= 0; i--) {
+    const o = state.healOrbs[i]
+    o.t += dt
+    if (o.t > 20) { state.healOrbs.splice(i, 1); continue }
+    for (const h of state.heroes) {
+      if (h.respawnT > 0 || h.hp <= 0 || h.fallT > 0) continue
+      if (Math.hypot(h.x - o.x, h.z - o.z) > 2.2) continue
+      h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.35)
+      pushFx(state, 'heal', h.x, h.z, 2.6, h.team)
+      state.healOrbs.splice(i, 1)
+      break
+    }
+  }
+  // 보급 아이템 습득 — 즉발(⚡) 또는 일시 버프
+  for (let i = state.brawlPickups.length - 1; i >= 0; i--) {
+    const pk = state.brawlPickups[i]
+    pk.t += dt
+    if (pk.t > 18) { state.brawlPickups.splice(i, 1); continue }
+    for (const h of state.heroes) {
+      if (h.respawnT > 0 || h.hp <= 0 || h.fallT > 0) continue
+      if (Math.hypot(h.x - pk.x, h.z - pk.z) > 2.0) continue
+      if (pk.kind === 'hammer') {
+        h.brawlHammerT = 10 // 🔨 뿅망치: 내 타격의 넉백이 크게 강해진다
+        pushFeed(state, 'obj', `🔨 ${emojiOf(h.zodiacId)} ${h.name} — 뿅망치를 주웠다`)
+      } else if (pk.kind === 'mush') {
+        h.brawlMushT = 8 // 🍄 거대버섯: 몸이 커지고 잘 안 밀린다
+        pushFeed(state, 'obj', `🍄 ${emojiOf(h.zodiacId)} ${h.name} — 거대해졌다`)
+      } else if (pk.kind === 'star') {
+        h.brawlGuardT = Math.max(h.brawlGuardT || 0, 5) // ⭐ 무적별
+        pushFeed(state, 'obj', `⭐ ${emojiOf(h.zodiacId)} ${h.name} — 빛나기 시작했다`)
+      } else if (pk.kind === 'bolt') {
+        for (const e of state.heroes) { // ⚡ 번개: 나 빼고 전원 감전
+          if (e === h || e.respawnT > 0 || e.hp <= 0) continue
+          e.stunT = Math.max(e.stunT, 1.2)
+          pushFx(state, 'spark', e.x, e.z, 2.4, null, 0.8)
+        }
+        pushFeed(state, 'obj', `⚡ ${emojiOf(h.zodiacId)} ${h.name} — 번개가 내리쳤다`)
+      }
+      state.brawlPickups.splice(i, 1)
+      break
+    }
+  }
   for (const h of state.heroes) {
     if (h.brawlGuardT > 0) h.brawlGuardT = Math.max(0, h.brawlGuardT - dt)
+    if (h.brawlHammerT > 0) h.brawlHammerT = Math.max(0, h.brawlHammerT - dt)
+    if (h.brawlMushT > 0) h.brawlMushT = Math.max(0, h.brawlMushT - dt)
     // 장외: 링 밖으로 밀리거나 걸어 나가면 추락 시작(넉백 = 처형 수단)
     if (h.respawnT <= 0 && h.hp > 0 && !(h.fallT > 0) && Math.hypot(h.x, h.z) > state.brawlR + 1.1) {
       arenaFall(state, h, null)
@@ -4650,6 +4719,7 @@ function stepZones(state, dt) {
           const d2v = (e.x - z.x) ** 2 + (e.z - z.z) ** 2
           if (d2v > r2 || d2v < rIn2) continue // 도넛 안쪽(안전지대)은 무사하다
           damageHero(state, e, z.dmg, owner.id ? owner : null, false, z.tag)
+          if (z.brawlBlast && e.hp > 0) applyKnockback(state, e, z.x, z.z, 5.5) // ☄️ 광선: 밖으로 튕겨낸다
           if (z.stun) e.stunT = Math.max(e.stunT, z.stun)
           if (z.freeze) e.freezeT = Math.max(e.freezeT, z.freeze)
           if (z.fear) applyFear(state, e, z.fear)
@@ -8064,6 +8134,16 @@ function brawlBotDuty(state, h, dt) {
     if (sc > best) { best = sc; foe = e }
   }
   if (!foe) { h.mx = 0; h.mz = 0; return }
+  // 보급 욕심: 체력 여유가 있고 가까우면(14) 아이템부터 줍는다 — 아이템이 난전을 뒤집는다
+  if (h.hp > h.maxHp * 0.45 && state.brawlPickups.length) {
+    let pk = null
+    let pd = 14
+    for (const o of state.brawlPickups) {
+      const od = Math.hypot(h.x - o.x, h.z - o.z)
+      if (od < pd) { pd = od; pk = o }
+    }
+    if (pk) { steerToward(state, h, pk); botAttack(state, h, dt); return }
+  }
   const d = dist(h, foe)
   const range = CLASSES[h.cls].range
   const frail = h.hp < h.maxHp * 0.4
@@ -8557,6 +8637,7 @@ export function makeView(state) {
     arenaT: r2d(state.arenaT), // 현재 페이즈 남은 시간
     brawlR: state.mode === 'brawl' ? r2d(state.brawlR) : 0, // 대난투 링 반경(씬 낭떠러지 링)
     brawlRanks: state.brawlRanks ? state.brawlRanks.map((r) => ({ ...r })) : null, // 복사 필수(델타 코덱)
+    brawlPickups: state.brawlPickups ? state.brawlPickups.map((o) => ({ id: o.id, kind: o.kind, x: o.x, z: o.z })) : null,
     healOrbs: state.healOrbs.map((o) => ({ id: o.id, x: o.x, z: o.z })), // 회복 열매(💖 렌더)
     holes: state.holes.map((o) => ({ id: o.id, x: o.x, z: o.z, r: o.r })), // 붕괴 구멍 — 복사 필수(원본 참조를 넘기면 델타 코덱이 push를 못 본다)
     holeWarns: state.holeWarns.map((w) => ({ id: w.id, x: w.x, z: w.z, r: w.r, t: r2d(w.at - state.time) })), // 경고 장판
@@ -8643,7 +8724,7 @@ export function makeView(state) {
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
       fallT: r2d(h.fallT),
-      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
+      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
       bladeT: r2d(h.bladeT),
       hookWindT: r2d(h.hookWindT),
       pullT: r2d(h.pullT),

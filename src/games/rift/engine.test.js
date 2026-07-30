@@ -4227,6 +4227,25 @@ test('대난투: 부활 시 전 스킬 쿨 초기화', () => {
   assert.equal(a.ultCd, 0, '궁 쿨 초기화')
 })
 
+test('대난투: 하늘 이벤트 — 시간이 지나면 광선/열매/보급이 떨어진다', () => {
+  const g = brawl8()
+  for (const h of g.heroes) h.x = 200 // 서로 안 싸우게 전원 링 밖... 은 낙사니 정지시켜 관찰만
+  for (const h of g.heroes) { h.x = 0; h.z = 0; h.atkCd = 99; h.stunT = 0 }
+  run(g, 40) // 이벤트 최소 2회 발동 구간
+  const dropped = g.zones.some((z) => z.team === 'sky') || g.healOrbs.length > 0 || g.brawlPickups.length > 0
+  assert.ok(dropped, '하늘에서 뭔가 떨어졌다')
+})
+
+test('대난투: ⭐ 무적별 픽업 — 5초 무적', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  a.x = 10; a.z = 10
+  g.brawlPickups.push({ id: 999, kind: 'star', x: 10, z: 10, t: 0 })
+  run(g, 0.2)
+  assert.ok(a.brawlGuardT >= 4.5, `무적 부여 (${a.brawlGuardT})`)
+  assert.ok(!g.brawlPickups.some((o) => o.id === 999), '픽업 소모')
+})
+
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
   const g = brawl8()
   // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락
