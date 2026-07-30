@@ -6781,6 +6781,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const particles = makeParticles(scene) // 타격 스파크·발자국 먼지·투사체 꼬리 공용
   let trailStamps = null // 이동 트레일 스탬프 풀(내 영웅 전용) — 첫 이동에 트레일을 알고 나면 생성
   let brawlRing = null // 대난투 낭떠러지 경계 링 — 단위원을 만들어 반경만 스케일
+  const brawlPickupObjs = new Map() // 대난투 보급 아이템 마커(이모지 스프라이트)
 
   // 시간술사 역행 미리보기: 내 영웅이 되돌아갈 과거 지점을 반투명 그림자로 보여 준다(궁극기 켜졌을 때만)
   const rewindGhost = new THREE.Group()
@@ -6872,6 +6873,22 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         brawlRing.position.y = 0.3
         brawlRing.frustumCulled = false
         scene.add(brawlRing)
+      }
+      // 보급 아이템 마커 — 이모지 스프라이트가 둥실거리며 떠 있다
+      const PICKUP_EMOJI = { hammer: '🔨', mush: '🍄', star: '⭐', bolt: '⚡' }
+      const seenPk = new Set()
+      for (const pk of view.brawlPickups || []) {
+        seenPk.add(pk.id)
+        let o = brawlPickupObjs.get(pk.id)
+        if (!o) {
+          o = emojiSprite(PICKUP_EMOJI[pk.kind] || '📦', 3)
+          scene.add(o)
+          brawlPickupObjs.set(pk.id, o)
+        }
+        o.position.set(pk.x, 1.9 + Math.sin(view.time * 2.4 + pk.id) * 0.45, pk.z)
+      }
+      for (const [id, o] of brawlPickupObjs) {
+        if (!seenPk.has(id)) { scene.remove(o); brawlPickupObjs.delete(id) }
       }
       const shrinking = view.brawlR < 39
       brawlRing.scale.set(view.brawlR + 0.8, view.brawlR + 0.8, 1)
@@ -7177,6 +7194,12 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           obj.rotation.y = 0
           obj.scale.setScalar(1)
           u.lastHp = h.hp
+        }
+        // 🍄 거대버섯(대난투): 먹으면 몸이 커진다 — 부풀고 줄어드는 전환은 부드럽게
+        if (view.mode === 'brawl' && !(h.fallT > 0)) {
+          const want = (h.brawlMushT || 0) > 0 ? 1.5 : 1
+          const cur = obj.scale.x
+          if (Math.abs(cur - want) > 0.01) obj.scale.setScalar(cur + (want - cur) * Math.min(1, dt * 6))
         }
         obj.visible = isHeroVisible(view, h, myTeam)
         if (!obj.visible) return
