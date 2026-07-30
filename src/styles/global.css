@@ -3355,6 +3355,8 @@ body {
 .hat-card.is-on { background: var(--toy-yellow); box-shadow: 0 4px 0 var(--toy-yellow-d); }
 .hat-card.is-preview { border-color: var(--toy-blue, #6db6ff); background: #eef6ff; }
 .hats-buy { margin-top: 4px; font-size: clamp(12px, 2.3vh, 14px); }
+.hats-buy__sale { color: #ff5a3a; font-weight: 900; }
+.hats-buy__was { opacity: 0.7; font-size: 0.85em; margin-left: 2px; }
 .hats-buy--poor { font-family: var(--toy-font); font-weight: 700; color: #b06a6a; }
 /* 보스 전리품(비매품) 안내 — 구매 버튼 자리에 해금 조건을 띄운다 */
 .hats-buy--trophy { font-family: var(--toy-font); font-weight: 800; color: #8a6bb8; text-align: center; }

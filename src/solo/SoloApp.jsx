@@ -1672,6 +1672,14 @@ function HatScreen({ profile, onBack }) {
   const previewDef = T.items.find((it) => (it.id || null) === (preview[tab] || null))
   const previewOwned = preview[tab] === null || HAT_DEV || owned[tab].includes(preview[tab])
     || (hasUnlockAll() && !!previewDef && !previewDef.trophy) // 올인원 구매 — 전리품(토벌 증표)만은 예외
+  // 이번 주 상점 진열(결정론) — 미리보기 중인 아이템이 진열에 있으면 그 할인가로 산다.
+  const weekly = weeklyShop({
+    catalog: WARDROBE_CATALOG,
+    owned: (tb, id) => hasUnlockAll() || HAT_DEV || (owned[tb] || []).includes(id),
+  })
+  const weeklyDiscOf = (tb, id) => weekly.items.find((w) => w.tab === tb && w.id === id)?.discPrice ?? null
+  const previewDisc = previewDef && !previewDef.trophy ? weeklyDiscOf(tab, preview[tab]) : null
+  const previewPrice = previewDisc ?? previewDef?.price // 할인 진열이면 할인가
 
   function pick(item) {
     setPreview((p) => ({ ...p, [tab]: item.id })) // 누르면 일단 걸쳐 본다
@@ -1683,9 +1691,9 @@ function HatScreen({ profile, onBack }) {
   }
 
   function buyPreview() {
-    if (previewOwned || !previewDef || previewDef.trophy || coins < previewDef.price) return // 전리품은 비매품
+    if (previewOwned || !previewDef || previewDef.trophy || coins < previewPrice) return // 전리품은 비매품
     sound.go()
-    addCoins(-previewDef.price)
+    addCoins(-previewPrice) // 주간 할인 진열이면 할인가로 차감
     T.addOwned(preview[tab])
     T.saveEquipped(preview[tab]) // 사면 바로 장착
     setCoins(loadCoins())
@@ -1693,26 +1701,19 @@ function HatScreen({ profile, onBack }) {
     setEquipped((e) => ({ ...e, [tab]: preview[tab] }))
   }
 
-  // 주간 상점 구매 — 진열가(할인가)로 사서 해당 탭에 소유·장착. 실수 방지 확인은 buyAsk 재사용.
-  function buyWeekly(entry) {
-    const price = entry.discPrice ?? entry.price
-    if (coins < price) return
-    sound.go()
-    addCoins(-price)
-    const D = WARDROBE_TABS[entry.tab]
-    D.addOwned(entry.id)
-    D.saveEquipped(entry.id) // 사면 바로 장착
-    setCoins(loadCoins())
-    setOwned((o) => ({ ...o, [entry.tab]: D.loadOwned() }))
-    setEquipped((e) => ({ ...e, [entry.tab]: entry.id }))
-    if (entry.tab === tab) setPreview((p) => ({ ...p, [tab]: entry.id }))
+  // 주간 상점 항목 클릭 = 미리 입어보기(아래 탭과 같은 UX) — 해당 탭으로 전환하고 미리보기에 얹는다.
+  //  구매는 미리보기 aside의 버튼에서(할인가 자동 반영). 바로 사지 않는다.
+  function pickWeekly(it) {
+    setTab(it.tab)
+    setPreview((p) => ({ ...p, [it.tab]: it.id }))
+    sound.step()
   }
 
   return (
     <div className="screen hats-screen">
       <BackButton onBack={onBack} />
       <h2 className="toy-heading toy-heading--screen">{t('꾸미기')}</h2>
-      <WeeklyShopStrip owned={owned} coins={coins} onBuy={(e) => setBuyAsk({ ...e, weekly: true })} />
+      <WeeklyShopStrip shop={weekly} coins={coins} onPick={pickWeekly} />
       <div className="hats-screen__body">
         <aside className="toy-card hats-preview">
           <HatPreview cls={previewCls} zodiacId={profile} hat={preview.hat} costume={preview.costume} weapon={preview.weapon} />
@@ -1730,13 +1731,15 @@ function HatScreen({ profile, onBack }) {
           {!previewOwned && previewDef && (
             previewDef.trophy
               ? <span className="hats-buy hats-buy--trophy">🏆 {trophyLockLabel(previewDef.trophy)} {t('시 획득해요')}</span>
-              : coins >= previewDef.price
+              : coins >= previewPrice
                 ? (
-                  <button className="toy-btn toy-btn--yellow hats-buy" onClick={() => { sound.step(); setBuyAsk(previewDef) }}>
-                    🪙 {previewDef.price} {t('구매·장착')}
+                  <button className="toy-btn toy-btn--yellow hats-buy" onClick={() => { sound.step(); setBuyAsk({ ...previewDef, price: previewPrice, wasPrice: previewDisc != null ? previewDef.price : null }) }}>
+                    {previewDisc != null && <span className="hats-buy__sale">SALE </span>}
+                    🪙 {previewPrice} {t('구매·장착')}
+                    {previewDisc != null && <s className="hats-buy__was"> 🪙{previewDef.price}</s>}
                   </button>
                 )
-                : <span className="hats-buy hats-buy--poor">🪙 {previewDef.price} — {t('코인이 부족해요')}</span>
+                : <span className="hats-buy hats-buy--poor">🪙 {previewPrice} — {t('코인이 부족해요')}</span>
           )}
         </aside>
         <div className="toy-card hats-grid-card">
@@ -1784,10 +1787,10 @@ function HatScreen({ profile, onBack }) {
       {buyAsk && (
         <BuyConfirm
           title={`${t(buyAsk.name)}${buyAsk.fx ? ' ✨' : ''}`}
-          desc={`🪙 ${buyAsk.weekly ? (buyAsk.discPrice ?? buyAsk.price) : buyAsk.price} ${t('코인을 사용해서 사고 바로 입어볼까요?')}`}
-          price={buyAsk.weekly ? (buyAsk.discPrice ?? buyAsk.price) : buyAsk.price}
+          desc={`🪙 ${buyAsk.price} ${t('코인을 사용해서 사고 바로 입어볼까요?')}${buyAsk.wasPrice ? ` (${t('정가')} 🪙${buyAsk.wasPrice})` : ''}`}
+          price={buyAsk.price}
           okLabel={t('구매·장착')}
-          onOk={() => { if (buyAsk.weekly) buyWeekly(buyAsk); else buyPreview(); setBuyAsk(null) }}
+          onOk={() => { buyPreview(); setBuyAsk(null) }}
           onCancel={() => { sound.step(); setBuyAsk(null) }}
         />
       )}
@@ -1804,28 +1807,24 @@ function fmtResetIn(ms) {
   return `${hours}${t('시간')} ${mins}${t('분')}`
 }
 
-function WeeklyShopStrip({ owned, coins, onBuy }) {
-  // 올인원 구매·개발자 모드는 전부 보유 취급 → 진열이 비어 섹션이 숨는다(살 게 없으니 자연스럽다)
-  const shop = weeklyShop({
-    catalog: WARDROBE_CATALOG,
-    owned: (tab, id) => hasUnlockAll() || HAT_DEV || (owned[tab] || []).includes(id),
-  })
-  if (!shop.items.length) return null // 다 사면 이번 주 진열이 빈다 — 섹션 자체를 숨긴다
+function WeeklyShopStrip({ shop, coins, onPick }) {
+  // 진열이 비면(올인원·개발자 모드·완판) 섹션 자체를 숨긴다 — 살 게 없으니 자연스럽다
+  if (!shop.items.length) return null
   return (
     <div className="toy-card weekly-shop">
       <div className="weekly-shop__head">
         <b className="weekly-shop__title">🛒 {t('이번 주 상점')}</b>
-        <span className="weekly-shop__timer">⏳ {fmtResetIn(shop.resetInMs)} {t('후 교체')}</span>
+        <span className="weekly-shop__timer">⏳ {fmtResetIn(shop.resetInMs)} {t('후 교체')} · {t('눌러서 입어보기')}</span>
       </div>
       <div className="weekly-shop__list">
         {shop.items.map((it) => {
           const price = it.discPrice ?? it.price
-          const canBuy = coins >= price
+          const canAfford = coins >= price
           return (
             <button
               key={`${it.tab}:${it.id}`}
-              className={`weekly-item ${it.discPrice != null ? 'weekly-item--sale' : ''} ${canBuy ? '' : 'weekly-item--poor'}`}
-              onClick={() => { if (canBuy) { sound.step(); onBuy(it) } else sound.step() }}
+              className={`weekly-item ${it.discPrice != null ? 'weekly-item--sale' : ''} ${canAfford ? '' : 'weekly-item--poor'}`}
+              onClick={() => onPick(it)}
             >
               {it.discPrice != null && <span className="weekly-item__sale-tag">SALE</span>}
               <span className="weekly-item__icon">{it.icon}</span>
