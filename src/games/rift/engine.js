@@ -8297,11 +8297,12 @@ function brawlBotDuty(state, h, dt) {
     if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || e.fallT > 0) continue
     const ed = dist(h, e)
     // 방관자(8초+)는 거리 감쇠를 크게 완화 — 구석에 숨어도 봇들이 일부러 찾아간다
-    let sc = (e.brawlIdleT || 0) > 8 ? -ed * 0.35 + 26 : -ed
+    let sc = (e.brawlIdleT || 0) > 6 ? -ed * 0.35 + 26 : -ed
     if (e.id === h.lastHitBy && state.time - h.lastHitT < 6) sc += 14 // 원한 — 날 때린 놈부터
     if (e.hp < e.maxHp * 0.3) sc += 9 // 막타 기회
     // 목숨 리더 견제: 나보다 목숨이 많은 상대일수록 우선 표적 — '안 싸우고 1등' 전략의 카운터
-    sc += Math.max(-8, Math.min(14, ((e.brawlLives || 0) - (h.brawlLives || 0)) * 2))
+    sc += Math.max(-8, Math.min(20, ((e.brawlLives || 0) - (h.brawlLives || 0)) * 3))
+    if (!e.isBot) sc += 8 // 사람 견제 — 파티게임의 예의(다 같이 유저를 조진다)
     if ((e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) sc -= 30 // 무적자는 두들겨도 헛손질
     if ((e.brawlBombT || 0) > 0) sc -= 45 // 폭탄 든 놈 근처엔 안 간다
     if (sc > best) { best = sc; foe = e }
@@ -8332,9 +8333,20 @@ function brawlBotDuty(state, h, dt) {
   const range = CLASSES[h.cls].range
   const frail = h.hp < h.maxHp * 0.4
   const nearEdge = myR > state.brawlR - 6
+  // 빈사면 회복 열매부터 사냥 — 자연재생이 없어 열매가 유일한 회복이다
+  if (frail && state.healOrbs.length) {
+    let orb = null
+    let od = 30
+    for (const o of state.healOrbs) {
+      const d2o = Math.hypot(h.x - o.x, h.z - o.z)
+      if (d2o < od) { od = d2o; orb = o }
+    }
+    if (orb) { steerToward(state, h, orb); botAttack(state, h, dt); return }
+  }
   let goal
-  if (frail || nearEdge) {
-    // 중앙 지향 — 빈사는 잘 날아가고, 가장자리는 낭떠러지다
+  if ((frail && d < 13) || nearEdge) {
+    // 중앙 지향 카이팅 — 단 '적이 가까울 때만'. 무조건 후퇴는 1:1 무한 대치를 만든다
+    //  (자연재생이 없어 빈사가 안 풀림 — 열매도 없고 적도 멀면 그냥 싸우러 간다)
     goal = { x: h.x * 0.5, z: h.z * 0.5 }
   } else if (d > range * 0.85) {
     goal = { x: foe.x, z: foe.z }
