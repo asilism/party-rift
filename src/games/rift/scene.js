@@ -6898,7 +6898,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         seenPk.add(pk.id)
         let o = brawlPickupObjs.get(pk.id)
         if (!o) {
-          o = emojiSprite(PICKUP_EMOJI[pk.kind] || '📦', 5.2)
+          o = emojiSprite(PICKUP_EMOJI[pk.kind] || '📦', 7.2) // 과장이 미덕 — 멀리서도 보이는 대형 아이템
           o.userData.bornAt = view.time // 낙하 연출 기준 시각
           scene.add(o)
           brawlPickupObjs.set(pk.id, o)
@@ -7274,7 +7274,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
         // 🍄 거대버섯: 커진다 / 🐔 닭: 쪼그라든다 — 전환은 부드럽게
         if (view.mode === 'brawl' && !(h.fallT > 0)) {
-          const want = (h.brawlPolyT || 0) > 0 ? 0.62 : (h.brawlMushT || 0) > 0 ? 1.5 : 1
+          const want = (h.brawlPolyT || 0) > 0 ? 0.55 : (h.brawlMushT || 0) > 0 ? 1.85 : 1 // 과장: 거대는 더 크게, 닭은 더 작게
           const cur = obj.scale.x
           if (Math.abs(cur - want) > 0.01) obj.scale.setScalar(cur + (want - cur) * Math.min(1, dt * 6))
           // 💣 폭탄: 머리 위에서 깜빡 — 남을수록 느긋, 터지기 직전엔 다급하게
@@ -7286,6 +7286,25 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             u.bombMark.visible = Math.sin(view.time * (4 + (5 - h.brawlBombT) * 4)) > -0.4
             u.bombMark.position.set(0, 6.4 / Math.max(0.1, obj.scale.x), 0)
           } else if (u.bombMark) { u.bombMark.visible = false }
+          // 🔨 뿅망치 버프: 머리 위에 망치가 쿵쿵 — 홈런배트 든 게 다 보인다
+          if ((h.brawlHammerT || 0) > 0) {
+            if (!u.hammerMark) {
+              u.hammerMark = emojiSprite('🔨', 3.4)
+              obj.add(u.hammerMark)
+            }
+            u.hammerMark.visible = true
+            u.hammerMark.position.set(1.6, (6.2 + Math.abs(Math.sin(view.time * 5)) * 1.4) / Math.max(0.1, obj.scale.x), 0)
+            u.hammerMark.material.rotation = Math.sin(view.time * 5) * 0.6
+          } else if (u.hammerMark) { u.hammerMark.visible = false }
+          // ⭐ 무적(별·스폰 보호): 빙글 도는 별 — 때려봤자 소용없음을 알린다
+          if ((h.brawlGuardT || 0) > 0) {
+            if (!u.starMark) {
+              u.starMark = emojiSprite('⭐', 2.6)
+              obj.add(u.starMark)
+            }
+            u.starMark.visible = true
+            u.starMark.position.set(Math.cos(view.time * 4) * 2.6, 4.2 / Math.max(0.1, obj.scale.x), Math.sin(view.time * 4) * 2.6)
+          } else if (u.starMark) { u.starMark.visible = false }
           // 🐔 닭 머리 표시
           if ((h.brawlPolyT || 0) > 0) {
             if (!u.polyMark) {

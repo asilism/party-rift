@@ -2875,7 +2875,7 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && attacker.x != null
       && amount >= 8 && victim.hp > 0 && !(victim.fallT > 0)) {
     const frailty = 1 + (1 - victim.hp / victim.maxHp) * 1.6 // 빈사면 2.6배 — 몸이 가벼워진다
-    const hammer = (attacker.brawlHammerT || 0) > 0 ? 2.1 : 1 // 🔨 뿅망치: 홈런배트
+    const hammer = (attacker.brawlHammerT || 0) > 0 ? 2.5 : 1 // 🔨 뿅망치: 홈런배트(과장)
     const mush = (victim.brawlMushT || 0) > 0 ? 0.4 : 1 // 🍄 거대버섯: 묵직해서 잘 안 밀린다
     const kb = Math.min(8.5 * hammer, (0.7 + (amount / victim.maxHp) * 8) * frailty * hammer * mush)
     applyKnockback(state, victim, attacker.x, attacker.z, kb)
@@ -3608,8 +3608,8 @@ function stepBrawl(state, dt) {
     } else {
       // 펑! — 든 사람 대피해 + 주변 광역·강넉백
       h.brawlBombT = 0
-      pushFx(state, 'meteorhit', h.x, h.z, 7, null, 1.0)
-      pushFx(state, 'rocksplash', h.x, h.z, 5, null, 0.9)
+      pushFx(state, 'meteorhit', h.x, h.z, 10, null, 1.4)
+      pushFx(state, 'rocksplash', h.x, h.z, 8, null, 1.2)
       for (const e of state.heroes) {
         if (e.respawnT > 0 || e.hp <= 0 || e.fallT > 0 || (e.brawlGuardT || 0) > 0) continue
         const ed = Math.hypot(h.x - e.x, h.z - e.z)
@@ -4035,6 +4035,13 @@ function stepHero(state, h, dt) {
       h.z = pos.z
       h.hp = h.maxHp
       if (state.mode === 'brawl') {
+        // 링 축소 후 원래 스폰(반경 31)이 절벽 밖이면 현재 링 안쪽으로 당겨서 부활
+        const sr = Math.hypot(h.x, h.z)
+        const safe = Math.max(6, state.brawlR - 5)
+        if (sr > safe) {
+          h.x = (h.x / sr) * safe
+          h.z = (h.z / sr) * safe
+        }
         h.brawlGuardT = BRAWL_GUARD_T // 스폰킬 방지 무적
         // 대난투: 부활 시 전 스킬 쿨 초기화 — 목숨제 난전에서 맨몸 부활은 연속 처형만 부른다
         h.skillCd = 0
@@ -8897,7 +8904,7 @@ export function makeView(state) {
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
       fallT: r2d(h.fallT),
-      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlPolyT: r2d(h.brawlPolyT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
+      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlPolyT: r2d(h.brawlPolyT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
       bladeT: r2d(h.bladeT),
       hookWindT: r2d(h.hookWindT),
       pullT: r2d(h.pullT),

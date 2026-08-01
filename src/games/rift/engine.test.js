@@ -4355,6 +4355,21 @@ test('대난투: 방관 페널티 — 18초 미전투면 겁쟁이 세금, 전�
   assert.ok(b.brawlIdleT < 2, '피격도 방관 리셋')
 })
 
+test('대난투: 링 축소 후 리스폰 — 절벽(구 스폰)이 아니라 링 안쪽에 부활', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  for (const h of g.heroes) h.atkCd = 99
+  g.brawlR = 18 // 링이 좁혀진 상황
+  a.x = g.brawlR + 3 // 장외로 목숨 1 소실
+  run(g, 2.0)
+  assert.ok(a.respawnT > 0)
+  run(g, 3.5) // 부활 — 원 스폰(반경 31)은 절벽 밖
+  assert.ok(a.hp > 0, '부활')
+  assert.ok(Math.hypot(a.x, a.z) <= g.brawlR - 4.9, `링 안쪽 부활 (${Math.hypot(a.x, a.z).toFixed(1)} vs 링 ${g.brawlR})`)
+  run(g, 2.0)
+  assert.ok(!(a.fallT > 0), '부활 직후 낙사 없음')
+})
+
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
   const g = brawl8()
   // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락
