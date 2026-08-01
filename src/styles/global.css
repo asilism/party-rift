@@ -3836,3 +3836,10 @@ body {
 .brawl-standings__place { font-size: 15px; }
 .brawl-standings__name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .brawl-standings__lives { font-variant-numeric: tabular-nums; }
+
+/* 대난투 번개 — 화면 전체 백색 섬광(두 단계 감쇠) */
+.brawl-flash {
+  position: absolute; inset: 0; z-index: 40; pointer-events: none;
+  background: #fff; opacity: 0.85;
+}
+.brawl-flash--fade { opacity: 0.25; transition: opacity 0.18s ease-out; }

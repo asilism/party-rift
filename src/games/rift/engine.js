@@ -1743,6 +1743,22 @@ export function castAttack(state, id, forceRef = null) {
     const tk = state.heroes.find((o) => o.id === h.tauntBy && o.team !== h.team && o.respawnT <= 0)
     if (tk && dist(h, tk) <= heroRange(h)) ref = { tk: 'hero', id: tk.id }
   }
+  // 🍌 바나나 다발(대난투): 평타 버튼 = 투척 — 사거리에 적이 없어도 조준 방향으로 던진다.
+  //  던지는 모션은 평타 스윙(atkSeq)이 담당. 표적이 있으면 그 발밑에 정조준.
+  if (state.mode === 'brawl' && (h.brawlBananaN || 0) > 0) {
+    h.brawlBananaN--
+    const tt = ref ? targetEntity(state, ref) : null
+    const ba = state.rng() * Math.PI * 2
+    const bx = tt && tt.x != null ? tt.x + Math.cos(ba) * 1.2 : h.x + Math.cos(h.dir) * 4.5
+    const bz = tt && tt.z != null ? tt.z + Math.sin(ba) * 1.2 : h.z + Math.sin(h.dir) * 4.5
+    state.brawlTraps.push({ id: state.nextId++, x: bx, z: bz, owner: h.id, t: 0 })
+    if (!ref) { // 허공 투척 — 평타 리듬과 스윙 모션만 태우고 끝
+      h.atkCd = CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed)
+      h.atkSeq++
+      h.revealT = Math.max(h.revealT, REVEAL_TIME)
+      return state
+    }
+  }
   if (!ref) return state
   const tgt = targetEntity(state, ref)
   cancelRecall(h) // 공격하면 집중이 풀린다
@@ -1751,12 +1767,6 @@ export function castAttack(state, id, forceRef = null) {
   if (h.freezeT > 0) h.atkCd *= FREEZE_ATK // 빙결 중엔 평타도 굼뜨다
   if (h.bladeT > 0) h.atkCd *= 1 - BLADE_ASPD // 검성 무형검: 공격속도 ↑
   h.atkSeq++
-  // 🍌 바나나 다발(대난투): 평타마다 표적 발밑에 껍질을 던진다 — 던지는 손맛은 평타 모션이 낸다
-  if (state.mode === 'brawl' && (h.brawlBananaN || 0) > 0 && tgt.x != null) {
-    h.brawlBananaN--
-    const ba = state.rng() * Math.PI * 2
-    state.brawlTraps.push({ id: state.nextId++, x: tgt.x + Math.cos(ba) * 1.2, z: tgt.z + Math.sin(ba) * 1.2, owner: h.id, t: 0 })
-  }
   h.dir = Math.atan2(tgt.z - h.z, tgt.x - h.x)
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
   h.slowT = Math.max(h.slowT, ATK_SLOW_T) // 쏘는 동안엔 발이 무겁다
@@ -3532,11 +3542,15 @@ function stepBrawl(state, dt) {
         h.brawlStarT = 5 // ⭐ 무적별(마리오식): 무지개 점멸 + 이속 2배 — 스폰 보호와 별개 연출
         pushFeed(state, 'obj', `⭐ ${emojiOf(h.zodiacId)} ${h.name} — 빛나기 시작했다`)
       } else if (pk.kind === 'bolt') {
+        const struck = []
         for (const e of state.heroes) { // ⚡ 번개: 나 빼고 전원 감전
           if (e === h || e.respawnT > 0 || e.hp <= 0) continue
           e.stunT = Math.max(e.stunT, 3.0) // 3초 대정전
           pushFx(state, 'spark', e.x, e.z, 2.4, null, 0.8)
+          struck.push({ x: e.x, z: e.z })
         }
+        state.brawlBoltSeq = (state.brawlBoltSeq || 0) + 1 // 씬 낙뢰 기둥 + 화면 번쩍 트리거
+        state.brawlBoltAt = struck
         pushFeed(state, 'obj', `⚡ ${emojiOf(h.zodiacId)} ${h.name} — 번개가 내리쳤다`)
       } else if (pk.kind === 'bomb') {
         h.brawlBombT = 5 // 💣 폭탄 돌리기: 손에 붙는다 — 남에게 부딪혀 옮겨라!
@@ -3664,7 +3678,20 @@ function stepBrawl(state, dt) {
       }
     }
   }
+  // ⭐ 별 무적: 몸에 닿는 적을 태워 날린다(마리오 스타) — 대상별 0.45초 간격
   for (const h of state.heroes) {
+    if (!(h.brawlStarT > 0) || h.respawnT > 0 || h.hp <= 0 || h.fallT > 0) continue
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || e.fallT > 0) continue
+      if (Math.hypot(h.x - e.x, h.z - e.z) > 2.7) continue
+      if ((e.brawlStarHitCd || 0) > 0) continue
+      e.brawlStarHitCd = 0.45
+      damageHero(state, e, 90, h, false, '무적별') // 대난투 공용 넉백이 알아서 날린다
+      pushFx(state, 'spark', e.x, e.z, 2.6, null, 0.9)
+    }
+  }
+  for (const h of state.heroes) {
+    if (h.brawlStarHitCd > 0) h.brawlStarHitCd = Math.max(0, h.brawlStarHitCd - dt)
     if (h.brawlGuardT > 0) h.brawlGuardT = Math.max(0, h.brawlGuardT - dt)
     if (h.brawlHammerT > 0) h.brawlHammerT = Math.max(0, h.brawlHammerT - dt)
     if (h.brawlMushT > 0) h.brawlMushT = Math.max(0, h.brawlMushT - dt)
@@ -8302,7 +8329,6 @@ function brawlBotDuty(state, h, dt) {
     if (e.hp < e.maxHp * 0.3) sc += 9 // 막타 기회
     // 목숨 리더 견제: 나보다 목숨이 많은 상대일수록 우선 표적 — '안 싸우고 1등' 전략의 카운터
     sc += Math.max(-8, Math.min(20, ((e.brawlLives || 0) - (h.brawlLives || 0)) * 3))
-    if (!e.isBot) sc += 8 // 사람 견제 — 파티게임의 예의(다 같이 유저를 조진다)
     if ((e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) sc -= 30 // 무적자는 두들겨도 헛손질
     if ((e.brawlBombT || 0) > 0) sc -= 45 // 폭탄 든 놈 근처엔 안 간다
     if (sc > best) { best = sc; foe = e }
@@ -8836,6 +8862,8 @@ export function makeView(state) {
     brawlPickups: state.brawlPickups ? state.brawlPickups.map((o) => ({ id: o.id, kind: o.kind, x: o.x, z: o.z })) : null,
     brawlTraps: state.brawlTraps ? state.brawlTraps.map((o) => ({ id: o.id, x: o.x, z: o.z })) : null,
     brawlCannons: state.brawlCannons ? state.brawlCannons.map((c) => ({ id: c.id, x: c.x, z: c.z, cd: r2d(c.cd) })) : null,
+    brawlBoltSeq: state.brawlBoltSeq || 0,
+    brawlBoltAt: state.brawlBoltAt ? state.brawlBoltAt.map((o) => ({ ...o })) : null, // 복사 필수
     healOrbs: state.healOrbs.map((o) => ({ id: o.id, x: o.x, z: o.z })), // 회복 열매(💖 렌더)
     holes: state.holes.map((o) => ({ id: o.id, x: o.x, z: o.z, r: o.r })), // 붕괴 구멍 — 복사 필수(원본 참조를 넘기면 델타 코덱이 push를 못 본다)
     holeWarns: state.holeWarns.map((w) => ({ id: w.id, x: w.x, z: w.z, r: w.r, t: r2d(w.at - state.time) })), // 경고 장판

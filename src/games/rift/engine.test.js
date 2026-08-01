@@ -4256,6 +4256,11 @@ test('대난투: ⭐ 무적별 — 별 무적(스폰 보호와 별개)·이속 2
   const fast = a.x - x0
   setInput(g, a.id, { mx: 0, mz: 0 })
   assert.ok(fast > plain * 1.6, `별 질주 (${plain.toFixed(1)}→${fast.toFixed(1)})`)
+  // 접촉 대미지: 별 상태로 몸이 닿으면 상대가 타며 날아간다
+  b.x = a.x + 2; b.z = a.z; b.knockT = 0
+  const bHp0 = b.hp
+  run(g, 0.3)
+  assert.ok(b.hp < bHp0, `별 접촉 대미지 (${Math.round(bHp0)}→${Math.round(b.hp)})`)
   // 무적: 옆에서 때려도 무효
   b.x = a.x + 2.5; b.z = a.z; b.atkCd = 0
   const hp = a.hp
