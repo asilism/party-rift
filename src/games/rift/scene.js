@@ -7296,15 +7296,30 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             u.hammerMark.position.set(1.6, (6.2 + Math.abs(Math.sin(view.time * 5)) * 1.4) / Math.max(0.1, obj.scale.x), 0)
             u.hammerMark.material.rotation = Math.sin(view.time * 5) * 0.6
           } else if (u.hammerMark) { u.hammerMark.visible = false }
-          // ⭐ 무적(별·스폰 보호): 빙글 도는 별 — 때려봤자 소용없음을 알린다
-          if ((h.brawlGuardT || 0) > 0) {
-            if (!u.starMark) {
-              u.starMark = emojiSprite('⭐', 2.6)
-              obj.add(u.starMark)
-            }
-            u.starMark.visible = true
-            u.starMark.position.set(Math.cos(view.time * 4) * 2.6, 4.2 / Math.max(0.1, obj.scale.x), Math.sin(view.time * 4) * 2.6)
-          } else if (u.starMark) { u.starMark.visible = false }
+          // ⭐ 별 무적(마리오식): 몸이 무지개색으로 빛나며 점멸 — 재질 발광색을 색상환으로 돌린다
+          if ((h.brawlStarT || 0) > 0) {
+            u.starWas = true
+            const glow = rainbowHex(view.time * 2.4)
+            const pulse = Math.sin(view.time * 14) > -0.4 ? 0.85 : 0.25 // 점멸
+            obj.traverse((o) => {
+              if (o.isMesh && o.material?.emissive) {
+                o.material.emissive.setHex(glow)
+                o.material.emissiveIntensity = pulse
+              }
+            })
+          } else if (u.starWas) { // 별 종료 — 발광 원복
+            u.starWas = false
+            obj.traverse((o) => {
+              if (o.isMesh && o.material?.emissive) {
+                o.material.emissive.setHex(0x000000)
+                o.material.emissiveIntensity = 1
+              }
+            })
+          }
+          // 스폰 보호: 전통 아케이드식 투명 깜빡 — 몸이 깜빡거리는 동안은 못 건드린다
+          if ((h.brawlGuardT || 0) > 0 && !(h.brawlStarT > 0) && !(h.brawlFlyT > 0)) {
+            obj.visible = Math.floor(view.time * 9) % 2 === 0
+          }
           // 🐔 닭 머리 표시
           if ((h.brawlPolyT || 0) > 0) {
             if (!u.polyMark) {

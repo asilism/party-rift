@@ -4236,14 +4236,32 @@ test('대난투: 하늘 이벤트 — 시간이 지나면 광선/열매/보급�
   assert.ok(dropped, '하늘에서 뭔가 떨어졌다')
 })
 
-test('대난투: ⭐ 무적별 픽업 — 5초 무적', () => {
+test('대난투: ⭐ 무적별 — 별 무적(스폰 보호와 별개)·이속 2배', () => {
   const g = brawl8()
-  const a = g.heroes[0]
-  a.x = 10; a.z = 10
-  g.brawlPickups.push({ id: 999, kind: 'star', x: 10, z: 10, t: 0 })
-  run(g, 0.2)
-  assert.ok(a.brawlGuardT >= 4.5, `무적 부여 (${a.brawlGuardT})`)
-  assert.ok(!g.brawlPickups.some((o) => o.id === 999), '픽업 소모')
+  const [a, b] = g.heroes
+  for (const h of g.heroes) h.atkCd = 99
+  // 평시 이동 거리 측정
+  a.x = -10; a.z = 0
+  setInput(g, a.id, { mx: 1, mz: 0 })
+  run(g, 0.5)
+  const plain = a.x - -10
+  // 별 픽업
+  g.brawlPickups.push({ id: 999, kind: 'star', x: a.x, z: a.z, t: 0 })
+  run(g, 0.1)
+  assert.ok(a.brawlStarT >= 4.4, `별 무적 부여 (${a.brawlStarT})`)
+  assert.equal(a.brawlGuardT || 0, 0, '스폰 보호와 별개 타이머')
+  // 이속 2배
+  const x0 = a.x
+  run(g, 0.5)
+  const fast = a.x - x0
+  setInput(g, a.id, { mx: 0, mz: 0 })
+  assert.ok(fast > plain * 1.6, `별 질주 (${plain.toFixed(1)}→${fast.toFixed(1)})`)
+  // 무적: 옆에서 때려도 무효
+  b.x = a.x + 2.5; b.z = a.z; b.atkCd = 0
+  const hp = a.hp
+  castAttack(g, b.id)
+  run(g, 0.4)
+  assert.equal(a.hp, hp, '별 무적 중 피해 무효')
 })
 
 test('대난투: 💣 폭탄 돌리기 — 부딪히면 옮겨가고 만료 시 폭발', () => {
