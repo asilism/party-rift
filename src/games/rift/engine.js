@@ -3500,14 +3500,19 @@ function stepBrawl(state, dt) {
     if (roll < 0.3) {
       // ☄️ 심판의 광선 — 예고 원 뒤 낙뢰. 중립(team 'sky')이라 전원이 피해자, 명중 시 밖으로 밀쳐낸다
       state.zones.push({ id: state.nextId++, kind: 'meteor', team: 'sky', owner: null, x, z, r: 6.5, t: 0, delay: 1.7, dmg: 230, tag: '심판의 광선', brawlBlast: true })
-    } else if (roll < 0.55 && state.healOrbs.length < 3) {
-      state.healOrbs.push({ id: state.nextId++, x, z, t: 0 })
-      pushFx(state, 'descend', x, z, 2.2, null, 1.0)
-    } else if (state.brawlPickups.length < 4) {
-      // 아이템이 난투의 주인공 — 비중 45%, 필드 최대 4개. 웃긴 것일수록 가중치를 준다
-      const kinds = ['hammer', 'hammer', 'mush', 'star', 'bolt', 'bomb', 'bomb', 'banana', 'magnet', 'gust', 'mystery']
-      state.brawlPickups.push({ id: state.nextId++, kind: kinds[Math.floor(state.rng() * kinds.length)], x, z, t: 0 })
-      pushFx(state, 'descend', x, z, 3.2, null, 1.2)
+    } else {
+      // 통합 드롭 풀 — 아이템 11칸 + 열매 3칸(전체의 15%). 아이템이 난투의 주인공.
+      const kinds = ['hammer', 'hammer', 'mush', 'star', 'bolt', 'bomb', 'bomb', 'banana', 'magnet', 'gust', 'mystery', 'heal', 'heal', 'heal']
+      const kind = kinds[Math.floor(state.rng() * kinds.length)]
+      if (kind === 'heal') {
+        if (state.healOrbs.length < 3) {
+          state.healOrbs.push({ id: state.nextId++, x, z, t: 0 })
+          pushFx(state, 'descend', x, z, 2.2, null, 1.0)
+        }
+      } else if (state.brawlPickups.length < 4) {
+        state.brawlPickups.push({ id: state.nextId++, kind, x, z, t: 0 })
+        pushFx(state, 'descend', x, z, 3.2, null, 1.2)
+      }
     }
   }
   // 회복 열매 습득(아레나와 같은 규칙 — 먼저 밟는 쪽이 임자, 35% 회복)
@@ -3518,8 +3523,8 @@ function stepBrawl(state, dt) {
     for (const h of state.heroes) {
       if (h.respawnT > 0 || h.hp <= 0 || h.fallT > 0) continue
       if (Math.hypot(h.x - o.x, h.z - o.z) > 2.2) continue
-      h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.35)
-      pushFx(state, 'heal', h.x, h.z, 2.6, h.team)
+      h.hp = h.maxHp // 💖 완전 회복 — 희귀해진 만큼(15%) 화끈하게
+      pushFx(state, 'heal', h.x, h.z, 3.2, h.team)
       state.healOrbs.splice(i, 1)
       break
     }
