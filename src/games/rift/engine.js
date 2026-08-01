@@ -26,8 +26,8 @@ export const BRAWL_LIVES = 10 // 시작 목숨 — 다 잃으면 탈락(순위�
 const BRAWL_LVL = 8 // 전원 고정 레벨(성장 없음) — 전 스킬 해금 + 중간 스탯
 const BRAWL_RESPAWN = 3.0 // 리스폰 대기(초) — 난전 리듬 유지
 const BRAWL_GUARD_T = 1.6 // 리스폰 직후 무적(스폰킬 방지)
-const BRAWL_RING_T = 300 // 이 시각부터 링(낭떠러지 경계)이 좁혀진다 — 5분
-const BRAWL_RING_SPEED = 0.12 // 초당 축소량
+const BRAWL_RING_T = 100 // 이 시각부터 링(낭떠러지 경계)이 좁혀진다 — 판 중앙(3.5분)보다 일찍(구 300초는 미발동)
+const BRAWL_RING_SPEED = 0.18 // 초당 축소량
 const BRAWL_RING_MIN = 14
 // ── 콜로세움(아레나) — 준비 30초(반코트 결계·상점) → 전투 3분 → 서든데스(무작위 조각 붕괴) ──
 export const ARENA_SHOP_T = 30
@@ -1012,7 +1012,12 @@ export function createGame(players, opts = {}) {
     brawlR: mode === 'brawl' ? 40 : 0, // 대난투 링 반경(시간에 따라 축소)
     brawlRanks: mode === 'brawl' ? [] : null, // 탈락 순위 기록 {place,id,name,zodiacId}
     brawlPickups: mode === 'brawl' ? [] : null, // 하늘 보급 아이템 {id,kind,x,z,t}
-    brawlTraps: mode === 'brawl' ? [] : null, // 바나나 트랩 {id,x,z,owner,t} // 토너먼트 라운드 — 봇 장보기 단계(공격→피해감소→방어)를 가른다
+    brawlTraps: mode === 'brawl' ? [] : null, // 바나나 트랩 {id,x,z,owner,t}
+    // 대포 발사대 3곳(120° 간격, 스폰 사이) — 밟으면 반대편으로 포물선 발사(z축 쾌감·도주·기습)
+    brawlCannons: mode === 'brawl' ? [0, 1, 2].map((k) => {
+      const ca = (k / 3) * Math.PI * 2 + Math.PI / 6
+      return { id: k, x: Math.cos(ca) * 31, z: Math.sin(ca) * 31, cd: 0 }
+    }) : null, // 토너먼트 라운드 — 봇 장보기 단계(공격→피해감소→방어)를 가른다
     healOrbs: [], // 콜로세움 회복 열매 {id,x,z,t} — 먹으면 체력 회복
     orbT: 6, // 다음 열매 낙하까지(전투 개시 후)
     holes: [], // 붕괴 구멍 {x,z,r} — 밟으면 추락
@@ -3612,6 +3617,45 @@ function stepBrawl(state, dt) {
           damageHero(state, e, 160, null, false, '시한폭탄')
           if (e.hp > 0) applyKnockback(state, e, h.x, h.z, 6)
         }
+      }
+    }
+  }
+  // 🌀 대포 발사대: 밟으면 반대편으로 포물선 발사 — 공중에선 무적(대포 쿨 4초)
+  for (const c of state.brawlCannons) {
+    if (c.cd > 0) { c.cd = Math.max(0, c.cd - dt); continue }
+    for (const h of state.heroes) {
+      if (h.respawnT > 0 || h.hp <= 0 || h.fallT > 0 || (h.brawlFlyT || 0) > 0) continue
+      if (Math.hypot(h.x - c.x, h.z - c.z) > 2.2) continue
+      c.cd = 4
+      h.brawlFlyDur = 1.15
+      h.brawlFlyT = 1.15
+      h.brawlFlyX0 = h.x
+      h.brawlFlyZ0 = h.z
+      h.brawlFlyX1 = -h.x * 0.55 // 중심 대칭 반대편 중간 지대로
+      h.brawlFlyZ1 = -h.z * 0.55
+      h.brawlGuardT = Math.max(h.brawlGuardT || 0, 1.3) // 비행 중 무적
+      h.knockT = 0
+      h.castT = 0
+      h.mx = 0
+      h.mz = 0
+      pushFx(state, 'rocksplash', c.x, c.z, 3, null, 0.8)
+      pushFeed(state, 'obj', `🌀 ${emojiOf(h.zodiacId)} ${h.name} — 발사!`)
+      break
+    }
+  }
+  for (const h of state.heroes) {
+    if (!(h.brawlFlyT > 0)) continue
+    h.brawlFlyT = Math.max(0, h.brawlFlyT - dt)
+    const k = 1 - h.brawlFlyT / h.brawlFlyDur
+    h.x = h.brawlFlyX0 + (h.brawlFlyX1 - h.brawlFlyX0) * k
+    h.z = h.brawlFlyZ0 + (h.brawlFlyZ1 - h.brawlFlyZ0) * k
+    h.mx = 0
+    h.mz = 0
+    if (h.brawlFlyT === 0) { // 착지 쿵 — 주변 소넉백
+      pushFx(state, 'meteorhit', h.x, h.z, 4, null, 0.8)
+      for (const e of state.heroes) {
+        if (e === h || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0) continue
+        if (Math.hypot(h.x - e.x, h.z - e.z) < 5) applyKnockback(state, e, h.x, h.z, 3.5)
       }
     }
   }
@@ -8742,6 +8786,7 @@ export function makeView(state) {
     brawlRanks: state.brawlRanks ? state.brawlRanks.map((r) => ({ ...r })) : null, // 복사 필수(델타 코덱)
     brawlPickups: state.brawlPickups ? state.brawlPickups.map((o) => ({ id: o.id, kind: o.kind, x: o.x, z: o.z })) : null,
     brawlTraps: state.brawlTraps ? state.brawlTraps.map((o) => ({ id: o.id, x: o.x, z: o.z })) : null,
+    brawlCannons: state.brawlCannons ? state.brawlCannons.map((c) => ({ id: c.id, x: c.x, z: c.z, cd: r2d(c.cd) })) : null,
     healOrbs: state.healOrbs.map((o) => ({ id: o.id, x: o.x, z: o.z })), // 회복 열매(💖 렌더)
     holes: state.holes.map((o) => ({ id: o.id, x: o.x, z: o.z, r: o.r })), // 붕괴 구멍 — 복사 필수(원본 참조를 넘기면 델타 코덱이 push를 못 본다)
     holeWarns: state.holeWarns.map((w) => ({ id: w.id, x: w.x, z: w.z, r: w.r, t: r2d(w.at - state.time) })), // 경고 장판
@@ -8828,7 +8873,7 @@ export function makeView(state) {
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
       fallT: r2d(h.fallT),
-      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlPolyT: r2d(h.brawlPolyT || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
+      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlPolyT: r2d(h.brawlPolyT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
       bladeT: r2d(h.bladeT),
       hookWindT: r2d(h.hookWindT),
       pullT: r2d(h.pullT),

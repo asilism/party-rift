@@ -4291,6 +4291,24 @@ test('대난투: 🍌 바나나 — 설치자 외 밟으면 미끄러짐', () =>
   assert.ok(!g.brawlTraps.some((t2) => t2.id === 902), '트랩 소모')
 })
 
+test('대난투: 🌀 대포 — 밟으면 반대편으로 포물선 발사(무적), 착지 후 쿨', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  for (const h of g.heroes) h.atkCd = 99
+  const c = g.brawlCannons[0]
+  a.x = c.x; a.z = c.z
+  run(g, 0.1)
+  assert.ok(a.brawlFlyT > 0, '발사됨')
+  assert.ok(a.brawlGuardT > 0, '비행 중 무적')
+  assert.ok(c.cd > 3, '대포 쿨다운')
+  run(g, 1.5)
+  assert.ok(!(a.brawlFlyT > 0), '착지')
+  const rr = Math.hypot(a.x, a.z)
+  assert.ok(rr < g.brawlR, `링 안에 착지 (${rr.toFixed(1)})`)
+  // 반대편(원점 대칭 55%)으로 날아갔다
+  assert.ok(Math.sign(a.x) !== Math.sign(c.x) || Math.abs(a.x) < 1, '반대편 방향')
+})
+
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
   const g = brawl8()
   // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락
