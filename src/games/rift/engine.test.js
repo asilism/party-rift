@@ -4246,6 +4246,51 @@ test('대난투: ⭐ 무적별 픽업 — 5초 무적', () => {
   assert.ok(!g.brawlPickups.some((o) => o.id === 999), '픽업 소모')
 })
 
+test('대난투: 💣 폭탄 돌리기 — 부딪히면 옮겨가고 만료 시 폭발', () => {
+  const g = brawl8()
+  const [a, b] = g.heroes
+  a.x = 10; a.z = 10; b.x = 25; b.z = 25 // 링(R40) 안 — (30,30)은 중심거리 42로 장외!
+  for (const h of g.heroes) h.atkCd = 99
+  g.brawlPickups.push({ id: 900, kind: 'bomb', x: 10, z: 10, t: 0 })
+  run(g, 0.2)
+  assert.ok(a.brawlBombT > 4, '폭탄 부착')
+  // b에게 접촉 → 이전
+  b.x = a.x + 1.5; b.z = a.z
+  run(g, 0.2)
+  assert.ok(b.brawlBombT > 0 && !(a.brawlBombT > 0), '폭탄이 옮겨갔다')
+  // b 도망 후 만료 → 폭발 피해
+  b.x = 25; b.z = 25
+  const hp = b.hp
+  run(g, 5.5)
+  assert.ok(b.hp < hp || b.respawnT > 0, `폭발 피해 (${hp}→${b.hp})`)
+})
+
+test('대난투: 🐔 닭 폭탄 — 가장 가까운 적 폴리모프(스킬 봉인·감속)', () => {
+  const g = brawl8()
+  const [a, b] = g.heroes
+  a.x = 10; a.z = 10; b.x = 14; b.z = 10
+  for (const h of g.heroes) h.atkCd = 99
+  g.brawlPickups.push({ id: 901, kind: 'chicken', x: 10, z: 10, t: 0 })
+  run(g, 0.2)
+  assert.ok(b.brawlPolyT > 3, '가장 가까운 적이 닭이 됐다')
+  castSkill(g, b.id)
+  assert.equal(b.skillCd, 0, '닭은 스킬 봉인')
+  run(g, 4.2)
+  assert.ok(!(b.brawlPolyT > 0), '폴리모프 해제')
+})
+
+test('대난투: 🍌 바나나 — 설치자 외 밟으면 미끄러짐', () => {
+  const g = brawl8()
+  const [a, b] = g.heroes
+  a.x = -20; a.z = -20
+  for (const h of g.heroes) h.atkCd = 99
+  g.brawlTraps.push({ id: 902, x: 5, z: 5, owner: a.id, t: 0 })
+  b.x = 5; b.z = 5
+  run(g, 0.2)
+  assert.ok(b.stunT > 0.5, '꽈당')
+  assert.ok(!g.brawlTraps.some((t2) => t2.id === 902), '트랩 소모')
+})
+
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
   const g = brawl8()
   // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락

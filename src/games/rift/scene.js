@@ -6874,21 +6874,41 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         brawlRing.frustumCulled = false
         scene.add(brawlRing)
       }
-      // 보급 아이템 마커 — 이모지 스프라이트가 둥실거리며 떠 있다
-      const PICKUP_EMOJI = { hammer: '🔨', mush: '🍄', star: '⭐', bolt: '⚡' }
+      // 보급 아이템 마커 — 큼직한 이모지가 하늘에서 뚝 떨어져 둥실거린다(아이템이 난투의 주인공)
+      const PICKUP_EMOJI = { hammer: '🔨', mush: '🍄', star: '⭐', bolt: '⚡', bomb: '💣', chicken: '🐔', banana: '🍌', magnet: '🧲' }
       const seenPk = new Set()
       for (const pk of view.brawlPickups || []) {
         seenPk.add(pk.id)
         let o = brawlPickupObjs.get(pk.id)
         if (!o) {
-          o = emojiSprite(PICKUP_EMOJI[pk.kind] || '📦', 3)
+          o = emojiSprite(PICKUP_EMOJI[pk.kind] || '📦', 5.2)
+          o.userData.bornAt = view.time // 낙하 연출 기준 시각
           scene.add(o)
           brawlPickupObjs.set(pk.id, o)
         }
-        o.position.set(pk.x, 1.9 + Math.sin(view.time * 2.4 + pk.id) * 0.45, pk.z)
+        // 낙하: 0.6초간 하늘(y+16)에서 떨어져 살짝 튀고 자리를 잡는다
+        const age = Math.max(0, view.time - (o.userData.bornAt ?? view.time))
+        const drop = age < 0.6 ? (1 - age / 0.6) ** 2 * 16 : 0
+        const bounce = age >= 0.6 && age < 0.9 ? Math.sin(((age - 0.6) / 0.3) * Math.PI) * 1.2 : 0
+        o.position.set(pk.x, 2.6 + drop + bounce + (age > 0.9 ? Math.sin(view.time * 2.4 + pk.id) * 0.5 : 0), pk.z)
       }
       for (const [id, o] of brawlPickupObjs) {
         if (!seenPk.has(id)) { scene.remove(o); brawlPickupObjs.delete(id) }
+      }
+      // 바나나 트랩 — 바닥에 깔린 🍌 (설치자 눈에도 보인다 — 밟지 말라고)
+      const seenTr = new Set()
+      for (const tr of view.brawlTraps || []) {
+        seenTr.add(-tr.id) // 픽업과 키 충돌 방지(음수 키)
+        let o = brawlPickupObjs.get(-tr.id)
+        if (!o) {
+          o = emojiSprite('🍌', 2.4)
+          scene.add(o)
+          brawlPickupObjs.set(-tr.id, o)
+        }
+        o.position.set(tr.x, 0.9, tr.z)
+      }
+      for (const [id, o] of brawlPickupObjs) {
+        if (id < 0 && !seenTr.has(id)) { scene.remove(o); brawlPickupObjs.delete(id) }
       }
       const shrinking = view.brawlR < 39
       brawlRing.scale.set(view.brawlR + 0.8, view.brawlR + 0.8, 1)
@@ -7195,11 +7215,29 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           obj.scale.setScalar(1)
           u.lastHp = h.hp
         }
-        // 🍄 거대버섯(대난투): 먹으면 몸이 커진다 — 부풀고 줄어드는 전환은 부드럽게
+        // 🍄 거대버섯: 커진다 / 🐔 닭: 쪼그라든다 — 전환은 부드럽게
         if (view.mode === 'brawl' && !(h.fallT > 0)) {
-          const want = (h.brawlMushT || 0) > 0 ? 1.5 : 1
+          const want = (h.brawlPolyT || 0) > 0 ? 0.62 : (h.brawlMushT || 0) > 0 ? 1.5 : 1
           const cur = obj.scale.x
           if (Math.abs(cur - want) > 0.01) obj.scale.setScalar(cur + (want - cur) * Math.min(1, dt * 6))
+          // 💣 폭탄: 머리 위에서 깜빡 — 남을수록 느긋, 터지기 직전엔 다급하게
+          if ((h.brawlBombT || 0) > 0) {
+            if (!u.bombMark) {
+              u.bombMark = emojiSprite('💣', 2.6)
+              obj.add(u.bombMark)
+            }
+            u.bombMark.visible = Math.sin(view.time * (4 + (5 - h.brawlBombT) * 4)) > -0.4
+            u.bombMark.position.set(0, 6.4 / Math.max(0.1, obj.scale.x), 0)
+          } else if (u.bombMark) { u.bombMark.visible = false }
+          // 🐔 닭 머리 표시
+          if ((h.brawlPolyT || 0) > 0) {
+            if (!u.polyMark) {
+              u.polyMark = emojiSprite('🐔', 3.2)
+              obj.add(u.polyMark)
+            }
+            u.polyMark.visible = true
+            u.polyMark.position.set(0, 7.2 / Math.max(0.1, obj.scale.x), 0)
+          } else if (u.polyMark) { u.polyMark.visible = false }
         }
         obj.visible = isHeroVisible(view, h, myTeam)
         if (!obj.visible) return
