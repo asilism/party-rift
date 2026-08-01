@@ -4283,30 +4283,42 @@ test('대난투: 💣 폭탄 돌리기 — 부딪히면 옮겨가고 만료 시 
   assert.ok(b.hp < hp || b.respawnT > 0, `폭발 피해 (${hp}→${b.hp})`)
 })
 
-test('대난투: 🐔 닭 폭탄 — 가장 가까운 적 폴리모프(스킬 봉인·감속)', () => {
+test('대난투: 🍌 바나나 다발 — 평타마다 껍질 투척, 밟으면 크게 미끄러짐', () => {
   const g = brawl8()
   const [a, b] = g.heroes
-  a.x = 10; a.z = 10; b.x = 14; b.z = 10
   for (const h of g.heroes) h.atkCd = 99
-  g.brawlPickups.push({ id: 901, kind: 'chicken', x: 10, z: 10, t: 0 })
-  run(g, 0.2)
-  assert.ok(b.brawlPolyT > 3, '가장 가까운 적이 닭이 됐다')
-  castSkill(g, b.id)
-  assert.equal(b.skillCd, 0, '닭은 스킬 봉인')
-  run(g, 4.2)
-  assert.ok(!(b.brawlPolyT > 0), '폴리모프 해제')
+  a.x = 0; a.z = 0; b.x = 3; b.z = 0
+  g.brawlPickups.push({ id: 902, kind: 'banana', x: 0, z: 0, t: 0 })
+  run(g, 0.1)
+  assert.equal(a.brawlBananaN, 4, '바나나 다발 4발')
+  a.atkCd = 0
+  castAttack(g, a.id) // 평타 → 표적(b) 발밑에 껍질(동기 시전)
+  assert.equal(a.brawlBananaN, 3, '한 발 소모')
+  assert.ok(g.brawlTraps.length >= 1, '껍질이 깔렸다') // 스텝 전 확인 — b가 밟기 전에
+  run(g, 0.3) // b 발밑이라 바로 밟는다
+  assert.ok(b.stunT > 0.5, '꽈당 — 밟고 미끄러짐')
 })
 
-test('대난투: 🍌 바나나 — 설치자 외 밟으면 미끄러짐', () => {
+test('대난투: 💣 폭탄 든 채 죽으면 그 자리에서 폭발 + 번개 3초 기절', () => {
   const g = brawl8()
-  const [a, b] = g.heroes
-  a.x = -20; a.z = -20
+  const [a, b, c] = g.heroes
   for (const h of g.heroes) h.atkCd = 99
-  g.brawlTraps.push({ id: 902, x: 5, z: 5, owner: a.id, t: 0 })
-  b.x = 5; b.z = 5
-  run(g, 0.2)
-  assert.ok(b.stunT > 0.5, '꽈당')
-  assert.ok(!g.brawlTraps.some((t2) => t2.id === 902), '트랩 소모')
+  // 번개: 3초 기절
+  a.x = 10; a.z = 10
+  g.brawlPickups.push({ id: 903, kind: 'bolt', x: 10, z: 10, t: 0 })
+  run(g, 0.1)
+  assert.ok(b.stunT >= 2.5, `번개 3초 기절 (${b.stunT})`)
+  // 폭탄 든 채 사망 → 그 자리 폭발(주변 피해)
+  a.brawlBombT = 3
+  a.hp = 1
+  a.x = 20; a.z = 0
+  c.x = 24; c.z = 0; c.stunT = 0
+  const cHp = c.hp
+  b.stunT = 0; b.x = 30; b.z = 0; b.atkCd = 0 // 접촉(2.9) 밖 원거리 처치 — 붙으면 폭탄이 이전돼 버린다
+  castAttack(g, b.id, { tk: 'hero', id: a.id }) // a를 확정 조준(자동조준이 c를 무는 것 방지)
+  run(g, 0.6)
+  assert.ok(a.hp <= 0 || a.respawnT > 0, 'a 사망')
+  assert.ok(c.hp < cHp || c.knockT > 0 || c.fallT > 0, `사망 지점 폭발이 주변 타격 (${cHp}→${Math.round(c.hp)})`)
 })
 
 test('대난투: 🌀 대포 — 밟으면 반대편으로 포물선 발사(무적), 착지 후 쿨', () => {
