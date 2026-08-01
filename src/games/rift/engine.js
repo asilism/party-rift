@@ -3488,6 +3488,11 @@ function stepBrawl(state, dt) {
     }
     state.brawlR = Math.max(BRAWL_RING_MIN, state.brawlR - BRAWL_RING_SPEED * dt)
   }
+  if (!state.brawlPadsDead && state.brawlR < 38.5) {
+    // 링이 발판 목을 끊었다 — 대포·벽이 무너져 내리고(씬), 발판은 더 이상 안전하지 않다
+    state.brawlPadsDead = true
+    pushFeed(state, 'obj', '🌀 발판이 끊겨 대포가 심연으로 무너진다')
+  }
   // ── 하늘 이벤트 디렉터: 개전 15초 후부터, 시간이 갈수록 잦아진다 ──
   state.brawlEventT = (state.brawlEventT ?? 8) - dt
   if (state.brawlEventT <= 0) {
@@ -3648,7 +3653,7 @@ function stepBrawl(state, dt) {
     }
   }
   // 🌀 대포 발사대: 밟으면 반대편으로 포물선 발사 — 공중에선 무적(대포 쿨 4초)
-  for (const c of state.brawlCannons) {
+  for (const c of state.brawlPadsDead ? [] : state.brawlCannons) { // 붕괴 후엔 작동 정지
     if (c.cd > 0) { c.cd = Math.max(0, c.cd - dt); continue }
     for (const h of state.heroes) {
       if (h.respawnT > 0 || h.hp <= 0 || h.fallT > 0 || (h.brawlFlyT || 0) > 0) continue
@@ -3727,7 +3732,7 @@ function stepBrawl(state, dt) {
     // 장외: 링 밖으로 밀리거나 걸어 나가면 추락 시작(넉백 = 처형 수단).
     //  단 대포 발판(링 밖 전용 공간·벽 보호)은 안전지대다.
     if (h.respawnT <= 0 && h.hp > 0 && !(h.fallT > 0) && Math.hypot(h.x, h.z) > state.brawlR + 1.1
-        && !state.brawlCannons.some((c) => Math.hypot(h.x - c.x, h.z - c.z) < 4.4)) {
+        && (state.brawlPadsDead || !state.brawlCannons.some((c) => Math.hypot(h.x - c.x, h.z - c.z) < 4.4))) {
       arenaFall(state, h, null)
     }
   }
@@ -8871,6 +8876,7 @@ export function makeView(state) {
     brawlTraps: state.brawlTraps ? state.brawlTraps.map((o) => ({ id: o.id, x: o.x, z: o.z })) : null,
     brawlCannons: state.brawlCannons ? state.brawlCannons.map((c) => ({ id: c.id, x: c.x, z: c.z, cd: r2d(c.cd) })) : null,
     brawlBoltSeq: state.brawlBoltSeq || 0,
+    brawlPadsDead: !!state.brawlPadsDead, // 대포 발판 붕괴(씬 낙하 연출)
     brawlNukeSeq: state.brawlNukeSeq || 0,
     brawlNukeAt: state.brawlNukeAt ? { ...state.brawlNukeAt } : null, // 복사 필수
     brawlBoltAt: state.brawlBoltAt ? state.brawlBoltAt.map((o) => ({ ...o })) : null, // 복사 필수

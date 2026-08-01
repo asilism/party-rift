@@ -4405,6 +4405,20 @@ test('대난투: 링 축소 후 리스폰 — 절벽(구 스폰)이 아니라 �
   assert.ok(!(a.fallT > 0), '부활 직후 낙사 없음')
 })
 
+test('대난투: 링이 발판을 끊으면 대포 붕괴 — 발사 정지 + 발판도 낙사 지대', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  for (const h of g.heroes) h.atkCd = 99
+  g.brawlR = 38 // 발판 목이 끊긴 상황
+  const c = g.brawlCannons[0]
+  a.x = c.x; a.z = c.z
+  run(g, 0.2)
+  assert.ok(g.brawlPadsDead, '붕괴 플래그')
+  assert.ok(!(a.brawlFlyT > 0), '무너진 대포는 발사되지 않는다')
+  run(g, 1.5)
+  assert.ok(a.fallT > 0 || a.respawnT > 0, '발판 위도 이제 낙사 지대')
+})
+
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
   const g = brawl8()
   // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락

@@ -540,6 +540,8 @@ function RiftPlay({
   // 승리 메시지를 한 글자씩 나타나게 — "파랑팀 승리"를 글자 단위로 쪼갠다(공백은 자리만 차지).
   // 보스전은 토벌 서사로: "카르곤 토벌!" / "토벌 실패...", 방어전은 도달 파도가 곧 성적표.
   const raidBoss = hud.mode === 'boss' ? hud.heroes?.find((h) => h.cls?.startsWith('boss_')) : null
+  // 대난투 탈락 관전 — 지켜보기를 누르면 카메라를 경기장 중앙 전경으로 고정
+  const [spectate, setSpectate] = useState(false)
   // ⚡ 번개: 낙뢰 순간 화면 전체가 하얗게 번쩍(짧게 2회 감쇠)
   const [boltFlash, setBoltFlash] = useState(0)
   const boltSeqRef = useRef(0)
@@ -578,7 +580,7 @@ function RiftPlay({
   return (
     <div className={`rift ${phaseFx ? 'rift--quake' : ''}`} style={{ '--btn-user': btnScale }} onContextMenu={(e) => e.preventDefault()}>
       <Rift3D arenaLayout={hud.arenaLayout || null}
-        sample={sample} myId={myId} mode={hud.mode || '3v3'} hitFx={hitFx} gfx={gfx} />
+        sample={sample} myId={spectate ? '__spectate__' : myId} mode={hud.mode || '3v3'} hitFx={hitFx} gfx={gfx} />
       {phaseFx && <div key={phaseFx.key} className="boss-flash" style={{ '--fc': phaseFx.color }} />}
 
       {me && !finished && (
@@ -801,17 +803,33 @@ function RiftPlay({
           </div>
         )}
         {me && me.respawnT > 0 && !finished && (
-          <>
-            <div className="rift__dead" />
-            <div className="rift__respawn">
-              💀 {t('부활까지')} <b>{Math.ceil(me.respawnT)}</b>{t('초')}...
-            </div>
-            {/* 사망 중엔 양 팀 킬스코어·아이템·레벨 현황을 한눈에 (상대 빌드 파악용).
-                대난투(FFA)는 팀이 없어 좌상단 목숨 순위판이 그 역할 — 팀 패널 생략 */}
-            {hud.mode !== 'brawl' && <div className="rift__dead-board">
-              <RiftRoster hud={hud} />
-            </div>}
-          </>
+          hud.mode === 'brawl' && (me.brawlLives || 0) <= 0 ? (
+            // 대난투 탈락: 부활 없음 — 순위와 함께 지켜보기/다시하기를 고른다
+            !spectate && (
+              <>
+                <div className="rift__dead" />
+                <div className="rift__respawn rift__respawn--out">
+                  🪦 <b>{myBrawlPlace || '-'}</b>{t('위')}{t('로 탈락')}...
+                  <div className="brawl-out-btns">
+                    <button className="btn" onClick={() => setSpectate(true)}>👀 {t('지켜보기')}</button>
+                    <button className="btn btn--primary" onClick={onExit}>🔁 {t('다시하기')}</button>
+                  </div>
+                </div>
+              </>
+            )
+          ) : (
+            <>
+              <div className="rift__dead" />
+              <div className="rift__respawn">
+                💀 {t('부활까지')} <b>{Math.ceil(me.respawnT)}</b>{t('초')}...
+              </div>
+              {/* 사망 중엔 양 팀 킬스코어·아이템·레벨 현황을 한눈에 (상대 빌드 파악용).
+                  대난투(FFA)는 팀이 없어 좌상단 목숨 순위판이 그 역할 — 팀 패널 생략 */}
+              {hud.mode !== 'brawl' && <div className="rift__dead-board">
+                <RiftRoster hud={hud} />
+              </div>}
+            </>
+          )
         )}
         {me && hud.status === 'playing' && hud.go && (
           <div className="rift__hint">
@@ -854,7 +872,7 @@ function RiftPlay({
 
       {finished && showWin && (
         <div className="win-modal" style={{ '--z-color': hud.mode === 'defense' ? '#4fc3ff' : hud.winner === 'red' ? '#ff6b6b' : '#4f8cff' }}>
-          {(hud.mode === 'defense' ? (hud.wave || 0) >= 20 : (!myTeam || hud.winner === myTeam)) && <Fireworks />}
+          {(hud.mode === 'brawl' ? myBrawlPlace === 1 : hud.mode === 'defense' ? (hud.wave || 0) >= 20 : (!myTeam || hud.winner === myTeam)) && <Fireworks />}
           {/* 위쪽: 트로피 + 한 글자씩 나타나는 승리 메시지 */}
           <div className="win-banner">
             <div className="win-banner__trophy">{hud.mode === 'defense' ? '🌊' : raidBoss && hud.winner === 'blue' ? '👑' : hud.winner ? '🏆' : '🤝'}</div>
@@ -874,7 +892,19 @@ function RiftPlay({
           {/* 아래쪽: 스코어 표 박스 */}
           <div className="win-modal__card">
             <div className="rift-result">
-              <RiftRoster hud={hud} crown={hud.winner} />
+              {hud.mode === 'brawl' ? (
+                // 대난투: 팀 없음 — 최종 순위표(1위부터)
+                <div className="brawl-final">
+                  {[...(hud.brawlRanks || [])].sort((a, b) => a.place - b.place).map((r) => (
+                    <div key={r.id} className={`brawl-final__row ${r.id === myId ? 'is-me' : ''}`}>
+                      <span className="brawl-final__place">{r.place === 1 ? '🥇' : r.place === 2 ? '🥈' : r.place === 3 ? '🥉' : `${r.place}${t('위')}`}</span>
+                      <span className="brawl-final__name">{r.name}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <RiftRoster hud={hud} crown={hud.winner} />
+              )}
             </div>
             <div className="win-modal__btns">
               {adButton /* 📺 광고 보고 2배 보상 — 배너가 아닌 버튼 줄(항상 보이고 눌리는 위치) */}
