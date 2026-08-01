@@ -702,7 +702,24 @@ function RiftPlay({
 
         {/* 좌상단: 미니맵 + (우물/사망 중) 상점 버튼 — 세로 스택이라 비율 무관 자동 정렬 */}
         <div className="rift__side">
-          <RiftMiniMap view={hud} myId={myId} />
+          {hud.mode === 'brawl' ? (
+            /* 대난투: 미니맵 대신 목숨 순위판 — 지금 1~3위가 누군지가 진짜 지도다 */
+            <div className="brawl-standings">
+              {[...(hud.heroes || [])]
+                .filter((h) => (h.brawlLives || 0) > 0)
+                .sort((a, b) => (b.brawlLives || 0) - (a.brawlLives || 0) || (b.kills || 0) - (a.kills || 0))
+                .slice(0, 3)
+                .map((h, i) => (
+                  <div key={h.id} className={`brawl-standings__row ${h.id === myId ? 'is-me' : ''}`}>
+                    <span className="brawl-standings__place">{['🥇', '🥈', '🥉'][i]}</span>
+                    <span className="brawl-standings__name">{h.name}</span>
+                    <span className="brawl-standings__lives">❤️{h.brawlLives}</span>
+                  </div>
+                ))}
+            </div>
+          ) : (
+            <RiftMiniMap view={hud} myId={myId} />
+          )}
           {me && !finished && meCanShop && !shopOpen && hud.mode !== 'brawl' && (hud.mode !== 'arena' || hud.arenaPhase === 'shop') && (
             <button className="rift-shop-fab" onClick={() => setShopOpen(true)}>
               🛒 <small>{me.respawnT > 0 ? t('상점 (대기중)') : t('상점')}</small>
