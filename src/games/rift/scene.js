@@ -6782,6 +6782,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   let trailStamps = null // 이동 트레일 스탬프 풀(내 영웅 전용) — 첫 이동에 트레일을 알고 나면 생성
   let brawlRing = null // 대난투 낭떠러지 경계 링 — 단위원을 만들어 반경만 스케일
   const brawlPickupObjs = new Map() // 대난투 보급 아이템 마커(이모지 스프라이트)
+  const brawlCannonObjs = new Map() // 대포 발사대(소용돌이 패드)
+  let brawlShakeT = 0 // 강넉백·장외 카메라 흔들림
 
   // 시간술사 역행 미리보기: 내 영웅이 되돌아갈 과거 지점을 반투명 그림자로 보여 준다(궁극기 켜졌을 때만)
   const rewindGhost = new THREE.Group()
@@ -6909,6 +6911,26 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       }
       for (const [id, o] of brawlPickupObjs) {
         if (id < 0 && !seenTr.has(id)) { scene.remove(o); brawlPickupObjs.delete(id) }
+      }
+      // 🌀 대포 발사대 — 소용돌이가 돌고, 쿨다운 중엔 흐려진다
+      for (const c of view.brawlCannons || []) {
+        let o = brawlCannonObjs.get(c.id)
+        if (!o) {
+          o = emojiSprite('🌀', 4.6)
+          o.material.depthTest = false
+          o.renderOrder = 2
+          scene.add(o)
+          brawlCannonObjs.set(c.id, o)
+        }
+        o.position.set(c.x, 1.2, c.z)
+        o.material.rotation = view.time * 2.5
+        o.material.opacity = c.cd > 0 ? 0.25 : 0.95
+      }
+      if (brawlShakeT > 0) { // 강넉백·발사·장외 순간의 손맛 — 카메라가 잘게 흔들린다
+        brawlShakeT = Math.max(0, brawlShakeT - dt)
+        const mag = brawlShakeT * 2.2
+        camera.position.x += (Math.random() - 0.5) * mag
+        camera.position.z += (Math.random() - 0.5) * mag
       }
       const shrinking = view.brawlR < 39
       brawlRing.scale.set(view.brawlR + 0.8, view.brawlR + 0.8, 1)
@@ -7179,6 +7201,25 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           if (u.fell) { // 추락사 — 구멍 속으로 가라앉는 연출을 끝까지 보여준다(지상 파티클 없음)
             const fp = Math.min(1, (performance.now() / 1000 - u.fellAt) / 1.55)
             obj.visible = fp < 1
+            if (view.mode === 'brawl') {
+              // 대난투: 별이 되어 날아간다 ⭐ — 링 바깥 방향으로 솟구쳐 멀어지며 반짝
+              const rr = Math.max(0.001, Math.hypot(h.x, h.z))
+              const ox = (h.x / rr) * fp * 26
+              const oz = (h.z / rr) * fp * 26
+              obj.position.set(h.x + ox, 4 + fp * 15, h.z + oz)
+              obj.rotation.y = fp * 12
+              obj.scale.setScalar(Math.max(0.05, 1 - fp * 0.9))
+              if (!u.koStar) {
+                u.koStar = emojiSprite('⭐', 3)
+                scene.add(u.koStar)
+              }
+              u.koStar.visible = fp > 0.45 && fp < 1
+              u.koStar.position.set(h.x + ox, 5 + fp * 15, h.z + oz)
+              u.koStar.material.rotation = fp * 9
+              if (h.id === myId && !u.koShake) { u.koShake = true; brawlShakeT = 0.35 }
+              if (fp >= 1) u.koShake = false
+              return
+            }
             obj.position.set(h.x, -22 * fp * fp, h.z)
             obj.rotation.y = fp * 7
             obj.scale.setScalar(1 - fp * 0.45)
@@ -7214,6 +7255,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           obj.rotation.y = 0
           obj.scale.setScalar(1)
           u.lastHp = h.hp
+          if (u.koStar) u.koStar.visible = false
         }
         // 🍄 거대버섯: 커진다 / 🐔 닭: 쪼그라든다 — 전환은 부드럽게
         if (view.mode === 'brawl' && !(h.fallT > 0)) {
@@ -7238,6 +7280,22 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             u.polyMark.visible = true
             u.polyMark.position.set(0, 7.2 / Math.max(0.1, obj.scale.x), 0)
           } else if (u.polyMark) { u.polyMark.visible = false }
+          // 🌀 대포 비행: 포물선으로 붕 떠서 빙글빙글 — 착지 직전 내려온다
+          if ((h.brawlFlyT || 0) > 0 && (h.brawlFlyDur || 0) > 0) {
+            const fk = 1 - h.brawlFlyT / h.brawlFlyDur
+            obj.position.y += Math.sin(fk * Math.PI) * 13
+            obj.rotation.y = fk * Math.PI * 6
+            if (h.id === myId && fk > 0.8 && !u.flyLandShake) { u.flyLandShake = true; brawlShakeT = 0.3 }
+          } else {
+            if (!(h.fallT > 0)) obj.rotation.y = 0
+            u.flyLandShake = false
+          }
+          // 강넉백 손맛: 내 영웅이 크게 밀리는 순간 카메라가 살짝 흔들린다
+          if (h.id === myId) {
+            const kv = Math.hypot(h.knockVx || 0, h.knockVz || 0)
+            if (h.knockT > 0 && !u.wasKnock && kv > 18) brawlShakeT = 0.28
+            u.wasKnock = h.knockT > 0
+          }
         }
         obj.visible = isHeroVisible(view, h, myTeam)
         if (!obj.visible) return
