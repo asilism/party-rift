@@ -2866,6 +2866,10 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   }
   victim.hp -= amount
   victim.lastHurt = state.time
+  if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && amount > 0) {
+    attacker.brawlIdleT = 0 // 전투 참여 — 방관 아님
+    victim.brawlIdleT = 0
+  }
   // 대난투 코어: 모든 피해가 넉백을 동반 — 잃은 체력이 많을수록 크게 날아간다(스매시 %).
   //  가장자리는 낭떠러지라 넉백 자체가 처형 수단. 잔피해(<8)는 제외(도트 진동 방지).
   if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && attacker.x != null
@@ -3661,6 +3665,26 @@ function stepBrawl(state, dt) {
     if (h.brawlHammerT > 0) h.brawlHammerT = Math.max(0, h.brawlHammerT - dt)
     if (h.brawlMushT > 0) h.brawlMushT = Math.max(0, h.brawlMushT - dt)
     if (h.brawlPolyT > 0) h.brawlPolyT = Math.max(0, h.brawlPolyT - dt)
+    // 방관 카운터: 전투(가해·피격) 없이 버티면 누적 — 멀찍이 어부지리 전략을 막는다.
+    //  12초+ = 봇들의 사냥감(표적 가중치), 18초+ = 겁쟁이 세금(서서히 힘이 빠진다)
+    if (h.respawnT > 0 || h.hp <= 0 || h.fallT > 0 || (h.brawlPolyT || 0) > 0) {
+      h.brawlIdleT = 0
+      h.brawlIdleFed = false
+    } else {
+      h.brawlIdleT = (h.brawlIdleT || 0) + dt
+      if (h.brawlIdleT < 18) h.brawlIdleFed = false
+      if (h.brawlIdleT >= 18) {
+        if (!h.brawlIdleFed) {
+          h.brawlIdleFed = true
+          pushFeed(state, 'obj', `💤 ${emojiOf(h.zodiacId)} ${h.name} — 몸만 사리다 힘이 빠진다`)
+        }
+        h.brawlIdleTickT = (h.brawlIdleTickT || 0) - dt
+        if (h.brawlIdleTickT <= 0) {
+          h.brawlIdleTickT = 0.5
+          damageHero(state, h, h.maxHp * 0.01, null, false, '겁쟁이 세금') // 초당 2%
+        }
+      }
+    }
     // 장외: 링 밖으로 밀리거나 걸어 나가면 추락 시작(넉백 = 처형 수단).
     //  단 대포 발판(링 밖 전용 공간·벽 보호)은 안전지대다.
     if (h.respawnT <= 0 && h.hp > 0 && !(h.fallT > 0) && Math.hypot(h.x, h.z) > state.brawlR + 1.1
@@ -8266,6 +8290,7 @@ function brawlBotDuty(state, h, dt) {
     if (e.hp < e.maxHp * 0.3) sc += 9 // 막타 기회
     if ((e.brawlGuardT || 0) > 0) sc -= 30 // 무적자는 두들겨도 헛손질
     if ((e.brawlBombT || 0) > 0) sc -= 45 // 폭탄 든 놈 근처엔 안 간다
+    if ((e.brawlIdleT || 0) > 12) sc += 24 // 방관자 사냥 — 멀찍이 구경하는 놈부터 조진다
     if (sc > best) { best = sc; foe = e }
   }
   if (!foe) { h.mx = 0; h.mz = 0; return }
