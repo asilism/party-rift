@@ -6927,19 +6927,63 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       for (const [id, o] of brawlPickupObjs) {
         if (id < 0 && !seenTr.has(id)) { scene.remove(o); brawlPickupObjs.delete(id) }
       }
-      // 🌀 대포 발사대 — 소용돌이가 돌고, 쿨다운 중엔 흐려진다
+      // 🧨 대포 실물 — 포신이 경기장 중심을 향해 들려 있고, 준비등이 초록/빨강으로 상태를 알린다
       for (const c of view.brawlCannons || []) {
         let o = brawlCannonObjs.get(c.id)
         if (!o) {
-          o = emojiSprite('🌀', 4.6)
-          o.material.depthTest = false
-          o.renderOrder = 2
+          o = new THREE.Group()
+          // 돌 받침 + 나무 마운트
+          const base = new THREE.Mesh(
+            new THREE.CylinderGeometry(2.5, 3.0, 0.9, 10),
+            new THREE.MeshLambertMaterial({ color: 0x8f8066, flatShading: true })
+          )
+          base.position.y = 0.45
+          o.add(base)
+          const mount = new THREE.Mesh(
+            new THREE.BoxGeometry(2.5, 1.3, 2.0),
+            new THREE.MeshLambertMaterial({ color: 0x6f4b2b, flatShading: true })
+          )
+          mount.position.y = 1.3
+          o.add(mount)
+          // 포신(테이퍼 원통) — 피벗을 뒤끝으로 밀고 45° 들어올린다
+          const pivot = new THREE.Group()
+          pivot.position.y = 1.9
+          const barrelGeo = new THREE.CylinderGeometry(0.55, 0.8, 4.4, 12)
+          barrelGeo.translate(0, 2.2, 0)
+          const barrel = new THREE.Mesh(barrelGeo, new THREE.MeshLambertMaterial({ color: 0x3a3f4a, flatShading: true }))
+          const muzzle = new THREE.Mesh(
+            new THREE.TorusGeometry(0.68, 0.16, 8, 14),
+            new THREE.MeshLambertMaterial({ color: 0x22262e })
+          )
+          muzzle.position.y = 4.3
+          muzzle.rotation.x = Math.PI / 2
+          barrel.add(muzzle)
+          pivot.add(barrel)
+          pivot.rotation.z = -(Math.PI / 2 - 0.8) // +y 포신을 +x 쪽으로 45°가량 눕힌다(위를 향해 발사각)
+          o.add(pivot)
+          // 준비등 — 포신 옆 구슬
+          const lamp = new THREE.Mesh(
+            new THREE.SphereGeometry(0.34, 10, 10),
+            new THREE.MeshBasicMaterial({ color: 0x7dffa0 })
+          )
+          lamp.position.set(0, 2.9, 0)
+          o.add(lamp)
+          o.userData.lamp = lamp
+          // 포신이 경기장 중심을 향하게 회전(unrot 시 +x 방향으로 기울어 있음)
+          o.rotation.y = Math.atan2(c.z, -c.x)
+          o.position.set(c.x, 0, c.z)
           scene.add(o)
           brawlCannonObjs.set(c.id, o)
         }
-        o.position.set(c.x, 1.2, c.z)
-        o.material.rotation = view.time * 2.5
-        o.material.opacity = c.cd > 0 ? 0.25 : 0.95
+        // 준비등: 초록(발사 가능) ↔ 빨강(쿨다운), 준비 시 은은히 맥동
+        const lamp = o.userData.lamp
+        if (c.cd > 0) {
+          lamp.material.color.setHex(0xff4a3a)
+          lamp.scale.setScalar(1)
+        } else {
+          lamp.material.color.setHex(0x7dffa0)
+          lamp.scale.setScalar(1 + Math.sin(view.time * 5) * 0.2)
+        }
       }
       if (brawlShakeT > 0) { // 강넉백·발사·장외 순간의 손맛 — 카메라가 잘게 흔들린다
         brawlShakeT = Math.max(0, brawlShakeT - dt)

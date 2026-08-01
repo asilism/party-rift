@@ -3676,8 +3676,8 @@ function stepBrawl(state, dt) {
       h.brawlIdleFed = false
     } else {
       h.brawlIdleT = (h.brawlIdleT || 0) + dt
-      if (h.brawlIdleT < 18) h.brawlIdleFed = false
-      if (h.brawlIdleT >= 18) {
+      if (h.brawlIdleT < 10) h.brawlIdleFed = false
+      if (h.brawlIdleT >= 10) { // 10초만 몸 사려도 세금 — 방관은 확실히 손해
         if (!h.brawlIdleFed) {
           h.brawlIdleFed = true
           pushFeed(state, 'obj', `💤 ${emojiOf(h.zodiacId)} ${h.name} — 몸만 사리다 힘이 빠진다`)
@@ -3685,7 +3685,7 @@ function stepBrawl(state, dt) {
         h.brawlIdleTickT = (h.brawlIdleTickT || 0) - dt
         if (h.brawlIdleTickT <= 0) {
           h.brawlIdleTickT = 0.5
-          damageHero(state, h, h.maxHp * 0.01, null, false, '겁쟁이 세금') // 초당 2%
+          damageHero(state, h, h.maxHp * 0.015, null, false, '겁쟁이 세금') // 초당 3%
         }
       }
     }
@@ -8296,12 +8296,14 @@ function brawlBotDuty(state, h, dt) {
   for (const e of state.heroes) {
     if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || e.fallT > 0) continue
     const ed = dist(h, e)
-    let sc = -ed
+    // 방관자(8초+)는 거리 감쇠를 크게 완화 — 구석에 숨어도 봇들이 일부러 찾아간다
+    let sc = (e.brawlIdleT || 0) > 8 ? -ed * 0.35 + 26 : -ed
     if (e.id === h.lastHitBy && state.time - h.lastHitT < 6) sc += 14 // 원한 — 날 때린 놈부터
     if (e.hp < e.maxHp * 0.3) sc += 9 // 막타 기회
+    // 목숨 리더 견제: 나보다 목숨이 많은 상대일수록 우선 표적 — '안 싸우고 1등' 전략의 카운터
+    sc += Math.max(-8, Math.min(14, ((e.brawlLives || 0) - (h.brawlLives || 0)) * 2))
     if ((e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) sc -= 30 // 무적자는 두들겨도 헛손질
     if ((e.brawlBombT || 0) > 0) sc -= 45 // 폭탄 든 놈 근처엔 안 간다
-    if ((e.brawlIdleT || 0) > 12) sc += 24 // 방관자 사냥 — 멀찍이 구경하는 놈부터 조진다
     if (sc > best) { best = sc; foe = e }
   }
   if (!foe) { h.mx = 0; h.mz = 0; return }
