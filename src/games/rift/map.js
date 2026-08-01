@@ -731,7 +731,7 @@ export function buildMap(mode = '3v3', arenaLayout = null) {
   if (mode === 'brawl') {
     for (const c of BRAWL_CANNONS) {
       const deg = (Math.atan2(c.z, c.x) * 180) / Math.PI // 중심→발판 방향각: 이 방향(바깥쪽)을 감싼다
-      WALL_LINES.push(...arcWallLines(c.x, c.z, 4.6, deg - 120, deg + 120))
+      WALL_LINES.push(...arcWallLines(c.x, c.z, 4.6, deg - 95, deg + 95)) // 바깥 190°만 — 입구(링 쪽)를 넓게
     }
     WALLS.length = 0
     WALLS.push(...wallCircles(WALL_LINES))

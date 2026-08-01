@@ -6458,7 +6458,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const Ro = FOUNTAIN_RADIUS + 2 * t // 바깥 면
   const Rmid = FOUNTAIN_RADIUS + t // 중심선(성가퀴 배치)
   const H = 4.6
-  for (const team of ['blue', 'red']) {
+  for (const team of map.mode === 'brawl' ? [] : ['blue', 'red']) { // 대난투: 더미 우물(링 밖)엔 성곽 없음
     const fp = FOUNTAIN_POS[team]
     const g = new THREE.Group()
     // 반호 링을 위로 밀어 세운 곡면 벽체. ExtrudeGeometry는 shape의 (x,y)→월드(x,-z)로 눕힌다.
