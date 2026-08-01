@@ -900,6 +900,41 @@ function ModeScreen({ diff, onDiff, onPick, onBack }) {
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+  // PC 접근성: 세로 휠 → 가로 스크롤 변환 + 마우스 드래그 스크롤 + 화살표 클릭.
+  //  (터치·트랙패드 수평 제스처만으로는 휠 없는 마우스 사용자가 오른쪽 카드에 못 간다)
+  const dragRef = useRef(null)
+  const suppressClickRef = useRef(false)
+  function cardsWheel(e) {
+    const el = cardsRef.current
+    if (el && Math.abs(e.deltaY) > Math.abs(e.deltaX)) el.scrollLeft += e.deltaY
+  }
+  function cardsPointerDown(e) {
+    if (e.pointerType !== 'mouse') return // 터치는 브라우저 네이티브 스크롤이 이미 잘 된다
+    dragRef.current = { x: e.clientX, left: cardsRef.current?.scrollLeft || 0, moved: false }
+  }
+  function cardsPointerMove(e) {
+    const d = dragRef.current
+    const el = cardsRef.current
+    if (!d || !el) return
+    const dx = e.clientX - d.x
+    if (Math.abs(dx) > 5) d.moved = true
+    if (d.moved) el.scrollLeft = d.left - dx
+  }
+  function cardsPointerUp() {
+    const d = dragRef.current
+    dragRef.current = null
+    if (d?.moved) { // 드래그로 끌었으면 놓는 순간의 클릭은 삼킨다(카드 오발동 방지)
+      suppressClickRef.current = true
+      setTimeout(() => { suppressClickRef.current = false }, 0)
+    }
+  }
+  function cardsClickCapture(e) {
+    if (suppressClickRef.current) { e.stopPropagation(); e.preventDefault() }
+  }
+  function scrollCards(dir) {
+    sound.step()
+    cardsRef.current?.scrollBy({ left: dir * 240, behavior: 'smooth' })
+  }
   function askBuyMode(m) {
     if (loadCoins() < m.price) {
       sound.step() // 코인 부족 — 카드의 가격 표시가 안내 역할
@@ -931,9 +966,13 @@ function ModeScreen({ diff, onDiff, onPick, onBack }) {
         ))}
       </div>
       <div className="mode-screen__scrollwrap">
-        {scrollHint.left && <><div className="mode-scroll-fade mode-scroll-fade--left" /><span className="mode-scroll-hint mode-scroll-hint--left">›</span></>}
-        {scrollHint.right && <><div className="mode-scroll-fade mode-scroll-fade--right" /><span className="mode-scroll-hint mode-scroll-hint--right">›</span></>}
-        <div className="mode-screen__cards" ref={cardsRef} onScroll={refreshScrollHint}>
+        {scrollHint.left && <><div className="mode-scroll-fade mode-scroll-fade--left" /><button className="mode-scroll-hint mode-scroll-hint--left" onClick={() => scrollCards(-1)}>›</button></>}
+        {scrollHint.right && <><div className="mode-scroll-fade mode-scroll-fade--right" /><button className="mode-scroll-hint mode-scroll-hint--right" onClick={() => scrollCards(1)}>›</button></>}
+        <div
+          className="mode-screen__cards" ref={cardsRef} onScroll={refreshScrollHint}
+          onWheel={cardsWheel} onPointerDown={cardsPointerDown} onPointerMove={cardsPointerMove}
+          onPointerUp={cardsPointerUp} onPointerLeave={cardsPointerUp} onClickCapture={cardsClickCapture}
+        >
         {MODE_OPTS.map((m, i) => {
           // 유료 모드(보스전): 코인으로 1회 해금 — 해금 전엔 자물쇠와 가격을 보여준다.
           // 개발자 모드(HAT_DEV: dev 서버/?devhat)에서는 꾸미기처럼 바로 열린다.
