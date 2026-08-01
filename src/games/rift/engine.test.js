@@ -4336,6 +4336,25 @@ test('대난투: 경기장 3종 — 레이아웃마다 구조물이 다르고 �
   }
 })
 
+test('대난투: 방관 페널티 — 18초 미전투면 겁쟁이 세금, 전투하면 리셋', () => {
+  const g = brawl8()
+  const [a, b] = g.heroes
+  for (const h of g.heroes) h.atkCd = 99
+  // 서로 멀리 — 20초 방관
+  g.heroes.forEach((h, i) => { h.x = Math.cos(i) * 20; h.z = Math.sin(i) * 20 })
+  const hp0 = a.hp
+  run(g, 20)
+  assert.ok(a.brawlIdleT > 18, `방관 누적 (${a.brawlIdleT.toFixed(1)})`)
+  assert.ok(a.hp < hp0, `겁쟁이 세금으로 체력 감소 (${hp0}→${Math.round(a.hp)})`)
+  // 전투 참여 → 리셋
+  a.x = 0; a.z = 0; b.x = 2.5; b.z = 0
+  a.atkCd = 0
+  castAttack(g, a.id)
+  run(g, 0.5)
+  assert.ok(a.brawlIdleT < 2, '가해로 방관 리셋')
+  assert.ok(b.brawlIdleT < 2, '피격도 방관 리셋')
+})
+
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
   const g = brawl8()
   // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락
