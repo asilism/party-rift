@@ -3631,15 +3631,18 @@ function stepBrawl(state, dt) {
       h.brawlBombT = 0
       const dead = h.brawlBombDead
       h.brawlBombDead = false
+      // 🍄 핵버섯구름 — 씬이 화염 코어·연기 기둥·버섯머리·충격파 링을 그린다(+화면 섬광)
+      state.brawlNukeSeq = (state.brawlNukeSeq || 0) + 1
+      state.brawlNukeAt = { x: h.x, z: h.z }
       pushFx(state, 'meteorhit', h.x, h.z, 13, null, 1.6)
       pushFx(state, 'rocksplash', h.x, h.z, 10, null, 1.4)
       for (const e of state.heroes) {
         if (e.respawnT > 0 || e.hp <= 0 || e.fallT > 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) continue
         const ed = Math.hypot(h.x - e.x, h.z - e.z)
         if (e === h && !dead) damageHero(state, e, 99999, null, false, '시한폭탄') // 확정 처형
-        else if (e !== h && ed < 9) {
+        else if (e !== h && ed < 11) {
           damageHero(state, e, 200, null, false, '시한폭탄')
-          if (e.hp > 0) applyKnockback(state, e, h.x, h.z, 8)
+          if (e.hp > 0) applyKnockback(state, e, h.x, h.z, 11) // 폭심 밖까지 전원 날아간다
         }
       }
     }
@@ -8868,6 +8871,8 @@ export function makeView(state) {
     brawlTraps: state.brawlTraps ? state.brawlTraps.map((o) => ({ id: o.id, x: o.x, z: o.z })) : null,
     brawlCannons: state.brawlCannons ? state.brawlCannons.map((c) => ({ id: c.id, x: c.x, z: c.z, cd: r2d(c.cd) })) : null,
     brawlBoltSeq: state.brawlBoltSeq || 0,
+    brawlNukeSeq: state.brawlNukeSeq || 0,
+    brawlNukeAt: state.brawlNukeAt ? { ...state.brawlNukeAt } : null, // 복사 필수
     brawlBoltAt: state.brawlBoltAt ? state.brawlBoltAt.map((o) => ({ ...o })) : null, // 복사 필수
     healOrbs: state.healOrbs.map((o) => ({ id: o.id, x: o.x, z: o.z })), // 회복 열매(💖 렌더)
     holes: state.holes.map((o) => ({ id: o.id, x: o.x, z: o.z, r: o.r })), // 붕괴 구멍 — 복사 필수(원본 참조를 넘기면 델타 코덱이 push를 못 본다)

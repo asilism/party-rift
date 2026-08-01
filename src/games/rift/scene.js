@@ -6801,6 +6801,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   let brawlShakeT = 0 // 강넉백·장외 카메라 흔들림
   let brawlBoltSeen = 0 // 번개 낙뢰 시퀀스(중복 방지)
   const brawlBolts = [] // 낙뢰 기둥 {mesh, t}
+  let brawlNukeSeen = 0 // 폭탄 버섯구름 시퀀스
+  const brawlNukes = [] // 버섯구름 {g, stem, cap, fire, ring, t, dur}
 
   // 시간술사 역행 미리보기: 내 영웅이 되돌아갈 과거 지점을 반투명 그림자로 보여 준다(궁극기 켜졌을 때만)
   const rewindGhost = new THREE.Group()
@@ -6986,6 +6988,59 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           lamp.material.color.setHex(0x7dffa0)
           lamp.scale.setScalar(1 + Math.sin(view.time * 5) * 0.2)
         }
+      }
+      // 💣 폭탄: 핵버섯구름 — 화염 코어가 치솟아 연기 기둥·버섯머리가 부풀고 충격파 링이 퍼진다
+      if ((view.brawlNukeSeq || 0) !== brawlNukeSeen) {
+        brawlNukeSeen = view.brawlNukeSeq || 0
+        const at = view.brawlNukeAt || { x: 0, z: 0 }
+        const g = new THREE.Group()
+        g.position.set(at.x, 0, at.z)
+        const smoke = new THREE.MeshLambertMaterial({ color: 0x6e675e, transparent: true, opacity: 0.92, flatShading: true })
+        const stemGeo = new THREE.CylinderGeometry(1.5, 2.4, 1, 10)
+        stemGeo.translate(0, 0.5, 0) // 피벗 바닥 — scale.y로 자라난다
+        const stem = new THREE.Mesh(stemGeo, smoke)
+        g.add(stem)
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(2.8, 12, 9), smoke.clone())
+        g.add(cap)
+        const fire = new THREE.Mesh(
+          new THREE.SphereGeometry(2.0, 10, 8),
+          new THREE.MeshBasicMaterial({ color: 0xff8a2a, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false })
+        )
+        g.add(fire)
+        const ring = new THREE.Mesh(
+          new THREE.RingGeometry(0.9, 1.35, 40),
+          new THREE.MeshBasicMaterial({ color: 0xffc060, transparent: true, opacity: 0.9, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false })
+        )
+        ring.rotation.x = -Math.PI / 2
+        ring.position.y = 0.35
+        g.add(ring)
+        scene.add(g)
+        brawlNukes.push({ g, stem, cap, fire, ring, t: 0, dur: 1.35 })
+        brawlShakeT = Math.max(brawlShakeT, 0.55)
+      }
+      for (let ni = brawlNukes.length - 1; ni >= 0; ni--) {
+        const n = brawlNukes[ni]
+        n.t += dt
+        const k = Math.min(1, n.t / n.dur)
+        if (k >= 1) {
+          scene.remove(n.g)
+          n.stem.material.dispose(); n.cap.material.dispose(); n.fire.material.dispose(); n.ring.material.dispose()
+          brawlNukes.splice(ni, 1)
+          continue
+        }
+        const rise = 1 - (1 - k) ** 2 // easeOut 상승
+        const stemH = 11 * Math.min(1, rise * 1.3)
+        n.stem.scale.set(1 + k * 0.6, stemH, 1 + k * 0.6)
+        n.cap.position.y = stemH + 1.2
+        n.cap.scale.setScalar(0.6 + rise * 1.8)
+        n.fire.position.y = Math.min(stemH * 0.5, 4) // 화염 코어는 아래서 타오르다 삭는다
+        n.fire.scale.setScalar(1 + k * 2.2)
+        n.fire.material.opacity = Math.max(0, 0.95 - k * 1.4)
+        n.ring.scale.setScalar(1 + rise * 13) // 지면 충격파
+        n.ring.material.opacity = Math.max(0, 0.9 - k * 1.1)
+        const fade = k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1 // 말미에 연기 소산
+        n.stem.material.opacity = 0.92 * fade
+        n.cap.material.opacity = 0.92 * fade
       }
       // ⚡ 번개: 하늘에서 감전자마다 낙뢰 기둥이 내리꽂힌다 + 카메라 흔들림(화면 번쩍은 HUD가)
       if ((view.brawlBoltSeq || 0) !== brawlBoltSeen) {

@@ -544,7 +544,7 @@ function RiftPlay({
   const [boltFlash, setBoltFlash] = useState(0)
   const boltSeqRef = useRef(0)
   useEffect(() => {
-    const seq = hud?.brawlBoltSeq || 0
+    const seq = (hud?.brawlBoltSeq || 0) + (hud?.brawlNukeSeq || 0) // 번개·핵폭발 공용 섬광
     if (seq && seq !== boltSeqRef.current) {
       boltSeqRef.current = seq
       setBoltFlash(1)
@@ -553,7 +553,7 @@ function RiftPlay({
       return () => { clearTimeout(t1); clearTimeout(t2) }
     }
     return undefined
-  }, [hud?.brawlBoltSeq])
+  }, [hud?.brawlBoltSeq, hud?.brawlNukeSeq])
   const myBrawlPlace = hud.mode === 'brawl'
     ? ((hud.brawlRanks || []).find((r) => r.id === myId)?.place || null) : null
   const winText = hud.mode === 'brawl'
@@ -806,10 +806,11 @@ function RiftPlay({
             <div className="rift__respawn">
               💀 {t('부활까지')} <b>{Math.ceil(me.respawnT)}</b>{t('초')}...
             </div>
-            {/* 사망 중엔 양 팀 킬스코어·아이템·레벨 현황을 한눈에 (상대 빌드 파악용) */}
-            <div className="rift__dead-board">
+            {/* 사망 중엔 양 팀 킬스코어·아이템·레벨 현황을 한눈에 (상대 빌드 파악용).
+                대난투(FFA)는 팀이 없어 좌상단 목숨 순위판이 그 역할 — 팀 패널 생략 */}
+            {hud.mode !== 'brawl' && <div className="rift__dead-board">
               <RiftRoster hud={hud} />
-            </div>
+            </div>}
           </>
         )}
         {me && hud.status === 'playing' && hud.go && (
