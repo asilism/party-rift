@@ -3089,7 +3089,8 @@ body {
 .mode-scroll-fade--left { left: 0; background: linear-gradient(to right, rgba(20, 16, 40, 0.55), transparent); }
 .mode-scroll-hint {
   position: absolute; top: 50%; transform: translateY(-50%);
-  z-index: 3; pointer-events: none;
+  z-index: 3; cursor: pointer; /* 클릭 가능한 버튼 — 휠 없는 마우스도 카드를 넘긴다 */
+  background: none; border: none; padding: 6px 10px;
   font-size: 34px; font-weight: 900; color: #fff;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
   animation: modeHintNudge 1.2s ease-in-out infinite;
