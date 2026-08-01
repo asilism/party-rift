@@ -6141,7 +6141,18 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         ctx.beginPath()
         ctx.arc(512, 512, (r + 1.6) * k, 0, Math.PI * 2)
         ctx.fill()
+        // 대포 발판(링 밖 전용 공간)의 바닥은 남긴다 — 컷 후 다시 그린다
         ctx.globalCompositeOperation = 'source-over'
+        for (const cn of map.CANNONS || []) {
+          ctx.save()
+          ctx.beginPath()
+          ctx.arc(512 + cn.x * k, 512 + cn.z * k, 4.4 * k, 0, Math.PI * 2)
+          ctx.clip()
+          for (let ty = 0; ty < 1024; ty += 256) {
+            for (let tx = 0; tx < 1024; tx += 256) ctx.drawImage(src, tx, ty, 256, 256)
+          }
+          ctx.restore()
+        }
         tex.needsUpdate = true
       }
       groundPunch.brawlCut(40)
@@ -6689,6 +6700,10 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   nexusObjs.blue.position.set(NEXUS_POS.blue.x, 0, NEXUS_POS.blue.z)
   nexusObjs.red.position.set(NEXUS_POS.red.x, 0, NEXUS_POS.red.z)
   scene.add(nexusObjs.blue, nexusObjs.red) // 콜로세움 포함 — 아레나에선 포인트 제단(공격 불가)
+  if (map.mode === 'brawl') { // 대난투: 수호석은 룰과 무관한 장식 — 화면 정리 차원에서 숨긴다
+    nexusObjs.blue.visible = false
+    nexusObjs.red.visible = false
+  }
 
   // ── 콜로세움 포인트 하트 — 수호석 주변에 토너먼트 포인트만큼 하트가 떠 있고,
   //    라운드 패배 시 차감분만큼 한 개씩 펑·펑·펑 터진다. 0이 되면 수호석 파괴 + 탈락. ──

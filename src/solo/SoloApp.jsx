@@ -312,7 +312,11 @@ export default function SoloApp() {
     saveSoloPick(pick)
     const n = createLocalNet(riftNet, {
       players: [],
-      config: { mode, roster: buildSoloRoster(pick), botLevel: dOpt.botLevel, bossTier: dOpt.bossTier },
+      config: {
+        mode, roster: buildSoloRoster(pick), botLevel: dOpt.botLevel, bossTier: dOpt.bossTier,
+        // 대난투: 경기장 3종(개활지/기둥숲/분화구) 매판 랜덤
+        arenaLayout: mode === 'brawl' ? ['open', 'pillars', 'crater'][Math.floor(Math.random() * 3)] : undefined,
+      },
       deviceId: 'solo',
       // 경기가 끝나면 내 직업 전적에 누적 — 중도 이탈(exit)은 기록하지 않는다
       onFinish(view) {
