@@ -180,6 +180,40 @@ const BRAWL_SPAWNS = Object.fromEntries(Array.from({ length: 8 }, (_, k) => {
   const a = (k / 8) * Math.PI * 2
   return [`t${k}`, { x: Math.cos(a) * (BRAWL_R - 9), z: Math.sin(a) * (BRAWL_R - 9) }]
 }))
+// 대포 발판 3곳 — 링(R40) "밖" 전용 공간(반경 3.8). 벽이 바깥을 감싸 낙사 없이 탈 수 있다.
+export const BRAWL_CANNONS = [0, 1, 2].map((k) => {
+  const a = (k / 3) * Math.PI * 2 + Math.PI / 6
+  return { x: Math.round(Math.cos(a) * 44 * 10) / 10, z: Math.round(Math.sin(a) * 44 * 10) / 10 }
+})
+// 대난투 경기장 3종 — 매판 랜덤 배정(구조물만 다르고 룰은 동일)
+export const BRAWL_LAYOUT_IDS = ['open', 'pillars', 'crater']
+const BRAWL_LAYOUTS = {
+  open: { // 개활지 — 넉백이 곧 정의인 순수 난투판
+    WALL_LINES: [],
+    ROCKS: [
+      { x: -14, z: -10, r: 2.2 }, { x: 14, z: -10, r: 2.2 }, { x: 0, z: 17, r: 2.2 },
+    ],
+  },
+  pillars: { // 기둥숲 — 엄폐·핀볼 추격전(스킬샷이 끊기고 골목 싸움이 난다)
+    WALL_LINES: [
+      { x1: -16, z1: -6, x2: -9, z2: -12 },
+      { x1: 9, z1: 12, x2: 16, z2: 6 },
+      { x1: -6, z1: 16, x2: -13, z2: 10 },
+      { x1: 6, z1: -16, x2: 13, z2: -10 },
+    ],
+    ROCKS: [
+      { x: 0, z: 0, r: 2.0 }, { x: -22, z: 8, r: 1.8 }, { x: 22, z: -8, r: 1.8 },
+    ],
+  },
+  crater: { // 분화구 — 중앙 거암 둘레로 도는 회전 난투(원거리 카이팅이 꺾인다)
+    WALL_LINES: [],
+    ROCKS: [
+      { x: 0, z: 0, r: 4.6 },
+      { x: -19, z: -14, r: 1.9 }, { x: 19, z: -14, r: 1.9 },
+      { x: -19, z: 14, r: 1.9 }, { x: 19, z: 14, r: 1.9 },
+    ],
+  },
+}
 const BRAWL_BASE = {
   WORLD: { minX: -60, maxX: 60, minZ: -60, maxZ: 60 },
   // 수호석은 대난투에서 순수 배경 장식 — 경기장 밖 남북 멀리(공격 불가·동선 무관)
@@ -632,6 +666,7 @@ function findPathFor(geo, sx, sz, tx, tz) {
 export function buildMap(mode = '3v3', arenaLayout = null) {
   const raid = mode === 'boss' || mode === 'defense' // 방어전도 보스의 협곡 지형을 쓴다
   let base = mode === 'brawl' ? BRAWL_BASE : mode === 'arena' ? ARENA_BASE : raid ? BOSS_BASE : BASE // 모드별 전용 지형
+  if (mode === 'brawl' && BRAWL_LAYOUTS[arenaLayout]) base = { ...BRAWL_BASE, ...BRAWL_LAYOUTS[arenaLayout] } // 대난투 경기장 3종
   // 콜로세움 내부 구조: 레이아웃이 지정되면 엄폐벽·바위·부쉬를 통째로 갈아 끼운다
   if (mode === 'arena' && ARENA_LAYOUTS[arenaLayout]) {
     base = { ...ARENA_BASE, ...ARENA_LAYOUTS[arenaLayout] }
@@ -693,6 +728,14 @@ export function buildMap(mode = '3v3', arenaLayout = null) {
     WALLS.length = 0
     WALLS.push(...wallCircles(WALL_LINES))
   }
+  if (mode === 'brawl') {
+    for (const c of BRAWL_CANNONS) {
+      const deg = (Math.atan2(c.z, c.x) * 180) / Math.PI // 중심→발판 방향각: 이 방향(바깥쪽)을 감싼다
+      WALL_LINES.push(...arcWallLines(c.x, c.z, 4.6, deg - 120, deg + 120))
+    }
+    WALLS.length = 0
+    WALLS.push(...wallCircles(WALL_LINES))
+  }
   if (mode !== 'arena' && mode !== 'brawl') WALLS.push(...respawnArcCircles(FOUNTAIN_POS.blue.x, FOUNTAIN_POS.blue.z, -1))
   if (!raid && mode !== 'arena' && mode !== 'brawl') {
     WALLS.push(...respawnArcCircles(FOUNTAIN_POS.red.x, FOUNTAIN_POS.red.z, 1))
@@ -703,6 +746,7 @@ export function buildMap(mode = '3v3', arenaLayout = null) {
     ROCKS, BUSHES, WOLF_CAMPS, DRAGON_PIT, BARON_PIT,
     NEXUS_RADIUS, FOUNTAIN_RADIUS, TOWER_RADIUS, WALL_RADIUS, enemyOf,
     HOLES: [], // 콜로세움 붕괴 구멍(+경고) — 봇 경로탐색·조향 전용 가상 장애물(물리 충돌 아님: 밀쳐 떨어뜨리기 허용)
+    CANNONS: mode === 'brawl' ? BRAWL_CANNONS.map((c) => ({ ...c })) : [], // 대난투 대포 발판(링 밖 안전지대)
   }
   geo.bushIndexAt = (x, z) => bushIndexAtFor(geo, x, z)
   geo.nearestWp = (lane, x, z) => nearestWpFor(geo, lane, x, z)

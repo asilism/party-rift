@@ -1002,7 +1002,7 @@ export function createGame(players, opts = {}) {
     teamSize,
     botLevel: BOT_LEVELS[o.botLevel] ? o.botLevel : 'normal', // 봇 난이도(솔로 모드) — 온라인은 항상 normal
     bossTier: BOSS_TIERS[o.bossTier] ? o.bossTier : 'normal', // 보스전 난이도 티어(보통/어려움/악몽)
-    arenaLayout: mode === 'arena' ? (o.arenaLayout || null) : null, // 콜로세움 내부 구조(렌더러 동기화용)
+    arenaLayout: (mode === 'arena' || mode === 'brawl') ? (o.arenaLayout || null) : null, // brawl: 경기장 3종 // 콜로세움 내부 구조(렌더러 동기화용)
     arenaPhase: mode === 'arena' ? 'shop' : null, // 콜로세움: shop → fight → sudden
     arenaT: mode === 'arena' ? ARENA_SHOP_T : 0, // 현재 페이즈 남은 시간
     arenaWave: 0, // 서든데스 붕괴 웨이브 번호
@@ -1013,11 +1013,8 @@ export function createGame(players, opts = {}) {
     brawlRanks: mode === 'brawl' ? [] : null, // 탈락 순위 기록 {place,id,name,zodiacId}
     brawlPickups: mode === 'brawl' ? [] : null, // 하늘 보급 아이템 {id,kind,x,z,t}
     brawlTraps: mode === 'brawl' ? [] : null, // 바나나 트랩 {id,x,z,owner,t}
-    // 대포 발사대 3곳(120° 간격, 스폰 사이) — 밟으면 반대편으로 포물선 발사(z축 쾌감·도주·기습)
-    brawlCannons: mode === 'brawl' ? [0, 1, 2].map((k) => {
-      const ca = (k / 3) * Math.PI * 2 + Math.PI / 6
-      return { id: k, x: Math.cos(ca) * 31, z: Math.sin(ca) * 31, cd: 0 }
-    }) : null, // 토너먼트 라운드 — 봇 장보기 단계(공격→피해감소→방어)를 가른다
+    // 대포 발사대 — 링 밖 전용 발판(map.CANNONS, 벽으로 감싸인 안전지대)
+    brawlCannons: mode === 'brawl' ? map.CANNONS.map((c, k) => ({ id: k, x: c.x, z: c.z, cd: 0 })) : null, // 토너먼트 라운드 — 봇 장보기 단계(공격→피해감소→방어)를 가른다
     healOrbs: [], // 콜로세움 회복 열매 {id,x,z,t} — 먹으면 체력 회복
     orbT: 6, // 다음 열매 낙하까지(전투 개시 후)
     holes: [], // 붕괴 구멍 {x,z,r} — 밟으면 추락
@@ -3664,8 +3661,10 @@ function stepBrawl(state, dt) {
     if (h.brawlHammerT > 0) h.brawlHammerT = Math.max(0, h.brawlHammerT - dt)
     if (h.brawlMushT > 0) h.brawlMushT = Math.max(0, h.brawlMushT - dt)
     if (h.brawlPolyT > 0) h.brawlPolyT = Math.max(0, h.brawlPolyT - dt)
-    // 장외: 링 밖으로 밀리거나 걸어 나가면 추락 시작(넉백 = 처형 수단)
-    if (h.respawnT <= 0 && h.hp > 0 && !(h.fallT > 0) && Math.hypot(h.x, h.z) > state.brawlR + 1.1) {
+    // 장외: 링 밖으로 밀리거나 걸어 나가면 추락 시작(넉백 = 처형 수단).
+    //  단 대포 발판(링 밖 전용 공간·벽 보호)은 안전지대다.
+    if (h.respawnT <= 0 && h.hp > 0 && !(h.fallT > 0) && Math.hypot(h.x, h.z) > state.brawlR + 1.1
+        && !state.brawlCannons.some((c) => Math.hypot(h.x - c.x, h.z - c.z) < 4.4)) {
       arenaFall(state, h, null)
     }
   }

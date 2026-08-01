@@ -4309,6 +4309,33 @@ test('대난투: 🌀 대포 — 밟으면 반대편으로 포물선 발사(무�
   assert.ok(Math.sign(a.x) !== Math.sign(c.x) || Math.abs(a.x) < 1, '반대편 방향')
 })
 
+test('대난투: 대포 발판은 링 밖이어도 안전지대 — 서 있어도 낙사하지 않는다', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  for (const h of g.heroes) h.atkCd = 99
+  const c = g.brawlCannons[0]
+  // 발판 가장자리(대포 트리거 밖 2.2~4.4 사이)에 서도 낙사 없음
+  const rr = Math.hypot(c.x, c.z)
+  a.x = c.x + (c.x / rr) * 3
+  a.z = c.z + (c.z / rr) * 3
+  run(g, 1.0)
+  assert.ok(!(a.fallT > 0) && a.hp > 0, '발판 위 안전')
+})
+
+test('대난투: 경기장 3종 — 레이아웃마다 구조물이 다르고 대포 발판·벽이 있다', () => {
+  const open = buildMap('brawl', 'open')
+  const pillars = buildMap('brawl', 'pillars')
+  const crater = buildMap('brawl', 'crater')
+  assert.ok(pillars.WALL_LINES.length > open.WALL_LINES.length, '기둥숲은 엄폐벽이 있다')
+  assert.ok(crater.ROCKS.some((r) => r.r > 4), '분화구는 중앙 거암')
+  for (const m of [open, pillars, crater]) {
+    assert.equal(m.CANNONS.length, 3, '대포 발판 3곳')
+    // 발판 반호 벽이 물리 충돌(WALLS)에 들어 있다 — 발판 근처(6) 벽 원이 존재
+    const c = m.CANNONS[0]
+    assert.ok(m.WALLS.some((w) => Math.hypot(w.x - c.x, w.z - c.z) < 6), '발판 감싸는 벽')
+  }
+})
+
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
   const g = brawl8()
   // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락

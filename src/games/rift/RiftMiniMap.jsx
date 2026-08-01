@@ -121,7 +121,7 @@ export default function RiftMiniMap({ view, myId }) {
           stroke="rgba(0,0,0,0.4)" strokeWidth={1}
         />
       ))}
-      {['blue', 'red'].map((team) => (
+      {(view.mode === 'brawl' ? [] : ['blue', 'red']).map((team) => (
         <circle
           key={team}
           cx={NEXUS_POS[team].x} cy={NEXUS_POS[team].z} r={6}
