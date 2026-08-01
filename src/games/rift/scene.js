@@ -6995,12 +6995,22 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const at = view.brawlNukeAt || { x: 0, z: 0 }
         const g = new THREE.Group()
         g.position.set(at.x, 0, at.z)
-        const smoke = new THREE.MeshLambertMaterial({ color: 0x6e675e, transparent: true, opacity: 0.92, flatShading: true })
-        const stemGeo = new THREE.CylinderGeometry(1.5, 2.4, 1, 10)
+        // 뭉게구름 재질 — 하얀 연기(버섯 아니라 버섯 '모양' 구름)
+        const smoke = new THREE.MeshLambertMaterial({ color: 0xf1efe8, transparent: true, opacity: 0.94, flatShading: true })
+        const stemGeo = new THREE.CylinderGeometry(1.4, 2.2, 1, 10)
         stemGeo.translate(0, 0.5, 0) // 피벗 바닥 — scale.y로 자라난다
         const stem = new THREE.Mesh(stemGeo, smoke)
         g.add(stem)
-        const cap = new THREE.Mesh(new THREE.SphereGeometry(2.8, 12, 9), smoke.clone())
+        // 머리: 작은 구체 8개가 고리+꼭대기로 뭉친 빌로우 — 단일 구체는 송이버섯처럼 보인다
+        const cap = new THREE.Group()
+        const capMat = smoke.clone()
+        for (let bi = 0; bi < 8; bi++) {
+          const ba = (bi / 7) * Math.PI * 2
+          const puff = new THREE.Mesh(new THREE.SphereGeometry(1.35 + (bi % 3) * 0.35, 9, 7), capMat)
+          if (bi < 7) puff.position.set(Math.cos(ba) * 1.9, (bi % 2) * 0.5, Math.sin(ba) * 1.9)
+          else puff.position.set(0, 1.3, 0) // 꼭대기 봉우리
+          cap.add(puff)
+        }
         g.add(cap)
         const fire = new THREE.Mesh(
           new THREE.SphereGeometry(2.0, 10, 8),
@@ -7015,7 +7025,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         ring.position.y = 0.35
         g.add(ring)
         scene.add(g)
-        brawlNukes.push({ g, stem, cap, fire, ring, t: 0, dur: 1.35 })
+        brawlNukes.push({ g, stem, cap, capMat, fire, ring, t: 0, dur: 1.35 })
         brawlShakeT = Math.max(brawlShakeT, 0.55)
       }
       for (let ni = brawlNukes.length - 1; ni >= 0; ni--) {
@@ -7024,7 +7034,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const k = Math.min(1, n.t / n.dur)
         if (k >= 1) {
           scene.remove(n.g)
-          n.stem.material.dispose(); n.cap.material.dispose(); n.fire.material.dispose(); n.ring.material.dispose()
+          n.stem.material.dispose(); n.capMat.dispose(); n.fire.material.dispose(); n.ring.material.dispose()
           brawlNukes.splice(ni, 1)
           continue
         }
@@ -7033,14 +7043,15 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         n.stem.scale.set(1 + k * 0.6, stemH, 1 + k * 0.6)
         n.cap.position.y = stemH + 1.2
         n.cap.scale.setScalar(0.6 + rise * 1.8)
+        n.cap.rotation.y = k * 0.9 // 뭉게뭉게 천천히 말리며 피어오른다
         n.fire.position.y = Math.min(stemH * 0.5, 4) // 화염 코어는 아래서 타오르다 삭는다
         n.fire.scale.setScalar(1 + k * 2.2)
         n.fire.material.opacity = Math.max(0, 0.95 - k * 1.4)
         n.ring.scale.setScalar(1 + rise * 13) // 지면 충격파
         n.ring.material.opacity = Math.max(0, 0.9 - k * 1.1)
         const fade = k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1 // 말미에 연기 소산
-        n.stem.material.opacity = 0.92 * fade
-        n.cap.material.opacity = 0.92 * fade
+        n.stem.material.opacity = 0.94 * fade
+        n.capMat.opacity = 0.94 * fade
       }
       // ⚡ 번개: 하늘에서 감전자마다 낙뢰 기둥이 내리꽂힌다 + 카메라 흔들림(화면 번쩍은 HUD가)
       if ((view.brawlBoltSeq || 0) !== brawlBoltSeen) {
