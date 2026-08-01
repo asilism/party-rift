@@ -6111,6 +6111,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const GW = WORLD.maxX - WORLD.minX + 80
   const GH = WORLD.maxZ - WORLD.minZ + 80
   const collapsibles = [] // 콜로세움: 붕괴 구멍과 겹치면 침몰·소멸할 구조물(성벽·수풀)
+  const brawlPadWalls = [] // 대난투: 대포 발판 반호 벽(링이 끊기면 낙하) — 벽 빌드 루프가 채운다
   let groundPunch = null // 콜로세움: 붕괴 구멍을 바닥 텍스처에서 실제로 뚫는 캔버스
   let ground
   if (map.mode === 'arena' || map.mode === 'brawl') {
@@ -6806,7 +6807,6 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const brawlBolts = [] // 낙뢰 기둥 {mesh, t}
   let brawlNukeSeen = 0 // 폭탄 버섯구름 시퀀스
   const brawlNukes = [] // 버섯구름 {g, stem, cap, fire, ring, t, dur}
-  const brawlPadWalls = [] // 대포 발판 반호 벽 조형(붕괴 낙하용)
   let brawlPadsFallT = -1 // 발판 붕괴 진행 시계(-1=아직)
 
   // 시간술사 역행 미리보기: 내 영웅이 되돌아갈 과거 지점을 반투명 그림자로 보여 준다(궁극기 켜졌을 때만)
