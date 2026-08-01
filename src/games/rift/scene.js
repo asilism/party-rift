@@ -6892,7 +6892,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         scene.add(brawlRing)
       }
       // 보급 아이템 마커 — 큼직한 이모지가 하늘에서 뚝 떨어져 둥실거린다(아이템이 난투의 주인공)
-      const PICKUP_EMOJI = { hammer: '🔨', mush: '🍄', star: '⭐', bolt: '⚡', bomb: '💣', chicken: '🐔', banana: '🍌', magnet: '🧲' }
+      const PICKUP_EMOJI = { hammer: '🔨', mush: '🍄', star: '⭐', bolt: '⚡', bomb: '💣', banana: '🍌', magnet: '🧲', gust: '💨', mystery: '🎁' }
       const seenPk = new Set()
       for (const pk of view.brawlPickups || []) {
         seenPk.add(pk.id)
@@ -7274,18 +7274,36 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
         // 🍄 거대버섯: 커진다 / 🐔 닭: 쪼그라든다 — 전환은 부드럽게
         if (view.mode === 'brawl' && !(h.fallT > 0)) {
-          const want = (h.brawlPolyT || 0) > 0 ? 0.55 : (h.brawlMushT || 0) > 0 ? 1.85 : 1 // 과장: 거대는 더 크게, 닭은 더 작게
+          const want = (h.brawlMushT || 0) > 0 ? 3.0 : 1 // 🍄 진짜 거인 — 3배
           const cur = obj.scale.x
           if (Math.abs(cur - want) > 0.01) obj.scale.setScalar(cur + (want - cur) * Math.min(1, dt * 6))
-          // 💣 폭탄: 머리 위에서 깜빡 — 남을수록 느긋, 터지기 직전엔 다급하게
+          // 💣 폭탄: 만세 포즈로 머리 위에 받쳐 들고 뛴다 — 만료가 다가올수록 시뻘겋게 깜빡
           if ((h.brawlBombT || 0) > 0) {
             if (!u.bombMark) {
-              u.bombMark = emojiSprite('💣', 2.6)
+              u.bombMark = emojiSprite('💣', 3.4)
               obj.add(u.bombMark)
             }
-            u.bombMark.visible = Math.sin(view.time * (4 + (5 - h.brawlBombT) * 4)) > -0.4
-            u.bombMark.position.set(0, 6.4 / Math.max(0.1, obj.scale.x), 0)
-          } else if (u.bombMark) { u.bombMark.visible = false }
+            u.bombMark.visible = true
+            u.bombMark.position.set(0, 7.0 / Math.max(0.1, obj.scale.x), 0)
+            const urgency = 4 + (5 - Math.min(5, h.brawlBombT)) * 5 // 남을수록 빠른 빨간 점멸
+            u.bombMark.material.color.setHex(Math.sin(view.time * urgency) > 0 ? 0xff2a1a : 0xffffff)
+            if (u.arms) { // 만세! — 걷기 팔휘두름을 덮어쓰고 양팔을 번쩍
+              u.arms[0].rotation.z = 2.7
+              u.arms[1].rotation.z = -2.7
+            }
+          } else if (u.bombMark) {
+            u.bombMark.visible = false
+            u.bombMark.material.color.setHex(0xffffff)
+          }
+          // 🍌 바나나 다발: 손에 들려 있다 — 평타마다 껍질을 던진다
+          if ((h.brawlBananaN || 0) > 0) {
+            if (!u.bananaMark) {
+              u.bananaMark = emojiSprite('🍌', 2.6)
+              obj.add(u.bananaMark)
+            }
+            u.bananaMark.visible = true
+            u.bananaMark.position.set(-1.6, 4.6 / Math.max(0.1, obj.scale.x), 0)
+          } else if (u.bananaMark) { u.bananaMark.visible = false }
           // 🔨 뿅망치 버프: 머리 위에 망치가 쿵쿵 — 홈런배트 든 게 다 보인다
           if ((h.brawlHammerT || 0) > 0) {
             if (!u.hammerMark) {
@@ -7320,15 +7338,6 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           if ((h.brawlGuardT || 0) > 0 && !(h.brawlStarT > 0) && !(h.brawlFlyT > 0)) {
             obj.visible = Math.floor(view.time * 9) % 2 === 0
           }
-          // 🐔 닭 머리 표시
-          if ((h.brawlPolyT || 0) > 0) {
-            if (!u.polyMark) {
-              u.polyMark = emojiSprite('🐔', 3.2)
-              obj.add(u.polyMark)
-            }
-            u.polyMark.visible = true
-            u.polyMark.position.set(0, 7.2 / Math.max(0.1, obj.scale.x), 0)
-          } else if (u.polyMark) { u.polyMark.visible = false }
           // 🌀 대포 비행: 포물선으로 붕 떠서 빙글빙글 — 착지 직전 내려온다
           if ((h.brawlFlyT || 0) > 0 && (h.brawlFlyDur || 0) > 0) {
             const fk = 1 - h.brawlFlyT / h.brawlFlyDur
