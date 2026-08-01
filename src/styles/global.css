@@ -3843,3 +3843,11 @@ body {
   background: #fff; opacity: 0.85;
 }
 .brawl-flash--fade { opacity: 0.25; transition: opacity 0.18s ease-out; }
+
+/* 대난투 탈락 오버레이 버튼 + 최종 순위표 */
+.rift__respawn--out { pointer-events: auto; }
+.brawl-out-btns { display: flex; gap: 10px; justify-content: center; margin-top: 12px; }
+.brawl-final { display: flex; flex-direction: column; gap: 5px; padding: 6px 4px; max-height: 40vh; overflow-y: auto; }
+.brawl-final__row { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 15px; color: #fff; }
+.brawl-final__row.is-me { color: #ffe27a; }
+.brawl-final__place { min-width: 44px; text-align: center; }

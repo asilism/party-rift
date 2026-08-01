@@ -136,7 +136,8 @@ export default function SoloApp() {
   const netRef = useRef(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [exitAsk, setExitAsk] = useState(false) // 전투 중 뒤로가기 → "나갈까요?" 확인
-  const [coinMsg, setCoinMsg] = useState(null) // 경기 종료 코인 보상 라인(승리 화면에 표시)
+  const [coinMsg, setCoinMsg] = useState(null)
+  const [brawlChamp, setBrawlChamp] = useState(false) // 대난투 우승 — 단상 만세 무대 // 경기 종료 코인 보상 라인(승리 화면에 표시)
   const [tour, setTour] = useState(null) // 콜로세움 토너먼트 상태
   const [tourStage, setTourStage] = useState('bracket') // bracket(대진) | result(라운드 결과) | final(최종 순위)
   const arenaCarryRef = useRef({}) // 라운드 간 유저 팀 이월(레벨·골드·아이템)
@@ -337,6 +338,10 @@ export default function SoloApp() {
         const tierOpt = tier && BOSS_TIER_OPTS.find((o) => o.id === tier)
         // 대난투: 순위 보상(1위 40 → 8위 6). 우승만 '승'으로 취급(첫승 보너스 연동).
         const brawlPlace = view.mode === 'brawl' ? (view.brawlRanks?.find((r) => r.id === 'solo')?.place || 8) : 0
+        if (brawlPlace === 1) { // 🏆 우승 — 콜로세움처럼 단상 만세 무대를 잠시 풀스크린으로
+          setBrawlChamp(true)
+          setTimeout(() => setBrawlChamp(false), 7000)
+        }
         let earn = view.mode === 'brawl' ? (BRAWL_PLACE_COIN[brawlPlace - 1] || 6)
           : view.mode === 'defense' ? 5 + (view.wave || 0) * 2 : win ? (tierOpt?.coin || 30) : 10
         let firstWin = false
@@ -558,7 +563,13 @@ export default function SoloApp() {
 
   return (
     <div className="shell">
-      {screen === 'colosseum' ? (
+      {brawlChamp ? (
+        // 대난투 우승: 내 캐릭터가 단상에서 만세 — 콜로세움 우승 무대 재사용(1인)
+        <ChampionStage duo={[{
+          cls: loadSoloPick()?.cls || 'warrior', zodiacId: profile,
+          hat: loadEquippedHat(), costume: loadEquippedCostume(), weapon: loadEquippedWeapon(),
+        }]} />
+      ) : screen === 'colosseum' ? (
         // 우승 확정 최종 화면: 빈 경기장 대신 우승 듀오의 단상 만세 무대
         tourStage === 'final' && tour && userPlacement(tour) === 1 ? (
           <ChampionStage duo={tour.teams.find((tm) => tm.isUser).members.map((m) => (

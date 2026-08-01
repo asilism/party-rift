@@ -6141,9 +6141,9 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         ctx.beginPath()
         ctx.arc(512, 512, (r + 1.6) * k, 0, Math.PI * 2)
         ctx.fill()
-        // 대포 발판(링 밖 전용 공간)의 바닥은 남긴다 — 컷 후 다시 그린다
+        // 대포 발판(링 밖 전용 공간)의 바닥은 남긴다 — 컷 후 다시 그린다(붕괴 후엔 생략)
         ctx.globalCompositeOperation = 'source-over'
-        for (const cn of map.CANNONS || []) {
+        for (const cn of groundPunch.padsDead ? [] : (map.CANNONS || [])) {
           ctx.save()
           ctx.beginPath()
           ctx.arc(512 + cn.x * k, 512 + cn.z * k, 4.4 * k, 0, Math.PI * 2)
@@ -6448,6 +6448,9 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     g.rotation.y = -Math.atan2(w.z2 - w.z1, w.x2 - w.x1)
     scene.add(g)
     if (map.mode === 'arena') collapsibles.push({ g, kind: 'seg', x1: w.x1, z1: w.z1, x2: w.x2, z2: w.z2 })
+    if (map.mode === 'brawl' && (map.CANNONS || []).some((cn) => Math.hypot((w.x1 + w.x2) / 2 - cn.x, (w.z1 + w.z2) / 2 - cn.z) < 7)) {
+      brawlPadWalls.push(g) // 대포 발판을 감싼 반호 벽 — 링이 끊기면 함께 무너진다
+    }
   }
 
   // 리스폰 존 뒤쪽 절반을 감싸는 반호(半弧) 성벽 — 부활 지점을 등지고 보호하는 물리 구조물.
@@ -6803,6 +6806,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const brawlBolts = [] // 낙뢰 기둥 {mesh, t}
   let brawlNukeSeen = 0 // 폭탄 버섯구름 시퀀스
   const brawlNukes = [] // 버섯구름 {g, stem, cap, fire, ring, t, dur}
+  const brawlPadWalls = [] // 대포 발판 반호 벽 조형(붕괴 낙하용)
+  let brawlPadsFallT = -1 // 발판 붕괴 진행 시계(-1=아직)
 
   // 시간술사 역행 미리보기: 내 영웅이 되돌아갈 과거 지점을 반투명 그림자로 보여 준다(궁극기 켜졌을 때만)
   const rewindGhost = new THREE.Group()
@@ -6987,6 +6992,25 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         } else {
           lamp.material.color.setHex(0x7dffa0)
           lamp.scale.setScalar(1 + Math.sin(view.time * 5) * 0.2)
+        }
+      }
+      // 🌀 발판 붕괴: 링이 발판을 끊으면 대포·벽이 회전하며 심연으로 떨어진다
+      if (view.brawlPadsDead && brawlPadsFallT < 0) {
+        brawlPadsFallT = 0
+        if (groundPunch?.brawlCut) {
+          groundPunch.padsDead = true // 바닥 발판 원도 걷어낸다
+          groundPunch.brawlCut(view.brawlR)
+        }
+        brawlShakeT = Math.max(brawlShakeT, 0.45)
+      }
+      if (brawlPadsFallT >= 0 && brawlPadsFallT < 2.2) {
+        brawlPadsFallT += dt
+        const fall = brawlPadsFallT
+        const targets = [...brawlPadWalls, ...brawlCannonObjs.values()]
+        for (const o of targets) {
+          o.position.y = -fall * fall * 9 // 가속 낙하
+          o.rotation.z = fall * 0.7
+          o.visible = fall < 2.0
         }
       }
       // 💣 폭탄: 핵버섯구름 — 화염 코어가 치솟아 연기 기둥·버섯머리가 부풀고 충격파 링이 퍼진다
