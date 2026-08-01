@@ -6799,6 +6799,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const brawlPickupObjs = new Map() // 대난투 보급 아이템 마커(이모지 스프라이트)
   const brawlCannonObjs = new Map() // 대포 발사대(소용돌이 패드)
   let brawlShakeT = 0 // 강넉백·장외 카메라 흔들림
+  let brawlBoltSeen = 0 // 번개 낙뢰 시퀀스(중복 방지)
+  const brawlBolts = [] // 낙뢰 기둥 {mesh, t}
 
   // 시간술사 역행 미리보기: 내 영웅이 되돌아갈 과거 지점을 반투명 그림자로 보여 준다(궁극기 켜졌을 때만)
   const rewindGhost = new THREE.Group()
@@ -6984,6 +6986,32 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           lamp.material.color.setHex(0x7dffa0)
           lamp.scale.setScalar(1 + Math.sin(view.time * 5) * 0.2)
         }
+      }
+      // ⚡ 번개: 하늘에서 감전자마다 낙뢰 기둥이 내리꽂힌다 + 카메라 흔들림(화면 번쩍은 HUD가)
+      if ((view.brawlBoltSeq || 0) !== brawlBoltSeen) {
+        brawlBoltSeen = view.brawlBoltSeq || 0
+        for (const at of view.brawlBoltAt || []) {
+          const bolt = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.35, 0.9, 30, 6),
+            new THREE.MeshBasicMaterial({ color: 0xfff9c8, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false })
+          )
+          bolt.position.set(at.x, 15, at.z)
+          scene.add(bolt)
+          brawlBolts.push({ mesh: bolt, t: 0.4 })
+        }
+        brawlShakeT = Math.max(brawlShakeT, 0.35)
+      }
+      for (let bi = brawlBolts.length - 1; bi >= 0; bi--) {
+        const b = brawlBolts[bi]
+        b.t -= dt
+        if (b.t <= 0) {
+          scene.remove(b.mesh)
+          b.mesh.material.dispose()
+          brawlBolts.splice(bi, 1)
+          continue
+        }
+        b.mesh.material.opacity = b.t / 0.4
+        b.mesh.scale.x = b.mesh.scale.z = 0.6 + (0.4 - b.t) * 2.4 // 퍼지며 사그라든다
       }
       if (brawlShakeT > 0) { // 강넉백·발사·장외 순간의 손맛 — 카메라가 잘게 흔들린다
         brawlShakeT = Math.max(0, brawlShakeT - dt)
@@ -7486,9 +7514,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             u.arms[1].rotation.z = stride * 0.65 // 왼팔
           }
         }
-        // 발 딛는 순간 발밑에서 흙먼지가 퍼진다
+        // 발 딛는 순간 발밑에서 흙먼지가 퍼진다 — 🍄 거인은 쿵쿵 걸음마다 화면이 전율한다
         if (wk.step && obj.visible) {
-          particles.emit(h.x, 0.2, h.z, 0xcbb894, 4, { spread: 2, up: 0.9, gravity: 4, size: 1.1, lifeMin: 0.22, lifeMax: 0.4 })
+          const giant = view.mode === 'brawl' && (h.brawlMushT || 0) > 0
+          particles.emit(h.x, 0.2, h.z, 0xcbb894, giant ? 12 : 4, { spread: giant ? 5 : 2, up: giant ? 2.2 : 0.9, gravity: 4, size: giant ? 1.8 : 1.1, lifeMin: 0.22, lifeMax: 0.4 })
+          if (giant) brawlShakeT = Math.max(brawlShakeT, 0.16)
         }
         // 이동 트레일(내 영웅 전용 코스메틱): 발밑에 발광 파티클을 흘리고, 가끔 이모지 무늬를 섞는다.
         //  코스메틱은 로컬 설정을 직접 읽고(스냅샷 무관), 저사양(low) 티어에선 생략한다.

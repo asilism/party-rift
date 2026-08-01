@@ -540,6 +540,20 @@ function RiftPlay({
   // 승리 메시지를 한 글자씩 나타나게 — "파랑팀 승리"를 글자 단위로 쪼갠다(공백은 자리만 차지).
   // 보스전은 토벌 서사로: "카르곤 토벌!" / "토벌 실패...", 방어전은 도달 파도가 곧 성적표.
   const raidBoss = hud.mode === 'boss' ? hud.heroes?.find((h) => h.cls?.startsWith('boss_')) : null
+  // ⚡ 번개: 낙뢰 순간 화면 전체가 하얗게 번쩍(짧게 2회 감쇠)
+  const [boltFlash, setBoltFlash] = useState(0)
+  const boltSeqRef = useRef(0)
+  useEffect(() => {
+    const seq = hud?.brawlBoltSeq || 0
+    if (seq && seq !== boltSeqRef.current) {
+      boltSeqRef.current = seq
+      setBoltFlash(1)
+      const t1 = setTimeout(() => setBoltFlash(2), 90)
+      const t2 = setTimeout(() => setBoltFlash(0), 280)
+      return () => { clearTimeout(t1); clearTimeout(t2) }
+    }
+    return undefined
+  }, [hud?.brawlBoltSeq])
   const myBrawlPlace = hud.mode === 'brawl'
     ? ((hud.brawlRanks || []).find((r) => r.id === myId)?.place || null) : null
   const winText = hud.mode === 'brawl'
@@ -617,6 +631,7 @@ function RiftPlay({
               </div>
             </div>
           )}
+          {boltFlash > 0 && <div className={`brawl-flash ${boltFlash === 2 ? 'brawl-flash--fade' : ''}`} />}
           {/* 대난투: 내 목숨 + 생존자 수 + 링 축소 경고 (같은 슬롯) */}
           {hud.mode === 'brawl' && !finished && (
             <div className="boss-bar-slot">
