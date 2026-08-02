@@ -18,7 +18,8 @@ const soloMode =
   typeof window !== 'undefined' &&
   (IS_APP_SHELL
     || new URLSearchParams(window.location.search).has('solo')
-    || new URLSearchParams(window.location.search).has('boss'))
+    || new URLSearchParams(window.location.search).has('boss')
+    || new URLSearchParams(window.location.search).has('ult')) // 궁극기 시험장(?ult)도 솔로 앱
 
 // 개발 검수용 — ?faces: 12지신 인게임 실물을 한 화면에 진열(얼굴 크기·크롭 비교)
 const FaceGallery = lazy(() => import('./dev/FaceGallery.jsx'))
