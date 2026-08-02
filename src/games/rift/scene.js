@@ -6808,7 +6808,17 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   let brawlNukeSeen = 0 // 폭탄 버섯구름 시퀀스
   const brawlNukes = [] // 버섯구름 {g, stem, cap, fire, ring, t, dur}
   let brawlPadsFallT = -1 // 발판 붕괴 진행 시계(-1=아직)
-  const brawlUps = [] // 1UP 팝업 {spr, t, x, z}
+  const brawlUps = [] // 텍스트 팝업(1UP·콤보·SMASH) {spr, t, x, z}
+  function brawlPopText(text, color, x, z, scale = 1) {
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: makeNameTexture(text, color), depthWrite: false, depthTest: false, transparent: true,
+    }))
+    spr.scale.set(7 * scale, 1.9 * scale, 1)
+    spr.renderOrder = 5
+    spr.position.set(x, 6.5, z)
+    scene.add(spr)
+    brawlUps.push({ spr, t: 0, x, z })
+  }
 
   // 시간술사 역행 미리보기: 내 영웅이 되돌아갈 과거 지점을 반투명 그림자로 보여 준다(궁극기 켜졌을 때만)
   const rewindGhost = new THREE.Group()
@@ -7452,16 +7462,17 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         if (view.mode === 'brawl' && !(h.fallT > 0)) {
           // 🍄 1UP: 목숨이 늘어난 순간 머리 위에 '1UP' 팝업
           if (u.lastBrawlLives != null && (h.brawlLives || 0) > u.lastBrawlLives && h.hp > 0) {
-            const spr = new THREE.Sprite(new THREE.SpriteMaterial({
-              map: makeNameTexture('1UP', '#3fff6a'), depthWrite: false, depthTest: false, transparent: true,
-            }))
-            spr.scale.set(7, 1.9, 1)
-            spr.renderOrder = 5
-            spr.position.set(h.x, 6.5, h.z)
-            scene.add(spr)
-            brawlUps.push({ spr, t: 0, x: h.x, z: h.z })
+            brawlPopText('1UP', '#3fff6a', h.x, h.z)
           }
           u.lastBrawlLives = h.brawlLives || 0
+          // 👊 콤보 표시: 피격자 위에 쌓이는 숫자, 4타 발사 순간엔 SMASH!
+          const comboN = h.brawlComboN || 0
+          if (comboN > (u.lastComboN || 0) && comboN >= 2) {
+            brawlPopText(`${comboN} COMBO`, '#ffd24a', h.x, h.z, 0.85)
+          } else if (comboN === 0 && (u.lastComboN || 0) >= 3 && h.hp > 0) {
+            brawlPopText('SMASH!', '#ff5a3a', h.x, h.z, 1.25) // 피니셔로 발사됐다
+          }
+          u.lastComboN = comboN
           const want = (h.brawlMushT || 0) > 0 ? 3.0 : 1 // 🍄 진짜 거인 — 3배
           const cur = obj.scale.x
           if (Math.abs(cur - want) > 0.01) obj.scale.setScalar(cur + (want - cur) * Math.min(1, dt * 6))

@@ -4178,15 +4178,17 @@ test('대난투: 잃은 체력이 많을수록 넉백이 커진다(스매시 %)'
   a.x = 0; a.z = 0
   b.x = 3; b.z = 0
   b.atkCd = 99 // b의 유휴 자동 평타 봉인 — a가 반격당해 밀려나면 측정이 오염된다
-  // 풀피에서 한 대 — 넉백 기록
+  // 풀피 피니셔(4타째) — 넉백 기록
+  b.brawlComboN = 3; b.brawlComboBy = a.id; b.brawlComboT = g.time
   castAttack(g, a.id)
   run(g, 0.45)
   const fullHpPush = b.x - 3
-  // 빈사로 만들고 같은 조건에서 다시 한 대
+  // 빈사로 만들고 같은 조건(피니셔)에서 다시 한 대
   a.x = 0; a.z = 0; a.atkCd = 0; a.knockT = 0
   b.x = 3; b.z = 0; b.knockT = 0; b.knockVx = 0
   b.hp = b.maxHp * 0.1
   b.atkCd = 99
+  b.brawlComboN = 3; b.brawlComboBy = a.id; b.brawlComboT = g.time
   castAttack(g, a.id)
   run(g, 0.45)
   const lowHpPush = b.x - 3
@@ -4419,6 +4421,28 @@ test('대난투: 링이 발판을 끊으면 대포 붕괴 — 발사 정지 + �
   assert.ok(a.fallT > 0 || a.respawnT > 0, '발판 위도 이제 낙사 지대')
 })
 
+test('대난투: 콤보 — 1~3타 경직(제자리), 4타 피니셔로 발사', () => {
+  const g = brawl8()
+  const [a, b] = g.heroes
+  for (const h of g.heroes) h.atkCd = 99
+  a.x = 0; a.z = 0; b.x = 3; b.z = 0
+  b.atkCd = 99
+  // 1~3타: 경직만 — 거의 안 밀린다
+  for (let i = 0; i < 3; i++) {
+    a.atkCd = 0
+    castAttack(g, a.id, { tk: 'hero', id: b.id })
+    run(g, 0.4)
+  }
+  assert.equal(b.brawlComboN, 3, '콤보 3 누적')
+  assert.ok(Math.abs(b.x - 3) < 1.2, `경직 중 제자리 (x=${b.x.toFixed(1)})`)
+  // 4타: 피니셔 — 크게 날아가고 콤보 리셋
+  a.atkCd = 0
+  castAttack(g, a.id, { tk: 'hero', id: b.id })
+  run(g, 0.5)
+  assert.equal(b.brawlComboN, 0, '피니셔 후 콤보 리셋')
+  assert.ok(b.x - 3 > 2.5, `피니셔 발사 (x=${b.x.toFixed(1)})`)
+})
+
 test('대난투: 막타 킬 = 목숨 +1 (1UP)', () => {
   const g = brawl8()
   const [a, b] = g.heroes
@@ -4428,10 +4452,12 @@ test('대난투: 막타 킬 = 목숨 +1 (1UP)', () => {
   b.atkCd = 99
   a.atkCd = 0
   a.brawlLives = 5 // 시작 목숨(10)은 상한이라 +1이 안 보인다 — 잃은 상태에서 검증
+  a.brawlKillN = 2 // 이번이 누적 3킬째 — 3킬마다 1UP(1킬 1UP은 무한 생명이었다)
   castAttack(g, a.id, { tk: 'hero', id: b.id })
   run(g, 0.5)
   assert.ok(b.respawnT > 0, 'b 처치')
-  assert.equal(a.brawlLives, 6, '막타 1UP(상한 10 안에서)')
+  assert.equal(a.brawlLives, 6, '누적 3킬 1UP')
+  assert.equal(a.brawlKillN, 3, '킬 카운트 누적')
 })
 
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
