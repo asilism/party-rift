@@ -124,7 +124,7 @@ export function ArenaStage() {
 
 // ── 우승 무대 — 콜로세움 우승 시 최종 화면 배경: 실제 경기장 중앙 단상에서 만세하는 듀오를
 //  "외부 원거리 → 성벽 위 활공 → 단상 앞 안착 → 느린 궤도" 카메라로 담는다(championCam).
-export function ChampionStage({ duo }) {
+export function ChampionStage({ duo, podium = null }) {
   const canvasRef = useRef(null)
   useEffect(() => {
     const canvas = canvasRef.current
@@ -136,7 +136,7 @@ export function ChampionStage({ duo }) {
     ro.observe(holder)
     fit()
     const stub = {
-      championCam: true, champDuo: duo, mode: 'arena', status: 'playing', phase: 'play', time: 0, winner: null,
+      championCam: true, champDuo: duo, champPodium: podium, mode: 'arena', status: 'playing', phase: 'play', time: 0, winner: null,
       heroes: [], minions: [], towers: [], zones: [], projectiles: [], monsters: [], fx: [],
       holes: [], holeWarns: [], healOrbs: [], feed: [],
       kills: { blue: 0, red: 0 },

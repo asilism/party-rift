@@ -8692,7 +8692,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     // 우승 셀레브레이션 캠 — 콜로세움 "바깥 원거리"에서 출발해 성벽 위를 활공,
     // 중앙 단상 앞에 안착한 뒤 느린 궤도로 만세하는 우승 듀오를 담는다.
     if (view.championCam) {
-      if (!champSet) champSet = buildChampionSet(scene, view.champDuo || [])
+      if (!champSet) champSet = buildChampionSet(scene, view.champDuo || [], view.champPodium || null)
       const now = performance.now() / 1000
       const t = now - champSet.t0
       champSet.update(now)
@@ -8993,9 +8993,11 @@ export function createHeroShowcase(canvas, { cls, zodiacId, hat = null, costume 
 
 // ── 콜로세움 우승 무대 세트 — 실제 경기장(createRiftScene) 중앙에 단상·듀오·색종이를 조립 ──
 //  championCam 분기(render)가 첫 프레임에 호출한다. update(now)가 만세 점프·색종이를 굴린다.
-function buildChampionSet(scene, duo) {
+function buildChampionSet(scene, duo, podium = null) {
   const group = new THREE.Group() // 경기장 정중앙
   const stone = new THREE.MeshLambertMaterial({ color: 0xcfc3a6 })
+  const silver = new THREE.MeshLambertMaterial({ color: 0xc9ccd6, emissive: 0x3a3e4a, emissiveIntensity: 0.25 })
+  const bronze = new THREE.MeshLambertMaterial({ color: 0xc98d4b, emissive: 0x4a2e10, emissiveIntensity: 0.25 })
   const gold = new THREE.MeshLambertMaterial({ color: 0xf3c34b, emissive: 0x64430a, emissiveIntensity: 0.35 })
   const tier1 = new THREE.Mesh(new THREE.CylinderGeometry(6.4, 7.2, 1.0, 24), stone)
   tier1.position.y = 0.5
@@ -9004,6 +9006,13 @@ function buildChampionSet(scene, duo) {
   const podTop = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.8, 1.0, 24), gold)
   podTop.position.y = 2.6
   group.add(tier1, tier2, podTop)
+  if (podium) { // 🥈🥉 올림픽식 좌우 단 — 은/동 원기둥이 중앙 금단상 옆에 선다
+    const pod2 = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 3.2, 1.8, 20), silver)
+    pod2.position.set(-7.6, 0.9, 0)
+    const pod3 = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 3.2, 1.1, 20), bronze)
+    pod3.position.set(7.6, 0.55, 0)
+    group.add(pod2, pod3)
+  }
   const TOP_Y = 3.1
   const halo = new THREE.Mesh(
     new THREE.RingGeometry(4.2, 6.4, 44),
@@ -9013,8 +9022,11 @@ function buildChampionSet(scene, duo) {
   halo.position.y = 0.06
   group.add(halo)
 
-  // 우승 듀오 — 명패/체력바 없이 모델만, 무기는 하늘로 치켜든 자세
-  const champs = (duo || []).slice(0, 2).map((m2, i) => {
+  // 등단자 — 명패/체력바 없이 모델만. 포디움 모드면 1위 중앙(만세) + 2·3위 좌우(박수).
+  const roster = podium
+    ? podium.slice(0, 3).map((m2, i) => ({ ...m2, spotX: [0, -7.6, 7.6][i], spotY: [TOP_Y, 2.3, 1.6][i], cheer: i === 0 }))
+    : (duo || []).slice(0, 2).map((m2, i) => ({ ...m2, spotX: i === 0 ? -1.7 : 1.7, spotY: TOP_Y, cheer: true }))
+  const champs = roster.map((m2, i) => {
     const g = buildHero(
       { id: `champ${i}`, cls: m2.cls, zodiacId: m2.zodiacId, team: 'blue', lvl: 18, atkSeq: 0 },
       false, '#fff', m2.hat || null, m2.costume || null, m2.weapon || null
@@ -9022,12 +9034,14 @@ function buildChampionSet(scene, duo) {
     const u = g.userData
     u.name.visible = false
     u.bar.visible = false
-    u.weapon.userData.pose(0.5)
-    u.weapon.parent.parent.rotation.z = 0.6 // 손목 들어올림 — 만세!
+    if (m2.cheer) {
+      u.weapon.userData.pose(0.5)
+      u.weapon.parent.parent.rotation.z = 0.6 // 손목 들어올림 — 만세!
+    }
     const cs = CLS_SCALE[m2.cls] || 1
-    g.position.set(i === 0 ? -1.7 : 1.7, TOP_Y, 0)
+    g.position.set(m2.spotX, m2.spotY, 0)
     group.add(g)
-    return { g, s: cs, phase: i * Math.PI } // 교차 점프 위상
+    return { g, u, s: cs, phase: i * Math.PI, cheer: m2.cheer, baseY: m2.spotY } // 교차 점프 위상
   })
 
   // 색종이 — 단상 하늘에서 흩날리며 끝없이 내린다
@@ -9050,9 +9064,16 @@ function buildChampionSet(scene, duo) {
     update(now) {
       for (const h of champs) {
         const cyc = Math.sin(now * 3.1 + h.phase)
-        h.g.position.y = TOP_Y + Math.max(0, cyc) * 1.0 * h.s
-        h.g.rotation.z = cyc * 0.07
-        h.g.scale.y = 1 - Math.max(0, -cyc) * 0.07
+        if (h.cheer) { // 🥇 만세만세 — 폴짝폴짝 뛴다
+          h.g.position.y = h.baseY + Math.max(0, cyc) * 1.0 * h.s
+          h.g.rotation.z = cyc * 0.07
+          h.g.scale.y = 1 - Math.max(0, -cyc) * 0.07
+        } else if (h.u.arms) { // 🥈🥉 박수 — 양팔을 앞으로 마주치며 축하
+          const clap = Math.sin(now * 6.5 + h.phase)
+          h.u.arms[0].rotation.z = -0.9 + clap * 0.45
+          h.u.arms[1].rotation.z = 0.9 - clap * 0.45
+          h.g.rotation.z = Math.sin(now * 2.2 + h.phase) * 0.03
+        }
       }
       halo.material.opacity = 0.24 + Math.sin(now * 2.4) * 0.1
       for (const c of confetti) {
