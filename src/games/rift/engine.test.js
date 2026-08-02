@@ -4144,9 +4144,9 @@ test('사망 리캡: 보스 즉사기에 죽으면 "무엇에 스러졌는지"�
 })
 
 // ── 대난투(8인 FFA) — 고유 팀·넉백·장외·목숨·종료 ──
-function brawl8() {
+function brawl8(cls0 = 'warrior') {
   const zs = ['rat', 'ox', 'tiger', 'rabbit', 'dragon', 'snake', 'horse', 'goat']
-  const cs = ['warrior', 'mage', 'archer', 'tank', 'assassin', 'healer', 'gladiator', 'cryomancer']
+  const cs = [cls0, 'mage', 'archer', 'tank', 'assassin', 'healer', 'gladiator', 'cryomancer']
   const players = zs.map((z, i) => ({
     id: i === 0 ? 'solo' : `bot-${z}`, name: z, zodiacId: z, color: '#abc',
     team: `t${i}`, cls: cs[i], isBot: false, // 전원 사람 취급 — 봇 두뇌가 위치를 오염시키지 않게
@@ -4576,6 +4576,45 @@ test('대난투 ★★궁: 검성 발도 일섬 — 전방 반원 일괄 피니�
   assert.ok(front.hp < fHp, '전방 피격')
   assert.ok(front.brawlSmashT > 0, '전방 피니셔 발사')
   assert.equal(back.hp, bHp, '후방 무사')
+})
+
+test('대난투 궁: 암살자 그림자 연무 — 3명 연쇄 타격+경직', () => {
+  const g = brawl8('assassin')
+  const a = g.heroes[0]
+  const hp0 = g.heroes.slice(1, 4).map((e) => e.hp)
+  g.heroes[1].x = a.x + 4; g.heroes[1].z = a.z
+  g.heroes[2].x = a.x - 5; g.heroes[2].z = a.z
+  g.heroes[3].x = a.x; g.heroes[3].z = a.z + 6
+  g.heroes.slice(4).forEach((e) => { e.x = 30; e.z = 30 })
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  for (let i = 1; i <= 3; i++) {
+    assert.ok(g.heroes[i].hp < hp0[i - 1], `표적${i} 피해`)
+    assert.ok(g.heroes[i].stunT > 0, `표적${i} 경직`)
+  }
+})
+
+test('대난투 궁: 시간여행자 시간 정지 — 나 빼고 전원 결빙 슬로우', () => {
+  const g = brawl8('chronomancer')
+  const a = g.heroes[0]
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  assert.equal(a.freezeT, 0, '시전자는 자유')
+  for (const e of g.heroes.slice(1)) assert.ok(e.freezeT >= 2.4, `${e.id} 슬로우`)
+})
+
+test('대난투 궁: 수호기사 성역 — 5초 무적 + 접근 적 밀어냄', () => {
+  const g = brawl8('guardian')
+  const a = g.heroes[0]
+  const e = g.heroes[1]
+  e.x = a.x + 3; e.z = a.z
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  assert.ok(a.brawlSanctT >= 5, '성역 시작')
+  const d0 = Math.hypot(e.x - a.x, e.z - a.z)
+  run(g, 0.6)
+  assert.ok((a.brawlGuardT || 0) > 0, '무적 유지')
+  assert.ok(Math.hypot(e.x - a.x, e.z - a.z) > d0, '적이 밀려남')
 })
 
 test('대난투: 궁극기 시험장(ultDebug) — 사람 게이지 상시 풀차지·링 정지', () => {

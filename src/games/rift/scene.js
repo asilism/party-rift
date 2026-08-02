@@ -6830,8 +6830,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     scene.add(g)
     brawlWedges.push({ g, t: 0, dur: 0.28 })
   }
-  function brawlBurst(x, z, size, dur = 0.18) {
-    const spr = emojiSprite('💥', size)
+  function brawlBurst(x, z, size, dur = 0.18, emoji = '💥') {
+    const spr = emojiSprite(emoji, size)
     spr.material.depthTest = false
     spr.renderOrder = 6
     spr.material.rotation = Math.random() * Math.PI * 2
@@ -7116,6 +7116,41 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         brawlBolts.push({ mesh: rune, t: 0.5 })
         brawlShakeT = Math.max(brawlShakeT, 0.25)
         brawlUltGlow = { id: at.id, t: 0.6 } // 시전자 스포트라이트(골드 발광)
+        // ── 직업별 궁 전용 연출 ──
+        if (at.cls === 'archer') {
+          // 🌈 극태 레이저: 조준 방향으로 화면을 가로지르는 수평 광선(굵은 심 + 넓은 글로우)
+          for (const [rad, col, op] of [[0.7, 0xffffff, 0.95], [1.8, 0x8fd0ff, 0.45]]) {
+            const beamGeo = new THREE.CylinderGeometry(rad, rad, 38, 10)
+            beamGeo.translate(0, 19, 0)
+            const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }))
+            beam.position.set(at.x, 2.4, at.z)
+            beam.rotation.z = -Math.PI / 2
+            beam.rotation.y = -(at.dir || 0)
+            beam.rotation.order = 'YZX'
+            scene.add(beam)
+            brawlBolts.push({ mesh: beam, t: 0.45 })
+          }
+        } else if (at.cls === 'healer') {
+          // 🌸 꽃밭: 초록 파동 링 + 꽃잎 버스트가 사방에
+          for (let fk = 0; fk < 8; fk++) {
+            const fa = (fk / 8) * Math.PI * 2
+            brawlBurst(at.x + Math.cos(fa) * (4 + fk % 3 * 3), at.z + Math.sin(fa) * (4 + fk % 3 * 3), 1.3, 0.35, '🌸')
+          }
+          const bloom = new THREE.Mesh(
+            new THREE.RingGeometry(0.9, 1.3, 40),
+            new THREE.MeshBasicMaterial({ color: 0x8dfab4, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+          )
+          bloom.rotation.x = -Math.PI / 2
+          bloom.position.set(at.x, 0.4, at.z)
+          bloom.scale.setScalar(1)
+          scene.add(bloom)
+          brawlBolts.push({ mesh: bloom, t: 0.5 })
+        } else if (at.cls === 'cryomancer') {
+          for (let fk = 0; fk < 5; fk++) { // ❄️ 전방 얼음 파편
+            const fa = (at.dir || 0) + (fk - 2) * 0.35
+            brawlBurst(at.x + Math.cos(fa) * (5 + fk * 2), at.z + Math.sin(fa) * (5 + fk * 2), 2.8, 0.4, '❄️')
+          }
+        }
       }
       if (brawlUltGlow) {
         brawlUltGlow.t -= dt
