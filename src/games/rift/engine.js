@@ -23,11 +23,11 @@ export const TEAM_SIZE = 3 // 기본(3:3) 팀 인원 — 하위호환용 별칭
 export const TEAM_SIZES = { '3v3': 3, '5v5': 5, boss: 5, defense: 5, arena: 2, brawl: 1 } // brawl = 대난투(8인 FFA, 팀당 1명)
 // ── 대난투(8인 FFA) — 각자 고유 팀(t0~t7), 넉백+장외 하이브리드 ──
 export const BRAWL_LIVES = 10 // 시작 목숨 — 다 잃으면 탈락(순위는 탈락 역순)
-const BRAWL_LVL = 8 // 전원 고정 레벨(성장 없음) — 전 스킬 해금 + 중간 스탯
+const BRAWL_LVL = 18 // 전원 만렙 고정 — 직업 특성이 최대로 선다(스탯·스킬 계수 만개)
 const BRAWL_RESPAWN = 3.0 // 리스폰 대기(초) — 난전 리듬 유지
 const BRAWL_GUARD_T = 1.6 // 리스폰 직후 무적(스폰킬 방지)
 const BRAWL_RING_T = 100 // 이 시각부터 링(낭떠러지 경계)이 좁혀진다 — 판 중앙(3.5분)보다 일찍(구 300초는 미발동)
-const BRAWL_RING_SPEED = 0.18 // 초당 축소량
+const BRAWL_RING_SPEED = 0.3 // 초당 축소량 — 만렙 유지력에 맞춰 빠르게(100s+87s면 최소)
 const BRAWL_RING_MIN = 14
 // ── 콜로세움(아레나) — 준비 30초(반코트 결계·상점) → 전투 3분 → 서든데스(무작위 조각 붕괴) ──
 export const ARENA_SHOP_T = 30
@@ -2987,6 +2987,11 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   ))
   const assisters = [...damagers, ...supporters]
   if (killer) {
+    if (state.mode === 'brawl' && (killer.brawlLives || 0) > 0 && !((state.brawlSuddenT || 0) > 8)) {
+      // 🍄 1UP — 막타 킬은 목숨을 돌려준다(공격적인 플레이가 이득). 시작 목숨(10) 상한 —
+      //  상한 없으면 총량 보존으로 게임이 영원히 안 끝난다. 서든데스 중엔 무효(확정 종결).
+      killer.brawlLives = Math.min(BRAWL_LIVES, killer.brawlLives + 1)
+    }
     killer.kills++
     killer.deathStreak = 0 // 킬을 따면 연속 데스 디버프 해제
     killer.killStreak++ // 안 죽고 이어가면 다음에 잡힐 때 현상금이 붙는다
@@ -3488,6 +3493,26 @@ function stepBrawl(state, dt) {
     }
     state.brawlR = Math.max(BRAWL_RING_MIN, state.brawlR - BRAWL_RING_SPEED * dt)
   }
+  // ☠️ 서든데스: 링이 최소에 닿으면 8초 뒤 대지가 모두를 태운다(누적 도트) — 만렙 유지력으로도
+  //  못 버티는 확정 종결 장치. 드롭도 멈춰 회복 수단이 사라진다.
+  if (state.brawlR <= BRAWL_RING_MIN + 0.01) {
+    state.brawlSuddenT = (state.brawlSuddenT || 0) + dt
+    if (!state.brawlSuddenFed) {
+      state.brawlSuddenFed = true
+      pushFeed(state, 'obj', '☠️ 최후의 결전 — 대지가 타오르기 시작한다')
+    }
+    if (state.brawlSuddenT > 5) {
+      state.brawlSuddenTickT = (state.brawlSuddenTickT || 0) - dt
+      if (state.brawlSuddenTickT <= 0) {
+        state.brawlSuddenTickT = 0.5
+        const rate = 0.035 + (state.brawlSuddenT - 5) * 0.003 // 갈수록 매섭게
+        for (const h of state.heroes) {
+          if (h.respawnT > 0 || h.hp <= 0 || h.fallT > 0) continue
+          damageHero(state, h, h.maxHp * rate * 0.5, null, false, '최후의 결전')
+        }
+      }
+    }
+  }
   if (!state.brawlPadsDead && state.brawlR < 38.5) {
     // 링이 발판 목을 끊었다 — 대포·벽이 무너져 내리고(씬), 발판은 더 이상 안전하지 않다
     state.brawlPadsDead = true
@@ -3495,7 +3520,7 @@ function stepBrawl(state, dt) {
   }
   // ── 하늘 이벤트 디렉터: 개전 15초 후부터, 시간이 갈수록 잦아진다 ──
   state.brawlEventT = (state.brawlEventT ?? 8) - dt
-  if (state.brawlEventT <= 0) {
+  if (state.brawlEventT <= 0 && !((state.brawlSuddenT || 0) > 5)) { // 서든데스엔 하늘도 침묵
     state.brawlEventT = Math.max(5, 10 - state.time / 60)
     const a = state.rng() * Math.PI * 2
     const rr = Math.sqrt(state.rng()) * (state.brawlR - 5)
@@ -3504,7 +3529,7 @@ function stepBrawl(state, dt) {
     const roll = state.rng()
     if (roll < 0.3) {
       // ☄️ 심판의 광선 — 예고 원 뒤 낙뢰. 중립(team 'sky')이라 전원이 피해자, 명중 시 밖으로 밀쳐낸다
-      state.zones.push({ id: state.nextId++, kind: 'meteor', team: 'sky', owner: null, x, z, r: 6.5, t: 0, delay: 1.7, dmg: 230, tag: '심판의 광선', brawlBlast: true })
+      state.zones.push({ id: state.nextId++, kind: 'meteor', team: 'sky', owner: null, x, z, r: 6.5, t: 0, delay: 1.7, dmg: 370, tag: '심판의 광선', brawlBlast: true })
     } else {
       // 통합 드롭 풀 — 아이템 11칸 + 열매 3칸(전체의 15%). 아이템이 난투의 주인공.
       const kinds = ['hammer', 'hammer', 'mush', 'star', 'bolt', 'bomb', 'bomb', 'banana', 'magnet', 'gust', 'mystery', 'heal', 'heal', 'heal']
@@ -3646,7 +3671,7 @@ function stepBrawl(state, dt) {
         const ed = Math.hypot(h.x - e.x, h.z - e.z)
         if (e === h && !dead) damageHero(state, e, 99999, null, false, '시한폭탄') // 확정 처형
         else if (e !== h && ed < 11) {
-          damageHero(state, e, 200, null, false, '시한폭탄')
+          damageHero(state, e, 330, null, false, '시한폭탄')
           if (e.hp > 0) applyKnockback(state, e, h.x, h.z, 11) // 폭심 밖까지 전원 날아간다
         }
       }
@@ -3699,7 +3724,7 @@ function stepBrawl(state, dt) {
       if (Math.hypot(h.x - e.x, h.z - e.z) > 2.7) continue
       if ((e.brawlStarHitCd || 0) > 0) continue
       e.brawlStarHitCd = 0.45
-      damageHero(state, e, 90, h, false, '무적별') // 대난투 공용 넉백이 알아서 날린다
+      damageHero(state, e, 145, h, false, '무적별') // 대난투 공용 넉백이 알아서 날린다
       pushFx(state, 'spark', e.x, e.z, 2.6, null, 0.9)
     }
   }

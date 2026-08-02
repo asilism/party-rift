@@ -6808,6 +6808,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   let brawlNukeSeen = 0 // 폭탄 버섯구름 시퀀스
   const brawlNukes = [] // 버섯구름 {g, stem, cap, fire, ring, t, dur}
   let brawlPadsFallT = -1 // 발판 붕괴 진행 시계(-1=아직)
+  const brawlUps = [] // 1UP 팝업 {spr, t, x, z}
 
   // 시간술사 역행 미리보기: 내 영웅이 되돌아갈 과거 지점을 반투명 그림자로 보여 준다(궁극기 켜졌을 때만)
   const rewindGhost = new THREE.Group()
@@ -6993,6 +6994,19 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           lamp.material.color.setHex(0x7dffa0)
           lamp.scale.setScalar(1 + Math.sin(view.time * 5) * 0.2)
         }
+      }
+      // 🍄 1UP 팝업 — 초록 글자가 머리 위로 솟아오르며 사라진다(마리오 보너스)
+      for (let ui = brawlUps.length - 1; ui >= 0; ui--) {
+        const up = brawlUps[ui]
+        up.t += dt
+        if (up.t > 1.15) {
+          scene.remove(up.spr)
+          up.spr.material.dispose()
+          brawlUps.splice(ui, 1)
+          continue
+        }
+        up.spr.position.set(up.x, 6.5 + up.t * 4.2, up.z)
+        up.spr.material.opacity = up.t < 0.75 ? 1 : 1 - (up.t - 0.75) / 0.4
       }
       // 🌀 발판 붕괴: 링이 발판을 끊으면 대포·벽이 회전하며 심연으로 떨어진다
       if (view.brawlPadsDead && brawlPadsFallT < 0) {
@@ -7436,6 +7450,18 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
         // 🍄 거대버섯: 커진다 / 🐔 닭: 쪼그라든다 — 전환은 부드럽게
         if (view.mode === 'brawl' && !(h.fallT > 0)) {
+          // 🍄 1UP: 목숨이 늘어난 순간 머리 위에 '1UP' 팝업
+          if (u.lastBrawlLives != null && (h.brawlLives || 0) > u.lastBrawlLives && h.hp > 0) {
+            const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+              map: makeNameTexture('1UP', '#3fff6a'), depthWrite: false, depthTest: false, transparent: true,
+            }))
+            spr.scale.set(7, 1.9, 1)
+            spr.renderOrder = 5
+            spr.position.set(h.x, 6.5, h.z)
+            scene.add(spr)
+            brawlUps.push({ spr, t: 0, x: h.x, z: h.z })
+          }
+          u.lastBrawlLives = h.brawlLives || 0
           const want = (h.brawlMushT || 0) > 0 ? 3.0 : 1 // 🍄 진짜 거인 — 3배
           const cur = obj.scale.x
           if (Math.abs(cur - want) > 0.01) obj.scale.setScalar(cur + (want - cur) * Math.min(1, dt * 6))

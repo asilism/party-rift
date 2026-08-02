@@ -4161,7 +4161,7 @@ test('대난투: 8인 고유 팀 — 서로 피해가 들어가고, 고정 레�
   assert.equal(g.heroes.length, 8)
   assert.equal(new Set(g.heroes.map((h) => h.team)).size, 8, '팀 전부 고유')
   for (const h of g.heroes) {
-    assert.equal(h.lvl, 8, '고정 레벨')
+    assert.equal(h.lvl, 18, '만렙 고정')
     assert.equal(h.brawlLives, 10, '목숨 10')
   }
   const [a, b] = g.heroes
@@ -4417,6 +4417,21 @@ test('대난투: 링이 발판을 끊으면 대포 붕괴 — 발사 정지 + �
   assert.ok(!(a.brawlFlyT > 0), '무너진 대포는 발사되지 않는다')
   run(g, 1.5)
   assert.ok(a.fallT > 0 || a.respawnT > 0, '발판 위도 이제 낙사 지대')
+})
+
+test('대난투: 막타 킬 = 목숨 +1 (1UP)', () => {
+  const g = brawl8()
+  const [a, b] = g.heroes
+  for (const h of g.heroes) h.atkCd = 99
+  a.x = 0; a.z = 0; b.x = 3; b.z = 0
+  b.hp = 1
+  b.atkCd = 99
+  a.atkCd = 0
+  a.brawlLives = 5 // 시작 목숨(10)은 상한이라 +1이 안 보인다 — 잃은 상태에서 검증
+  castAttack(g, a.id, { tk: 'hero', id: b.id })
+  run(g, 0.5)
+  assert.ok(b.respawnT > 0, 'b 처치')
+  assert.equal(a.brawlLives, 6, '막타 1UP(상한 10 안에서)')
 })
 
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
