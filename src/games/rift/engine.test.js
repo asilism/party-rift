@@ -4427,14 +4427,16 @@ test('대난투: 콤보 — 1~3타 경직(제자리), 4타 피니셔로 발사',
   for (const h of g.heroes) h.atkCd = 99
   a.x = 0; a.z = 0; b.x = 3; b.z = 0
   b.atkCd = 99
-  // 1~3타: 경직만 — 거의 안 밀린다
+  // 1~3타: 경직 + 미세 밀림 — 밀려나 사거리를 벗어나니 타수마다 위치 리셋(콤보 누적 검증이 목적)
   for (let i = 0; i < 3; i++) {
     a.atkCd = 0
+    b.x = 3; b.z = 0; b.knockT = 0
     castAttack(g, a.id, { tk: 'hero', id: b.id })
     run(g, 0.4)
   }
   assert.equal(b.brawlComboN, 3, '콤보 3 누적')
-  assert.ok(Math.abs(b.x - 3) < 1.2, `경직 중 제자리 (x=${b.x.toFixed(1)})`)
+  assert.ok(Math.abs(b.x - 3) < 1.5, `경직 중 미세 밀림만 (x=${b.x.toFixed(1)})`)
+  b.x = 3; b.z = 0; b.knockT = 0
   // 4타: 피니셔 — 크게 날아가고 콤보 리셋
   a.atkCd = 0
   castAttack(g, a.id, { tk: 'hero', id: b.id })

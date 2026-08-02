@@ -7473,6 +7473,12 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             brawlPopText('SMASH!', '#ff5a3a', h.x, h.z, 1.25) // 피니셔로 발사됐다
           }
           u.lastComboN = comboN
+          // 💥 SMASH 비행: 날아가는 동안 팽이처럼 돌고 궤적을 흘리며 화면이 울린다
+          if ((h.brawlSmashT || 0) > 0 && h.hp > 0) {
+            obj.rotation.y += dt * 22
+            particles.emit(h.x, u.bodyBaseY + 1, h.z, 0xffd24a, 2, { spread: 1.2, up: 0.8, gravity: 1, size: 1.5, lifeMin: 0.14, lifeMax: 0.28 })
+            if (!u.wasSmash) { u.wasSmash = true; brawlShakeT = Math.max(brawlShakeT, 0.24) }
+          } else if (u.wasSmash) { u.wasSmash = false; obj.rotation.y = 0 }
           const want = (h.brawlMushT || 0) > 0 ? 3.0 : 1 // 🍄 진짜 거인 — 3배
           const cur = obj.scale.x
           if (Math.abs(cur - want) > 0.01) obj.scale.setScalar(cur + (want - cur) * Math.min(1, dt * 6))
@@ -7701,8 +7707,10 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           u.dmgAccum = (u.dmgAccum || 0) + dHp
           // 타격 조각: 맞은 몸통 높이에서 선명한 주황빛 파편이 퐉! 사방으로 날카롭게 튀어 흩어진다(피 아님)
           if (obj.visible) {
-            const n = Math.min(14, 6 + Math.round(dHp / 9))
-            particles.emit(h.x, u.bodyBaseY + 0.6, h.z, 0xffb42a, n, { spread: 9, up: 9, gravity: 22, size: 1.5, hard: true, lifeMin: 0.16, lifeMax: 0.34 })
+            const brawlHit = view.mode === 'brawl' // 대난투: 팍! 팍! — 파편이 크고 많게
+            const n = Math.min(brawlHit ? 22 : 14, (brawlHit ? 10 : 6) + Math.round(dHp / 9))
+            particles.emit(h.x, u.bodyBaseY + 0.6, h.z, 0xffb42a, n, { spread: brawlHit ? 13 : 9, up: brawlHit ? 12 : 9, gravity: 22, size: brawlHit ? 2.1 : 1.5, hard: true, lifeMin: 0.16, lifeMax: 0.34 })
+            if (brawlHit) particles.emit(h.x, u.bodyBaseY + 1, h.z, 0xffffff, 3, { spread: 4, up: 3, gravity: 2, size: 1.6, lifeMin: 0.08, lifeMax: 0.16 })
           }
         }
         u.dmgFlush = (u.dmgFlush || 0) - dt
