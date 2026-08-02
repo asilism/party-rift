@@ -2911,7 +2911,7 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
       const giant = (attacker.brawlMushT || 0) > 0 // 🍄 거인의 손찌검: 매 타가 발사
       if (victim.brawlComboN >= 4 || hammer || giant) {
         const frailty = 1 + (1 - victim.hp / victim.maxHp) * 1.6 // 빈사면 2.6배 — 몸이 가벼워진다
-        const kb = Math.min(12, (1.5 + (amount / victim.maxHp) * 8) * frailty * 1.7 * (hammer ? 1.5 : 1) * (giant ? 1.6 : 1))
+        const kb = Math.min(24, (1.5 + (amount / victim.maxHp) * 8) * frailty * 3.4 * (hammer ? 1.5 : 1) * (giant ? 1.6 : 1)) // 피니셔는 경기장 반을 가로지르게 — 맛의 핵심
         applyKnockback(state, victim, attacker.x, attacker.z, kb)
         victim.brawlComboN = 0 // 발사 — 콤보 종료(반격 턴)
         victim.brawlSmashT = 0.55 // 씬: 날아가는 동안 회전·궤적·화면 진동(과장 연출)
