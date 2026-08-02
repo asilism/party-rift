@@ -71,6 +71,26 @@ const BRAWL_PLACE_COIN = [40, 28, 20, 15, 12, 10, 8, 6]
 // 수면(30초)·소환 국면(240초)을 건너뛰고 곧장 진군. 기록·코인·전리품은 일절 남기지 않는다
 // (디버그 판이 실계정 보상·토벌 기록을 오염시키면 안 된다). 앱 빌드에선 URL 파라미터가 없어 비활성.
 const BOSS_DEBUG = typeof location !== 'undefined' && new URLSearchParams(location.search).has('boss')
+const ULT_DEBUG = typeof location !== 'undefined' && new URLSearchParams(location.search).has('ult')
+
+// ── 궁극기 시험장(웹 ?ult 전용): 직업을 골라 대난투 허수아비 판에서 궁만 반복 시전 ──
+function UltDebugScreen({ onStart }) {
+  return (
+    <div className="screen bossdebug-screen">
+      <h2 className="toy-heading toy-heading--screen">🌟 {t('궁극기 시험장')}</h2>
+      <div className="toy-card bossdebug-card">
+        <div className="bossdebug-row" style={{ flexWrap: 'wrap' }}>
+          {CLASS_IDS.map((id) => (
+            <button key={id} className="toy-btn bossdebug-pick" onClick={() => onStart(id)}>
+              {CLASSES[id].icon} {t(CLASSES[id].name)}
+            </button>
+          ))}
+        </div>
+        <p className="hats-note">{t('게이지 상시 풀차지 · 봇은 허수아비 · 링·이벤트 정지')}</p>
+      </div>
+    </div>
+  )
+}
 
 function BossDebugScreen({ onStart }) {
   const [boss, setBoss] = useState('boss_colossus')
@@ -116,6 +136,7 @@ export default function SoloApp() {
     return getZodiac(p) ? p : null
   })
   const [screen, setScreen] = useState(() => {
+    if (ULT_DEBUG) return 'ultdebug' // 웹 ?ult — 궁극기 시험장
     if (BOSS_DEBUG) return 'bossdebug' // 웹 ?boss — 보스 기믹 실테스트 급행 모드
     // 언어 전환 등 새로고침 뒤 복귀할 화면(1회성 힌트)
     try {
@@ -407,7 +428,32 @@ export default function SoloApp() {
     setScreen('play')
   }
 
+  function startDebugUlt(cls) {
+    sound.go()
+    const roster = buildSoloRoster({ zodiacId: profile || 'rat', cls, mode: 'brawl' })
+    const n = createLocalNet(riftNet, {
+      players: [],
+      config: { mode: 'brawl', roster, botLevel: 'normal', ultDebug: true },
+      deviceId: 'solo',
+      onFinish() {}, // 시험장: 아무것도 기록하지 않는다
+    })
+    netRef.current = n
+    if (typeof window !== 'undefined') window.__soloNet = n
+    setCoinMsg(null)
+    setNet(n)
+    setScreen('play')
+  }
+
   function exitBattle() {
+    if (ULT_DEBUG) { // 시험장 판 종료 → 직업 선택으로 복귀
+      netRef.current?.close()
+      netRef.current = null
+      setNet(null)
+      setBrawlChamp(null)
+      brawlChampRef.current = null
+      setScreen('ultdebug')
+      return
+    }
     if (brawlChampRef.current) { // 대난투 시상식 — 경기장을 나온 순간 1위 만세·2/3위 박수
       setBrawlChamp(brawlChampRef.current)
       brawlChampRef.current = null
@@ -590,6 +636,7 @@ export default function SoloApp() {
         <ProfileScreen current={profile} onPick={pickProfile} onBack={profile ? () => go('menu') : null} />
       )}
       {screen === 'bossdebug' && <BossDebugScreen onStart={startDebugBoss} />}
+      {screen === 'ultdebug' && <UltDebugScreen onStart={startDebugUlt} />}
       {screen === 'menu' && (
         <MainMenu
           profile={profile}
