@@ -6809,6 +6809,16 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const brawlNukes = [] // 버섯구름 {g, stem, cap, fire, ring, t, dur}
   let brawlPadsFallT = -1 // 발판 붕괴 진행 시계(-1=아직)
   const brawlUps = [] // 텍스트 팝업(1UP·콤보·SMASH) {spr, t, x, z}
+  const brawlBursts = [] // 💥 타격 버스트 {spr, t, dur}
+  function brawlBurst(x, z, size, dur = 0.18) {
+    const spr = emojiSprite('💥', size)
+    spr.material.depthTest = false
+    spr.renderOrder = 6
+    spr.material.rotation = Math.random() * Math.PI * 2
+    spr.position.set(x, 3.2, z)
+    scene.add(spr)
+    brawlBursts.push({ spr, t: 0, dur })
+  }
   function brawlPopText(text, color, x, z, scale = 1) {
     const spr = new THREE.Sprite(new THREE.SpriteMaterial({
       map: makeNameTexture(text, color), depthWrite: false, depthTest: false, transparent: true,
@@ -7004,6 +7014,20 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           lamp.material.color.setHex(0x7dffa0)
           lamp.scale.setScalar(1 + Math.sin(view.time * 5) * 0.2)
         }
+      }
+      // 💥 타격 버스트 갱신 — 급팽창 후 소멸(스매시식 슬래시 플래시)
+      for (let xi = brawlBursts.length - 1; xi >= 0; xi--) {
+        const bx = brawlBursts[xi]
+        bx.t += dt
+        if (bx.t >= bx.dur) {
+          scene.remove(bx.spr)
+          bx.spr.material.dispose()
+          brawlBursts.splice(xi, 1)
+          continue
+        }
+        const bk = bx.t / bx.dur
+        bx.spr.scale.multiplyScalar(1 + dt * 9) // 급팽창
+        bx.spr.material.opacity = 1 - bk * bk
       }
       // 🍄 1UP 팝업 — 초록 글자가 머리 위로 솟아오르며 사라진다(마리오 보너스)
       for (let ui = brawlUps.length - 1; ui >= 0; ui--) {
@@ -7473,11 +7497,27 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             brawlPopText('SMASH!', '#ff5a3a', h.x, h.z, 1.25) // 피니셔로 발사됐다
           }
           u.lastComboN = comboN
-          // 💥 SMASH 비행: 날아가는 동안 팽이처럼 돌고 궤적을 흘리며 화면이 울린다
+          // 🔴 피격 점멸: 맞는 쪽 몸이 붉게 번쩍(별 무지개가 있으면 그쪽 우선)
+          if ((u.brawlRedT || 0) > 0 && !(h.brawlStarT > 0)) {
+            u.brawlRedT -= dt
+            const on = u.brawlRedT > 0
+            obj.traverse((o) => {
+              if (o.isMesh && o.material?.emissive) {
+                o.material.emissive.setHex(on ? 0xff2020 : 0x000000)
+                o.material.emissiveIntensity = on ? 0.75 : 1
+              }
+            })
+          }
+          // 💥 SMASH 비행: 발사 순간 대형 작렬 + 팽이 회전·궤적·진동
           if ((h.brawlSmashT || 0) > 0 && h.hp > 0) {
             obj.rotation.y += dt * 22
             particles.emit(h.x, u.bodyBaseY + 1, h.z, 0xffd24a, 2, { spread: 1.2, up: 0.8, gravity: 1, size: 1.5, lifeMin: 0.14, lifeMax: 0.28 })
-            if (!u.wasSmash) { u.wasSmash = true; brawlShakeT = Math.max(brawlShakeT, 0.24) }
+            if (!u.wasSmash) {
+              u.wasSmash = true
+              brawlShakeT = Math.max(brawlShakeT, 0.3)
+              brawlBurst(h.x, h.z, 9, 0.32) // 대형 작렬 — 스매시의 그 번쩍
+              particles.emit(h.x, u.bodyBaseY + 1.2, h.z, 0xfff6c8, 16, { spread: 16, up: 10, gravity: 6, size: 2.4, hard: true, lifeMin: 0.14, lifeMax: 0.3 })
+            }
           } else if (u.wasSmash) { u.wasSmash = false; obj.rotation.y = 0 }
           const want = (h.brawlMushT || 0) > 0 ? 3.0 : 1 // 🍄 진짜 거인 — 3배
           const cur = obj.scale.x
@@ -7710,7 +7750,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             const brawlHit = view.mode === 'brawl' // 대난투: 팍! 팍! — 파편이 크고 많게
             const n = Math.min(brawlHit ? 22 : 14, (brawlHit ? 10 : 6) + Math.round(dHp / 9))
             particles.emit(h.x, u.bodyBaseY + 0.6, h.z, 0xffb42a, n, { spread: brawlHit ? 13 : 9, up: brawlHit ? 12 : 9, gravity: 22, size: brawlHit ? 2.1 : 1.5, hard: true, lifeMin: 0.16, lifeMax: 0.34 })
-            if (brawlHit) particles.emit(h.x, u.bodyBaseY + 1, h.z, 0xffffff, 3, { spread: 4, up: 3, gravity: 2, size: 1.6, lifeMin: 0.08, lifeMax: 0.16 })
+            if (brawlHit) {
+              particles.emit(h.x, u.bodyBaseY + 1, h.z, 0xffffff, 3, { spread: 4, up: 3, gravity: 2, size: 1.6, lifeMin: 0.08, lifeMax: 0.16 })
+              brawlBurst(h.x, h.z, 3.6, 0.15) // 💥 콤보 타격 플래시
+              u.brawlRedT = 0.16 // 피격자는 빨갛게 번쩍 — 누가 맞는지 한눈에
+            }
           }
         }
         u.dmgFlush = (u.dmgFlush || 0) - dt

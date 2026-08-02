@@ -2899,6 +2899,14 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
       }
       victim.brawlComboBy = attacker.id
       victim.brawlComboT = now
+      // 때리는 쪽이 반 발짝 파고든다 — 공격자/피격자가 화면에서 구분되는 몸짓(스매시 런지)
+      if (!(attacker.fallT > 0) && (attacker.brawlFlyT || 0) <= 0) {
+        const ldx = victim.x - attacker.x
+        const ldz = victim.z - attacker.z
+        const ld = Math.hypot(ldx, ldz) || 1
+        attacker.x += (ldx / ld) * 0.45
+        attacker.z += (ldz / ld) * 0.45
+      }
       const hammer = (attacker.brawlHammerT || 0) > 0 // 🔨 뿅망치: 매 타가 홈런
       const giant = (attacker.brawlMushT || 0) > 0 // 🍄 거인의 손찌검: 매 타가 발사
       if (victim.brawlComboN >= 4 || hammer || giant) {
