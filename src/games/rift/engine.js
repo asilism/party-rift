@@ -2113,6 +2113,31 @@ export function castUlt(state, id) {
     state.brawlUltAt = { x: h.x, z: h.z, id: h.id }
     state.brawlUltSlowT = 0.35 // 슬로모
     pushFeed(state, 'obj', `🌟 ${emojiOf(h.zodiacId)} ${h.name} — 힘이 폭발한다!`)
+    // ── ★ 대난투 전용 궁 과장 — 본편 킷은 그대로, 그 위에 드라마를 얹는다 ──
+    if (h.cls === 'mage') {
+      // ☄️ 거대 운석: 조준 방향 8 지점에 1.2초 뒤 대낙하 — 명중 시 버섯구름(존 폭발이 트리거)
+      const mx = h.x + Math.cos(h.dir) * 8
+      const mz = h.z + Math.sin(h.dir) * 8
+      state.zones.push({ id: state.nextId++, kind: 'meteor', team: h.team, owner: h.id, x: mx, z: mz, r: 7, t: 0, delay: 1.2, dmg: 520, tag: '거대 운석', brawlBlast: true, brawlNuke: true })
+    } else if (h.cls === 'engineer') {
+      // 🛰️ 궤도 폭격: 주변 무작위 5발 시차 낙하
+      for (let k = 0; k < 5; k++) {
+        const ba = state.rng() * Math.PI * 2
+        const br = 4 + state.rng() * 9
+        state.zones.push({ id: state.nextId++, kind: 'meteor', team: h.team, owner: h.id, x: h.x + Math.cos(ba) * br, z: h.z + Math.sin(ba) * br, r: 5, t: 0, delay: 0.8 + k * 0.25, dmg: 300, tag: '궤도 폭격', brawlBlast: true })
+      }
+    } else if (h.cls === 'windcaller') {
+      h.brawlStormT = 3 // 🌪️ 태풍의 눈 — 3초간 주변을 계속 밀쳐낸다(stepBrawl)
+    } else if (h.cls === 'fearmonger') {
+      for (const e of state.heroes) { // 😱 대공황: 근방 전원 3초 공포 도주 — 낭떠러지 쪽이면 백미
+        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) continue
+        if (Math.hypot(h.x - e.x, h.z - e.z) > 18) continue
+        applyFear(state, e, 3)
+        e.fearFrom = h.id
+      }
+    } else if (h.cls === 'warlock') {
+      h.brawlHexT = 8 // 🧿 저주 폭풍 — 8초간 내 도트가 미세 경직을 건다(도트 예외의 예외)
+    }
   }
   h.ultCd = state.mode === 'brawl' ? h.ultCd : CLASSES[h.cls].ult.cd * (1 - cdrOf(h)) * augOf(h).ultCdMul // 증강: 궁 쿨 배율
   if (h.resetUltCd) { h.ultCd = 0; h.resetUltCd = false } // 그림자처형 처치 → 처형 쿨 초기화
@@ -2182,7 +2207,10 @@ const ULTS = {
     if (foe.hp < foe.maxHp * 0.35) dmg *= 2
     pushFx(state, 'shadowexec', foe.x, foe.z, 3, h.team, 1.0) // 붉은 참격 + 해골 팍!
     damageHero(state, foe, dmg, h)
-    if (foe.respawnT > 0) h.resetUltCd = true // 처형 성공 → 처형 쿨 초기화 (castUlt에서 적용)
+    if (foe.respawnT > 0) {
+      h.resetUltCd = true // 처형 성공 → 처형 쿨 초기화 (castUlt에서 적용)
+      if (state.mode === 'brawl') h.brawlUltQ = Math.min(100, (h.brawlUltQ || 0) + 60) // 대난투: 게이지 환급 — 연쇄 처형
+    }
   },
   // 대지균열: 앞으로 땅을 3파(파파팍)로 끊어 갈라 나가며, 닿는 적을 길게 기절.
   //  각 파는 앞쪽 구간을 차례로 덮어 균열이 적진을 향해 달려간다(한 적은 한 파에 맞는다).
@@ -3789,6 +3817,21 @@ function stepBrawl(state, dt) {
   for (const h of state.heroes) {
     if (h.brawlStarHitCd > 0) h.brawlStarHitCd = Math.max(0, h.brawlStarHitCd - dt)
     if (h.brawlSmashT > 0) h.brawlSmashT = Math.max(0, h.brawlSmashT - dt)
+    if (h.brawlHexT > 0) h.brawlHexT = Math.max(0, h.brawlHexT - dt)
+    if (h.brawlStormT > 0) { // 🌪️ 태풍의 눈: 0.25초마다 주변(8)을 밀쳐낸다
+      h.brawlStormT = Math.max(0, h.brawlStormT - dt)
+      h.brawlStormTickT = (h.brawlStormTickT || 0) - dt
+      if (h.brawlStormTickT <= 0 && h.respawnT <= 0 && h.hp > 0) {
+        h.brawlStormTickT = 0.25
+        pushFx(state, 'rocksplash', h.x, h.z, 5, null, 0.5)
+        for (const e of state.heroes) {
+          if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
+          const ed = Math.hypot(h.x - e.x, h.z - e.z)
+          if (ed > 8) continue
+          applyKnockback(state, e, h.x, h.z, 2.6)
+        }
+      }
+    }
     if (h.brawlGuardT > 0) h.brawlGuardT = Math.max(0, h.brawlGuardT - dt)
     if (h.brawlHammerT > 0) h.brawlHammerT = Math.max(0, h.brawlHammerT - dt)
     if (h.brawlMushT > 0) h.brawlMushT = Math.max(0, h.brawlMushT - dt)
@@ -4216,6 +4259,7 @@ function stepHero(state, h, dt) {
     h.poisonT = Math.max(0, h.poisonT - dt)
     const by = state.heroes.find((o) => o.id === h.poisonBy && o.team !== h.team)
     damageHero(state, h, h.poisonDps * dt, by || null, false, null, true) // 도트 — 콤보·넉백 없음
+    if (state.mode === 'brawl' && (by?.brawlHexT || 0) > 0) h.stunT = Math.max(h.stunT, 0.18) // 🧿 저주 폭풍: 도트가 몸을 옥죈다
   }
   // 정신집중(궁수 빛의 화살): 1초 집중 후 발사. 그동안 제자리(아래 이동에서 막힘), 기절당하면 끊긴다.
   if (h.castT > 0) {
@@ -5017,6 +5061,11 @@ function stepZones(state, dt) {
           if (d2v > r2 || d2v < rIn2) continue // 도넛 안쪽(안전지대)은 무사하다
           damageHero(state, e, z.dmg, owner.id ? owner : null, false, z.tag)
           if (z.brawlBlast && e.hp > 0) applyKnockback(state, e, z.x, z.z, 5.5) // ☄️ 광선: 밖으로 튕겨낸다
+          if (z.brawlNuke && !z.brawlNuked) {
+            z.brawlNuked = true // 🍄 거대 운석 — 명중 지점에 버섯구름
+            state.brawlNukeSeq = (state.brawlNukeSeq || 0) + 1
+            state.brawlNukeAt = { x: z.x, z: z.z }
+          }
           if (z.stun) e.stunT = Math.max(e.stunT, z.stun)
           if (z.freeze) e.freezeT = Math.max(e.freezeT, z.freeze)
           if (z.fear) applyFear(state, e, z.fear)
