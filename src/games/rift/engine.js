@@ -2954,7 +2954,7 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
     victim.brawlLives = Math.max(0, (victim.brawlLives || 0) - 1)
     if (victim.brawlLives <= 0 && !victim.brawlOut) {
       victim.brawlOut = true
-      state.brawlRanks.push({ place: state.heroes.length - state.brawlRanks.length, id: victim.id, name: victim.name, zodiacId: victim.zodiacId })
+      state.brawlRanks.push({ place: state.heroes.length - state.brawlRanks.length, id: victim.id, name: victim.name, zodiacId: victim.zodiacId, cls: victim.cls })
       pushFeed(state, 'obj', `🪦 ${emojiOf(victim.zodiacId)} ${victim.name} — 목숨을 모두 잃고 탈락`)
     }
   }
@@ -3804,7 +3804,7 @@ function stepBrawl(state, dt) {
   const alive = state.heroes.filter((o) => (o.brawlLives || 0) > 0)
   if (alive.length <= 1) {
     const winner = alive[0] || null
-    if (winner) state.brawlRanks.push({ place: 1, id: winner.id, name: winner.name, zodiacId: winner.zodiacId })
+    if (winner) state.brawlRanks.push({ place: 1, id: winner.id, name: winner.name, zodiacId: winner.zodiacId, cls: winner.cls })
     state.winner = winner ? winner.team : null
     state.status = 'finished'
   }
