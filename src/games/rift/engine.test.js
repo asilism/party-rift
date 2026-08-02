@@ -4504,13 +4504,9 @@ test('대난투: 궁극기 게이지 — 때려서 충전, 100 미만 불발, �
   assert.ok(a.brawlUltQ > 0, `가해 충전 (${a.brawlUltQ})`)
   assert.ok(b.brawlUltQ > 0 && b.brawlUltQ < a.brawlUltQ, '피격은 절반 충전')
   a.brawlUltQ = 100
-  const t0 = g.time
   castUlt(g, a.id)
   assert.equal(a.brawlUltQ, 0, '발동 — 게이지 소모')
   assert.ok(g.brawlUltSeq >= 1, '발동 연출 시퀀스')
-  assert.ok(g.brawlUltSlowT > 0, '슬로모 시작')
-  run(g, 0.3) // 실시간 0.3초 — 슬로모라 게임 시간은 ~0.09초만 흘러야
-  assert.ok(g.time - t0 < 0.15, `슬로모 감속 (${(g.time - t0).toFixed(2)})`)
 })
 
 test('대난투: 도트 딜은 콤보·경직·넉백을 안 만든다', () => {
@@ -4580,6 +4576,19 @@ test('대난투 ★★궁: 검성 발도 일섬 — 전방 반원 일괄 피니�
   assert.ok(front.hp < fHp, '전방 피격')
   assert.ok(front.brawlSmashT > 0, '전방 피니셔 발사')
   assert.equal(back.hp, bHp, '후방 무사')
+})
+
+test('대난투: 궁극기 시험장(ultDebug) — 사람 게이지 상시 풀차지·링 정지', () => {
+  const g = createGame([
+    { id: 'solo', name: 'w', zodiacId: 'rat', color: '#abc', team: 't0', cls: 'warrior' },
+    { id: 'b1', name: 'b1', zodiacId: 'ox', color: '#abc', team: 't1', cls: 'mage', isBot: true },
+  ], { mode: 'brawl', ultDebug: true, rng: () => 0.5 })
+  startPlaying(g)
+  run(g, 1.0)
+  assert.equal(g.heroes[0].brawlUltQ, 100, '상시 풀차지')
+  g.time = 200
+  run(g, 1.0)
+  assert.equal(g.brawlR, 40, '링 축소 정지')
 })
 
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {

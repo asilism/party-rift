@@ -1011,6 +1011,7 @@ export function createGame(players, opts = {}) {
     arenaDeduct: mode === 'arena' ? (o.arenaDeduct ?? 3) : 0, // 이번 라운드 패배 시 차감량(하트 펑 연출용)
     arenaRound: mode === 'arena' ? (o.arenaRound || 1) : 0,
     brawlR: mode === 'brawl' ? 40 : 0, // 대난투 링 반경(시간에 따라 축소)
+    brawlUltDebug: mode === 'brawl' && !!o.ultDebug, // ?ult 궁극기 시험장 — 게이지 무한·전장 정적
     brawlRanks: mode === 'brawl' ? [] : null, // 탈락 순위 기록 {place,id,name,zodiacId}
     brawlPickups: mode === 'brawl' ? [] : null, // 하늘 보급 아이템 {id,kind,x,z,t}
     brawlTraps: mode === 'brawl' ? [] : null, // 바나나 트랩 {id,x,z,owner,t}
@@ -2111,7 +2112,6 @@ export function castUlt(state, id) {
     h.ultCd = 1.2 // 연타 방지용 최소 간격
     state.brawlUltSeq = (state.brawlUltSeq || 0) + 1 // 씬 발동 연출(마법진·빛기둥·섬광)
     state.brawlUltAt = { x: h.x, z: h.z, id: h.id }
-    state.brawlUltSlowT = 0.35 // 슬로모
     pushFeed(state, 'obj', `🌟 ${emojiOf(h.zodiacId)} ${h.name} — 힘이 폭발한다!`)
     // ── ★ 대난투 전용 궁 과장 — 본편 킷은 그대로, 그 위에 드라마를 얹는다 ──
     if (h.cls === 'mage') {
@@ -3363,11 +3363,6 @@ function giveXp(state, h, amount) {
 export function step(state, dt) {
   // 증강 뽑기 대기 중이면 완전 정지(시간·전투 모두) — 사람이 카드를 고를 때까지. 봇은 즉시 골라 안 걸린다.
   if (state.status === 'playing' && state.augPending) return state
-  if (state.brawlUltSlowT > 0) {
-    // 🌟 궁극기 슬로모 — 발동 직후 0.35초(실시간)만 시뮬이 30%로 흐른다(전장이 숨을 죽인다)
-    state.brawlUltSlowT = Math.max(0, state.brawlUltSlowT - dt)
-    dt *= 0.3
-  }
   state.time += dt
   if (state.status === 'countdown') {
     state.countdown = Math.max(0, COUNTDOWN_TIME - state.time)
@@ -3620,7 +3615,7 @@ function arenaPickHole(state) {
 function stepBrawl(state, dt) {
   if (state.mode !== 'brawl' || state.status !== 'playing') return
   // 링 축소(5분 후): 좁아지는 낭떠러지가 피날레를 강제한다
-  if (state.time > BRAWL_RING_T && state.brawlR > BRAWL_RING_MIN) {
+  if (state.time > BRAWL_RING_T && state.brawlR > BRAWL_RING_MIN && !state.brawlUltDebug) {
     if (!state.brawlShrinkFed) {
       state.brawlShrinkFed = true
       pushFeed(state, 'obj', '☄️ 가장자리가 무너지기 시작한다')
@@ -3652,9 +3647,16 @@ function stepBrawl(state, dt) {
     state.brawlPadsDead = true
     pushFeed(state, 'obj', '🌀 발판이 끊겨 대포가 심연으로 무너진다')
   }
+  if (state.brawlUltDebug) {
+    // 🧪 궁극기 시험장: 사람은 게이지 상시 풀차지, 이벤트·링·세금은 전부 정지 — 궁만 본다
+    for (const h of state.heroes) {
+      if (!h.isBot && h.hp > 0) h.brawlUltQ = 100
+      h.brawlIdleT = 0
+    }
+  }
   // ── 하늘 이벤트 디렉터: 개전 15초 후부터, 시간이 갈수록 잦아진다 ──
   state.brawlEventT = (state.brawlEventT ?? 8) - dt
-  if (state.brawlEventT <= 0 && !((state.brawlSuddenT || 0) > 5)) { // 서든데스엔 하늘도 침묵
+  if (state.brawlEventT <= 0 && !((state.brawlSuddenT || 0) > 5) && !state.brawlUltDebug) { // 서든데스·시험장엔 하늘도 침묵
     state.brawlEventT = Math.max(5, 10 - state.time / 60)
     const a = state.rng() * Math.PI * 2
     const rr = Math.sqrt(state.rng()) * (state.brawlR - 5)
@@ -7657,6 +7659,7 @@ function stepBots(state, dt) {
     }
     // 대난투: FFA 전용 두뇌 — 최상단 가로채기(콜로세움과 같은 이유)
     if (state.mode === 'brawl') {
+      if (state.brawlUltDebug) { h.mx = 0; h.mz = 0; continue } // 시험장: 봇은 허수아비
       brawlBotDuty(state, h, dt)
       continue
     }

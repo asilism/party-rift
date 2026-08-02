@@ -381,16 +381,16 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
       )}
       {/* 스킬/평타/귀환 버튼은 항상 보여 쿨다운을 알려주되, 터치 입력은 모바일 모드에서만 받는다. */}
       <CdButton
-        className="rift-btn--ult"
+        className={`rift-btn--ult ${me?.brawlUltQ != null && me.brawlUltQ >= 100 ? 'is-ultready' : ''}`}
         icon={cls.ult.icon}
         label={t(cls.ult.name)}
         name={t(cls.ult.name)}
         desc={t(cls.ult.desc)}
         lines={abilityLines(me?.cls, 'ult', me)}
-        cd={me?.brawlUltQ != null ? (100 - me.brawlUltQ) / 100 : me?.ultCd ?? 0}
+        cd={me?.brawlUltQ != null ? 0 : me?.ultCd ?? 0}
         cdMax={me?.brawlUltQ != null ? 1 : cls.ult.cd}
-        locked={me?.ultLocked}
-        lockText={me?.arenaPrep ? t('전투 전') : t('Lv5부터')}
+        locked={me?.brawlUltQ != null ? me.brawlUltQ < 100 : me?.ultLocked}
+        lockText={me?.brawlUltQ != null && !me?.arenaPrep ? `${me.brawlUltQ}%` : me?.arenaPrep ? t('전투 전') : t('Lv5부터')}
         onPress={onUlt}
         interactive={mobile}
         pulse={pulses.ult || 0}
