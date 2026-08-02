@@ -2886,14 +2886,29 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   //  가장자리는 낭떠러지라 넉백 자체가 처형 수단. 잔피해(<8)는 제외(도트 진동 방지).
   if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && attacker.x != null
       && amount >= 8 && victim.hp > 0 && !(victim.fallT > 0)) {
-    const frailty = 1 + (1 - victim.hp / victim.maxHp) * 1.6 // 빈사면 2.6배 — 몸이 가벼워진다
-    const hammer = (attacker.brawlHammerT || 0) > 0 ? 2.5 : 1 // 🔨 뿅망치: 홈런배트(과장)
-    const giant = (attacker.brawlMushT || 0) > 0 ? 2.8 : 1 // 🍄 거인의 손찌검 — 스치면 날아간다
     if ((victim.brawlMushT || 0) > 0) {
-      // 거인은 밀리지 않는다 — 받는 넉백 완전 무효
+      // 🍄 거인은 밀리지도, 경직되지도 않는다 — 묵직함이 정체성
     } else {
-      const kb = Math.min(8.5 * Math.max(hammer, giant), (0.7 + (amount / victim.maxHp) * 8) * frailty * hammer * giant)
-      applyKnockback(state, victim, attacker.x, attacker.z, kb)
+      // 콤보: 같은 공격자의 연속 타격(2초 내)이 쌓인다 — 1~3타는 경직(히트스턴),
+      //  4타째 피니셔로 크게 날린다(스매시 리듬: 묶어 패다 마지막에 발사 → 맞은 쪽 반격 턴)
+      const now = state.time
+      if (victim.brawlComboBy === attacker.id && now - (victim.brawlComboT || -99) < 2.0) {
+        victim.brawlComboN = (victim.brawlComboN || 0) + 1
+      } else {
+        victim.brawlComboN = 1
+      }
+      victim.brawlComboBy = attacker.id
+      victim.brawlComboT = now
+      const hammer = (attacker.brawlHammerT || 0) > 0 // 🔨 뿅망치: 매 타가 홈런
+      const giant = (attacker.brawlMushT || 0) > 0 // 🍄 거인의 손찌검: 매 타가 발사
+      if (victim.brawlComboN >= 4 || hammer || giant) {
+        const frailty = 1 + (1 - victim.hp / victim.maxHp) * 1.6 // 빈사면 2.6배 — 몸이 가벼워진다
+        const kb = Math.min(12, (1.5 + (amount / victim.maxHp) * 8) * frailty * 1.7 * (hammer ? 1.5 : 1) * (giant ? 1.6 : 1))
+        applyKnockback(state, victim, attacker.x, attacker.z, kb)
+        victim.brawlComboN = 0 // 발사 — 콤보 종료(반격 턴)
+      } else {
+        victim.stunT = Math.max(victim.stunT, 0.32) // 경직 — 짧은 히트스턴(넉백 없음)
+      }
     }
   }
   // 증강 가시(반사): 받은 피해의 일부를 때린 적 영웅(그림자/보스)에게 되돌린다.
@@ -2987,10 +3002,11 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   ))
   const assisters = [...damagers, ...supporters]
   if (killer) {
-    if (state.mode === 'brawl' && (killer.brawlLives || 0) > 0 && !((state.brawlSuddenT || 0) > 8)) {
-      // 🍄 1UP — 막타 킬은 목숨을 돌려준다(공격적인 플레이가 이득). 시작 목숨(10) 상한 —
-      //  상한 없으면 총량 보존으로 게임이 영원히 안 끝난다. 서든데스 중엔 무효(확정 종결).
-      killer.brawlLives = Math.min(BRAWL_LIVES, killer.brawlLives + 1)
+    if (state.mode === 'brawl' && (killer.brawlLives || 0) > 0 && !((state.brawlSuddenT || 0) > 5)) {
+      // 🍄 1UP — 누적 3킬마다 목숨 1개(1킬 1UP은 무한 생명이 됐다). 상한 = 시작 목숨(10).
+      //  서든데스 중엔 무효(확정 종결).
+      killer.brawlKillN = (killer.brawlKillN || 0) + 1
+      if (killer.brawlKillN % 3 === 0) killer.brawlLives = Math.min(BRAWL_LIVES, killer.brawlLives + 1)
     }
     killer.kills++
     killer.deathStreak = 0 // 킬을 따면 연속 데스 디버프 해제
@@ -8991,7 +9007,7 @@ export function makeView(state) {
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
       fallT: r2d(h.fallT),
-      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0), brawlStarT: r2d(h.brawlStarT || 0), brawlBananaN: h.brawlBananaN || 0 } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
+      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0), brawlStarT: r2d(h.brawlStarT || 0), brawlBananaN: h.brawlBananaN || 0, brawlComboN: h.brawlComboN || 0 } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
       bladeT: r2d(h.bladeT),
       hookWindT: r2d(h.hookWindT),
       pullT: r2d(h.pullT),
