@@ -968,7 +968,7 @@ export function createGame(players, opts = {}) {
       h.maxHp = heroMaxHp(h)
       h.hp = h.maxHp
       h.brawlLives = BRAWL_LIVES
-      h.brawlGuardT = 0
+      h.brawlGuardT = BRAWL_GUARD_T // 개전에도 스폰 보호 — 리스폰과 같은 깜빡임(감쇠는 playing부터)
       h.brawlOut = false
     }
   }
@@ -2950,6 +2950,12 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   // 보스전 부활: 짧게(상한 18초) — 죽음이 리셋이 아니라 잠깐의 공백이어야 레이드가 굴러간다.
   // 그림자 영웅(정예 소환수)은 부활하지 않는다.
   if (state.mode === 'brawl') {
+    // 죽으면 들고 있던 아이템 버프는 무덤까지 — 부활 후 이어지지 않는다
+    victim.brawlHammerT = 0
+    victim.brawlMushT = 0
+    victim.brawlStarT = 0
+    victim.brawlBananaN = 0
+    victim.brawlComboN = 0
     // 대난투: 목숨 1 차감 — 남으면 짧은 리스폰, 다 잃으면 탈락(순위는 탈락 역순)
     victim.brawlLives = Math.max(0, (victim.brawlLives || 0) - 1)
     if (victim.brawlLives <= 0 && !victim.brawlOut) {
@@ -3798,7 +3804,11 @@ function stepBrawl(state, dt) {
     h.fallT -= dt
     h.mx = 0
     h.mz = 0
-    if (h.fallT <= 0) damageHero(state, h, 1e9, null)
+    if (h.fallT <= 0) {
+      h.brawlGuardT = 0 // 절벽 아래엔 무적이 없다 — 별·스폰 보호가 낙사 확정을 막지 않게
+      h.brawlStarT = 0
+      damageHero(state, h, 1e9, null)
+    }
   }
   // 종료: 목숨 보유자가 1명이면 우승 — 순위표 완성
   const alive = state.heroes.filter((o) => (o.brawlLives || 0) > 0)

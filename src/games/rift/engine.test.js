@@ -4153,8 +4153,31 @@ function brawl8() {
   }))
   const g = createGame(players, { mode: 'brawl', rng: () => 0.5 })
   startPlaying(g)
+  for (const h of g.heroes) h.brawlGuardT = 0 // 개전 스폰 무적 해제 — 시나리오 테스트용
   return g
 }
+
+test('대난투: 개전에도 스폰 무적 + 죽으면 버프 소멸(부활 후 미지속)', () => {
+  const zs2 = ['rat', 'ox', 'tiger', 'rabbit', 'dragon', 'snake', 'horse', 'goat']
+  const cs2 = ['warrior', 'mage', 'archer', 'tank', 'assassin', 'healer', 'gladiator', 'cryomancer']
+  const g = createGame(zs2.map((z, i) => ({
+    id: i === 0 ? 'solo' : `bot-${z}`, name: z, zodiacId: z, color: '#abc', team: `t${i}`, cls: cs2[i], isBot: false,
+  })), { mode: 'brawl', rng: () => 0.5 })
+  startPlaying(g)
+  assert.ok(g.heroes.every((h) => h.brawlGuardT > 0), '개전 스폰 무적')
+  // 버프 든 채 사망 → 부활 후 버프 없음
+  const a = g.heroes[0]
+  for (const h of g.heroes) { h.brawlGuardT = 0; h.atkCd = 99 }
+  a.brawlHammerT = 9
+  a.brawlStarT = 4
+  a.x = g.brawlR + 3 // 장외
+  run(g, 2.0)
+  assert.ok(a.respawnT > 0, '사망')
+  assert.equal(a.brawlHammerT, 0, '뿅망치 소멸')
+  assert.equal(a.brawlStarT, 0, '별 소멸')
+  run(g, 3.5)
+  assert.ok(a.hp > 0 && !(a.brawlHammerT > 0), '부활 후에도 버프 없음')
+})
 
 test('대난투: 8인 고유 팀 — 서로 피해가 들어가고, 고정 레벨·목숨 10', () => {
   const g = brawl8()
