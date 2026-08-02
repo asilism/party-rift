@@ -4526,6 +4526,41 @@ test('대난투: 도트 딜은 콤보·경직·넉백을 안 만든다', () => {
   assert.equal(b.knockT, 0, '도트는 넉백 없음')
 })
 
+test('대난투 ★궁: 공포술사 대공황 — 근방 전원 공포 도주', () => {
+  const g = brawl8()
+  const cs = g.heroes.map((h) => h.cls)
+  // brawl8엔 공포술사가 없다 — 커스텀 로스터
+  const zs2 = ['rat', 'ox', 'tiger']
+  const g2 = createGame([
+    { id: 'solo', name: 'f', zodiacId: 'rat', color: '#abc', team: 't0', cls: 'fearmonger' },
+    { id: 'b1', name: 'b1', zodiacId: 'ox', color: '#abc', team: 't1', cls: 'warrior' },
+    { id: 'b2', name: 'b2', zodiacId: 'tiger', color: '#abc', team: 't2', cls: 'mage' },
+  ], { mode: 'brawl', rng: () => 0.5 })
+  startPlaying(g2)
+  for (const h of g2.heroes) { h.brawlGuardT = 0; h.atkCd = 99 }
+  const [f, b1, b2] = g2.heroes
+  f.x = 0; f.z = 0; b1.x = 5; b1.z = 0; b2.x = -6; b2.z = 0
+  f.brawlUltQ = 100
+  castUlt(g2, f.id)
+  assert.ok(b1.fearT > 2 && b2.fearT > 2, `전원 공포 (${b1.fearT}, ${b2.fearT})`)
+})
+
+test('대난투 ★궁: 돌풍술사 태풍의 눈 — 지속 밀쳐냄', () => {
+  const g = createGame([
+    { id: 'solo', name: 'w', zodiacId: 'rat', color: '#abc', team: 't0', cls: 'windcaller' },
+    { id: 'b1', name: 'b1', zodiacId: 'ox', color: '#abc', team: 't1', cls: 'warrior' },
+  ], { mode: 'brawl', rng: () => 0.5 })
+  startPlaying(g)
+  for (const h of g.heroes) { h.brawlGuardT = 0; h.atkCd = 99 }
+  const [w, b1] = g.heroes
+  w.x = 0; w.z = 0; b1.x = 4; b1.z = 0
+  w.brawlUltQ = 100
+  castUlt(g, w.id)
+  assert.ok(w.brawlStormT > 2, '태풍 시작')
+  run(g, 1.0)
+  assert.ok(b1.x > 5.2, `계속 밀려난다 (x=${b1.x.toFixed(1)})`)
+})
+
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
   const g = brawl8()
   // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락
