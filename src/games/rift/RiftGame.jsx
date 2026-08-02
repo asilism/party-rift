@@ -754,6 +754,11 @@ function RiftPlay({
               <div className="rift__bar rift__bar--hp">
                 <div style={{ width: `${(me.hp / me.maxHp) * 100}%` }} />
                 <span>{me.hp} / {me.maxHp}</span>
+                {me.brawlUltQ != null && (
+                  <div className={`brawl-ultbar ${me.brawlUltQ >= 100 ? 'is-full' : ''}`}>
+                    <div style={{ width: `${me.brawlUltQ}%` }} />
+                  </div>
+                )}
               </div>
               <div className="rift__bar rift__bar--xp">
                 <div style={{ width: me.xpNeed ? `${(me.xp / me.xpNeed) * 100}%` : '100%' }} />

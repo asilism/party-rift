@@ -969,6 +969,7 @@ export function createGame(players, opts = {}) {
       h.hp = h.maxHp
       h.brawlLives = BRAWL_LIVES
       h.brawlGuardT = BRAWL_GUARD_T // 개전에도 스폰 보호 — 리스폰과 같은 깜빡임(감쇠는 playing부터)
+      h.brawlUltQ = 0 // 궁극기 게이지 — 교전으로 충전
       h.brawlOut = false
     }
   }
@@ -2098,11 +2099,20 @@ export function castUlt(state, id) {
   if (state.status !== 'playing') return state
   if (state.mode === 'arena' && state.arenaPhase === 'shop') return state // 준비 중 프리캐스트 봉인
   const h = getHero(state, id)
-  if (!h || !canAct(h) || h.ultCd > 0 || h.lvl < ULT_LEVEL || h.castT > 0) return state
+  if (!h || !canAct(h) || h.lvl < ULT_LEVEL || h.castT > 0) return state
+  if (state.mode === 'brawl') {
+    if ((h.brawlUltQ || 0) < 100 || h.ultCd > 0) return state // 대난투: 쿨 대신 게이지 — 때려서 모아야 쓴다
+  } else if (h.ultCd > 0) return state
   const ok = ULTS[h.cls](state, h)
   if (ok === false) return state
   cancelRecall(h) // 궁극기를 쓰면 집중이 풀린다
-  h.ultCd = CLASSES[h.cls].ult.cd * (1 - cdrOf(h)) * augOf(h).ultCdMul // 증강: 궁 쿨 배율
+  if (state.mode === 'brawl') {
+    h.brawlUltQ = 0
+    h.ultCd = 1.2 // 연타 방지용 최소 간격
+    state.brawlUltSeq = (state.brawlUltSeq || 0) + 1 // 씬 발동 연출(마법진·빛기둥·섬광)
+    state.brawlUltAt = { x: h.x, z: h.z, id: h.id }
+  }
+  h.ultCd = state.mode === 'brawl' ? h.ultCd : CLASSES[h.cls].ult.cd * (1 - cdrOf(h)) * augOf(h).ultCdMul // 증강: 궁 쿨 배율
   if (h.resetUltCd) { h.ultCd = 0; h.resetUltCd = false } // 그림자처형 처치 → 처형 쿨 초기화
   h.revealT = Math.max(h.revealT, REVEAL_TIME)
   return state
@@ -2800,7 +2810,7 @@ function healHero(h, amount) {
 
 // ── 피해 처리 ──
 //  redirected=true 는 결속 리다이렉트로 수호기사가 대신 맞는 호출(무한 연쇄 방지 플래그).
-function damageHero(state, victim, amount, attacker, redirected = false, tag = null) {
+function damageHero(state, victim, amount, attacker, redirected = false, tag = null, dot = false) {
   if (victim.respawnT > 0 || state.status !== 'playing') return
   if (state.mode === 'brawl' && (victim.brawlGuardT > 0 || victim.brawlStarT > 0)) return // 대난투: 스폰 보호 또는 ⭐ 별 무적
   if (state.mode === 'arena' && state.arenaPhase === 'shop' && attacker) return // 준비 결계: 전투 불가
@@ -2884,8 +2894,13 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   }
   // 대난투 코어: 모든 피해가 넉백을 동반 — 잃은 체력이 많을수록 크게 날아간다(스매시 %).
   //  가장자리는 낭떠러지라 넉백 자체가 처형 수단. 잔피해(<8)는 제외(도트 진동 방지).
+  if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && amount > 0 && !dot) {
+    // ⚡ 궁극기 게이지: 때리면 크게, 맞으면 절반 — 교전이 궁을 만든다(도트 제외)
+    attacker.brawlUltQ = Math.min(100, (attacker.brawlUltQ || 0) + amount * 0.09)
+    victim.brawlUltQ = Math.min(100, (victim.brawlUltQ || 0) + amount * 0.045)
+  }
   if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && attacker.x != null
-      && amount >= 8 && victim.hp > 0 && !(victim.fallT > 0)) {
+      && amount >= 8 && victim.hp > 0 && !(victim.fallT > 0) && !dot) {
     if ((victim.brawlMushT || 0) > 0) {
       // 🍄 거인은 밀리지도, 경직되지도 않는다 — 묵직함이 정체성
     } else {
@@ -4193,7 +4208,7 @@ function stepHero(state, h, dt) {
   if (h.poisonT > 0) {
     h.poisonT = Math.max(0, h.poisonT - dt)
     const by = state.heroes.find((o) => o.id === h.poisonBy && o.team !== h.team)
-    damageHero(state, h, h.poisonDps * dt, by || null)
+    damageHero(state, h, h.poisonDps * dt, by || null, false, null, true) // 도트 — 콤보·넉백 없음
   }
   // 정신집중(궁수 빛의 화살): 1초 집중 후 발사. 그동안 제자리(아래 이동에서 막힘), 기절당하면 끊긴다.
   if (h.castT > 0) {
@@ -8943,6 +8958,8 @@ export function makeView(state) {
     brawlCannons: state.brawlCannons ? state.brawlCannons.map((c) => ({ id: c.id, x: c.x, z: c.z, cd: r2d(c.cd) })) : null,
     brawlBoltSeq: state.brawlBoltSeq || 0,
     brawlPadsDead: !!state.brawlPadsDead, // 대포 발판 붕괴(씬 낙하 연출)
+    brawlUltSeq: state.brawlUltSeq || 0,
+    brawlUltAt: state.brawlUltAt ? { ...state.brawlUltAt } : null, // 복사 필수
     brawlNukeSeq: state.brawlNukeSeq || 0,
     brawlNukeAt: state.brawlNukeAt ? { ...state.brawlNukeAt } : null, // 복사 필수
     brawlBoltAt: state.brawlBoltAt ? state.brawlBoltAt.map((o) => ({ ...o })) : null, // 복사 필수
@@ -9032,7 +9049,7 @@ export function makeView(state) {
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
       fallT: r2d(h.fallT),
-      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0), brawlStarT: r2d(h.brawlStarT || 0), brawlBananaN: h.brawlBananaN || 0, brawlComboN: h.brawlComboN || 0, brawlSmashT: r2d(h.brawlSmashT || 0), brawlSmashA: r2d(h.brawlSmashA || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
+      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0), brawlStarT: r2d(h.brawlStarT || 0), brawlBananaN: h.brawlBananaN || 0, brawlComboN: h.brawlComboN || 0, brawlSmashT: r2d(h.brawlSmashT || 0), brawlSmashA: r2d(h.brawlSmashA || 0), brawlUltQ: Math.round(h.brawlUltQ || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
       bladeT: r2d(h.bladeT),
       hookWindT: r2d(h.hookWindT),
       pullT: r2d(h.pullT),

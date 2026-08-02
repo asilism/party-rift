@@ -387,8 +387,8 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
         name={t(cls.ult.name)}
         desc={t(cls.ult.desc)}
         lines={abilityLines(me?.cls, 'ult', me)}
-        cd={me?.ultCd ?? 0}
-        cdMax={cls.ult.cd}
+        cd={me?.brawlUltQ != null ? (100 - me.brawlUltQ) / 100 : me?.ultCd ?? 0}
+        cdMax={me?.brawlUltQ != null ? 1 : cls.ult.cd}
         locked={me?.ultLocked}
         lockText={me?.arenaPrep ? t('전투 전') : t('Lv5부터')}
         onPress={onUlt}
