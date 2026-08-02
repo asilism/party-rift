@@ -2909,7 +2909,9 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
         victim.brawlSmashT = 0.55 // 씬: 날아가는 동안 회전·궤적·화면 진동(과장 연출)
         pushFx(state, 'rocksplash', victim.x, victim.z, 4, null, 0.9)
       } else {
-        victim.stunT = Math.max(victim.stunT, 0.32) // 경직 + 살짝 밀림 — 팍! 맞는 느낌
+        // 경직 0.55s — 다음 타 도달 간격(평타 ~0.4s+비행)보다 길어 콤보 중 락이 안 끊긴다.
+        //  한 번 물리면 4타 피니셔까지 확정(반격 턴은 발사 후) — CC 해제기(광폭화 등)만 예외
+        victim.stunT = Math.max(victim.stunT, 0.55)
         applyKnockback(state, victim, attacker.x, attacker.z, 0.6)
       }
     }
