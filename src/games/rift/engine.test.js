@@ -4561,6 +4561,27 @@ test('대난투 ★궁: 돌풍술사 태풍의 눈 — 지속 밀쳐냄', () => 
   assert.ok(b1.x > 5.2, `계속 밀려난다 (x=${b1.x.toFixed(1)})`)
 })
 
+test('대난투 ★★궁: 검성 발도 일섬 — 전방 반원 일괄 피니셔, 후방은 무사', () => {
+  const g = createGame([
+    { id: 'solo', name: 's', zodiacId: 'rat', color: '#abc', team: 't0', cls: 'swordmaster' },
+    { id: 'f1', name: 'f1', zodiacId: 'ox', color: '#abc', team: 't1', cls: 'warrior' },
+    { id: 'b1', name: 'b1', zodiacId: 'tiger', color: '#abc', team: 't2', cls: 'mage' },
+  ], { mode: 'brawl', rng: () => 0.5 })
+  startPlaying(g)
+  for (const h of g.heroes) { h.brawlGuardT = 0; h.atkCd = 99 }
+  const [sm, front, back] = g.heroes
+  sm.x = 0; sm.z = 0; sm.dir = 0
+  front.x = 8; front.z = 0 // 전방
+  back.x = -8; back.z = 0 // 후방
+  const fHp = front.hp
+  const bHp = back.hp
+  sm.brawlUltQ = 100
+  castUlt(g, sm.id)
+  assert.ok(front.hp < fHp, '전방 피격')
+  assert.ok(front.brawlSmashT > 0, '전방 피니셔 발사')
+  assert.equal(back.hp, bHp, '후방 무사')
+})
+
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
   const g = brawl8()
   // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락

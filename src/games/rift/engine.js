@@ -2137,6 +2137,54 @@ export function castUlt(state, id) {
       }
     } else if (h.cls === 'warlock') {
       h.brawlHexT = 8 // 🧿 저주 폭풍 — 8초간 내 도트가 미세 경직을 건다(도트 예외의 예외)
+    } else if (h.cls === 'tank') {
+      // 🌋 대지 밟기: 주변 전원을 끌어당기고 0.55초 뒤 발밑 대폭발 — 자석+폭탄 콤보 문법
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) continue
+        const ed = Math.hypot(h.x - e.x, h.z - e.z)
+        if (ed > 10 || ed < 2) continue
+        applyKnockback(state, e, e.x * 2 - h.x, e.z * 2 - h.z, Math.min(ed - 1.5, 7))
+      }
+      state.zones.push({ id: state.nextId++, kind: 'meteor', team: h.team, owner: h.id, x: h.x, z: h.z, r: 6.5, t: 0, delay: 0.55, dmg: 280, tag: '대지 밟기', brawlBlast: true })
+    } else if (h.cls === 'swordmaster') {
+      // ⚔️ 발도 일섬: 전방 반원(14)의 전원을 한 호흡에 베어 일괄 피니셔 발사
+      const fx2 = Math.cos(h.dir)
+      const fz2 = Math.sin(h.dir)
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) continue
+        const dx2 = e.x - h.x
+        const dz2 = e.z - h.z
+        const ed = Math.hypot(dx2, dz2)
+        if (ed > 14 || dx2 * fx2 + dz2 * fz2 < 0) continue // 전방 반원만
+        damageHero(state, e, 430, h, false, '발도 일섬')
+        if (e.hp > 0 && !(e.brawlMushT > 0)) {
+          applyKnockback(state, e, h.x, h.z, 11)
+          e.brawlSmashT = 0.55
+          e.brawlSmashA = Math.atan2(dz2, dx2)
+        }
+      }
+      pushFx(state, 'rocksplash', h.x + fx2 * 6, h.z + fz2 * 6, 8, h.team, 1.2)
+    } else if (h.cls === 'archer') {
+      // 🌈 극태 레이저: 조준 직선의 전원을 꿰뚫고, 반동으로 나는 뒤로 밀린다(웃김 포인트)
+      const fx3 = Math.cos(h.dir)
+      const fz3 = Math.sin(h.dir)
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) continue
+        const dx3 = e.x - h.x
+        const dz3 = e.z - h.z
+        const along = dx3 * fx3 + dz3 * fz3
+        if (along < 0 || along > 38) continue
+        const perp = Math.abs(dx3 * fz3 - dz3 * fx3)
+        if (perp > 2.6) continue
+        damageHero(state, e, 380, h, false, '극태 레이저')
+        if (e.hp > 0 && !(e.brawlMushT > 0)) {
+          applyKnockback(state, e, h.x, h.z, 9)
+          e.brawlSmashT = 0.5
+          e.brawlSmashA = h.dir
+        }
+        pushFx(state, 'spark', e.x, e.z, 3, h.team, 0.9)
+      }
+      applyKnockback(state, h, h.x + fx3, h.z + fz3, 3) // 반동 — 뒤로 주르륵
     }
   }
   h.ultCd = state.mode === 'brawl' ? h.ultCd : CLASSES[h.cls].ult.cd * (1 - cdrOf(h)) * augOf(h).ultCdMul // 증강: 궁 쿨 배율
@@ -3818,6 +3866,29 @@ function stepBrawl(state, dt) {
     if (h.brawlStarHitCd > 0) h.brawlStarHitCd = Math.max(0, h.brawlStarHitCd - dt)
     if (h.brawlSmashT > 0) h.brawlSmashT = Math.max(0, h.brawlSmashT - dt)
     if (h.brawlHexT > 0) h.brawlHexT = Math.max(0, h.brawlHexT - dt)
+    // 🌀 전사 회전베기(대난투): 도는 동안 주변을 빨아들이고, 멈추는 순간 전원 발사
+    if (h.cls === 'warrior' && h.hp > 0 && h.respawnT <= 0) {
+      if (h.whirlT > 0) {
+        h.brawlWhirlWas = true
+        for (const e of state.heroes) {
+          if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
+          const ed = Math.hypot(h.x - e.x, h.z - e.z)
+          if (ed > 9 || ed < 2.2) continue
+          applyKnockback(state, e, e.x * 2 - h.x, e.z * 2 - h.z, Math.min(ed - 1.8, 1.6)) // 조금씩 빨려든다
+        }
+      } else if (h.brawlWhirlWas) {
+        h.brawlWhirlWas = false // 회전 종료 — 모아둔 전원을 사방으로 발사
+        for (const e of state.heroes) {
+          if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
+          const ed = Math.hypot(h.x - e.x, h.z - e.z)
+          if (ed > 7) continue
+          applyKnockback(state, e, h.x, h.z, 10)
+          e.brawlSmashT = 0.55
+          e.brawlSmashA = Math.atan2(e.z - h.z, e.x - h.x)
+        }
+        pushFx(state, 'rocksplash', h.x, h.z, 7, h.team, 1.1)
+      }
+    }
     if (h.brawlStormT > 0) { // 🌪️ 태풍의 눈: 0.25초마다 주변(8)을 밀쳐낸다
       h.brawlStormT = Math.max(0, h.brawlStormT - dt)
       h.brawlStormTickT = (h.brawlStormTickT || 0) - dt
