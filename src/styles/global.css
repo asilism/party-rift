@@ -3851,3 +3851,12 @@ body {
 .brawl-final__row { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 15px; color: #fff; }
 .brawl-final__row.is-me { color: #ffe27a; }
 .brawl-final__place { min-width: 44px; text-align: center; }
+
+/* 대난투 궁극기 게이지 — 체력바 바로 밑 얇은 금줄, 가득 차면 맥동 */
+.brawl-ultbar {
+  position: absolute; left: 2px; right: 2px; bottom: -6px; height: 4px;
+  background: rgba(20, 16, 40, 0.8); border-radius: 99px; overflow: hidden;
+}
+.brawl-ultbar > div { height: 100%; background: linear-gradient(90deg, #c9a3ff, #ffd24a); border-radius: 99px; }
+.brawl-ultbar.is-full > div { animation: ultFullPulse 0.7s ease-in-out infinite; }
+@keyframes ultFullPulse { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.7); } }

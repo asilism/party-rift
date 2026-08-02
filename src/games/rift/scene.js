@@ -6805,6 +6805,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   let brawlShakeT = 0 // 강넉백·장외 카메라 흔들림
   let brawlBoltSeen = 0 // 번개 낙뢰 시퀀스(중복 방지)
   const brawlBolts = [] // 낙뢰 기둥 {mesh, t}
+  let brawlUltSeen = 0 // 궁극기 발동 연출 시퀀스
   let brawlNukeSeen = 0 // 폭탄 버섯구름 시퀀스
   const brawlNukes = [] // 버섯구름 {g, stem, cap, fire, ring, t, dur}
   let brawlPadsFallT = -1 // 발판 붕괴 진행 시계(-1=아직)
@@ -7092,6 +7093,27 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           o.rotation.z = fall * 0.7
           o.visible = fall < 2.0
         }
+      }
+      // 🌟 궁극기 발동: 시전자 발밑 마법진 링 + 수직 빛기둥 — 전장의 시선이 쏠린다
+      if ((view.brawlUltSeq || 0) !== brawlUltSeen) {
+        brawlUltSeen = view.brawlUltSeq || 0
+        const at = view.brawlUltAt || { x: 0, z: 0 }
+        const beam = new THREE.Mesh(
+          new THREE.CylinderGeometry(2.2, 3.2, 26, 12, 1, true),
+          new THREE.MeshBasicMaterial({ color: 0xbf8bff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide })
+        )
+        beam.position.set(at.x, 13, at.z)
+        scene.add(beam)
+        brawlBolts.push({ mesh: beam, t: 0.5 }) // 낙뢰 페이드 재사용(확산·소멸)
+        const rune = new THREE.Mesh(
+          new THREE.RingGeometry(2.4, 3.6, 40),
+          new THREE.MeshBasicMaterial({ color: 0xd9b3ff, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+        )
+        rune.rotation.x = -Math.PI / 2
+        rune.position.set(at.x, 0.35, at.z)
+        scene.add(rune)
+        brawlBolts.push({ mesh: rune, t: 0.5 })
+        brawlShakeT = Math.max(brawlShakeT, 0.25)
       }
       // 💣 폭탄: 핵버섯구름 — 화염 코어가 치솟아 연기 기둥·버섯머리가 부풀고 충격파 링이 퍼진다
       if ((view.brawlNukeSeq || 0) !== brawlNukeSeen) {

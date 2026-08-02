@@ -4491,6 +4491,37 @@ test('대난투: 막타 킬 = 목숨 +1 (1UP)', () => {
   assert.equal(a.brawlKillN, 3, '킬 카운트 누적')
 })
 
+test('대난투: 궁극기 게이지 — 때려서 충전, 100 미만 불발, 발동 시 소모', () => {
+  const g = brawl8()
+  const [a, b] = g.heroes
+  for (const h of g.heroes) h.atkCd = 99
+  a.x = 0; a.z = 0; b.x = 3; b.z = 0
+  b.atkCd = 99
+  assert.equal(castUlt(g, a.id) && a.brawlUltQ, 0, '게이지 0 — 궁 불발')
+  a.atkCd = 0
+  castAttack(g, a.id, { tk: 'hero', id: b.id })
+  run(g, 0.4)
+  assert.ok(a.brawlUltQ > 0, `가해 충전 (${a.brawlUltQ})`)
+  assert.ok(b.brawlUltQ > 0 && b.brawlUltQ < a.brawlUltQ, '피격은 절반 충전')
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  assert.equal(a.brawlUltQ, 0, '발동 — 게이지 소모')
+  assert.ok(g.brawlUltSeq >= 1, '발동 연출 시퀀스')
+})
+
+test('대난투: 도트 딜은 콤보·경직·넉백을 안 만든다', () => {
+  const g = brawl8()
+  const [a, b] = g.heroes
+  for (const h of g.heroes) h.atkCd = 99
+  a.x = -20; a.z = 0; b.x = 5; b.z = 0
+  b.poisonT = 2; b.poisonDps = 300; b.poisonBy = a.id // 진한 독(틱당 10)
+  run(g, 1.0)
+  assert.ok(b.hp < b.maxHp, '독 피해는 들어간다')
+  assert.equal(b.brawlComboN || 0, 0, '도트는 콤보 없음')
+  assert.equal(b.stunT, 0, '도트는 경직 없음')
+  assert.equal(b.knockT, 0, '도트는 넉백 없음')
+})
+
 test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
   const g = brawl8()
   // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락
