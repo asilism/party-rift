@@ -6810,6 +6810,24 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   let brawlPadsFallT = -1 // 발판 붕괴 진행 시계(-1=아직)
   const brawlUps = [] // 텍스트 팝업(1UP·콤보·SMASH) {spr, t, x, z}
   const brawlBursts = [] // 💥 타격 버스트 {spr, t, dur}
+  const brawlWedges = [] // 피니셔 쐐기 {g, t, dur}
+  function brawlWedge(x, z, ang) {
+    // 공격자→피격자로 찌르는 쐐기 다발 — 스매시의 방향성 슬래시. 본체+양옆 짧은 가시 3발.
+    const g = new THREE.Group()
+    g.position.set(x, 3.0, z)
+    g.rotation.y = -ang // 로컬 +x가 찌르는 방향이 되게
+    for (const [spread, len, rad, col] of [[0, 9, 1.1, 0xfff9d8], [0.3, 5.5, 0.7, 0xffd24a], [-0.3, 5.5, 0.7, 0xffd24a]]) {
+      const cone = new THREE.Mesh(
+        new THREE.ConeGeometry(rad, len, 6),
+        new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false })
+      )
+      cone.geometry.translate(0, len * 0.5, 0) // 꼬리(공격자 쪽)를 피벗으로
+      cone.rotation.z = -Math.PI / 2 + spread // +x로 눕힘 + 부챗살
+      g.add(cone)
+    }
+    scene.add(g)
+    brawlWedges.push({ g, t: 0, dur: 0.28 })
+  }
   function brawlBurst(x, z, size, dur = 0.18) {
     const spr = emojiSprite('💥', size)
     spr.material.depthTest = false
@@ -7014,6 +7032,20 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           lamp.material.color.setHex(0x7dffa0)
           lamp.scale.setScalar(1 + Math.sin(view.time * 5) * 0.2)
         }
+      }
+      // 피니셔 쐐기 갱신 — 찌르며 늘어났다가 사그라든다
+      for (let wi = brawlWedges.length - 1; wi >= 0; wi--) {
+        const w = brawlWedges[wi]
+        w.t += dt
+        if (w.t >= w.dur) {
+          scene.remove(w.g)
+          w.g.traverse((o) => { if (o.isMesh) o.material.dispose() })
+          brawlWedges.splice(wi, 1)
+          continue
+        }
+        const wk = w.t / w.dur
+        w.g.scale.set(1 + wk * 0.9, 1, 1 + wk * 0.4) // 찌르는 방향으로 쭉 늘어난다
+        w.g.traverse((o) => { if (o.isMesh) o.material.opacity = 0.95 * (1 - wk * wk) })
       }
       // 💥 타격 버스트 갱신 — 급팽창 후 소멸(스매시식 슬래시 플래시)
       for (let xi = brawlBursts.length - 1; xi >= 0; xi--) {
@@ -7515,10 +7547,17 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             if (!u.wasSmash) {
               u.wasSmash = true
               brawlShakeT = Math.max(brawlShakeT, 0.3)
-              brawlBurst(h.x, h.z, 9, 0.32) // 대형 작렬 — 스매시의 그 번쩍
-              particles.emit(h.x, u.bodyBaseY + 1.2, h.z, 0xfff6c8, 16, { spread: 16, up: 10, gravity: 6, size: 2.4, hard: true, lifeMin: 0.14, lifeMax: 0.3 })
+              brawlWedge(h.x, h.z, h.brawlSmashA || 0) // 쐐기 작렬 — 공격자에게서 꽂히는 방향성 슬래시
+              particles.emit(h.x, u.bodyBaseY + 1.2, h.z, 0xfff6c8, 12, { spread: 12, up: 8, gravity: 6, size: 2.2, hard: true, lifeMin: 0.12, lifeMax: 0.26 })
             }
-          } else if (u.wasSmash) { u.wasSmash = false; obj.rotation.y = 0 }
+          } else if (u.wasSmash) {
+            u.wasSmash = false
+            obj.rotation.y = 0
+            if (h.hp > 0 && !(h.fallT > 0)) { // 착지 — 먼지구름 폭삭
+              particles.emit(h.x, 0.4, h.z, 0xcbb894, 14, { spread: 7, up: 2.6, gravity: 5, size: 2.0, lifeMin: 0.3, lifeMax: 0.55 })
+              particles.emit(h.x, 0.7, h.z, 0xe8e2d4, 6, { spread: 4, up: 1.6, gravity: 3, size: 1.6, lifeMin: 0.25, lifeMax: 0.45 })
+            }
+          }
           const want = (h.brawlMushT || 0) > 0 ? 3.0 : 1 // 🍄 진짜 거인 — 3배
           const cur = obj.scale.x
           if (Math.abs(cur - want) > 0.01) obj.scale.setScalar(cur + (want - cur) * Math.min(1, dt * 6))
@@ -7752,7 +7791,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             particles.emit(h.x, u.bodyBaseY + 0.6, h.z, 0xffb42a, n, { spread: brawlHit ? 13 : 9, up: brawlHit ? 12 : 9, gravity: 22, size: brawlHit ? 2.1 : 1.5, hard: true, lifeMin: 0.16, lifeMax: 0.34 })
             if (brawlHit) {
               particles.emit(h.x, u.bodyBaseY + 1, h.z, 0xffffff, 3, { spread: 4, up: 3, gravity: 2, size: 1.6, lifeMin: 0.08, lifeMax: 0.16 })
-              brawlBurst(h.x, h.z, 3.6, 0.15) // 💥 콤보 타격 플래시
+              brawlBurst(h.x + (Math.random() - 0.5) * 2.2, h.z + (Math.random() - 0.5) * 2.2, 3.6, 0.15) // 💥 몸 주변 랜덤 위치에 팍!
               u.brawlRedT = 0.16 // 피격자는 빨갛게 번쩍 — 누가 맞는지 한눈에
             }
           }

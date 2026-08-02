@@ -2915,6 +2915,7 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
         applyKnockback(state, victim, attacker.x, attacker.z, kb)
         victim.brawlComboN = 0 // 발사 — 콤보 종료(반격 턴)
         victim.brawlSmashT = 0.55 // 씬: 날아가는 동안 회전·궤적·화면 진동(과장 연출)
+        victim.brawlSmashA = Math.atan2(victim.z - attacker.z, victim.x - attacker.x) // 쐐기 방향(공격자→피격자)
         pushFx(state, 'rocksplash', victim.x, victim.z, 4, null, 0.9)
       } else {
         // 경직 0.55s — 다음 타 도달 간격(평타 ~0.4s+비행)보다 길어 콤보 중 락이 안 끊긴다.
@@ -9021,7 +9022,7 @@ export function makeView(state) {
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
       fallT: r2d(h.fallT),
-      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0), brawlStarT: r2d(h.brawlStarT || 0), brawlBananaN: h.brawlBananaN || 0, brawlComboN: h.brawlComboN || 0, brawlSmashT: r2d(h.brawlSmashT || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
+      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0), brawlStarT: r2d(h.brawlStarT || 0), brawlBananaN: h.brawlBananaN || 0, brawlComboN: h.brawlComboN || 0, brawlSmashT: r2d(h.brawlSmashT || 0), brawlSmashA: r2d(h.brawlSmashA || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
       bladeT: r2d(h.bladeT),
       hookWindT: r2d(h.hookWindT),
       pullT: r2d(h.pullT),
