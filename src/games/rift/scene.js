@@ -6806,6 +6806,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   let brawlBoltSeen = 0 // 번개 낙뢰 시퀀스(중복 방지)
   const brawlBolts = [] // 낙뢰 기둥 {mesh, t}
   let brawlUltSeen = 0 // 궁극기 발동 연출 시퀀스
+  let brawlUltGlow = null // 궁 시전자 스포트라이트 {id, t}
   let brawlNukeSeen = 0 // 폭탄 버섯구름 시퀀스
   const brawlNukes = [] // 버섯구름 {g, stem, cap, fire, ring, t, dur}
   let brawlPadsFallT = -1 // 발판 붕괴 진행 시계(-1=아직)
@@ -7114,6 +7115,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         scene.add(rune)
         brawlBolts.push({ mesh: rune, t: 0.5 })
         brawlShakeT = Math.max(brawlShakeT, 0.25)
+        brawlUltGlow = { id: at.id, t: 0.6 } // 시전자 스포트라이트(골드 발광)
+      }
+      if (brawlUltGlow) {
+        brawlUltGlow.t -= dt
+        if (brawlUltGlow.t <= 0) brawlUltGlow = null
       }
       // 💣 폭탄: 핵버섯구름 — 화염 코어가 치솟아 연기 기둥·버섯머리가 부풀고 충격파 링이 퍼진다
       if ((view.brawlNukeSeq || 0) !== brawlNukeSeen) {
@@ -7551,6 +7557,24 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             brawlPopText('SMASH!', '#ff5a3a', h.x, h.z, 1.25) // 피니셔로 발사됐다
           }
           u.lastComboN = comboN
+          // 🌟 궁 시전자 스포트라이트: 골드로 타오른다(0.6s)
+          if (brawlUltGlow && brawlUltGlow.id === h.id && !(h.brawlStarT > 0)) {
+            u.ultGlowWas = true
+            obj.traverse((o) => {
+              if (o.isMesh && o.material?.emissive) {
+                o.material.emissive.setHex(0xffb62a)
+                o.material.emissiveIntensity = 0.4 + Math.max(0, brawlUltGlow.t) * 0.9
+              }
+            })
+          } else if (u.ultGlowWas) {
+            u.ultGlowWas = false
+            obj.traverse((o) => {
+              if (o.isMesh && o.material?.emissive) {
+                o.material.emissive.setHex(0x000000)
+                o.material.emissiveIntensity = 1
+              }
+            })
+          }
           // 🔴 피격 점멸: 맞는 쪽 몸이 붉게 번쩍(별 무지개가 있으면 그쪽 우선)
           if ((u.brawlRedT || 0) > 0 && !(h.brawlStarT > 0)) {
             u.brawlRedT -= dt
