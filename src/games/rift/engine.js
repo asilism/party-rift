@@ -1214,7 +1214,7 @@ const berserkStrength = (h) =>
 
 // 버프 포함 피해 배율 / 공격력
 const dmgMult = (h) => (h.baronT > 0 ? 1.4 : h.dragonT > 0 ? 1.25 : 1)
-const atkOf = (h) => heroAtk(h) * dmgMult(h)
+const atkOf = (h, st = null) => heroAtk(h) * dmgMult(h) * (st?.mode === 'brawl' ? 0.78 : 1) // 대난투: 잦은 타격만큼 한 대는 가볍게
 // 직업 계열: 마법(AP, 주문력 계수) vs 물리(AD, 공격력 계수).
 //  · 마법 계열(마법사·힐러)은 레벨로 성장하는 기본 주문력 + 아이템 주문력을 쓴다.
 //  · 그 외(전사·궁수·암살자·탱커)는 공격력(heroAtk)을 그대로 주력 스탯으로 쓴다.
@@ -1753,7 +1753,7 @@ export function castAttack(state, id, forceRef = null) {
     const bz = tt && tt.z != null ? tt.z + Math.sin(ba) * 1.2 : h.z + Math.sin(h.dir) * 4.5
     state.brawlTraps.push({ id: state.nextId++, x: bx, z: bz, owner: h.id, t: 0 })
     if (!ref) { // 허공 투척 — 평타 리듬과 스윙 모션만 태우고 끝
-      h.atkCd = CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed)
+      h.atkCd = CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed) * (state.mode === 'brawl' ? 0.55 : 1) // 대난투: 파파파 리듬
       h.atkSeq++
       h.revealT = Math.max(h.revealT, REVEAL_TIME)
       return state
@@ -1762,7 +1762,7 @@ export function castAttack(state, id, forceRef = null) {
   if (!ref) return state
   const tgt = targetEntity(state, ref)
   cancelRecall(h) // 공격하면 집중이 풀린다
-  h.atkCd = CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed)
+  h.atkCd = CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed) * (state.mode === 'brawl' ? 0.55 : 1) // 대난투: 파파파 리듬
   if (h.berserkT > 0) h.atkCd *= 1 - BERSERK_ASPD * berserkStrength(h) // 광폭화: 공격속도 ↑
   if (h.freezeT > 0) h.atkCd *= FREEZE_ATK // 빙결 중엔 평타도 굼뜨다
   if (h.bladeT > 0) h.atkCd *= 1 - BLADE_ASPD // 검성 무형검: 공격속도 ↑
@@ -1775,13 +1775,13 @@ export function castAttack(state, id, forceRef = null) {
     state.projectiles.push({
       id: state.nextId++, kind: 'swordwave', team: h.team, owner: h.id,
       x: h.x, z: h.z, dir: h.dir, vx: Math.cos(h.dir) * SWORDWAVE_SPEED, vz: Math.sin(h.dir) * SWORDWAVE_SPEED,
-      dmg: atkOf(h), travel: 0, hit: new Set(),
+      dmg: atkOf(h, state), travel: 0, hit: new Set(),
     })
     return state
   }
   state.projectiles.push({
     id: state.nextId++, kind: 'bolt', team: h.team, owner: h.id, cls: h.cls, // cls: 렌더러의 직업별 투사체 조형용
-    x: h.x, z: h.z, target: ref, dmg: atkOf(h), speed: BOLT_SPEED,
+    x: h.x, z: h.z, target: ref, dmg: atkOf(h, state), speed: BOLT_SPEED,
   })
   return state
 }
