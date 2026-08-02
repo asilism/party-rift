@@ -2111,6 +2111,8 @@ export function castUlt(state, id) {
     h.ultCd = 1.2 // 연타 방지용 최소 간격
     state.brawlUltSeq = (state.brawlUltSeq || 0) + 1 // 씬 발동 연출(마법진·빛기둥·섬광)
     state.brawlUltAt = { x: h.x, z: h.z, id: h.id }
+    state.brawlUltSlowT = 0.35 // 슬로모
+    pushFeed(state, 'obj', `🌟 ${emojiOf(h.zodiacId)} ${h.name} — 힘이 폭발한다!`)
   }
   h.ultCd = state.mode === 'brawl' ? h.ultCd : CLASSES[h.cls].ult.cd * (1 - cdrOf(h)) * augOf(h).ultCdMul // 증강: 궁 쿨 배율
   if (h.resetUltCd) { h.ultCd = 0; h.resetUltCd = false } // 그림자처형 처치 → 처형 쿨 초기화
@@ -3285,6 +3287,11 @@ function giveXp(state, h, amount) {
 export function step(state, dt) {
   // 증강 뽑기 대기 중이면 완전 정지(시간·전투 모두) — 사람이 카드를 고를 때까지. 봇은 즉시 골라 안 걸린다.
   if (state.status === 'playing' && state.augPending) return state
+  if (state.brawlUltSlowT > 0) {
+    // 🌟 궁극기 슬로모 — 발동 직후 0.35초(실시간)만 시뮬이 30%로 흐른다(전장이 숨을 죽인다)
+    state.brawlUltSlowT = Math.max(0, state.brawlUltSlowT - dt)
+    dt *= 0.3
+  }
   state.time += dt
   if (state.status === 'countdown') {
     state.countdown = Math.max(0, COUNTDOWN_TIME - state.time)
