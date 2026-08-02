@@ -4435,6 +4435,12 @@ test('대난투: 콤보 — 1~3타 경직(제자리), 4타 피니셔로 발사',
     run(g, 0.4)
   }
   assert.equal(b.brawlComboN, 3, '콤보 3 누적')
+  // 콤보에 물린 동안엔 반격 불가 — 경직이 평타 간격보다 길어 락이 이어진다
+  assert.ok(b.stunT > 0, '경직 유지 중')
+  const seq = b.atkSeq
+  b.atkCd = 0
+  castAttack(g, b.id, { tk: 'hero', id: a.id })
+  assert.equal(b.atkSeq, seq, '경직 중 반격 평타 불발')
   assert.ok(Math.abs(b.x - 3) < 1.5, `경직 중 미세 밀림만 (x=${b.x.toFixed(1)})`)
   b.x = 3; b.z = 0; b.knockT = 0
   // 4타: 피니셔 — 크게 날아가고 콤보 리셋
