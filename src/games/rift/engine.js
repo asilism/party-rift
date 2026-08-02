@@ -2111,7 +2111,7 @@ export function castUlt(state, id) {
     h.brawlUltQ = 0
     h.ultCd = 1.2 // 연타 방지용 최소 간격
     state.brawlUltSeq = (state.brawlUltSeq || 0) + 1 // 씬 발동 연출(마법진·빛기둥·섬광)
-    state.brawlUltAt = { x: h.x, z: h.z, id: h.id }
+    state.brawlUltAt = { x: h.x, z: h.z, id: h.id, cls: h.cls, dir: h.dir || 0 }
     pushFeed(state, 'obj', `🌟 ${emojiOf(h.zodiacId)} ${h.name} — 힘이 폭발한다!`)
     // ── ★ 대난투 전용 궁 과장 — 본편 킷은 그대로, 그 위에 드라마를 얹는다 ──
     if (h.cls === 'mage') {
@@ -2164,6 +2164,107 @@ export function castUlt(state, id) {
         }
       }
       pushFx(state, 'rocksplash', h.x + fx2 * 6, h.z + fz2 * 6, 8, h.team, 1.2)
+    } else if (h.cls === 'healer') {
+      // 🌸 전장 축복: 완전 회복 + 주변 전원 밀쳐냄 — 꽃밭 연출은 씬이 그린다
+      h.hp = h.maxHp
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
+        const ed = Math.hypot(h.x - e.x, h.z - e.z)
+        if (ed > 11 || ed < 0.5) continue
+        applyKnockback(state, e, h.x, h.z, 7)
+      }
+      pushFx(state, 'heal', h.x, h.z, 6, h.team, 1.4)
+    } else if (h.cls === 'cryomancer') {
+      // ❄️ 대빙원: 전방 부채꼴 전원 빙결 + 빙판(미끄럼 트랩) 살포
+      const cf = Math.cos(h.dir)
+      const cz = Math.sin(h.dir)
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) continue
+        const dx = e.x - h.x
+        const dz = e.z - h.z
+        if (Math.hypot(dx, dz) > 15 || dx * cf + dz * cz < 0) continue
+        e.freezeT = Math.max(e.freezeT, 2.5)
+      }
+      for (let k = 0; k < 6; k++) { // 빙판 조각 — 밟으면 주르륵(바나나 문법 재사용)
+        const ba = h.dir + (state.rng() - 0.5) * 1.6
+        const br = 4 + state.rng() * 9
+        state.brawlTraps.push({ id: state.nextId++, x: h.x + Math.cos(ba) * br, z: h.z + Math.sin(ba) * br, owner: h.id, t: 0 })
+      }
+    } else if (h.cls === 'guardian') {
+      h.brawlSanctT = 5 // 🛡️ 성역: 5초 무적 돔 — 접근하는 적을 계속 밀어낸다(stepBrawl)
+    } else if (h.cls === 'beastmaster') {
+      // 🐻 곰 무리: 셋이 저마다 다른 각도로 뛰쳐나간다(소환물 시스템 재사용)
+      for (let k = 0; k < 3; k++) {
+        const ba = h.dir + (k - 1) * 0.7
+        spawnSummon(state, h, 'bear', h.x + Math.cos(ba) * 2.5, h.z + Math.sin(ba) * 2.5)
+      }
+    } else if (h.cls === 'snarer') {
+      // 🌿 넝쿨밭: 근방 전원 속박 후 중앙(내 쪽)으로 끌어온다
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) continue
+        const ed = Math.hypot(h.x - e.x, h.z - e.z)
+        if (ed > 14 || ed < 2) continue
+        e.rootT = Math.max(e.rootT || 0, 1.5)
+        applyKnockback(state, e, e.x * 2 - h.x, e.z * 2 - h.z, Math.min(ed - 2, 6))
+      }
+    } else if (h.cls === 'illusionist') {
+      // 🎭 환영 대난무: 전투형 분신을 왕창 — 누가 진짜냐
+      for (let k = 0; k < 5; k++) {
+        const ba = (k / 5) * Math.PI * 2 + state.rng()
+        spawnClone(state, h, ba, true, 2.5)
+      }
+    } else if (h.cls === 'terramancer') {
+      // 🪨 대륙 분열: 조준 직선의 대균열 — 양쪽으로 갈라 밀쳐낸다
+      const tf = Math.cos(h.dir)
+      const tz = Math.sin(h.dir)
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
+        const dx = e.x - h.x
+        const dz = e.z - h.z
+        const along = dx * tf + dz * tz
+        if (along < 0 || along > 34) continue
+        const side = dx * tz - dz * tf // 부호 = 균열의 어느 쪽인가
+        if (Math.abs(side) > 6) continue
+        damageHero(state, e, 260, h, false, '대륙 분열')
+        if (e.hp > 0) { // 균열 수직 방향으로 밀쳐낸다
+          const px = h.x + tf * along
+          const pz = h.z + tz * along
+          applyKnockback(state, e, px, pz, 8)
+        }
+      }
+      pushFx(state, 'rocksplash', h.x + tf * 10, h.z + tz * 10, 7, h.team, 1.2)
+      pushFx(state, 'rocksplash', h.x + tf * 24, h.z + tz * 24, 7, h.team, 1.2)
+    } else if (h.cls === 'assassin') {
+      // 🗡️ 그림자 연무: 가까운 최대 3명을 순간 연쇄 베기 — 마지막 표적 뒤에서 나타난다
+      const marks = state.heroes
+        .filter((e) => e.team !== h.team && e.respawnT <= 0 && e.hp > 0 && !(e.brawlGuardT > 0) && !(e.brawlStarT > 0) && Math.hypot(h.x - e.x, h.z - e.z) < 16)
+        .sort((e1, e2) => Math.hypot(h.x - e1.x, h.z - e1.z) - Math.hypot(h.x - e2.x, h.z - e2.z))
+        .slice(0, 3)
+      for (const e of marks) {
+        h.x = e.x + 1.2
+        h.z = e.z
+        damageHero(state, e, 330, h, false, '그림자 연무')
+        if (e.hp > 0) e.stunT = Math.max(e.stunT, 0.6)
+        pushFx(state, 'shadowexec', e.x, e.z, 2.6, h.team, 0.9)
+      }
+      if (marks.length) h.revealT = 0
+    } else if (h.cls === 'catcher') {
+      // ⛓️ 사슬 회오리: 전원 끌어모아 1.2초 뒤 사방 대투척(stepBrawl가 집행)
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
+        const ed = Math.hypot(h.x - e.x, h.z - e.z)
+        if (ed > 13 || ed < 2) continue
+        applyKnockback(state, e, e.x * 2 - h.x, e.z * 2 - h.z, Math.min(ed - 1.5, 9))
+        e.stunT = Math.max(e.stunT, 1.3)
+      }
+      h.brawlChainT = 1.2
+    } else if (h.cls === 'chronomancer') {
+      // ⏳ 시간 정지: 나 빼고 전원 2.5초 결빙급 슬로우
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlStarT || 0) > 0) continue
+        e.freezeT = Math.max(e.freezeT, 2.5)
+        pushFx(state, 'spark', e.x, e.z, 2, null, 0.6)
+      }
     } else if (h.cls === 'archer') {
       // 🌈 극태 레이저: 조준 직선의 전원을 꿰뚫고, 반동으로 나는 뒤로 밀린다(웃김 포인트)
       const fx3 = Math.cos(h.dir)
@@ -3868,6 +3969,32 @@ function stepBrawl(state, dt) {
     if (h.brawlStarHitCd > 0) h.brawlStarHitCd = Math.max(0, h.brawlStarHitCd - dt)
     if (h.brawlSmashT > 0) h.brawlSmashT = Math.max(0, h.brawlSmashT - dt)
     if (h.brawlHexT > 0) h.brawlHexT = Math.max(0, h.brawlHexT - dt)
+    if (h.brawlSanctT > 0) { // 🛡️ 성역: 무적 + 접근 적 지속 밀어냄
+      h.brawlSanctT = Math.max(0, h.brawlSanctT - dt)
+      h.brawlGuardT = Math.max(h.brawlGuardT || 0, Math.min(h.brawlSanctT, 0.3))
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
+        const ed = Math.hypot(h.x - e.x, h.z - e.z)
+        if (ed < 6 && ed > 0.3) applyKnockback(state, e, h.x, h.z, 2.2)
+      }
+    }
+    if (h.brawlChainT > 0) { // ⛓️ 사슬 회오리 집행: 모아둔 전원을 사방으로 대투척
+      h.brawlChainT = Math.max(0, h.brawlChainT - dt)
+      if (h.brawlChainT === 0 && h.hp > 0 && h.respawnT <= 0) {
+        for (const e of state.heroes) {
+          if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
+          const ed = Math.hypot(h.x - e.x, h.z - e.z)
+          if (ed > 8) continue
+          damageHero(state, e, 240, h, false, '사슬 회오리')
+          if (e.hp > 0) {
+            applyKnockback(state, e, h.x, h.z, 12)
+            e.brawlSmashT = 0.55
+            e.brawlSmashA = Math.atan2(e.z - h.z, e.x - h.x)
+          }
+        }
+        pushFx(state, 'rocksplash', h.x, h.z, 8, h.team, 1.2)
+      }
+    }
     // 🌀 전사 회전베기(대난투): 도는 동안 주변을 빨아들이고, 멈추는 순간 전원 발사
     if (h.cls === 'warrior' && h.hp > 0 && h.respawnT <= 0) {
       if (h.whirlT > 0) {
@@ -5134,11 +5261,6 @@ function stepZones(state, dt) {
           if (d2v > r2 || d2v < rIn2) continue // 도넛 안쪽(안전지대)은 무사하다
           damageHero(state, e, z.dmg, owner.id ? owner : null, false, z.tag)
           if (z.brawlBlast && e.hp > 0) applyKnockback(state, e, z.x, z.z, 5.5) // ☄️ 광선: 밖으로 튕겨낸다
-          if (z.brawlNuke && !z.brawlNuked) {
-            z.brawlNuked = true // 🍄 거대 운석 — 명중 지점에 버섯구름
-            state.brawlNukeSeq = (state.brawlNukeSeq || 0) + 1
-            state.brawlNukeAt = { x: z.x, z: z.z }
-          }
           if (z.stun) e.stunT = Math.max(e.stunT, z.stun)
           if (z.freeze) e.freezeT = Math.max(e.freezeT, z.freeze)
           if (z.fear) applyFear(state, e, z.fear)
@@ -5207,6 +5329,10 @@ function stepZones(state, dt) {
     if (z.t < z.delay) continue
     const owner = state.heroes.find((h) => h.id === z.owner) || { team: z.team }
     if (z.kind === 'meteor') {
+      if (z.brawlNuke) { // 🍄 거대 운석 — 명중 없어도 폭심에 버섯구름은 무조건 솟는다
+        state.brawlNukeSeq = (state.brawlNukeSeq || 0) + 1
+        state.brawlNukeAt = { x: z.x, z: z.z }
+      }
       aoeDamage(state, owner, z.x, z.z, z.r, z.dmg, 0)
       pushFx(state, 'meteorhit', z.x, z.z, z.r, z.team)
     } else if (z.kind === 'fissure') {
