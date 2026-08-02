@@ -6265,7 +6265,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     { pit: DRAGON_PIT, pad: 0xd4a878, rock: 0x99856e, crystal: 0xff9d4d, boneSpikes: 0 },
     { pit: BARON_PIT, pad: 0xaaa2bd, rock: 0x6d6a82, crystal: 0xc07dff, boneSpikes: 3 },
   ]
-  for (const theme of PIT_THEMES) {
+  for (const theme of map.mode === 'brawl' ? [] : PIT_THEMES) { // 대난투: 둥지 없음 — 링 밖은 허공뿐
     const pit = theme.pit
     const pad = new THREE.Mesh(
       new THREE.CircleGeometry(8, 32),
@@ -8727,8 +8727,13 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       want.set(me.x, 0, me.z)
     } else {
       want.set(0, 0, 0)
-      offY = 95
-      offZ = 60
+      if (view.mode === 'brawl') { // 대난투 관전: 링 전체가 꽉 차는 높이 — 95는 MOBA 전맵용이라 너무 멀다
+        offY = 58
+        offZ = 38
+      } else {
+        offY = 95
+        offZ = 60
+      }
     }
     if (!camInit) {
       camTarget.copy(want)
