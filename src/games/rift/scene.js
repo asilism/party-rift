@@ -9466,6 +9466,10 @@ function buildChampionSet(scene, duo, podium = null) {
     const u = g.userData
     u.name.visible = false
     u.bar.visible = false
+    if (u.face) { // 무대 카메라는 낮은 정면 앵글 — 빌보드 얼굴이 몸통에 묻히지 않게 항상 위에
+      u.face.material.depthTest = false
+      u.face.renderOrder = 6
+    }
     if (m2.cheer) {
       u.weapon.userData.pose(0.5)
       u.weapon.parent.parent.rotation.z = 0.6 // 손목 들어올림 — 만세!
