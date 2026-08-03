@@ -8253,9 +8253,6 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             })
           }
           // 스폰 보호: 전통 아케이드식 투명 깜빡 — 몸이 깜빡거리는 동안은 못 건드린다
-          if ((h.brawlGuardT || 0) > 0 && !(h.brawlStarT > 0) && !(h.brawlFlyT > 0)) {
-            obj.visible = Math.floor(view.time * 5) % 2 === 0 // 초당 2.5회 — 빠르면(9) 눈에 안 잡힌다
-          }
           // 🌀 대포 비행: 포물선으로 붕 떠서 빙글빙글 — 착지 직전 내려온다
           if ((h.brawlFlyT || 0) > 0 && (h.brawlFlyDur || 0) > 0) {
             const fk = 1 - h.brawlFlyT / h.brawlFlyDur
@@ -8274,6 +8271,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           }
         }
         obj.visible = isHeroVisible(view, h, myTeam)
+        if (obj.visible && (h.brawlGuardT || 0) > 0 && !(h.brawlStarT > 0) && !(h.brawlFlyT > 0)) {
+          // 스폰 무적 깜빡: 시야 판정 뒤에 있어야 한다 — 앞에 두면 아래 대입이 매 프레임 덮어써
+          // 깜빡임이 통째로 무효가 된다(2026-08-03 실사고)
+          obj.visible = Math.floor(view.time * 5) % 2 === 0
+        }
         if (!obj.visible) return
         // 돌풍에 띄워지면(airT) 몸이 공중으로 떠오른다 — 띄운 동안 빙글빙글 + 위로 솟았다 내려온다
         const air = h.airT > 0 ? Math.sin(Math.min(1, (1.5 - h.airT) / 1.5 + 0.0) * Math.PI) : 0
