@@ -2183,8 +2183,9 @@ export function castUlt(state, id) {
         })
       }
     } else if (h.cls === 'healer') {
-      // 🌸 전장 축복: 완전 회복 + 주변 전원 밀쳐냄 — 꽃밭 연출은 씬이 그린다
+      // 🌸 전장 축복: 완전 회복 + 주변 전원 밀쳐냄 + 🕊️ 5초 천사의 가호(1회 부활 — damageHero가 집행)
       h.hp = h.maxHp
+      h.brawlAngelT = 5
       for (const e of state.heroes) {
         if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
         const ed = Math.hypot(h.x - e.x, h.z - e.z)
@@ -3162,6 +3163,24 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
     victim.revealT = Math.max(victim.revealT, 0.8) // 맞으면 잠깐 드러난다
   }
   if (victim.hp > 0) return
+  if (state.mode === 'brawl' && (victim.brawlAngelT || 0) > 0) {
+    // 🕊️ 천사의 가호(힐러 궁): 5초 안에 쓰러지면 그 자리에서 한 번 되살아난다 — 목숨을 아끼는 힐러
+    victim.brawlAngelT = 0
+    victim.hp = Math.round(victim.maxHp * 0.5)
+    victim.fallT = 0
+    victim.stunT = 0
+    victim.knockT = 0
+    const vd = Math.hypot(victim.x, victim.z)
+    const safeR = Math.max(6, (state.brawlR || 40) - 4)
+    if (vd > safeR) { // 장외로 떨어지던 중이었어도 빛이 링 안으로 되돌린다
+      victim.x = (victim.x / vd) * safeR
+      victim.z = (victim.z / vd) * safeR
+    }
+    victim.brawlGuardT = Math.max(victim.brawlGuardT || 0, 1.2)
+    pushFx(state, 'heal', victim.x, victim.z, 5, victim.team, 1.2)
+    pushFeed(state, 'obj', `🕊️ ${emojiOf(victim.zodiacId)} ${victim.name} — 천사의 가호로 부활!`)
+    return
+  }
   // 사망!
   victim.hp = 0
   victim.deadSince = state.time // 부활 없는 적(그림자/보스)은 시체를 잠깐 뒤 시뮬에서 제거(누적 렉 방지)
@@ -4028,6 +4047,7 @@ function stepBrawl(state, dt) {
     if (h.brawlTitanT > 0) h.brawlTitanT = Math.max(0, h.brawlTitanT - dt) // 🏛️ 투기장의 거인
     if (h.brawlQuakeCd > 0) h.brawlQuakeCd = Math.max(0, h.brawlQuakeCd - dt) // 🪨 균열 다단히트 면역
     if (h.brawlFrogT > 0) h.brawlFrogT = Math.max(0, h.brawlFrogT - dt) // 🐸 개구리 변이
+    if (h.brawlAngelT > 0) h.brawlAngelT = Math.max(0, h.brawlAngelT - dt) // 🕊️ 천사의 가호
     if (h.brawlCage) { // 🪨 감옥 발사 대기 — 시간이 되면 기둥들이 일제히 출발
       h.brawlCage.t -= dt
       if (h.brawlCage.t <= 0) {
@@ -9508,7 +9528,7 @@ export function makeView(state) {
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
       fallT: r2d(h.fallT),
-      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0), brawlStarT: r2d(h.brawlStarT || 0), brawlBananaN: h.brawlBananaN || 0, brawlComboN: h.brawlComboN || 0, brawlSmashT: r2d(h.brawlSmashT || 0), brawlSmashA: r2d(h.brawlSmashA || 0), brawlUltQ: Math.round(h.brawlUltQ || 0), brawlKillCredit: (h.brawlKillN || 0) % 3, brawlLaunchT: r2d(h.brawlLaunchT || 0), brawlTitanT: r2d(h.brawlTitanT || 0), brawlFrogT: r2d(h.brawlFrogT || 0), brawlSanctT: r2d(h.brawlSanctT || 0), brawlSanctX: r2d(h.brawlSanctX || 0), brawlSanctZ: r2d(h.brawlSanctZ || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
+      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0), brawlStarT: r2d(h.brawlStarT || 0), brawlBananaN: h.brawlBananaN || 0, brawlComboN: h.brawlComboN || 0, brawlSmashT: r2d(h.brawlSmashT || 0), brawlSmashA: r2d(h.brawlSmashA || 0), brawlUltQ: Math.round(h.brawlUltQ || 0), brawlKillCredit: (h.brawlKillN || 0) % 3, brawlLaunchT: r2d(h.brawlLaunchT || 0), brawlTitanT: r2d(h.brawlTitanT || 0), brawlFrogT: r2d(h.brawlFrogT || 0), brawlAngelT: r2d(h.brawlAngelT || 0), brawlSanctT: r2d(h.brawlSanctT || 0), brawlSanctX: r2d(h.brawlSanctX || 0), brawlSanctZ: r2d(h.brawlSanctZ || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
       bladeT: r2d(h.bladeT),
       hookWindT: r2d(h.hookWindT),
       pullT: r2d(h.pullT),

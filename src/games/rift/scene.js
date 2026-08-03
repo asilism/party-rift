@@ -7922,6 +7922,20 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           const want = (h.brawlMushT || 0) > 0 ? 3.0 : (h.brawlTitanT || 0) > 0 ? 2.0 : (h.brawlFrogT || 0) > 0 ? 0.45 : 1 // 🍄 3배·🏛️ 2배·🐸 0.45배
           const cur = obj.scale.x
           if (Math.abs(cur - want) > 0.01) obj.scale.setScalar(cur + (want - cur) * Math.min(1, dt * 6))
+          // 🕊️ 천사의 가호 — 머리 위 비둘기가 지켜본다(5초 안에 쓰러지면 부활)
+          if ((h.brawlAngelT || 0) > 0) {
+            if (!u.angelMark) {
+              u.angelMark = emojiSprite('🕊️', 2.0)
+              u.angelMark.material.depthTest = false
+              u.angelMark.renderOrder = 5
+              obj.add(u.angelMark)
+            }
+            u.angelMark.visible = true
+            const ainv = 1 / Math.max(0.3, obj.scale.x)
+            u.angelMark.scale.set(2.0 * ainv, 2.0 * ainv, 1)
+            u.angelMark.position.set(0, (8 + Math.sin(view.time * 3) * 0.4) * ainv, 0)
+            u.angelMark.material.opacity = h.brawlAngelT > 1.2 ? 0.95 : 0.4 + Math.abs(Math.sin(view.time * 8)) * 0.5 // 끝나기 직전 깜빡
+          } else if (u.angelMark) u.angelMark.visible = false
           // 🐸 개구리 변이 표식 — 머리 위 개구리(몸은 0.45배로 쪼그라든다)
           if ((h.brawlFrogT || 0) > 0) {
             if (!u.frogMark) {
