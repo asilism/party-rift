@@ -3884,3 +3884,7 @@ body {
   animation: shadowDarkOut 1.2s ease-in forwards;
 }
 @keyframes shadowDarkOut { 0% { opacity: 1; } 55% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 대난투 1UP 크레딧 — 아이템창의 초록 하트(3개 모이면 목숨 +1) */
+.rift__me-item--life { filter: drop-shadow(0 0 4px rgba(80, 255, 120, 0.8)); animation: lifeCreditPop 0.4s ease-out; }
+@keyframes lifeCreditPop { 0% { transform: scale(2); } 100% { transform: scale(1); } }
