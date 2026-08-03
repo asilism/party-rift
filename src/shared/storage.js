@@ -613,6 +613,29 @@ export function loadBossRecords() {
 }
 
 // 토벌 1건 기록하고 { isFirst(이 보스·티어 첫 토벌), isBest(최단 갱신), best }를 돌려준다
+const BRAWL_REC_KEY = 'bgp.rift.brawlrec.v1'
+export function loadBrawlRecords() {
+  try {
+    return { games: 0, wins: 0, top3: 0, best: null, ...JSON.parse(localStorage.getItem(BRAWL_REC_KEY) || '{}') }
+  } catch {
+    return { games: 0, wins: 0, top3: 0, best: null }
+  }
+}
+// 대난투 전적 누적 — 판수/우승/포디움(3위 이내)/최고 순위
+export function recordBrawlRun(place) {
+  const r = loadBrawlRecords()
+  r.games += 1
+  if (place === 1) r.wins += 1
+  if (place <= 3) r.top3 += 1
+  if (r.best == null || place < r.best) r.best = place
+  try {
+    localStorage.setItem(BRAWL_REC_KEY, JSON.stringify(r))
+  } catch {
+    /* 무시 */
+  }
+  return r
+}
+
 export function recordBossClear(bossCls, timeSec, tier = 'normal') {
   const all = loadBossRecords()
   const byTier = all[bossCls] || {}
