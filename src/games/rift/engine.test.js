@@ -4617,6 +4617,26 @@ test('대난투 궁: 주술사 대변이 — 개구리는 때리지도 궁도 �
   assert.equal(a.hp, aHp, '개구리는 평타 불가')
 })
 
+test('대난투 궁: 힐러 천사의 가호 — 5초 안에 죽으면 그 자리 부활(1회)', () => {
+  const g = brawl8('healer')
+  const a = g.heroes[0]
+  const e = g.heroes[1]
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  assert.ok(a.brawlAngelT >= 4.9, '가호 부여')
+  const lives0 = a.brawlLives
+  a.x = 120; a.z = 0 // 장외 낙사 유도 — 확정사(1e9)가 가호에 가로채인다
+  run(g, 2.0)
+  assert.ok(a.hp >= a.maxHp * 0.45, `부활 체력 50% (${a.hp}/${a.maxHp})`)
+  assert.equal(a.brawlLives, lives0, '목숨 소모 없음')
+  assert.ok(Math.hypot(a.x, a.z) <= g.brawlR, '빛이 링 안으로 되돌림')
+  assert.equal(a.brawlAngelT, 0, '가호 소진')
+  a.x = 120; a.z = 0
+  run(g, 2.5)
+  assert.ok(a.respawnT > 0 || a.brawlLives < lives0, '두 번째 죽음은 진짜')
+  void e
+})
+
 test('대난투 궁: 수호기사 성역 — 돔 회복(5초 50%) + 돔 안 적 축출', () => {
   const g = brawl8('guardian')
   const a = g.heroes[0]
