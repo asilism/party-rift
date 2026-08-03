@@ -2,6 +2,38 @@
 
 각 언어 500자 제한. 업로드하는 트랙의 "버전 세부정보 > 출시 노트"에 붙여넣기.
 
+## v1.3 난투전 업데이트 (versionCode 146) — 2026-08-03
+
+v52~v146 누적분. 신모드 난투전이 주인공 — 보스전 개편·세트 전리품·상점 개편 포함.
+
+### ko-KR
+
+```
+💥 신규 모드 "난투전" — 8인 자유 결투!
+• 밀치고 떨어뜨려라! 목숨 10개, 링 밖은 낭떠러지 — 콤보 4타째 피니셔로 날려버리세요
+• 뿅망치·버섯·별·폭탄·바나나… 하늘에서 떨어지는 아이템과 낙뢰·대포까지
+• 궁극기 게이지: 때릴수록 차오르는 필살기 — 직업 20종 전부 전용 대난투 궁극기!
+• 3킬마다 목숨 +1, 경기 후엔 올림픽 시상식과 순위 보상
+• 난투전 전용 업적·전적·챔피언 세트(월계관/벨트/황금검)
+👹 보스전 4종 전면 개편 — 보스마다 3국면 기믹·난이도 티어
+🏆 세트 전리품: 무한방어 수문장·콜로세움 검투사 세트 신설, 풀세트 착용 시 후광!
+🛍️ 주간 상점·이펙트 꾸미기 탭 추가, 승리 해금 폐지(코인으로 자유 해금)
+그 외 성능 최적화와 수십 건의 개선·수정
+```
+
+### en-US
+
+```
+💥 NEW MODE: Brawl — 8-player free-for-all!
+• Knock foes off the cliffs! 10 lives, combo finishers, sky-drop items, lightning & cannons
+• Ultimate Gauge — all 20 classes get exclusive Brawl ultimates!
+• +1 life per 3 kills, podium ceremony, Brawl achievements & Champion trophy set
+👹 All 4 bosses reworked — 3-phase mechanics & difficulty tiers
+🏆 New Warden & Gladiator trophy sets — full-set halo aura!
+🛍️ Weekly shop & effects tab; win-gates removed
+Plus performance boosts and dozens of fixes
+```
+
 ## v1.2 무한 방어 심화 (versionCode 51) — 2026-07-23
 
 v46~v51 누적분. 무한 방어의 성장 시스템 두 종(강화·증강)이 핵심.
