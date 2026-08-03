@@ -8254,7 +8254,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           }
           // 스폰 보호: 전통 아케이드식 투명 깜빡 — 몸이 깜빡거리는 동안은 못 건드린다
           if ((h.brawlGuardT || 0) > 0 && !(h.brawlStarT > 0) && !(h.brawlFlyT > 0)) {
-            obj.visible = Math.floor(view.time * 9) % 2 === 0
+            obj.visible = Math.floor(view.time * 5) % 2 === 0 // 초당 2.5회 — 빠르면(9) 눈에 안 잡힌다
           }
           // 🌀 대포 비행: 포물선으로 붕 떠서 빙글빙글 — 착지 직전 내려온다
           if ((h.brawlFlyT || 0) > 0 && (h.brawlFlyDur || 0) > 0) {
