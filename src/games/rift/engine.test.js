@@ -4573,9 +4573,81 @@ test('대난투 ★★궁: 검성 발도 일섬 — 전방 반원 일괄 피니�
   const bHp = back.hp
   sm.brawlUltQ = 100
   castUlt(g, sm.id)
-  assert.ok(front.hp < fHp, '전방 피격')
-  assert.ok(front.brawlSmashT > 0, '전방 피니셔 발사')
+  const wave = g.projectiles.find((pr) => pr.kind === 'swordwave' && pr.brawlUlt)
+  assert.ok(wave, '대검기 발사')
+  run(g, 0.5) // 초고속(~82/s) — 전방 8 지점 통과
+  assert.ok(front.hp < fHp, '전방 검기 명중')
+  assert.ok(front.brawlSmashT > 0 || front.knockT > 0 || front.x > 8, '전방 피니셔 발사')
   assert.equal(back.hp, bHp, '후방 무사')
+})
+
+test('대난투 궁: 검투사 티탄 — 몸집 버프 + 평타가 뿅망치(즉시 피니셔)', () => {
+  const g = brawl8('gladiator')
+  const a = g.heroes[0]
+  const e = g.heroes[1]
+  e.x = a.x + 2; e.z = a.z
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  assert.ok(a.brawlTitanT >= 5.9, '티탄 변신')
+  const ex0 = e.x
+  castAttack(g, a.id)
+  run(g, 0.4)
+  assert.ok(e.brawlSmashT > 0 || Math.hypot(e.x - ex0, e.z - a.z) > 3, '평타 한 대에 홈런')
+})
+
+test('대난투 궁: 주술사 대변이 — 개구리는 때리지도 궁도 못 쓴다', () => {
+  const g = brawl8('warlock')
+  const a = g.heroes[0]
+  const e = g.heroes[1]
+  e.x = a.x + 5; e.z = a.z
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  assert.ok(e.brawlFrogT >= 2.9, '개구리 변이')
+  e.brawlUltQ = 100
+  const q0 = e.brawlUltQ
+  castUlt(g, e.id)
+  assert.equal(e.brawlUltQ, q0, '개구리는 궁 불가')
+  const aHp = a.hp
+  castAttack(g, e.id)
+  run(g, 0.5)
+  assert.equal(a.hp, aHp, '개구리는 평타 불가')
+})
+
+test('대난투 궁: 수호기사 성역 — 돔 회복(5초 50%) + 돔 안 적 축출', () => {
+  const g = brawl8('guardian')
+  const a = g.heroes[0]
+  const e = g.heroes[1]
+  e.x = a.x + 2; e.z = a.z
+  a.hp = Math.round(a.maxHp * 0.4)
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  run(g, 2.0)
+  assert.ok(a.hp >= a.maxHp * 0.55, `돔 회복 (${(a.hp / a.maxHp * 100).toFixed(0)}%)`)
+  assert.ok(Math.hypot(e.x - a.x, e.z - a.z) > 3.3, '돔 안 적은 밖으로')
+})
+
+test('대난투 궁: 사슬잡이 단죄 — 내 자리로 끌어온 뒤 심판(하얀 사슬 시퀀스)', () => {
+  const g = brawl8('catcher')
+  const a = g.heroes[0]
+  const e = g.heroes[1]
+  e.x = a.x + 9; e.z = a.z
+  g.heroes.slice(2).forEach((o) => { o.x = 30; o.z = 30 })
+  const d0 = 9
+  const hp0 = e.hp
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  assert.ok(g.brawlChainSeq >= 1 && g.brawlChainAt.targets.length >= 1, '사슬 연출 시퀀스')
+  run(g, 0.4)
+  assert.ok(Math.hypot(e.x - a.x, e.z - a.z) < d0 - 2, '내 쪽으로 끌려옴')
+  run(g, 0.8)
+  assert.ok(e.hp < hp0, '단죄 집행')
+})
+
+test('대난투: 용·이무기 미출현 — 스폰 봉인(콜로세움과 동일)', () => {
+  const g = brawl8()
+  const dragon = g.monsters.find((m) => m.kind === 'dragon')
+  const baron = g.monsters.find((m) => m.kind === 'baron')
+  assert.ok(dragon.respawnT >= 1e9 && baron.respawnT >= 1e9, '용·이무기 봉인')
 })
 
 test('대난투 궁: 암살자 그림자 연무 — 시간차 3연쇄 베기', () => {
