@@ -4614,6 +4614,16 @@ test('대난투 궁: 궁수 극태 레이저 — 정신집중 후 발사·강넉
   assert.ok(a.x < ax0, '반동으로 뒤로 밀림')
 })
 
+test('대난투 궁: 마법사 핵폭탄 3연발 — 운석 전부 핵·버섯구름 3회', () => {
+  const g = brawl8('mage')
+  const a = g.heroes[0]
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  assert.equal(g.zones.filter((z) => z.brawlNuke).length, 3, '핵 3발')
+  run(g, 2.4)
+  assert.ok((g.brawlNukeSeq || 0) >= 3, `버섯구름 3회 (${g.brawlNukeSeq})`)
+})
+
 test('대난투 궁: 시간여행자 시간 정지 — 나 빼고 전원 결빙 슬로우', () => {
   const g = brawl8('chronomancer')
   const a = g.heroes[0]

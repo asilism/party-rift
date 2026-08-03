@@ -2116,10 +2116,16 @@ export function castUlt(state, id) {
     pushFeed(state, 'obj', `🌟 ${emojiOf(h.zodiacId)} ${h.name} — 힘이 폭발한다!`)
     // ── ★ 대난투 전용 궁 과장 — 본편 킷은 그대로, 그 위에 드라마를 얹는다 ──
     if (h.cls === 'mage') {
-      // ☄️ 거대 운석: 조준 방향 8 지점에 1.2초 뒤 대낙하 — 명중 시 버섯구름(존 폭발이 트리거)
-      const mx = h.x + Math.cos(h.dir) * 8
-      const mz = h.z + Math.sin(h.dir) * 8
-      state.zones.push({ id: state.nextId++, kind: 'meteor', team: h.team, owner: h.id, x: mx, z: mz, r: 7, t: 0, delay: 1.2, dmg: 520, tag: '거대 운석', brawlBlast: true, brawlNuke: true })
+      // ☢️ 핵폭탄 3연발: 본래 운석 셋이 전부 핵급이 된다 — 발마다 버섯구름·백섬광·폭풍 넉백
+      for (const z of state.zones) {
+        if (z.kind === 'meteor' && z.owner === h.id && z.t === 0) {
+          z.r = Math.max(z.r, 6.5)
+          z.dmg = Math.max(z.dmg, 420)
+          z.tag = '핵폭탄'
+          z.brawlBlast = true
+          z.brawlNuke = true
+        }
+      }
     } else if (h.cls === 'engineer') {
       // 🛰️ 궤도 폭격: 주변 무작위 5발 시차 낙하
       for (let k = 0; k < 5; k++) {
@@ -5373,6 +5379,18 @@ function stepZones(state, dt) {
       }
       aoeDamage(state, owner, z.x, z.z, z.r, z.dmg, 0)
       pushFx(state, 'meteorhit', z.x, z.z, z.r, z.team)
+      if (z.brawlBlast && state.mode === 'brawl') { // 폭풍이 밖으로 밀어낸다 — 핵은 스매시급
+        const rB2 = (z.r + 0.6) ** 2
+        for (const e of state.heroes) {
+          if (e.team === z.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
+          if ((e.x - z.x) ** 2 + (e.z - z.z) ** 2 > rB2) continue
+          applyKnockback(state, e, z.x, z.z, z.brawlNuke ? 9 : 6)
+          if (z.brawlNuke) {
+            e.brawlSmashT = 0.5
+            e.brawlSmashA = Math.atan2(e.z - z.z, e.x - z.x)
+          }
+        }
+      }
     } else if (z.kind === 'fissure') {
       // 한 파(구간)가 터진다 — 그 구간의 적을 길게 기절
       lineDamage(state, owner, z.x, z.z, z.dir, z.len, z.half, z.dmg, z.stun)
