@@ -3888,3 +3888,12 @@ body {
 /* 대난투 1UP 크레딧 — 아이템창의 초록 하트(3개 모이면 목숨 +1) */
 .rift__me-item--life { filter: drop-shadow(0 0 4px rgba(80, 255, 120, 0.8)); animation: lifeCreditPop 0.4s ease-out; }
 @keyframes lifeCreditPop { 0% { transform: scale(2); } 100% { transform: scale(1); } }
+
+/* 대난투 시상식 스킵 레이어 — 무대는 그대로 보이고, 어디를 탭해도 넘어간다 */
+.brawl-champ-skip { position: absolute; inset: 0; z-index: 30; cursor: pointer; }
+.brawl-champ-skip__hint {
+  position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.85); font-weight: 700; text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+  animation: champHintPulse 1.4s ease-in-out infinite;
+}
+@keyframes champHintPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }

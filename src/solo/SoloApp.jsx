@@ -160,6 +160,7 @@ export default function SoloApp() {
   const [coinMsg, setCoinMsg] = useState(null)
   const [brawlChamp, setBrawlChamp] = useState(null) // 대난투 시상식 — 상위 3 포디움 데이터
   const brawlChampRef = useRef(null) // 대난투 포디움 상위 3 — 퇴장 때 무대를 켜기 위한 대기 데이터
+  const champTimerRef = useRef(null) // 시상식 자동 종료 타이머(탭 스킵과 공유)
   const [tour, setTour] = useState(null) // 콜로세움 토너먼트 상태
   const [tourStage, setTourStage] = useState('bracket') // bracket(대진) | result(라운드 결과) | final(최종 순위)
   const arenaCarryRef = useRef({}) // 라운드 간 유저 팀 이월(레벨·골드·아이템)
@@ -444,6 +445,12 @@ export default function SoloApp() {
     setScreen('play')
   }
 
+  function endChampStage() { // 시상식 종료(자동 6.5s/탭 스킵 공용) → 직업 선택으로
+    if (champTimerRef.current) { clearTimeout(champTimerRef.current); champTimerRef.current = null }
+    setBrawlChamp(null)
+    setScreen('char')
+  }
+
   function exitBattle() {
     if (ULT_DEBUG) { // 시험장 판 종료 → 직업 선택으로 복귀
       netRef.current?.close()
@@ -455,9 +462,16 @@ export default function SoloApp() {
       return
     }
     if (brawlChampRef.current) { // 대난투 시상식 — 경기장을 나온 순간 1위 만세·2/3위 박수
+      //  전용 화면(champ)으로 전환해 6.5초(탭하면 스킵) 보여준 뒤 "한 판 더" 직업 선택으로.
+      //  (예전엔 곧장 char로 가서 직업 선택 UI가 시상식을 통째로 덮었다 — 2026-08-03 수리)
       setBrawlChamp(brawlChampRef.current)
       brawlChampRef.current = null
-      setTimeout(() => setBrawlChamp(null), 6500)
+      netRef.current?.close()
+      netRef.current = null
+      setNet(null)
+      setScreen('champ')
+      champTimerRef.current = setTimeout(endChampStage, 6500)
+      return
     }
     if (BOSS_DEBUG) { // 디버그 판 종료 → 디버그 화면으로 복귀(한 판 더 굴리기 흐름)
       netRef.current?.close()
@@ -634,6 +648,11 @@ export default function SoloApp() {
       {screen === 'title' && <TitleScreen onEnter={enterFromTitle} />}
       {screen === 'profile' && (
         <ProfileScreen current={profile} onPick={pickProfile} onBack={profile ? () => go('menu') : null} />
+      )}
+      {screen === 'champ' && ( // 대난투 시상식 — 무대를 가리지 않는 투명 스킵 레이어
+        <div className="brawl-champ-skip" onPointerDown={endChampStage}>
+          <span className="brawl-champ-skip__hint">{t('탭해서 계속')}</span>
+        </div>
       )}
       {screen === 'bossdebug' && <BossDebugScreen onStart={startDebugBoss} />}
       {screen === 'ultdebug' && <UltDebugScreen onStart={startDebugUlt} />}
