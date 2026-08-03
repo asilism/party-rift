@@ -3905,5 +3905,7 @@ body {
 .brawl-result-card__earn { margin: 0 0 10px; font-weight: 700; color: #d9a406; }
 .brawl-result-card .brawl-final { text-align: left; margin: 0 auto 12px; max-height: 40vh; overflow-y: auto; }
 .brawl-result-card .brawl-final__name { color: #4a3b28; } /* 밝은 카드 위 — 어두운 글자 */
-.brawl-result-card .brawl-final__row.is-me .brawl-final__name { color: #d9a406; font-weight: 800; }
+.brawl-result-card .brawl-final__place { color: #4a3b28; } /* 4~8위 숫자도 어두운 글자 */
+.brawl-result-card .brawl-final__row.is-me .brawl-final__name { color: #b8860b; font-weight: 800; }
+.brawl-result-card__btns .toy-btn:not(.toy-btn--yellow) { background: #7ea4d9; } /* 메뉴로 — 흰 글자가 서게 파란 배경 */
 .brawl-result-card__btns { display: flex; gap: 10px; justify-content: center; }
