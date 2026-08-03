@@ -1103,6 +1103,39 @@ export const HAT_IDS = [
 ]
 
 const HAT_BUILDERS = {
+  // 파수꾼 투구(무한방어 30파도): 강철 돔 + 푸른 깃털 볏 — 성벽을 지키는 자
+  wardhelm(s) {
+    const g = new THREE.Group()
+    const steel = lamb(0xb8c4d6)
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.95 * s, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), steel)
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.93 * s, 0.1 * s, 6, 18), lamb(0x8a97ab))
+    rim.rotation.x = Math.PI / 2
+    g.add(dome, rim)
+    for (let i = 0; i < 4; i++) { // 뒤로 흐르는 파란 깃털 볏
+      const plume = new THREE.Mesh(new THREE.SphereGeometry(0.22 * s, 6, 5), lamb(0x6fb6ff))
+      plume.scale.set(1, 1.9 - i * 0.25, 0.5)
+      plume.position.set(-0.15 * s - i * 0.3 * s, (0.85 - i * 0.16) * s, 0)
+      plume.rotation.z = 0.5 + i * 0.22
+      g.add(plume)
+    }
+    return g
+  },
+  // 검투사 투구(콜로세움 우승 1회): 청동 돔 + 진홍 브러시 볏 — 투기장의 백전노장
+  gladhelm(s) {
+    const g = new THREE.Group()
+    const bronze = lamb(0xc98d4b)
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.95 * s, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), bronze)
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.93 * s, 0.09 * s, 6, 18), lamb(0x9a6a34))
+    band.rotation.x = Math.PI / 2
+    g.add(dome, band)
+    const crest = new THREE.Mesh(new THREE.BoxGeometry(1.5 * s, 0.55 * s, 0.16 * s), lamb(0xd94a4a))
+    crest.position.y = 0.85 * s
+    g.add(crest) // 앞뒤로 선 모히칸 브러시
+    const crestTop = new THREE.Mesh(new THREE.BoxGeometry(1.2 * s, 0.2 * s, 0.1 * s), lamb(0xb03a3a))
+    crestTop.position.y = 1.18 * s
+    g.add(crestTop)
+    return g
+  },
   // 난투 월계관(난투전 3위 전리품): 금빛 잎사귀 링 — 챔피언의 첫 조각
   champlaurel(s) {
     const g = new THREE.Group()
@@ -1732,7 +1765,7 @@ export const COSTUME_IDS = [
   'bowtie', 'scarf', 'lei', 'backpack', 'quiver', 'shield', 'tube', 'lantern',
   'goldcape', 'armor', 'redcloak', 'jetpack', 'wings', 'devilwings', 'starcape',
   'abysscloak', 'magmaplate', 'galaxyrobe', 'vinemail', // 보스 전리품(비매품) 4종
-  'champbelt', // 난투전 2위 전리품
+  'wardplate', 'gladpauldron', 'champbelt', // 방어 60파도 · 콜로세움 우승 3회 · 난투전 2위
 ]
 
 function equippedCostume() {
@@ -1793,6 +1826,46 @@ function waveCape(m, t, s) {
 }
 
 const COSTUME_BUILDERS = {
+  // 수문장 흉갑(무한방어 60파도): 가슴의 성문 방패판 + 강철 견갑 — 서 있는 성벽
+  wardplate(s) {
+    const g = new THREE.Group()
+    const steel = lamb(0xb8c4d6)
+    const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.55 * s, 0.72 * s, 0.85 * s, 6), steel)
+    plate.scale.z = 0.35
+    plate.position.set(0.95 * s, 0.15 * s, 0)
+    plate.rotation.z = Math.PI / 2
+    g.add(plate) // 가슴 방패판(육각 성문)
+    const emblem = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * s, 0.2 * s, 0.1 * s, 12), lamb(0x6fb6ff))
+    emblem.rotation.z = Math.PI / 2
+    emblem.position.set(1.12 * s, 0.15 * s, 0)
+    g.add(emblem)
+    for (const side of [-1, 1]) { // 강철 견갑 + 리벳
+      const pad = new THREE.Mesh(new THREE.SphereGeometry(0.42 * s, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), steel)
+      pad.position.set(0, 0.72 * s, side * 0.78 * s)
+      g.add(pad)
+      const rivet = new THREE.Mesh(new THREE.SphereGeometry(0.09 * s, 6, 5), lamb(0x6fb6ff))
+      rivet.position.set(0, 0.95 * s, side * 0.78 * s)
+      g.add(rivet)
+    }
+    return g
+  },
+  // 백부장 견갑(콜로세움 우승 3회): 한쪽 어깨의 큰 청동 견갑 + 가슴을 가르는 진홍 띠
+  gladpauldron(s) {
+    const g = new THREE.Group()
+    const bronze = lamb(0xc98d4b)
+    const pad1 = new THREE.Mesh(new THREE.SphereGeometry(0.55 * s, 10, 7, 0, Math.PI * 2, 0, Math.PI / 2), bronze)
+    pad1.position.set(0, 0.72 * s, 0.75 * s)
+    g.add(pad1)
+    const pad2 = new THREE.Mesh(new THREE.SphereGeometry(0.44 * s, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), lamb(0x9a6a34))
+    pad2.position.set(0, 0.6 * s, 0.9 * s)
+    g.add(pad2) // 겹갑
+    const sash = new THREE.Mesh(new THREE.TorusGeometry(1.0 * s, 0.11 * s, 6, 18, Math.PI * 0.95), lamb(0xd94a4a))
+    sash.rotation.y = Math.PI / 2
+    sash.rotation.x = 0.6
+    sash.position.set(0.2 * s, 0.3 * s, 0)
+    g.add(sash) // 어깨→허리 진홍 띠
+    return g
+  },
   // 챔피언 벨트(난투전 2위 전리품): 금 버클이 박힌 복싱 챔피언 벨트
   champbelt(s) {
     const g = new THREE.Group()
@@ -2721,7 +2794,7 @@ export const WEAPON_SKIN_IDS = [
   'woodsword', 'candycane', 'pan', 'mallet', 'fish', 'umbrella', 'trident',
   'doubleaxe', 'guitar', 'scythe', 'gemstaff', 'lightspear', 'flamesword', 'frostblade', 'excalibur',
   'crescentscythe', 'quakemaul', 'cometstaff', 'bramblesword', // 보스 전리품(비매품) 4종
-  'champblade', // 난투전 1위 전리품
+  'wardmaul', 'gladius', 'champblade', // 방어 100파도 · 콜로세움 우승 5회 · 난투전 1위
 ]
 
 function equippedWeaponSkin() {
@@ -2826,6 +2899,55 @@ function bladeGlow(mesh, color, opacity = 0.3, sx = 1.05, sy = 2.0, sz = 1.8) {
 }
 
 const WEAPON_SKINS = {
+  // 성벽 파쇄퇴(무한방어 100파도): 돌탑 모양 대형 메이스 — 성벽 그 자체를 휘두른다
+  wardmaul(g) {
+    const stone = lamb(0xcfc3ae)
+    const steel = lamb(0xb8c4d6)
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 1.4, 8), steel)
+    handle.rotation.z = Math.PI / 2
+    handle.position.x = 0.5
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.62, 0.62), stone)
+    tower.position.x = 1.55
+    const band1 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.68, 0.68), steel)
+    band1.position.x = 1.25
+    const band2 = band1.clone()
+    band2.position.x = 1.85
+    for (const dz of [-0.22, 0.22]) { // 성가퀴(요철)
+      for (const dy of [-0.22, 0.22]) {
+        const merlon = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.16), stone)
+        merlon.position.set(2.1, dy, dz)
+        g.add(merlon)
+      }
+    }
+    const glow = new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 5), new THREE.MeshLambertMaterial({ color: 0x6fb6ff, emissive: 0x2a5a9a, emissiveIntensity: 0.7 }))
+    glow.position.x = 1.55
+    glow.position.y = 0.0
+    g.userData.gem = glow
+    g.add(handle, tower, band1, band2, glow)
+  },
+  // 투기장 글라디우스(콜로세움 우승 5회): 폭 넓은 청동 단검 — 군중의 함성이 담긴 검
+  gladius(g) {
+    const bronze = lamb(0xc98d4b)
+    const pale = lamb(0xe8c56a)
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.09, 0.44), bronze)
+    blade.position.x = 0.95
+    const ridge = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.11, 0.1), pale)
+    ridge.position.x = 0.95
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.45, 4), bronze)
+    tip.rotation.z = -Math.PI / 2
+    tip.scale.z = 0.3
+    tip.position.x = 1.85
+    const guard = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.14, 8), pale)
+    guard.rotation.z = Math.PI / 2
+    guard.position.x = 0.26
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.42, 8), lamb(0xd94a4a))
+    grip.rotation.z = Math.PI / 2
+    grip.position.x = -0.02
+    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), new THREE.MeshLambertMaterial({ color: 0xd94a4a, emissive: 0x7a1a1a, emissiveIntensity: 0.6 }))
+    pommel.position.x = -0.28
+    g.userData.gem = pommel
+    g.add(blade, ridge, tip, guard, grip, pommel)
+  },
   // 우승자의 황금검(난투전 1위 전리품): 순금 대검 — 챔피언의 증표
   champblade(g) {
     const gold = new THREE.MeshLambertMaterial({ color: 0xffd34d, emissive: 0x6b4d00, emissiveIntensity: 0.4 })
@@ -3224,6 +3346,24 @@ const WEAPON_SKINS = {
 
 // 무기 스킨 FX — 고가만. 검신을 따라 흐르는 글린트가 "샤링"의 핵심
 const WEAPON_FX = {
+  // 성벽 파쇄퇴: 강철 테의 푸른 빛 + 돌가루 반짝
+  wardmaul(g) {
+    const glint = fxSprite(g, 0x9fd0ff, 0.55)
+    return (t) => {
+      glint.position.set(1.55, 0.42, 0)
+      glint.material.opacity = 0.3 + Math.abs(Math.sin(t * 1.8)) * 0.5
+      if (g.userData.gem) g.userData.gem.material.emissiveIntensity = 0.4 + Math.max(0, Math.sin(t * 2.0)) * 0.5
+    }
+  },
+  // 글라디우스: 청동 검신 광택 + 진홍 폼멜 고동
+  gladius(g) {
+    const glint = fxSprite(g, 0xffd8a0, 0.5)
+    return (t) => {
+      glint.position.set(0.5 + ((t * 1.3) % 1) * 1.3, 0.08, 0)
+      glint.material.opacity = Math.sin(((t * 1.3) % 1) * Math.PI) * 0.7
+      if (g.userData.gem) g.userData.gem.material.emissiveIntensity = 0.4 + Math.max(0, Math.sin(t * 2.6)) * 0.5
+    }
+  },
   // 황금검: 검신을 훑는 금빛 광택 + 보석 고동
   champblade(g) {
     const glint = fxSprite(g, 0xfff2b0, 0.62)
@@ -3820,6 +3960,8 @@ const TROPHY_AURA_HUE = {
   boss_shadow: [0x8a4ee0, 0xb08aff],
   boss_thorn: [0x67d67f, 0xb0f0c0],
   brawl_champ: [0xffd34d, 0xfff2b0], // 챔피언 골드
+  defense_ward: [0x3d8fff, 0x8ac8ff], // 수문장 강청 — 가산 합성에서 모래 배경에 묻히지 않게 진하게
+  arena_glad: [0xff3d3d, 0xff8a5a], // 검투사 진홍·청동 (챔피언 골드와 구분)
 }
 function buildTrophyAura(s, setBoss) {
   const [ringHue, moteHue] = TROPHY_AURA_HUE[setBoss] || TROPHY_AURA_HUE.boss_shadow
