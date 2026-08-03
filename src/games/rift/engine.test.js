@@ -4143,7 +4143,7 @@ test('사망 리캡: 보스 즉사기에 죽으면 "무엇에 스러졌는지"�
   assert.ok(recap, `리캡 피드 존재 (${(g.feed || []).slice(-3).map((f) => f.msg).join(' / ')})`)
 })
 
-// ── 대난투(8인 FFA) — 고유 팀·넉백·장외·목숨·종료 ──
+// ── 난투전(8인 FFA) — 고유 팀·넉백·장외·목숨·종료 ──
 function brawl8(cls0 = 'warrior') {
   const zs = ['rat', 'ox', 'tiger', 'rabbit', 'dragon', 'snake', 'horse', 'goat']
   const cs = [cls0, 'mage', 'archer', 'tank', 'assassin', 'healer', 'gladiator', 'cryomancer']
@@ -4157,7 +4157,7 @@ function brawl8(cls0 = 'warrior') {
   return g
 }
 
-test('대난투: 개전에도 스폰 무적 + 죽으면 버프 소멸(부활 후 미지속)', () => {
+test('난투전: 개전에도 스폰 무적 + 죽으면 버프 소멸(부활 후 미지속)', () => {
   const zs2 = ['rat', 'ox', 'tiger', 'rabbit', 'dragon', 'snake', 'horse', 'goat']
   const cs2 = ['warrior', 'mage', 'archer', 'tank', 'assassin', 'healer', 'gladiator', 'cryomancer']
   const g = createGame(zs2.map((z, i) => ({
@@ -4179,7 +4179,7 @@ test('대난투: 개전에도 스폰 무적 + 죽으면 버프 소멸(부활 후
   assert.ok(a.hp > 0 && !(a.brawlHammerT > 0), '부활 후에도 버프 없음')
 })
 
-test('대난투: 8인 고유 팀 — 서로 피해가 들어가고, 고정 레벨·목숨 10', () => {
+test('난투전: 8인 고유 팀 — 서로 피해가 들어가고, 고정 레벨·목숨 10', () => {
   const g = brawl8()
   assert.equal(g.heroes.length, 8)
   assert.equal(new Set(g.heroes.map((h) => h.team)).size, 8, '팀 전부 고유')
@@ -4195,7 +4195,7 @@ test('대난투: 8인 고유 팀 — 서로 피해가 들어가고, 고정 레�
   assert.ok(b.hp < hp, 'FFA 상호 피해')
 })
 
-test('대난투: 잃은 체력이 많을수록 넉백이 커진다(스매시 %)', () => {
+test('난투전: 잃은 체력이 많을수록 넉백이 커진다(스매시 %)', () => {
   const g = brawl8()
   const [a, b] = g.heroes
   a.x = 0; a.z = 0
@@ -4218,7 +4218,7 @@ test('대난투: 잃은 체력이 많을수록 넉백이 커진다(스매시 %)'
   assert.ok(lowHpPush > fullHpPush + 0.5, `빈사 넉백이 더 크다 (풀피 ${fullHpPush.toFixed(1)} < 빈사 ${lowHpPush.toFixed(1)})`)
 })
 
-test('대난투: 링 밖 = 장외 낙사 — 목숨 1 소실 후 리스폰 무적', () => {
+test('난투전: 링 밖 = 장외 낙사 — 목숨 1 소실 후 리스폰 무적', () => {
   const g = brawl8()
   const a = g.heroes[0]
   a.x = g.brawlR + 3 // 링 밖으로
@@ -4239,7 +4239,7 @@ test('대난투: 링 밖 = 장외 낙사 — 목숨 1 소실 후 리스폰 무�
   assert.equal(a.hp, hp, '무적 중 피해 무효')
 })
 
-test('대난투: 부활 시 전 스킬 쿨 초기화', () => {
+test('난투전: 부활 시 전 스킬 쿨 초기화', () => {
   const g = brawl8()
   const a = g.heroes[0]
   a.skillCd = 9; a.skill2Cd = 9; a.ultCd = 40
@@ -4252,7 +4252,7 @@ test('대난투: 부활 시 전 스킬 쿨 초기화', () => {
   assert.equal(a.ultCd, 0, '궁 쿨 초기화')
 })
 
-test('대난투: 하늘 이벤트 — 시간이 지나면 광선/열매/보급이 떨어진다', () => {
+test('난투전: 하늘 이벤트 — 시간이 지나면 광선/열매/보급이 떨어진다', () => {
   const g = brawl8()
   for (const h of g.heroes) h.x = 200 // 서로 안 싸우게 전원 링 밖... 은 낙사니 정지시켜 관찰만
   for (const h of g.heroes) { h.x = 0; h.z = 0; h.atkCd = 99; h.stunT = 0 }
@@ -4261,7 +4261,7 @@ test('대난투: 하늘 이벤트 — 시간이 지나면 광선/열매/보급�
   assert.ok(dropped, '하늘에서 뭔가 떨어졌다')
 })
 
-test('대난투: ⭐ 무적별 — 별 무적(스폰 보호와 별개)·이속 2배', () => {
+test('난투전: ⭐ 무적별 — 별 무적(스폰 보호와 별개)·이속 2배', () => {
   const g = brawl8()
   const [a, b] = g.heroes
   for (const h of g.heroes) h.atkCd = 99
@@ -4294,7 +4294,7 @@ test('대난투: ⭐ 무적별 — 별 무적(스폰 보호와 별개)·이속 2
   assert.equal(a.hp, hp, '별 무적 중 피해 무효')
 })
 
-test('대난투: 💣 폭탄 돌리기 — 부딪히면 옮겨가고 만료 시 폭발', () => {
+test('난투전: 💣 폭탄 돌리기 — 부딪히면 옮겨가고 만료 시 폭발', () => {
   const g = brawl8()
   const [a, b] = g.heroes
   a.x = 10; a.z = 10; b.x = 25; b.z = 25 // 링(R40) 안 — (30,30)은 중심거리 42로 장외!
@@ -4313,7 +4313,7 @@ test('대난투: 💣 폭탄 돌리기 — 부딪히면 옮겨가고 만료 시 
   assert.ok(b.hp < hp || b.respawnT > 0, `폭발 피해 (${hp}→${b.hp})`)
 })
 
-test('대난투: 🍌 바나나 다발 — 평타마다 껍질 투척, 밟으면 크게 미끄러짐', () => {
+test('난투전: 🍌 바나나 다발 — 평타마다 껍질 투척, 밟으면 크게 미끄러짐', () => {
   const g = brawl8()
   const [a, b] = g.heroes
   for (const h of g.heroes) h.atkCd = 99
@@ -4329,7 +4329,7 @@ test('대난투: 🍌 바나나 다발 — 평타마다 껍질 투척, 밟으면
   assert.ok(b.stunT > 0.5, '꽈당 — 밟고 미끄러짐')
 })
 
-test('대난투: 💣 폭탄 든 채 죽으면 그 자리에서 폭발 + 번개 3초 기절', () => {
+test('난투전: 💣 폭탄 든 채 죽으면 그 자리에서 폭발 + 번개 3초 기절', () => {
   const g = brawl8()
   const [a, b, c] = g.heroes
   for (const h of g.heroes) h.atkCd = 99
@@ -4351,7 +4351,7 @@ test('대난투: 💣 폭탄 든 채 죽으면 그 자리에서 폭발 + 번개 
   assert.ok(c.hp < cHp || c.knockT > 0 || c.fallT > 0, `사망 지점 폭발이 주변 타격 (${cHp}→${Math.round(c.hp)})`)
 })
 
-test('대난투: 🌀 대포 — 밟으면 반대편으로 포물선 발사(무적), 착지 후 쿨', () => {
+test('난투전: 🌀 대포 — 밟으면 반대편으로 포물선 발사(무적), 착지 후 쿨', () => {
   const g = brawl8()
   const a = g.heroes[0]
   for (const h of g.heroes) h.atkCd = 99
@@ -4369,7 +4369,7 @@ test('대난투: 🌀 대포 — 밟으면 반대편으로 포물선 발사(무�
   assert.ok(Math.sign(a.x) !== Math.sign(c.x) || Math.abs(a.x) < 1, '반대편 방향')
 })
 
-test('대난투: 대포 발판은 링 밖이어도 안전지대 — 서 있어도 낙사하지 않는다', () => {
+test('난투전: 대포 발판은 링 밖이어도 안전지대 — 서 있어도 낙사하지 않는다', () => {
   const g = brawl8()
   const a = g.heroes[0]
   for (const h of g.heroes) h.atkCd = 99
@@ -4382,7 +4382,7 @@ test('대난투: 대포 발판은 링 밖이어도 안전지대 — 서 있어�
   assert.ok(!(a.fallT > 0) && a.hp > 0, '발판 위 안전')
 })
 
-test('대난투: 경기장 3종 — 레이아웃마다 구조물이 다르고 대포 발판·벽이 있다', () => {
+test('난투전: 경기장 3종 — 레이아웃마다 구조물이 다르고 대포 발판·벽이 있다', () => {
   const open = buildMap('brawl', 'open')
   const pillars = buildMap('brawl', 'pillars')
   const crater = buildMap('brawl', 'crater')
@@ -4396,7 +4396,7 @@ test('대난투: 경기장 3종 — 레이아웃마다 구조물이 다르고 �
   }
 })
 
-test('대난투: 방관 페널티 — 18초 미전투면 겁쟁이 세금, 전투하면 리셋', () => {
+test('난투전: 방관 페널티 — 18초 미전투면 겁쟁이 세금, 전투하면 리셋', () => {
   const g = brawl8()
   const [a, b] = g.heroes
   for (const h of g.heroes) h.atkCd = 99
@@ -4415,7 +4415,7 @@ test('대난투: 방관 페널티 — 18초 미전투면 겁쟁이 세금, 전�
   assert.ok(b.brawlIdleT < 2, '피격도 방관 리셋')
 })
 
-test('대난투: 링 축소 후 리스폰 — 절벽(구 스폰)이 아니라 링 안쪽에 부활', () => {
+test('난투전: 링 축소 후 리스폰 — 절벽(구 스폰)이 아니라 링 안쪽에 부활', () => {
   const g = brawl8()
   const a = g.heroes[0]
   for (const h of g.heroes) h.atkCd = 99
@@ -4430,7 +4430,7 @@ test('대난투: 링 축소 후 리스폰 — 절벽(구 스폰)이 아니라 �
   assert.ok(!(a.fallT > 0), '부활 직후 낙사 없음')
 })
 
-test('대난투: 링이 발판을 끊으면 대포 붕괴 — 발사 정지 + 발판도 낙사 지대', () => {
+test('난투전: 링이 발판을 끊으면 대포 붕괴 — 발사 정지 + 발판도 낙사 지대', () => {
   const g = brawl8()
   const a = g.heroes[0]
   for (const h of g.heroes) h.atkCd = 99
@@ -4444,7 +4444,7 @@ test('대난투: 링이 발판을 끊으면 대포 붕괴 — 발사 정지 + �
   assert.ok(a.fallT > 0 || a.respawnT > 0, '발판 위도 이제 낙사 지대')
 })
 
-test('대난투: 콤보 — 1~3타 경직(제자리), 4타 피니셔로 발사', () => {
+test('난투전: 콤보 — 1~3타 경직(제자리), 4타 피니셔로 발사', () => {
   const g = brawl8()
   const [a, b] = g.heroes
   for (const h of g.heroes) h.atkCd = 99
@@ -4474,7 +4474,7 @@ test('대난투: 콤보 — 1~3타 경직(제자리), 4타 피니셔로 발사',
   assert.ok(b.x - 3 > 2.5, `피니셔 발사 (x=${b.x.toFixed(1)})`)
 })
 
-test('대난투: 막타 킬 = 목숨 +1 (1UP)', () => {
+test('난투전: 막타 킬 = 목숨 +1 (1UP)', () => {
   const g = brawl8()
   const [a, b] = g.heroes
   for (const h of g.heroes) h.atkCd = 99
@@ -4491,7 +4491,7 @@ test('대난투: 막타 킬 = 목숨 +1 (1UP)', () => {
   assert.equal(a.brawlKillN, 3, '킬 카운트 누적')
 })
 
-test('대난투: 궁극기 게이지 — 때려서 충전, 100 미만 불발, 발동 시 소모', () => {
+test('난투전: 궁극기 게이지 — 때려서 충전, 100 미만 불발, 발동 시 소모', () => {
   const g = brawl8()
   const [a, b] = g.heroes
   for (const h of g.heroes) h.atkCd = 99
@@ -4509,7 +4509,7 @@ test('대난투: 궁극기 게이지 — 때려서 충전, 100 미만 불발, �
   assert.ok(g.brawlUltSeq >= 1, '발동 연출 시퀀스')
 })
 
-test('대난투: 도트 딜은 콤보·경직·넉백을 안 만든다', () => {
+test('난투전: 도트 딜은 콤보·경직·넉백을 안 만든다', () => {
   const g = brawl8()
   const [a, b] = g.heroes
   for (const h of g.heroes) h.atkCd = 99
@@ -4522,7 +4522,7 @@ test('대난투: 도트 딜은 콤보·경직·넉백을 안 만든다', () => {
   assert.equal(b.knockT, 0, '도트는 넉백 없음')
 })
 
-test('대난투 ★궁: 공포술사 대공황 — 근방 전원 공포 도주', () => {
+test('난투전 ★궁: 공포술사 대공황 — 근방 전원 공포 도주', () => {
   const g = brawl8()
   const cs = g.heroes.map((h) => h.cls)
   // brawl8엔 공포술사가 없다 — 커스텀 로스터
@@ -4541,7 +4541,7 @@ test('대난투 ★궁: 공포술사 대공황 — 근방 전원 공포 도주',
   assert.ok(b1.fearT > 2 && b2.fearT > 2, `전원 공포 (${b1.fearT}, ${b2.fearT})`)
 })
 
-test('대난투 ★궁: 돌풍술사 태풍의 눈 — 지속 밀쳐냄', () => {
+test('난투전 ★궁: 돌풍술사 태풍의 눈 — 지속 밀쳐냄', () => {
   const g = createGame([
     { id: 'solo', name: 'w', zodiacId: 'rat', color: '#abc', team: 't0', cls: 'windcaller' },
     { id: 'b1', name: 'b1', zodiacId: 'ox', color: '#abc', team: 't1', cls: 'warrior' },
@@ -4557,7 +4557,7 @@ test('대난투 ★궁: 돌풍술사 태풍의 눈 — 지속 밀쳐냄', () => 
   assert.ok(b1.x > 5.2, `계속 밀려난다 (x=${b1.x.toFixed(1)})`)
 })
 
-test('대난투 ★★궁: 검성 발도 일섬 — 전방 반원 일괄 피니셔, 후방은 무사', () => {
+test('난투전 ★★궁: 검성 발도 일섬 — 전방 반원 일괄 피니셔, 후방은 무사', () => {
   const g = createGame([
     { id: 'solo', name: 's', zodiacId: 'rat', color: '#abc', team: 't0', cls: 'swordmaster' },
     { id: 'f1', name: 'f1', zodiacId: 'ox', color: '#abc', team: 't1', cls: 'warrior' },
@@ -4585,7 +4585,7 @@ test('대난투 ★★궁: 검성 발도 일섬 — 전방 반원 일괄 피니�
   assert.equal(back.hp, bHp, '후방 무사')
 })
 
-test('대난투 궁: 검투사 티탄 — 몸집 버프 + 평타가 뿅망치(즉시 피니셔)', () => {
+test('난투전 궁: 검투사 티탄 — 몸집 버프 + 평타가 뿅망치(즉시 피니셔)', () => {
   const g = brawl8('gladiator')
   const a = g.heroes[0]
   const e = g.heroes[1]
@@ -4599,7 +4599,7 @@ test('대난투 궁: 검투사 티탄 — 몸집 버프 + 평타가 뿅망치(�
   assert.ok(e.brawlSmashT > 0 || Math.hypot(e.x - ex0, e.z - a.z) > 3, '평타 한 대에 홈런')
 })
 
-test('대난투 궁: 주술사 대변이 — 개구리는 때리지도 궁도 못 쓴다', () => {
+test('난투전 궁: 주술사 대변이 — 개구리는 때리지도 궁도 못 쓴다', () => {
   const g = brawl8('warlock')
   const a = g.heroes[0]
   const e = g.heroes[1]
@@ -4617,7 +4617,7 @@ test('대난투 궁: 주술사 대변이 — 개구리는 때리지도 궁도 �
   assert.equal(a.hp, aHp, '개구리는 평타 불가')
 })
 
-test('대난투 궁: 힐러 천사의 가호 — 5초 안에 죽으면 그 자리 부활(1회)', () => {
+test('난투전 궁: 힐러 천사의 가호 — 5초 안에 죽으면 그 자리 부활(1회)', () => {
   const g = brawl8('healer')
   const a = g.heroes[0]
   const e = g.heroes[1]
@@ -4637,7 +4637,7 @@ test('대난투 궁: 힐러 천사의 가호 — 5초 안에 죽으면 그 자�
   void e
 })
 
-test('대난투 궁: 수호기사 성역 — 돔 회복(5초 50%) + 돔 안 적 축출', () => {
+test('난투전 궁: 수호기사 성역 — 돔 회복(5초 50%) + 돔 안 적 축출', () => {
   const g = brawl8('guardian')
   const a = g.heroes[0]
   const e = g.heroes[1]
@@ -4656,7 +4656,7 @@ test('대난투 궁: 수호기사 성역 — 돔 회복(5초 50%) + 돔 안 적 
   assert.ok(a.hp <= hpMid + 1, '돔 밖에선 회복 없음(시전 위치 고정)')
 })
 
-test('대난투: 얼음판 슬립 — 밟은 진행 방향으로 쭉 미끄러진다', () => {
+test('난투전: 얼음판 슬립 — 밟은 진행 방향으로 쭉 미끄러진다', () => {
   const g = brawl8()
   const a = g.heroes[0]
   const e = g.heroes[1]
@@ -4666,7 +4666,7 @@ test('대난투: 얼음판 슬립 — 밟은 진행 방향으로 쭉 미끄러�
   assert.ok(e.knockVx > 0 && Math.abs(e.knockVz) < Math.abs(e.knockVx) * 0.3 || e.x > 0, '진행 방향(+x)으로 미끄러짐')
 })
 
-test('대난투 궁: 사슬잡이 단죄 — 내 자리로 끌어온 뒤 심판(하얀 사슬 시퀀스)', () => {
+test('난투전 궁: 사슬잡이 단죄 — 내 자리로 끌어온 뒤 심판(하얀 사슬 시퀀스)', () => {
   const g = brawl8('catcher')
   const a = g.heroes[0]
   const e = g.heroes[1]
@@ -4683,7 +4683,7 @@ test('대난투 궁: 사슬잡이 단죄 — 내 자리로 끌어온 뒤 심판(
   assert.ok(e.hp < hp0, '단죄 집행')
 })
 
-test('대난투 궁: 야수조련사 — 곰1+용1 소환', () => {
+test('난투전 궁: 야수조련사 — 곰1+용1 소환', () => {
   const g = brawl8()
   const a = g.heroes[0]
   a.cls = 'beastmaster'
@@ -4693,7 +4693,7 @@ test('대난투 궁: 야수조련사 — 곰1+용1 소환', () => {
   assert.ok(kinds.includes('bear') && kinds.includes('dragonpet'), `곰+용 (${kinds})`)
 })
 
-test('대난투 궁: 환영무희 — 분신 7체가 7방향 확산', () => {
+test('난투전 궁: 환영무희 — 분신 7체가 7방향 확산', () => {
   const g = brawl8()
   const a = g.heroes[0]
   a.cls = 'illusionist'
@@ -4707,7 +4707,7 @@ test('대난투 궁: 환영무희 — 분신 7체가 7방향 확산', () => {
   assert.ok(d1.every((d, i) => d > d0[i] + 1.5), '바깥으로 질주')
 })
 
-test('대난투 궁: 대지술사 감옥 발사 — 기둥이 사방으로 내달리며 적을 날린다', () => {
+test('난투전 궁: 대지술사 감옥 발사 — 기둥이 사방으로 내달리며 적을 날린다', () => {
   const g = brawl8()
   const a = g.heroes[0]
   a.cls = 'terramancer'
@@ -4726,7 +4726,7 @@ test('대난투 궁: 대지술사 감옥 발사 — 기둥이 사방으로 내�
   assert.ok(far.hp < fHp || far.brawlSmashT > 0 || far.knockT > 0 || far.x > e.x + 13, '경로의 적 피격·넉백')
 })
 
-test('대난투 궁: 엔지니어 레이저 거포 — 직선 관통 5발 후 분해', () => {
+test('난투전 궁: 엔지니어 레이저 거포 — 직선 관통 5발 후 분해', () => {
   const g = brawl8()
   const a = g.heroes[0]
   a.cls = 'engineer'
@@ -4750,7 +4750,7 @@ test('대난투 궁: 엔지니어 레이저 거포 — 직선 관통 5발 후 �
   assert.ok(!g.summons.some((su) => su.kind === 'cannon'), '5발 소진 — 분해')
 })
 
-test('대난투: 킬 크레딧 뷰 — 아이템창 초록 하트용 필드', () => {
+test('난투전: 킬 크레딧 뷰 — 아이템창 초록 하트용 필드', () => {
   const g = brawl8()
   const a = g.heroes[0]
   a.brawlKillN = 2
@@ -4759,14 +4759,14 @@ test('대난투: 킬 크레딧 뷰 — 아이템창 초록 하트용 필드', ()
   assert.equal(me.brawlKillCredit, 2, '크레딧 2 (3이 되면 1UP 후 0으로)')
 })
 
-test('대난투: 용·이무기 미출현 — 스폰 봉인(콜로세움과 동일)', () => {
+test('난투전: 용·이무기 미출현 — 스폰 봉인(콜로세움과 동일)', () => {
   const g = brawl8()
   const dragon = g.monsters.find((m) => m.kind === 'dragon')
   const baron = g.monsters.find((m) => m.kind === 'baron')
   assert.ok(dragon.respawnT >= 1e9 && baron.respawnT >= 1e9, '용·이무기 봉인')
 })
 
-test('대난투 궁: 암살자 그림자 연무 — 시간차 3연쇄 베기', () => {
+test('난투전 궁: 암살자 그림자 연무 — 시간차 3연쇄 베기', () => {
   const g = brawl8('assassin')
   const a = g.heroes[0]
   const hp0 = g.heroes.slice(1, 4).map((e) => e.hp)
@@ -4784,7 +4784,7 @@ test('대난투 궁: 암살자 그림자 연무 — 시간차 3연쇄 베기', (
   for (let i = 1; i <= 3; i++) assert.ok(g.heroes[i].hp < hp0[i - 1], `표적${i} 피해`)
 })
 
-test('대난투 궁: 궁수 극태 레이저 — 정신집중 후 발사·강넉백·본인 반동', () => {
+test('난투전 궁: 궁수 극태 레이저 — 정신집중 후 발사·강넉백·본인 반동', () => {
   const g = brawl8('archer')
   const a = g.heroes[0]
   const e = g.heroes[1]
@@ -4802,7 +4802,7 @@ test('대난투 궁: 궁수 극태 레이저 — 정신집중 후 발사·강넉
   assert.ok(a.x < ax0, '반동으로 뒤로 밀림')
 })
 
-test('대난투 궁: 탱커 대지 밟기 — 균열 융기가 공중에 쳐올리며 날린다(끌어당김 없음)', () => {
+test('난투전 궁: 탱커 대지 밟기 — 균열 융기가 공중에 쳐올리며 날린다(끌어당김 없음)', () => {
   const g = brawl8('tank')
   const a = g.heroes[0]
   const e = g.heroes[1]
@@ -4821,7 +4821,7 @@ test('대난투 궁: 탱커 대지 밟기 — 균열 융기가 공중에 쳐올�
   assert.ok(e.x > ex0 + 4, '진행 방향으로 크게 날아감')
 })
 
-test('대난투 궁: 마법사 핵폭탄 3연발 — 운석 전부 핵·버섯구름 3회', () => {
+test('난투전 궁: 마법사 핵폭탄 3연발 — 운석 전부 핵·버섯구름 3회', () => {
   const g = brawl8('mage')
   const a = g.heroes[0]
   a.brawlUltQ = 100
@@ -4831,7 +4831,7 @@ test('대난투 궁: 마법사 핵폭탄 3연발 — 운석 전부 핵·버섯�
   assert.ok((g.brawlNukeSeq || 0) >= 3, `버섯구름 3회 (${g.brawlNukeSeq})`)
 })
 
-test('대난투 궁: 시간여행자 시간 정지 — 나 빼고 전원 결빙 슬로우', () => {
+test('난투전 궁: 시간여행자 시간 정지 — 나 빼고 전원 결빙 슬로우', () => {
   const g = brawl8('chronomancer')
   const a = g.heroes[0]
   a.brawlUltQ = 100
@@ -4840,7 +4840,7 @@ test('대난투 궁: 시간여행자 시간 정지 — 나 빼고 전원 결빙 
   for (const e of g.heroes.slice(1)) assert.ok(e.freezeT >= 2.4, `${e.id} 슬로우`)
 })
 
-test('대난투 궁: 수호기사 성역 — 5초 무적 + 접근 적 밀어냄', () => {
+test('난투전 궁: 수호기사 성역 — 5초 무적 + 접근 적 밀어냄', () => {
   const g = brawl8('guardian')
   const a = g.heroes[0]
   const e = g.heroes[1]
@@ -4854,7 +4854,7 @@ test('대난투 궁: 수호기사 성역 — 5초 무적 + 접근 적 밀어냄'
   assert.ok(Math.hypot(e.x - a.x, e.z - a.z) > d0, '적이 밀려남')
 })
 
-test('대난투: 궁극기 시험장(ultDebug) — 사람 게이지 상시 풀차지·링 정지', () => {
+test('난투전: 궁극기 시험장(ultDebug) — 사람 게이지 상시 풀차지·링 정지', () => {
   const g = createGame([
     { id: 'solo', name: 'w', zodiacId: 'rat', color: '#abc', team: 't0', cls: 'warrior' },
     { id: 'b1', name: 'b1', zodiacId: 'ox', color: '#abc', team: 't1', cls: 'mage', isBot: true },
@@ -4867,7 +4867,7 @@ test('대난투: 궁극기 시험장(ultDebug) — 사람 게이지 상시 풀�
   assert.equal(g.brawlR, 40, '링 축소 정지')
 })
 
-test('대난투: 마지막 1인 남으면 종료 — 순위표 완성', () => {
+test('난투전: 마지막 1인 남으면 종료 — 순위표 완성', () => {
   const g = brawl8()
   // 7명을 마지막 목숨으로 만들어 장외로 던진다 → 낙사 탈락
   for (let i = 1; i < 8; i++) {

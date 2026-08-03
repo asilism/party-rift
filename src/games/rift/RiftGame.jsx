@@ -124,7 +124,7 @@ export default function RiftGame({ onExit, net, bonus = null, adButton = null })
       rtt={rtt}
       onTogglePause={net.rtPause ? () => net.rtPause(!view.paused) : null}
       exitLabel={view.mode === 'arena' ? t('📋 결과 보기') : net.local ? t('🔁 다시 하기') : t('🔁 새 매치 찾기')}
-      suppressWin={view.mode === 'brawl' && !!net.local} // 대난투(솔로): 결과 카드는 시상식 뒤 SoloApp이 띄운다
+      suppressWin={view.mode === 'brawl' && !!net.local} // 난투전(솔로): 결과 카드는 시상식 뒤 SoloApp이 띄운다
       bonus={bonus}
       adButton={adButton}
       onExit={onExit}
@@ -541,7 +541,7 @@ function RiftPlay({
   // 승리 메시지를 한 글자씩 나타나게 — "파랑팀 승리"를 글자 단위로 쪼갠다(공백은 자리만 차지).
   // 보스전은 토벌 서사로: "카르곤 토벌!" / "토벌 실패...", 방어전은 도달 파도가 곧 성적표.
   const raidBoss = hud.mode === 'boss' ? hud.heroes?.find((h) => h.cls?.startsWith('boss_')) : null
-  // 대난투 탈락 관전 — 지켜보기를 누르면 카메라를 경기장 중앙 전경으로 고정
+  // 난투전 탈락 관전 — 지켜보기를 누르면 카메라를 경기장 중앙 전경으로 고정
   const [spectate, setSpectate] = useState(false)
   // ⚡ 번개: 낙뢰 순간 화면 전체가 하얗게 번쩍(짧게 2회 감쇠)
   const [boltFlash, setBoltFlash] = useState(0)
@@ -650,7 +650,7 @@ function RiftPlay({
           )}
           {boltFlash > 0 && <div className={`brawl-flash ${boltFlash === 2 ? 'brawl-flash--fade' : ''}`} />}
           {shadowDark && <div className="brawl-shadowdark" />}
-          {/* 대난투: 내 목숨 + 생존자 수 + 링 축소 경고 (같은 슬롯) */}
+          {/* 난투전: 내 목숨 + 생존자 수 + 링 축소 경고 (같은 슬롯) */}
           {hud.mode === 'brawl' && !finished && (
             <div className="boss-bar-slot">
               <div className={`boss-bar arena-bar ${hud.brawlR > 0 && hud.brawlR < 39 ? 'arena-bar--sudden' : ''}`}>
@@ -736,7 +736,7 @@ function RiftPlay({
         {/* 좌상단: 미니맵 + (우물/사망 중) 상점 버튼 — 세로 스택이라 비율 무관 자동 정렬 */}
         <div className="rift__side">
           {hud.mode === 'brawl' ? (
-            /* 대난투: 미니맵 대신 목숨 순위판 — 지금 1~3위가 누군지가 진짜 지도다 */
+            /* 난투전: 미니맵 대신 목숨 순위판 — 지금 1~3위가 누군지가 진짜 지도다 */
             <div className="brawl-standings">
               {[...(hud.heroes || [])]
                 .filter((h) => (h.brawlLives || 0) > 0)
@@ -783,7 +783,7 @@ function RiftPlay({
             </div>
             <span className="rift__me-items">
               {Array.from({ length: ITEM_SLOTS }).map((_, i) => {
-                // 대난투: 상점이 없으니 아이템창이 곧 1UP 크레딧판 — 킬마다 💚, 3개 모이면 1UP
+                // 난투전: 상점이 없으니 아이템창이 곧 1UP 크레딧판 — 킬마다 💚, 3개 모이면 1UP
                 if (me.brawlKillCredit != null && hud.mode === 'brawl') {
                   return i < me.brawlKillCredit
                     ? <span key={i} className="rift__me-item rift__me-item--life" title="1UP 크레딧 — 3킬마다 목숨 +1">💚</span>
@@ -832,7 +832,7 @@ function RiftPlay({
         )}
         {me && me.respawnT > 0 && !finished && (
           hud.mode === 'brawl' && (me.brawlLives || 0) <= 0 ? (
-            // 대난투 탈락: 부활 없음 — 순위와 함께 지켜보기/다시하기를 고른다
+            // 난투전 탈락: 부활 없음 — 순위와 함께 지켜보기/다시하기를 고른다
             !spectate && (
               <>
                 <div className="rift__dead" />
@@ -852,7 +852,7 @@ function RiftPlay({
                 💀 {t('부활까지')} <b>{Math.ceil(me.respawnT)}</b>{t('초')}...
               </div>
               {/* 사망 중엔 양 팀 킬스코어·아이템·레벨 현황을 한눈에 (상대 빌드 파악용).
-                  대난투(FFA)는 팀이 없어 좌상단 목숨 순위판이 그 역할 — 팀 패널 생략 */}
+                  난투전(FFA)는 팀이 없어 좌상단 목숨 순위판이 그 역할 — 팀 패널 생략 */}
               {hud.mode !== 'brawl' && <div className="rift__dead-board">
                 <RiftRoster hud={hud} />
               </div>}
@@ -921,7 +921,7 @@ function RiftPlay({
           <div className="win-modal__card">
             <div className="rift-result">
               {hud.mode === 'brawl' ? (
-                // 대난투: 팀 없음 — 최종 순위표(1위부터)
+                // 난투전: 팀 없음 — 최종 순위표(1위부터)
                 <div className="brawl-final">
                   {[...(hud.brawlRanks || [])].sort((a, b) => a.place - b.place).map((r) => (
                     <div key={r.id} className={`brawl-final__row ${r.id === myId ? 'is-me' : ''}`}>
