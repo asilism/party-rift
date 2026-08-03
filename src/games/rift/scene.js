@@ -212,6 +212,49 @@ function emojiSprite(emoji, scale = 2) {
   return sp
 }
 
+// 선버스트(후광) 텍스처 — 중심 글로우 + 28줄기 방사 광선을 캔버스에 직접 그린다.
+//  흰색으로 그려 material color로 세트 색을 입힌다. 전 세트 공유 1장(shared).
+let _sunburstTex = null
+function sunburstTexture() {
+  if (_sunburstTex) return _sunburstTex
+  if (typeof document === 'undefined') return null // 헤드리스 테스트
+  const size = 256
+  const c = document.createElement('canvas')
+  c.width = c.height = size
+  const ctx = c.getContext('2d')
+  const cx = size / 2
+  // 겹겹의 부드러운 발광 무리 — 광선보다 "빛에 감싸인" 느낌이 본체(디아블로풍 오라)
+  for (const [stop1, a1, a2] of [[0.2, 0.85, 0.32], [0.42, 0.5, 0.14], [0.7, 0.26, 0.05]]) {
+    const gl = ctx.createRadialGradient(cx, cx, 0, cx, cx, cx)
+    gl.addColorStop(0, `rgba(255,255,255,${a1})`)
+    gl.addColorStop(stop1, `rgba(255,255,255,${a2})`)
+    gl.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = gl
+    ctx.fillRect(0, 0, size, size)
+  }
+  ctx.translate(cx, cx)
+  for (let i = 0; i < 36; i++) { // 광선은 빛무리에 반쯤 파묻히게 — 낮은 대비·넓은 폭·촘촘히
+    const a = (i / 36) * Math.PI * 2 + (i % 2) * 0.045
+    const len = cx * (0.45 + ((i * 37) % 10) / 10 * 0.5)
+    const w = 7 + ((i * 53) % 3) * 5
+    const grad = ctx.createLinearGradient(0, 0, Math.cos(a) * len, Math.sin(a) * len)
+    grad.addColorStop(0, 'rgba(255,255,255,0.16)')
+    grad.addColorStop(0.55, 'rgba(255,255,255,0.07)')
+    grad.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = grad
+    ctx.beginPath()
+    ctx.moveTo(Math.cos(a + Math.PI / 2) * w * 0.5, Math.sin(a + Math.PI / 2) * w * 0.5)
+    ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len)
+    ctx.lineTo(Math.cos(a - Math.PI / 2) * w * 0.5, Math.sin(a - Math.PI / 2) * w * 0.5)
+    ctx.closePath()
+    ctx.fill()
+  }
+  const tex = new THREE.CanvasTexture(c)
+  tex.userData.shared = true
+  _sunburstTex = tex
+  return tex
+}
+
 // 부드러운 방사형 발광 텍스처 (가운데 흰빛 → 가장자리 투명). 발광체 후광·타격 스파크에 공용.
 let _glowTex = null
 function glowTexture() {
@@ -3792,37 +3835,37 @@ function buildTrophyAura(s, setBoss) {
   ring.position.y = 0.12
   g.add(ring)
   const motes = [0, 1, 2].map(() => fxSprite(g, moteHue, 0.5 * s, false))
-  // 🌟 후광 — 등 뒤에서 세트 색으로 뿜어 나오는 방사광(부드러운 글로우 + 광선 부챗살)
+  // 🌟 후광 — 선버스트 텍스처 2장을 서로 반대로 천천히 돌린다(빛줄기가 어긋나며 일렁이는 성광)
   const haloG = new THREE.Group()
-  const haloGlow = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: glowTexture(), color: ringHue, transparent: true, opacity: 0.5,
+  const mkBurst = (hue, scale, op) => {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: sunburstTexture(), color: hue, transparent: true, opacity: op,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    sp.scale.set(scale, scale, 1)
+    haloG.add(sp)
+    return sp
+  }
+  const burstA = mkBurst(ringHue, 5.6 * s, 0.8)
+  const burstB = mkBurst(moteHue, 4.4 * s, 0.55)
+  const haloCore = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture(), color: moteHue, transparent: true, opacity: 0.5,
     depthWrite: false, blending: THREE.AdditiveBlending,
   }))
-  haloGlow.scale.set(6.4 * s, 6.4 * s, 1)
-  haloG.add(haloGlow)
-  const rays = []
-  for (let ri = 0; ri < 10; ri++) {
-    const len = (2.2 + (ri % 3) * 0.9) * s
-    const ray = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.34 * s, len),
-      new THREE.MeshBasicMaterial({ color: moteHue, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
-    )
-    const ra = (ri / 10) * Math.PI * 2
-    ray.position.set(Math.cos(ra) * len * 0.55, Math.sin(ra) * len * 0.55, 0)
-    ray.rotation.z = ra - Math.PI / 2
-    haloG.add(ray)
-    rays.push({ ray, ra, len })
-  }
-  haloG.position.set(0, 2.5 * s, -0.55 * s) // 몸 뒤 — 카메라를 향해 서 있는 후광판
+  haloCore.scale.set(3.2 * s, 3.2 * s, 1)
+  haloG.add(haloCore)
+  haloG.position.set(0, 2.3 * s, -0.55 * s) // 몸 뒤 — 스프라이트라 어느 각도든 카메라를 향한다
   g.add(haloG)
   g.userData.fxUpdate = (t) => {
     ring.rotation.z = t * 0.8
     ring.material.opacity = 0.28 + 0.14 * Math.sin(t * 2.4)
-    haloGlow.material.opacity = 0.4 + 0.16 * Math.sin(t * 1.9)
-    haloG.rotation.z = Math.sin(t * 0.6) * 0.1 // 후광이 천천히 숨쉬듯 흔들린다
-    rays.forEach(({ ray }, ri2) => {
-      ray.material.opacity = 0.28 + 0.2 * Math.abs(Math.sin(t * 1.6 + ri2 * 1.3))
-    })
+    burstA.material.rotation = t * 0.06 // 거의 멈춘 듯 아주 느리게 — 고요한 성광
+    burstB.material.rotation = -t * 0.09
+    burstA.material.opacity = 0.72 + 0.12 * Math.sin(t * 1.1)
+    burstB.material.opacity = 0.45 + 0.1 * Math.sin(t * 1.6 + 1.5)
+    haloCore.material.opacity = 0.42 + 0.12 * Math.sin(t * 1.4)
+    const br = 1 + 0.03 * Math.sin(t * 0.9)
+    burstA.scale.set(5.6 * s * br, 5.6 * s * br, 1) // 숨쉬듯 아주 은은하게
     motes.forEach((m, i) => {
       const c = (t / 2.7 + i / 3) % 1 // 링 언저리에서 피어올라 녹아 사라지는 입자
       const a = i * 2.1 + t * 0.7
