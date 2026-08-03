@@ -4419,6 +4419,23 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
     ...(CLASSES[h.cls]?.boss ? { lastFanSeq: h.bossFanSeq || 0, lastSmashSeq: h.bossSmashSeq || 0, lastSlamSeq: h.bossSlamSeq || 0 } : null),
     deathPts, deathGeo, dpDir, dpRad, dpStartY, dpPeak, deathN: DEATH_N, dead: false, deathT: 0,
   }
+  {
+    // 스폰 무적 페이드 대상: 몸·팔다리·모자·옷·무기 등 불투명 재질(개별 생성이라 안전) + 얼굴.
+    // transparent 재질(오라·게이지·상태 표식)은 자체 opacity 애니가 있어 제외 — 명패·체력바도 가독을 위해 유지.
+    const seen = new Set()
+    const mats = []
+    for (const root of [body, face, ...(hat ? [hat] : []), ...(costume ? [costume] : []), ...(weapon ? [weapon] : [])]) {
+      root.traverse?.((o) => {
+        const m = o.material
+        if (!m || Array.isArray(m) || seen.has(m)) return
+        if (m.transparent && o !== face) return
+        seen.add(m)
+        mats.push(m)
+      })
+      if (root === face && face.material && !seen.has(face.material)) { seen.add(face.material); mats.push(face.material) }
+    }
+    g.userData.fadeMats = mats
+  }
   return g
 }
 
@@ -8272,9 +8289,20 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         }
         obj.visible = isHeroVisible(view, h, myTeam)
         if (obj.visible && (h.brawlGuardT || 0) > 0 && !(h.brawlStarT > 0) && !(h.brawlFlyT > 0)) {
-          // 스폰 무적 깜빡: 시야 판정 뒤에 있어야 한다 — 앞에 두면 아래 대입이 매 프레임 덮어써
-          // 깜빡임이 통째로 무효가 된다(2026-08-03 실사고)
-          obj.visible = Math.floor(view.time * 5) % 2 === 0
+          // 스폰 무적: 사인파 연속 페이드 — 뚝뚝 끊기는 토글 대신 몸이 일렁이며 반투명해진다.
+          // (시야 판정 뒤에 있어야 한다 — 앞에 두면 아래 대입이 매 프레임 덮어써 무효, 2026-08-03 실사고)
+          const gop = 0.2 + 0.8 * (0.5 + 0.5 * Math.sin(view.time * 22)) // ~3.5Hz 일렁임
+          if (!u.guardFading) {
+            u.guardFading = true
+            for (const m of u.fadeMats || []) m.transparent = true
+          }
+          for (const m of u.fadeMats || []) m.opacity = gop
+        } else if (u.guardFading) {
+          u.guardFading = false // 무적 종료 — 원상 복구(불투명)
+          for (const m of u.fadeMats || []) {
+            m.opacity = 1
+            if (m !== u.face?.material) m.transparent = false
+          }
         }
         if (!obj.visible) return
         // 돌풍에 띄워지면(airT) 몸이 공중으로 떠오른다 — 띄운 동안 빙글빙글 + 위로 솟았다 내려온다
