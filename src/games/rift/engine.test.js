@@ -4614,6 +4614,25 @@ test('대난투 궁: 궁수 극태 레이저 — 정신집중 후 발사·강넉
   assert.ok(a.x < ax0, '반동으로 뒤로 밀림')
 })
 
+test('대난투 궁: 탱커 대지 밟기 — 균열 융기가 공중에 쳐올리며 날린다(끌어당김 없음)', () => {
+  const g = brawl8('tank')
+  const a = g.heroes[0]
+  const e = g.heroes[1]
+  a.dir = 0
+  e.x = a.x + 8; e.z = a.z
+  const far = g.heroes[2]
+  far.x = a.x - 20; far.z = a.z // 뒤쪽 — 끌어당김이 사라졌으니 그대로여야
+  g.heroes.slice(3).forEach((o) => { o.x = 30; o.z = 30 })
+  const farX0 = far.x
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  assert.ok(Math.abs(far.x - farX0) < 0.01, '끌어당김 없음')
+  const ex0 = e.x
+  run(g, 1.0)
+  assert.ok(e.brawlLaunchT > 0 || e.airT > 0 || e.x > ex0 + 4, `쳐올림+발사 (dx=${(e.x - ex0).toFixed(1)})`)
+  assert.ok(e.x > ex0 + 4, '진행 방향으로 크게 날아감')
+})
+
 test('대난투 궁: 마법사 핵폭탄 3연발 — 운석 전부 핵·버섯구름 3회', () => {
   const g = brawl8('mage')
   const a = g.heroes[0]

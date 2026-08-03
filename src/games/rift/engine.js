@@ -2145,14 +2145,7 @@ export function castUlt(state, id) {
     } else if (h.cls === 'warlock') {
       h.brawlHexT = 8 // 🧿 저주 폭풍 — 8초간 내 도트가 미세 경직을 건다(도트 예외의 예외)
     } else if (h.cls === 'tank') {
-      // 🌋 대지 밟기: 주변 전원을 끌어당기고 0.55초 뒤 발밑 대폭발 — 자석+폭탄 콤보 문법
-      for (const e of state.heroes) {
-        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) continue
-        const ed = Math.hypot(h.x - e.x, h.z - e.z)
-        if (ed > 10 || ed < 2) continue
-        applyKnockback(state, e, e.x * 2 - h.x, e.z * 2 - h.z, Math.min(ed - 1.5, 7))
-      }
-      // 본래 궁의 3파 균열(0~18)을 대난투 사양으로 증폭: 캐릭 3개 폭 + 튕겨내기
+      // 🌋 대지 밟기: 본래 궁의 3파 균열(0~18)을 대난투 사양으로 증폭 — 캐릭 3개 폭·암석 융기
       for (const z of state.zones) {
         if (z.kind === 'fissure' && z.owner === h.id && z.t === 0) {
           z.half = CHAR_W * 1.5
@@ -3983,6 +3976,7 @@ function stepBrawl(state, dt) {
     if (h.brawlStarHitCd > 0) h.brawlStarHitCd = Math.max(0, h.brawlStarHitCd - dt)
     if (h.brawlSmashT > 0) h.brawlSmashT = Math.max(0, h.brawlSmashT - dt)
     if (h.brawlHexT > 0) h.brawlHexT = Math.max(0, h.brawlHexT - dt)
+    if (h.brawlLaunchT > 0) h.brawlLaunchT = Math.max(0, h.brawlLaunchT - dt) // 🪨 융기 쳐올림 궤도
     if (h.brawlSanctT > 0) { // 🛡️ 성역: 무적 + 접근 적 지속 밀어냄
       h.brawlSanctT = Math.max(0, h.brawlSanctT - dt)
       h.brawlGuardT = Math.max(h.brawlGuardT || 0, Math.min(h.brawlSanctT, 0.3))
@@ -5395,7 +5389,7 @@ function stepZones(state, dt) {
       // 한 파(구간)가 터진다 — 그 구간의 적을 길게 기절
       lineDamage(state, owner, z.x, z.z, z.dir, z.len, z.half, z.dmg, z.stun)
       pushFxDir(state, 'fissure', z.x, z.z, z.len, z.dir, z.team)
-      if (z.brawlQuake && state.mode === 'brawl') { // 대난투: 융기하는 땅이 적을 양옆으로 튕겨낸다
+      if (z.brawlQuake && state.mode === 'brawl') { // 대난투: 솟는 암석이 적을 하늘 높이 쳐올리며 날린다
         const qx = Math.cos(z.dir)
         const qz = Math.sin(z.dir)
         for (const e of state.heroes) {
@@ -5405,9 +5399,11 @@ function stepZones(state, dt) {
           const alongQ = dxq * qx + dzq * qz
           if (alongQ < -1 || alongQ > z.len + 1) continue
           if (Math.abs(dxq * qz - dzq * qx) > z.half + 0.6) continue
-          applyKnockback(state, e, z.x + qx * alongQ, z.z + qz * alongQ, 8)
-          e.brawlSmashT = 0.5
-          e.brawlSmashA = Math.atan2(e.z - (z.z + qz * alongQ), e.x - (z.x + qx * alongQ))
+          applyKnockback(state, e, e.x - qx, e.z - qz, 13.5) // 균열 진행 방향으로 — 극태 레이저와 같은 거리
+          e.brawlLaunchT = 0.9 // 하늘 높이 쳐올림(렌더러가 대궤도로 띄운다)
+          e.airT = Math.max(e.airT, 1.5)
+          e.brawlSmashT = 0.55
+          e.brawlSmashA = z.dir
         }
       }
     } else if (z.kind === 'vine') {
@@ -9378,7 +9374,7 @@ export function makeView(state) {
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
       fallT: r2d(h.fallT),
-      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0), brawlStarT: r2d(h.brawlStarT || 0), brawlBananaN: h.brawlBananaN || 0, brawlComboN: h.brawlComboN || 0, brawlSmashT: r2d(h.brawlSmashT || 0), brawlSmashA: r2d(h.brawlSmashA || 0), brawlUltQ: Math.round(h.brawlUltQ || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
+      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0), brawlStarT: r2d(h.brawlStarT || 0), brawlBananaN: h.brawlBananaN || 0, brawlComboN: h.brawlComboN || 0, brawlSmashT: r2d(h.brawlSmashT || 0), brawlSmashA: r2d(h.brawlSmashA || 0), brawlUltQ: Math.round(h.brawlUltQ || 0), brawlLaunchT: r2d(h.brawlLaunchT || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
       bladeT: r2d(h.bladeT),
       hookWindT: r2d(h.hookWindT),
       pullT: r2d(h.pullT),
