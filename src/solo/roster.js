@@ -33,7 +33,7 @@ export function buildSoloRoster({ zodiacId, cls, mode }) {
     },
   ]
   if (mode === 'brawl') {
-    // 대난투: 8인 FFA — 각자 고유 팀(t0~t7), 지신·직업 중복 없음. 내가 t0.
+    // 난투전: 8인 FFA — 각자 고유 팀(t0~t7), 지신·직업 중복 없음. 내가 t0.
     roster[0].team = 't0'
     for (let i = 1; i < 8; i++) {
       const botCls = shuffle(CLASS_IDS.filter((c) => !takenCls.has(c)))[0]

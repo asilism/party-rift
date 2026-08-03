@@ -1060,7 +1060,7 @@ export const HAT_IDS = [
 ]
 
 const HAT_BUILDERS = {
-  // 난투 월계관(대난투 3위 전리품): 금빛 잎사귀 링 — 챔피언의 첫 조각
+  // 난투 월계관(난투전 3위 전리품): 금빛 잎사귀 링 — 챔피언의 첫 조각
   champlaurel(s) {
     const g = new THREE.Group()
     const gold = new THREE.MeshLambertMaterial({ color: 0xffd34d, emissive: 0x6b4d00, emissiveIntensity: 0.35 })
@@ -1689,7 +1689,7 @@ export const COSTUME_IDS = [
   'bowtie', 'scarf', 'lei', 'backpack', 'quiver', 'shield', 'tube', 'lantern',
   'goldcape', 'armor', 'redcloak', 'jetpack', 'wings', 'devilwings', 'starcape',
   'abysscloak', 'magmaplate', 'galaxyrobe', 'vinemail', // 보스 전리품(비매품) 4종
-  'champbelt', // 대난투 2위 전리품
+  'champbelt', // 난투전 2위 전리품
 ]
 
 function equippedCostume() {
@@ -1750,7 +1750,7 @@ function waveCape(m, t, s) {
 }
 
 const COSTUME_BUILDERS = {
-  // 챔피언 벨트(대난투 2위 전리품): 금 버클이 박힌 복싱 챔피언 벨트
+  // 챔피언 벨트(난투전 2위 전리품): 금 버클이 박힌 복싱 챔피언 벨트
   champbelt(s) {
     const g = new THREE.Group()
     const gold = new THREE.MeshLambertMaterial({ color: 0xffd34d, emissive: 0x6b4d00, emissiveIntensity: 0.35 })
@@ -2678,7 +2678,7 @@ export const WEAPON_SKIN_IDS = [
   'woodsword', 'candycane', 'pan', 'mallet', 'fish', 'umbrella', 'trident',
   'doubleaxe', 'guitar', 'scythe', 'gemstaff', 'lightspear', 'flamesword', 'frostblade', 'excalibur',
   'crescentscythe', 'quakemaul', 'cometstaff', 'bramblesword', // 보스 전리품(비매품) 4종
-  'champblade', // 대난투 1위 전리품
+  'champblade', // 난투전 1위 전리품
 ]
 
 function equippedWeaponSkin() {
@@ -2783,7 +2783,7 @@ function bladeGlow(mesh, color, opacity = 0.3, sx = 1.05, sy = 2.0, sz = 1.8) {
 }
 
 const WEAPON_SKINS = {
-  // 우승자의 황금검(대난투 1위 전리품): 순금 대검 — 챔피언의 증표
+  // 우승자의 황금검(난투전 1위 전리품): 순금 대검 — 챔피언의 증표
   champblade(g) {
     const gold = new THREE.MeshLambertMaterial({ color: 0xffd34d, emissive: 0x6b4d00, emissiveIntensity: 0.4 })
     const paleGold = new THREE.MeshLambertMaterial({ color: 0xfff2b0, emissive: 0x9a7500, emissiveIntensity: 0.45 })
@@ -5035,7 +5035,7 @@ function buildFireballProj() {
 export const PROJ_BUILDERS = {
   tornado: buildTornadoProj, // 돌풍술사 회오리 — 빙글빙글 도는 입체 회오리
   rock: buildRockProj, // 대지술사 돌덩이 — 발광체가 아니라 진짜 돌
-  swordwave: (n) => { const g = buildSwordwaveProj(n); if (n.big) g.scale.setScalar(+n.big || 1.5); return g }, // 검성 무형검 검기 — 대난투 레이저 검기는 big 배율만큼
+  swordwave: (n) => { const g = buildSwordwaveProj(n); if (n.big) g.scale.setScalar(+n.big || 1.5); return g }, // 검성 무형검 검기 — 난투전 레이저 검기는 big 배율만큼
   pierce: buildPierceProj,
   lightarrow: buildLightArrowProj,
   hawk: buildHawkProj,
@@ -6254,12 +6254,12 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const GW = WORLD.maxX - WORLD.minX + 80
   const GH = WORLD.maxZ - WORLD.minZ + 80
   const collapsibles = [] // 콜로세움: 붕괴 구멍과 겹치면 침몰·소멸할 구조물(성벽·수풀)
-  const brawlPadWalls = [] // 대난투: 대포 발판 반호 벽(링이 끊기면 낙하) — 벽 빌드 루프가 채운다
+  const brawlPadWalls = [] // 난투전: 대포 발판 반호 벽(링이 끊기면 낙하) — 벽 빌드 루프가 채운다
   let groundPunch = null // 콜로세움: 붕괴 구멍을 바닥 텍스처에서 실제로 뚫는 캔버스
   let ground
   if (map.mode === 'arena' || map.mode === 'brawl') {
     // 아레나 바닥은 월드 1:1 캔버스 — 붕괴 시 destination-out으로 구멍을 실제로 뚫는다(알파 컷)
-    //  대난투도 같은 캔버스 — 낭떠러지 링 밖을 실제로 뚫어 허공을 만든다(축소 시 다시 뚫음)
+    //  난투전도 같은 캔버스 — 낭떠러지 링 밖을 실제로 뚫어 허공을 만든다(축소 시 다시 뚫음)
     const c = document.createElement('canvas')
     c.width = c.height = 1024
     const ctx = c.getContext('2d')
@@ -6373,7 +6373,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   // 리스폰 존 (회복 지대) 표시 — 수호석 뒤편에 원판 + 빛나는 테두리 + 회복 십자.
   //  콜로세움은 "스타팅 원"으로만 쓴다: 회복 십자 없음, 경기 시작 후엔 숨긴다(렌더 루프에서 토글)
   const fountainPads = new THREE.Group()
-  for (const team of map.mode === 'brawl' ? [] : ['blue', 'red']) { // 대난투: 더미 우물(링 밖)은 안 그린다
+  for (const team of map.mode === 'brawl' ? [] : ['blue', 'red']) { // 난투전: 더미 우물(링 밖)은 안 그린다
     const fp = FOUNTAIN_POS[team]
     const pad = new THREE.Mesh(
       new THREE.CircleGeometry(FOUNTAIN_RADIUS, 40),
@@ -6408,7 +6408,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     { pit: DRAGON_PIT, pad: 0xd4a878, rock: 0x99856e, crystal: 0xff9d4d, boneSpikes: 0 },
     { pit: BARON_PIT, pad: 0xaaa2bd, rock: 0x6d6a82, crystal: 0xc07dff, boneSpikes: 3 },
   ]
-  for (const theme of map.mode === 'brawl' ? [] : PIT_THEMES) { // 대난투: 둥지 없음 — 링 밖은 허공뿐
+  for (const theme of map.mode === 'brawl' ? [] : PIT_THEMES) { // 난투전: 둥지 없음 — 링 밖은 허공뿐
     const pit = theme.pit
     const pad = new THREE.Mesh(
       new THREE.CircleGeometry(8, 32),
@@ -6605,7 +6605,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const Ro = FOUNTAIN_RADIUS + 2 * t // 바깥 면
   const Rmid = FOUNTAIN_RADIUS + t // 중심선(성가퀴 배치)
   const H = 4.6
-  for (const team of map.mode === 'brawl' ? [] : ['blue', 'red']) { // 대난투: 더미 우물(링 밖)엔 성곽 없음
+  for (const team of map.mode === 'brawl' ? [] : ['blue', 'red']) { // 난투전: 더미 우물(링 밖)엔 성곽 없음
     const fp = FOUNTAIN_POS[team]
     const g = new THREE.Group()
     // 반호 링을 위로 밀어 세운 곡면 벽체. ExtrudeGeometry는 shape의 (x,y)→월드(x,-z)로 눕힌다.
@@ -6711,7 +6711,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   //  심연 테마: 일부가 거대한 마정석 첨탑으로 바뀐다 — 죽은 숲 사이에서 보랏빛이 새어 나온다.
   const rnd = lcg(20260612)
   for (let i = 0; i < 140; i++) {
-    if (map.mode === 'arena' || map.mode === 'brawl') break // 콜로세움·대난투: 외곽 나무·수정 없음 — 경기장이 곧 세계다
+    if (map.mode === 'arena' || map.mode === 'brawl') break // 콜로세움·난투전: 외곽 나무·수정 없음 — 경기장이 곧 세계다
     const ang = rnd() * Math.PI * 2
     const rad = 1.05 + rnd() * 0.4
     const x = Math.cos(ang) * (WORLD.maxX + 8 + rnd() * 30)
@@ -6847,7 +6847,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   nexusObjs.blue.position.set(NEXUS_POS.blue.x, 0, NEXUS_POS.blue.z)
   nexusObjs.red.position.set(NEXUS_POS.red.x, 0, NEXUS_POS.red.z)
   scene.add(nexusObjs.blue, nexusObjs.red) // 콜로세움 포함 — 아레나에선 포인트 제단(공격 불가)
-  if (map.mode === 'brawl') { // 대난투: 수호석은 룰과 무관한 장식 — 화면 정리 차원에서 숨긴다
+  if (map.mode === 'brawl') { // 난투전: 수호석은 룰과 무관한 장식 — 화면 정리 차원에서 숨긴다
     nexusObjs.blue.visible = false
     nexusObjs.red.visible = false
   }
@@ -6942,8 +6942,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const bossAimPool = new Map() // 보스 조준 예고(섬멸 광선 띠·서리 숨결 부채꼴) — 안개 무관(즉사급 예고)
   const particles = makeParticles(scene) // 타격 스파크·발자국 먼지·투사체 꼬리 공용
   let trailStamps = null // 이동 트레일 스탬프 풀(내 영웅 전용) — 첫 이동에 트레일을 알고 나면 생성
-  let brawlRing = null // 대난투 낭떠러지 경계 링 — 단위원을 만들어 반경만 스케일
-  const brawlPickupObjs = new Map() // 대난투 보급 아이템 마커(이모지 스프라이트)
+  let brawlRing = null // 난투전 낭떠러지 경계 링 — 단위원을 만들어 반경만 스케일
+  const brawlPickupObjs = new Map() // 난투전 보급 아이템 마커(이모지 스프라이트)
   const brawlCannonObjs = new Map() // 대포 발사대(소용돌이 패드)
   let brawlShakeT = 0 // 강넉백·장외 카메라 흔들림
   let brawlBoltSeen = 0 // 번개 낙뢰 시퀀스(중복 방지)
@@ -7077,7 +7077,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     moteGeo.attributes.position.needsUpdate = true
     particles.update(dt) // 타격 스파크·발자국 먼지·투사체 꼬리 전진
     trailStamps?.update(dt) // 이동 트레일 스탬프 페이드
-    // 대난투: 낭떠러지 경계 링 — 링 축소가 시작되면 붉게 다급히 맥동한다
+    // 난투전: 낭떠러지 경계 링 — 링 축소가 시작되면 붉게 다급히 맥동한다
     if (view.brawlR > 0) {
       if (!brawlRing) {
         brawlRing = new THREE.Mesh(
@@ -7802,7 +7802,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             const fp = Math.min(1, (performance.now() / 1000 - u.fellAt) / 1.55)
             obj.visible = fp < 1
             if (view.mode === 'brawl') {
-              // 대난투: 별이 되어 날아간다 ⭐ — 링 바깥 방향으로 솟구쳐 멀어지며 반짝
+              // 난투전: 별이 되어 날아간다 ⭐ — 링 바깥 방향으로 솟구쳐 멀어지며 반짝
               const rr = Math.max(0.001, Math.hypot(h.x, h.z))
               const ox = (h.x / rr) * fp * 26
               const oz = (h.z / rr) * fp * 26
@@ -7847,7 +7847,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           setHeroDead(u, false) // 부활 — 파티클 제거하고 영웅 복원
           u.lastHp = h.hp // 부활 회복을 피해로 오인하지 않게 기준 갱신
         }
-        // 낙사 부활(대난투): 추락 연출이 가라앉히고 줄여 둔 몸을 원상 복구 —
+        // 낙사 부활(난투전): 추락 연출이 가라앉히고 줄여 둔 몸을 원상 복구 —
         //  콜로세움은 낙사=영구 사망이라 이 복구 경로가 없었다(외형 소실/축소 버그의 원인)
         if (u.fell && !(h.fallT > 0)) {
           u.fell = false
@@ -8175,7 +8175,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           u.dmgAccum = (u.dmgAccum || 0) + dHp
           // 타격 조각: 맞은 몸통 높이에서 선명한 주황빛 파편이 퐉! 사방으로 날카롭게 튀어 흩어진다(피 아님)
           if (obj.visible) {
-            const brawlHit = view.mode === 'brawl' // 대난투: 팍! 팍! — 파편이 크고 많게
+            const brawlHit = view.mode === 'brawl' // 난투전: 팍! 팍! — 파편이 크고 많게
             const n = Math.min(brawlHit ? 22 : 14, (brawlHit ? 10 : 6) + Math.round(dHp / 9))
             particles.emit(h.x, u.bodyBaseY + 0.6, h.z, 0xffb42a, n, { spread: brawlHit ? 13 : 9, up: brawlHit ? 12 : 9, gravity: 22, size: brawlHit ? 2.1 : 1.5, hard: true, lifeMin: 0.16, lifeMax: 0.34 })
             if (brawlHit) {
@@ -9024,7 +9024,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
 
     // 전장의 안개 (관전자는 안개 없음 / 경기가 끝나면 걷어 폭발 연출이 또렷이 보이게)
     // 시야는 천천히 변하므로 품질에 따라 몇 프레임에 한 번만 캔버스를 다시 그려 재업로드 비용을 아낀다.
-    const fogVisible = !!myTeam && view.status !== 'finished' && view.mode !== 'arena' && view.mode !== 'brawl' // 콜로세움·대난투: 노포그
+    const fogVisible = !!myTeam && view.status !== 'finished' && view.mode !== 'arena' && view.mode !== 'brawl' // 콜로세움·난투전: 노포그
     if (fogVisible) {
       if (!fog.plane.visible || frameN % Q.fogEvery === 0) fog.update(view, myTeam) // 켜진 첫 프레임엔 즉시 갱신
     }
@@ -9116,7 +9116,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       want.set(me.x, 0, me.z)
     } else {
       want.set(0, 0, 0)
-      if (view.mode === 'brawl') { // 대난투 관전: 링 전체가 꽉 차는 높이 — 95는 MOBA 전맵용이라 너무 멀다
+      if (view.mode === 'brawl') { // 난투전 관전: 링 전체가 꽉 차는 높이 — 95는 MOBA 전맵용이라 너무 멀다
         offY = 58
         offZ = 38
       } else {

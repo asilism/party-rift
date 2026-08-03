@@ -20,8 +20,8 @@ export const ULT_LEVEL = 5 // 궁극기가 열리는 레벨 (Lv5)
 export const SKILL2_LEVEL = 3 // 보조 스킬이 열리는 레벨 (Lv3)
 export const TEAM_SIZE = 3 // 기본(3:3) 팀 인원 — 하위호환용 별칭
 // 모드별 팀 인원. 5:5는 탑/미드/봇 + 봇을 지원하는 힐러 + 정글러 구성.
-export const TEAM_SIZES = { '3v3': 3, '5v5': 5, boss: 5, defense: 5, arena: 2, brawl: 1 } // brawl = 대난투(8인 FFA, 팀당 1명)
-// ── 대난투(8인 FFA) — 각자 고유 팀(t0~t7), 넉백+장외 하이브리드 ──
+export const TEAM_SIZES = { '3v3': 3, '5v5': 5, boss: 5, defense: 5, arena: 2, brawl: 1 } // brawl = 난투전(8인 FFA, 팀당 1명)
+// ── 난투전(8인 FFA) — 각자 고유 팀(t0~t7), 넉백+장외 하이브리드 ──
 export const BRAWL_LIVES = 10 // 시작 목숨 — 다 잃으면 탈락(순위는 탈락 역순)
 const BRAWL_LVL = 18 // 전원 만렙 고정 — 직업 특성이 최대로 선다(스탯·스킬 계수 만개)
 const BRAWL_RESPAWN = 3.0 // 리스폰 대기(초) — 난전 리듬 유지
@@ -568,7 +568,7 @@ const SUMMON_SPEC = {
   // 미니포탑: 주인이 사거리 안에 없으면 잠시 뒤 휴면(zzz). 수명 없음 — 부서지거나 회수 전까지 자리를 지킨다
   turret: { hp: 90, hpCoef: 2.5, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity }, // 초반 ~210(4.7대) → 후반 ~490(3.3대)
   cannon: { hp: 480, hpCoef: 3.0, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 }, // 초반 ~620(13.7대) → 후반 ~960(6.4대)
-  // 야수조련사 대난투 궁 전용: 진짜 용 — 크고 아프고 짧게 산다
+  // 야수조련사 난투전 궁 전용: 진짜 용 — 크고 아프고 짧게 산다
   dragonpet: { hp: 300, hpCoef: 2.0, dmg: 36, coef: 0.15, range: 4.4, aggro: 22, speed: 8.2, mobile: true, cd: 1.6, life: 7 }, // 시뮬 승률 편중 반복 너프(2026-08-03, 최종 50%→)
 }
 const BEAST_LEAP_DUR = 0.45 // 사냥 명령 시 야수가 적에게 달려드는(도약) 시간 — 거리 무시
@@ -713,7 +713,7 @@ export const TROPHY_SETS = {
   boss_archmage: { hat: 'nebulacrown', costume: 'galaxyrobe', weapon: 'cometstaff', fx: { powerMul: 0.03 } }, // 대마도사 세트: 주문력 +3%
   boss_shadow: { hat: 'shadowmask', costume: 'abysscloak', weapon: 'crescentscythe', fx: { speed: 0.4 } }, // 그림자 세트: 이속 +3%
   boss_thorn: { hat: 'thorncrown', costume: 'vinemail', weapon: 'bramblesword', fx: { def: 0.03 } }, // 가시 세트: 피해감소 +3%
-  brawl_champ: { hat: 'champlaurel', costume: 'champbelt', weapon: 'champblade', fx: { speed: 0.3 } }, // 챔피언 세트(대난투 1·2·3위): 이속 소량
+  brawl_champ: { hat: 'champlaurel', costume: 'champbelt', weapon: 'champblade', fx: { speed: 0.3 } }, // 챔피언 세트(난투전 1·2·3위): 이속 소량
 }
 // 장착 3피스가 한 보스의 전리품 세트면 그 보스 id — 로스터(클라)와 씬(오라)이 같이 쓴다
 export function trophySetOf(hat, costume, weapon) {
@@ -884,7 +884,7 @@ export function createGame(players, opts = {}) {
   const slotCount = { blue: 0, red: 0 }
   const usedCls = { blue: new Set(), red: new Set() }
   const heroes = players.map((p) => {
-    // 대난투 등 고유 팀(t0~t7)도 수용 — 처음 보는 팀 키는 지연 초기화
+    // 난투전 등 고유 팀(t0~t7)도 수용 — 처음 보는 팀 키는 지연 초기화
     if (slotCount[p.team] == null) slotCount[p.team] = 0
     if (!usedCls[p.team]) usedCls[p.team] = new Set()
     const slot = slotCount[p.team]++
@@ -964,7 +964,7 @@ export function createGame(players, opts = {}) {
     for (const h of heroes) h.role = null // 콜로세움: 라인/정글 없음 — 결투뿐
   }
   if (mode === 'brawl') {
-    // 대난투: 성장 없음 — 전원 고정 레벨·풀피, 라인 역할 없음, 목숨 지급
+    // 난투전: 성장 없음 — 전원 고정 레벨·풀피, 라인 역할 없음, 목숨 지급
     for (const h of heroes) {
       h.role = null
       h.lvl = BRAWL_LVL
@@ -1013,7 +1013,7 @@ export function createGame(players, opts = {}) {
     arenaPts: mode === 'arena' ? { blue: 10, red: 10, ...(o.arenaPts || {}) } : null, // 팀별 토너먼트 포인트(수호석 하트)
     arenaDeduct: mode === 'arena' ? (o.arenaDeduct ?? 3) : 0, // 이번 라운드 패배 시 차감량(하트 펑 연출용)
     arenaRound: mode === 'arena' ? (o.arenaRound || 1) : 0,
-    brawlR: mode === 'brawl' ? 40 : 0, // 대난투 링 반경(시간에 따라 축소)
+    brawlR: mode === 'brawl' ? 40 : 0, // 난투전 링 반경(시간에 따라 축소)
     brawlUltDebug: mode === 'brawl' && !!o.ultDebug, // ?ult 궁극기 시험장 — 게이지 무한·전장 정적
     brawlRanks: mode === 'brawl' ? [] : null, // 탈락 순위 기록 {place,id,name,zodiacId}
     brawlPickups: mode === 'brawl' ? [] : null, // 하늘 보급 아이템 {id,kind,x,z,t}
@@ -1119,7 +1119,7 @@ function applyKnockback(state, victim, fromX, fromZ, dist, wallStun = 0) {
   victim.knockT = KNOCK_DUR
   victim.knockStun = wallStun * cc
   // 밀려나면 정신집중/귀환/발사준비 같은 채널은 끊긴다(이동기 CC로 취급)
-  //  단 대난투 궁 집중(castT)은 슈퍼아머 — 게이지를 모은 한 방이 잔넉백에 헛되지 않게
+  //  단 난투전 궁 집중(castT)은 슈퍼아머 — 게이지를 모은 한 방이 잔넉백에 헛되지 않게
   if (state.mode !== 'brawl') victim.castT = 0
   victim.recallT = 0
   victim.hookWindT = 0
@@ -1220,7 +1220,7 @@ const berserkStrength = (h) =>
 
 // 버프 포함 피해 배율 / 공격력
 const dmgMult = (h) => (h.baronT > 0 ? 1.4 : h.dragonT > 0 ? 1.25 : 1)
-const atkOf = (h, st = null) => heroAtk(h) * dmgMult(h) * (st?.mode === 'brawl' ? 0.78 : 1) // 대난투: 잦은 타격만큼 한 대는 가볍게
+const atkOf = (h, st = null) => heroAtk(h) * dmgMult(h) * (st?.mode === 'brawl' ? 0.78 : 1) // 난투전: 잦은 타격만큼 한 대는 가볍게
 // 직업 계열: 마법(AP, 주문력 계수) vs 물리(AD, 공격력 계수).
 //  · 마법 계열(마법사·힐러)은 레벨로 성장하는 기본 주문력 + 아이템 주문력을 쓴다.
 //  · 그 외(전사·궁수·암살자·탱커)는 공격력(heroAtk)을 그대로 주력 스탯으로 쓴다.
@@ -1261,14 +1261,14 @@ export function isHeroVisible(snap, h, team) {
     )
   }
   if (h.revealT > 0) return true
-  if (snap.mode === 'arena' || snap.mode === 'brawl') return true // 콜로세움·대난투: 노포그 — 수풀·은신 밖은 어디든 다 보인다
+  if (snap.mode === 'arena' || snap.mode === 'brawl') return true // 콜로세움·난투전: 노포그 — 수풀·은신 밖은 어디든 다 보인다
   return inSight(snap, h, team)
 }
 
 // 병사 등 일반 유닛: 수풀 규칙 없이 시야 거리만 본다
 export function isUnitVisible(snap, ent, team) {
   if (!team || ent.team === team) return true
-  if (snap.mode === 'arena' || snap.mode === 'brawl') return true // 콜로세움·대난투: 노포그
+  if (snap.mode === 'arena' || snap.mode === 'brawl') return true // 콜로세움·난투전: 노포그
   return inSight(snap, ent, team)
 }
 
@@ -1750,7 +1750,7 @@ export function castAttack(state, id, forceRef = null) {
     const tk = state.heroes.find((o) => o.id === h.tauntBy && o.team !== h.team && o.respawnT <= 0)
     if (tk && dist(h, tk) <= heroRange(h)) ref = { tk: 'hero', id: tk.id }
   }
-  // 🍌 바나나 다발(대난투): 평타 버튼 = 투척 — 사거리에 적이 없어도 조준 방향으로 던진다.
+  // 🍌 바나나 다발(난투전): 평타 버튼 = 투척 — 사거리에 적이 없어도 조준 방향으로 던진다.
   //  던지는 모션은 평타 스윙(atkSeq)이 담당. 표적이 있으면 그 발밑에 정조준.
   if (state.mode === 'brawl' && (h.brawlBananaN || 0) > 0) {
     h.brawlBananaN--
@@ -1760,7 +1760,7 @@ export function castAttack(state, id, forceRef = null) {
     const bz = tt && tt.z != null ? tt.z + Math.sin(ba) * 1.2 : h.z + Math.sin(h.dir) * 4.5
     state.brawlTraps.push({ id: state.nextId++, x: bx, z: bz, owner: h.id, t: 0 })
     if (!ref) { // 허공 투척 — 평타 리듬과 스윙 모션만 태우고 끝
-      h.atkCd = CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed) * (state.mode === 'brawl' ? 0.55 : 1) // 대난투: 파파파 리듬
+      h.atkCd = CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed) * (state.mode === 'brawl' ? 0.55 : 1) // 난투전: 파파파 리듬
       h.atkSeq++
       h.revealT = Math.max(h.revealT, REVEAL_TIME)
       return state
@@ -1769,7 +1769,7 @@ export function castAttack(state, id, forceRef = null) {
   if (!ref) return state
   const tgt = targetEntity(state, ref)
   cancelRecall(h) // 공격하면 집중이 풀린다
-  h.atkCd = CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed) * (state.mode === 'brawl' ? 0.55 : 1) // 대난투: 파파파 리듬
+  h.atkCd = CLASSES[h.cls].atkCd * (1 - itemBonus(h).atkSpeed) * (state.mode === 'brawl' ? 0.55 : 1) // 난투전: 파파파 리듬
   if (h.berserkT > 0) h.atkCd *= 1 - BERSERK_ASPD * berserkStrength(h) // 광폭화: 공격속도 ↑
   if (h.freezeT > 0) h.atkCd *= FREEZE_ATK // 빙결 중엔 평타도 굼뜨다
   if (h.bladeT > 0) h.atkCd *= 1 - BLADE_ASPD // 검성 무형검: 공격속도 ↑
@@ -1779,7 +1779,7 @@ export function castAttack(state, id, forceRef = null) {
   h.slowT = Math.max(h.slowT, ATK_SLOW_T) // 쏘는 동안엔 발이 무겁다
   // 검성 무형검: 평타가 초승달 검기가 되어 직선의 적을 모두 벤다 (건물이 목표면 그대로 평타)
   if (h.cls === 'swordmaster' && h.bladeT > 0 && ref.tk !== 'tower' && ref.tk !== 'nexus') {
-    // 대난투 무형검: 평타 검기가 직선 레이저 검기가 된다 — 2.2배 속도로 30까지 내달리는 관통 칼날
+    // 난투전 무형검: 평타 검기가 직선 레이저 검기가 된다 — 2.2배 속도로 30까지 내달리는 관통 칼날
     const wspd = state.mode === 'brawl' ? SWORDWAVE_SPEED * 2.2 : SWORDWAVE_SPEED
     state.projectiles.push({
       id: state.nextId++, kind: 'swordwave', team: h.team, owner: h.id,
@@ -2112,7 +2112,7 @@ export function castUlt(state, id) {
   const h = getHero(state, id)
   if (!h || !canAct(h) || h.lvl < ULT_LEVEL || h.castT > 0) return state
   if (state.mode === 'brawl') {
-    if ((h.brawlUltQ || 0) < 100 || h.ultCd > 0) return state // 대난투: 쿨 대신 게이지 — 때려서 모아야 쓴다
+    if ((h.brawlUltQ || 0) < 100 || h.ultCd > 0) return state // 난투전: 쿨 대신 게이지 — 때려서 모아야 쓴다
   } else if (h.ultCd > 0) return state
   const ok = ULTS[h.cls](state, h)
   if (ok === false) return state
@@ -2123,7 +2123,7 @@ export function castUlt(state, id) {
     state.brawlUltSeq = (state.brawlUltSeq || 0) + 1 // 씬 발동 연출(마법진·빛기둥·섬광)
     state.brawlUltAt = { x: h.x, z: h.z, id: h.id, cls: h.cls, dir: h.dir || 0 }
     pushFeed(state, 'obj', `🌟 ${emojiOf(h.zodiacId)} ${h.name} — 힘이 폭발한다!`)
-    // ── ★ 대난투 전용 궁 과장 — 본편 킷은 그대로, 그 위에 드라마를 얹는다 ──
+    // ── ★ 난투전 전용 궁 과장 — 본편 킷은 그대로, 그 위에 드라마를 얹는다 ──
     if (h.cls === 'mage') {
       // ☢️ 핵폭탄 3연발: 본래 운석 셋이 전부 핵급이 된다 — 발마다 버섯구름·백섬광·폭풍 넉백
       for (const z of state.zones) {
@@ -2166,12 +2166,12 @@ export function castUlt(state, id) {
         pushFx(state, 'spark', e.x, e.z, 2.4, h.team, 0.6)
       }
     } else if (h.cls === 'tank') {
-      // 🌋 대지 밟기: 본래 궁의 3파 균열(0~18)을 대난투 사양으로 증폭 — 캐릭 3개 폭·암석 융기
+      // 🌋 대지 밟기: 본래 궁의 3파 균열(0~18)을 난투전 사양으로 증폭 — 캐릭 3개 폭·암석 융기
       for (const z of state.zones) {
         if (z.kind === 'fissure' && z.owner === h.id && z.t === 0) {
           z.half = CHAR_W * 1.5
           z.brawlQuake = true
-          z.stun = Math.min(z.stun || 0, 0.9) // 본편 스턴 1.6이 새면 락이 된다 — 대난투 캡
+          z.stun = Math.min(z.stun || 0, 0.9) // 본편 스턴 1.6이 새면 락이 된다 — 난투전 캡
         }
       }
       for (let k = 0; k < 3; k++) { // 이어서 40(맵 절반)까지 균열이 내달린다
@@ -2215,7 +2215,7 @@ export function castUlt(state, id) {
       h.brawlSanctZ = h.z
     } else if (h.cls === 'beastmaster') {
       // 🐻🐉 야수 대소집: 곰 하나, 그리고 진짜 용(정글 드래곤 모델) 한 마리
-      //  — 위용은 그대로, 전투력은 대난투 사양으로 감쇠(시뮬 승률 63~75% 편중 교정)
+      //  — 위용은 그대로, 전투력은 난투전 사양으로 감쇠(시뮬 승률 63~75% 편중 교정)
       const bb = spawnSummon(state, h, 'bear', h.x + Math.cos(h.dir + 0.6) * 2.5, h.z + Math.sin(h.dir + 0.6) * 2.5)
       const dg = spawnSummon(state, h, 'dragonpet', h.x + Math.cos(h.dir - 0.5) * 3.2, h.z + Math.sin(h.dir - 0.5) * 3.2)
       for (const pet of [bb, dg]) {
@@ -2434,7 +2434,7 @@ const ULTS = {
     }
     pushFx(state, 'meteorhit', h.x, h.z, GUILLOTINE_RADIUS, h.team)
     if (!hitAny) {
-      // 대난투 단죄는 사슬 사거리(13)가 본체 — 그 안에 적이 있으면 내리치기가 빗나가도 발동한다
+      // 난투전 단죄는 사슬 사거리(13)가 본체 — 그 안에 적이 있으면 내리치기가 빗나가도 발동한다
       const chainable = state.mode === 'brawl' && state.heroes.some((e2) =>
         e2.team !== h.team && e2.respawnT <= 0 && e2.hp > 0 && Math.hypot(h.x - e2.x, h.z - e2.z) <= 13)
       if (!chainable) return false
@@ -3018,7 +3018,7 @@ function healHero(h, amount) {
 //  redirected=true 는 결속 리다이렉트로 수호기사가 대신 맞는 호출(무한 연쇄 방지 플래그).
 function damageHero(state, victim, amount, attacker, redirected = false, tag = null, dot = false) {
   if (victim.respawnT > 0 || state.status !== 'playing') return
-  if (state.mode === 'brawl' && (victim.brawlGuardT > 0 || victim.brawlStarT > 0)) return // 대난투: 스폰 보호 또는 ⭐ 별 무적
+  if (state.mode === 'brawl' && (victim.brawlGuardT > 0 || victim.brawlStarT > 0)) return // 난투전: 스폰 보호 또는 ⭐ 별 무적
   if (state.mode === 'arena' && state.arenaPhase === 'shop' && attacker) return // 준비 결계: 전투 불가
   if (victim.isBoss && bossInvuln(state, victim)) return // 무적(각성 휴지기 보호막 / 기상 전 수면)
   // 봇 난이도: 봇 영웅이 주는 피해(평타·스킬 공통)를 난이도 배율로. 리다이렉트(결속 대납)엔
@@ -3098,7 +3098,7 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
     attacker.brawlIdleT = 0 // 전투 참여 — 방관 아님
     victim.brawlIdleT = 0
   }
-  // 대난투 코어: 모든 피해가 넉백을 동반 — 잃은 체력이 많을수록 크게 날아간다(스매시 %).
+  // 난투전 코어: 모든 피해가 넉백을 동반 — 잃은 체력이 많을수록 크게 날아간다(스매시 %).
   //  가장자리는 낭떠러지라 넉백 자체가 처형 수단. 잔피해(<8)는 제외(도트 진동 방지).
   if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && amount > 0 && !dot && !state._summonHit && !state._ultHit) {
     // ⚡ 궁극기 게이지: 때리면 크게, 맞으면 절반 — 교전이 궁을 만든다.
@@ -3200,7 +3200,7 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
     victim.brawlStarT = 0
     victim.brawlBananaN = 0
     victim.brawlComboN = 0
-    // 대난투: 목숨 1 차감 — 남으면 짧은 리스폰, 다 잃으면 탈락(순위는 탈락 역순)
+    // 난투전: 목숨 1 차감 — 남으면 짧은 리스폰, 다 잃으면 탈락(순위는 탈락 역순)
     victim.brawlLives = Math.max(0, (victim.brawlLives || 0) - 1)
     if (victim.brawlLives <= 0 && !victim.brawlOut) {
       victim.brawlOut = true
@@ -3209,7 +3209,7 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
     }
   }
   victim.respawnT = (victim.isBossAdd || victim.defenseBoss) ? 1e9
-    : state.mode === 'brawl' ? ((victim.brawlLives || 0) > 0 ? BRAWL_RESPAWN : 1e9) // 대난투: 목숨제
+    : state.mode === 'brawl' ? ((victim.brawlLives || 0) > 0 ? BRAWL_RESPAWN : 1e9) // 난투전: 목숨제
     : state.mode === 'arena' ? 1e9 // 콜로세움: 한 번 죽으면 이 라운드는 끝
     : isRaidMode(state.mode) && !victim.isBoss ? Math.min(respawnTime(victim.lvl), 18)
     : respawnTime(victim.lvl)
@@ -3489,7 +3489,7 @@ function awardXp(state, team, at, amount, killer) {
 }
 
 function giveXp(state, h, amount) {
-  if (state.mode === 'brawl') return // 대난투: 성장 없음 — 전원 고정 레벨
+  if (state.mode === 'brawl') return // 난투전: 성장 없음 — 전원 고정 레벨
   if (h.respawnT > 0) return // 죽어 있는 동안엔 경험치를 받지 못한다
   // 보스는 레벨 개념이 없다 — 경험치를 받지 않는다. (예전엔 처치 XP로 레벨업하며
   //  레벨업 보너스 15%를 회복해, 영웅을 잡을 때마다 체력이 훅 차오르는 것처럼 보였다.)
@@ -3762,7 +3762,7 @@ function arenaPickHole(state) {
   return null // 자리가 완전히 소진 — 이번 조각은 생략
 }
 
-// ── 대난투 진행 — 링 축소·장외 낙사·리스폰 무적·종료/순위 판정 ──
+// ── 난투전 진행 — 링 축소·장외 낙사·리스폰 무적·종료/순위 판정 ──
 function stepBrawl(state, dt) {
   if (state.mode !== 'brawl' || state.status !== 'playing') return
   // 링 축소(5분 후): 좁아지는 낭떠러지가 피날레를 강제한다
@@ -4036,7 +4036,7 @@ function stepBrawl(state, dt) {
       if (Math.hypot(h.x - e.x, h.z - e.z) > 2.7) continue
       if ((e.brawlStarHitCd || 0) > 0) continue
       e.brawlStarHitCd = 0.45
-      damageHero(state, e, 145, h, false, '무적별') // 대난투 공용 넉백이 알아서 날린다
+      damageHero(state, e, 145, h, false, '무적별') // 난투전 공용 넉백이 알아서 날린다
       pushFx(state, 'spark', e.x, e.z, 2.6, null, 0.9)
     }
   }
@@ -4132,7 +4132,7 @@ function stepBrawl(state, dt) {
         pushFx(state, 'rocksplash', h.x, h.z, 6, h.team, 1.0)
       }
     }
-    // 🌀 전사 회전베기(대난투): 도는 동안 주변을 빨아들이고, 멈추는 순간 전원 발사
+    // 🌀 전사 회전베기(난투전): 도는 동안 주변을 빨아들이고, 멈추는 순간 전원 발사
     if (h.cls === 'warrior' && h.hp > 0 && h.respawnT <= 0) {
       if (h.whirlT > 0) {
         h.brawlWhirlWas = true
@@ -4388,7 +4388,7 @@ function stepArena(state, dt) {
 }
 
 function stepWaves(state, dt) {
-  if (state.mode === 'arena' || state.mode === 'brawl') return // 콜로세움·대난투: 병사 없음
+  if (state.mode === 'arena' || state.mode === 'brawl') return // 콜로세움·난투전: 병사 없음
   if (state.mode === 'defense') return stepDefenseWaves(state, dt) // 방어전: 전용 파도 시스템
   if (isRaidMode(state.mode)) return // 레이드: 정규 웨이브 없음 — 보스/파도 소환 병사가 라인을 민다
   state.waveT -= dt
@@ -4555,7 +4555,7 @@ function stepHero(state, h, dt) {
           h.z = (h.z / sr) * safe
         }
         h.brawlGuardT = BRAWL_GUARD_T // 스폰킬 방지 무적
-        // 대난투: 부활 시 전 스킬 쿨 초기화 — 목숨제 난전에서 맨몸 부활은 연속 처형만 부른다
+        // 난투전: 부활 시 전 스킬 쿨 초기화 — 목숨제 난전에서 맨몸 부활은 연속 처형만 부른다
         h.skillCd = 0
         h.skill2Cd = 0
         h.ultCd = 0
@@ -4600,7 +4600,7 @@ function stepHero(state, h, dt) {
   // 정신집중(궁수 빛의 화살): 1초 집중 후 발사. 그동안 제자리(아래 이동에서 막힘), 기절당하면 끊긴다.
   if (h.castT > 0) {
     if (h.stunT > 0 && state.mode !== 'brawl') {
-      h.castT = 0 // 기절에 끊김 — 불발 (대난투 궁 집중은 슈퍼아머 — 게이지를 모은 한 방이 헛되지 않게)
+      h.castT = 0 // 기절에 끊김 — 불발 (난투전 궁 집중은 슈퍼아머 — 게이지를 모은 한 방이 헛되지 않게)
     } else {
       h.castT = Math.max(0, h.castT - dt)
       if (h.castT === 0) fireLightArrow(state, h)
@@ -4723,7 +4723,7 @@ function stepHero(state, h, dt) {
   // 자연 회복 (전투 이탈 시) + 이무기 버프 회복.
   // 보스는 제외 — 전용 재생(bossThink, 0.5%/s)만 쓴다. 공통 회복(1.5%/s)까지 겹치면
   // 각성 휴지기(무적 30초)마다 반피를 되채우는 참사가 난다.
-  if (state.time - h.lastHurt > REGEN_DELAY && !h.isBoss && state.mode !== 'arena' && state.mode !== 'brawl') { // 대난투도 자연재생 없음 — 회복은 열매 경제 + 겁쟁이 세금 상쇄 방지
+  if (state.time - h.lastHurt > REGEN_DELAY && !h.isBoss && state.mode !== 'arena' && state.mode !== 'brawl') { // 난투전도 자연재생 없음 — 회복은 열매 경제 + 겁쟁이 세금 상쇄 방지
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * REGEN_RATE * dt) // 콜로세움: 자연 재생 없음 — 포킹이 쌓인다
   }
   if (h.baronT > 0) h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.02 * dt)
@@ -5490,7 +5490,7 @@ function stepZones(state, dt) {
       state._ultHit = !!z.brawlQuake
       lineDamage(state, owner, z.x, z.z, z.dir, z.len, z.half, z.dmg, z.stun)
       pushFxDir(state, 'fissure', z.x, z.z, z.len, z.dir, z.team)
-      if (z.brawlQuake && state.mode === 'brawl') { // 대난투: 솟는 암석이 적을 하늘 높이 쳐올리며 날린다
+      if (z.brawlQuake && state.mode === 'brawl') { // 난투전: 솟는 암석이 적을 하늘 높이 쳐올리며 날린다
         const qx = Math.cos(z.dir)
         const qz = Math.sin(z.dir)
         for (const e of state.heroes) {
@@ -5556,7 +5556,7 @@ function spawnSummon(state, owner, kind, x, z) {
   const ps = powerStat(owner)
   // 증강(소환물 강화): 소환 시점 주인의 summonMul만큼 체력·피해를 함께 올린다 — 무한방어 소환사 빌드 축
   let smul = 1 + augOf(owner).summonMul
-  // 대난투: 늑대·곰은 낙사도 링 축소도 무시하는 FFA 최적 병기 — 물량 가치만큼 개체를 감쇠(본편 무영향)
+  // 난투전: 늑대·곰은 낙사도 링 축소도 무시하는 FFA 최적 병기 — 물량 가치만큼 개체를 감쇠(본편 무영향)
   if (state.mode === 'brawl' && (kind === 'wolfpet' || kind === 'bear')) smul *= 0.72
   const hp = Math.round((spec.hp + (spec.hpCoef || 0) * ps) * smul)
   const su = {
@@ -7997,7 +7997,7 @@ function stepBots(state, dt) {
       h.mz = 0
       continue
     }
-    // 대난투: FFA 전용 두뇌 — 최상단 가로채기(콜로세움과 같은 이유)
+    // 난투전: FFA 전용 두뇌 — 최상단 가로채기(콜로세움과 같은 이유)
     if (state.mode === 'brawl') {
       if (state.brawlUltDebug) { h.mx = 0; h.mz = 0; continue } // 시험장: 봇은 허수아비
       brawlBotDuty(state, h, dt)
@@ -8878,7 +8878,7 @@ function arenaBotDuty(state, h, dt) {
   }
 }
 
-// 대난투 전용 봇 두뇌 — FFA: 원한(마지막으로 날 때린 상대)+가까움+빈사 보너스로 표적을 고르고,
+// 난투전 전용 봇 두뇌 — FFA: 원한(마지막으로 날 때린 상대)+가까움+빈사 보너스로 표적을 고르고,
 //  체력이 밀리거나 가장자리에 몰리면 중앙 쪽으로 몸을 뺀다(넉백 장외 방지). 상점·라인 습관 없음.
 function brawlBotDuty(state, h, dt) {
   const myR = Math.hypot(h.x, h.z)
@@ -9425,7 +9425,7 @@ export function makeView(state) {
     arenaPts: state.arenaPts ? { ...state.arenaPts } : null, // 팀별 토너먼트 포인트 — 복사 필수(델타 코덱이 참조 비교라 원본을 넘기면 변경이 전송 안 됨)
     arenaDeduct: state.arenaDeduct, // 패배 시 차감량 — 종료 연출에서 하트가 터지는 개수
     arenaT: r2d(state.arenaT), // 현재 페이즈 남은 시간
-    brawlR: state.mode === 'brawl' ? r2d(state.brawlR) : 0, // 대난투 링 반경(씬 낭떠러지 링)
+    brawlR: state.mode === 'brawl' ? r2d(state.brawlR) : 0, // 난투전 링 반경(씬 낭떠러지 링)
     brawlRanks: state.brawlRanks ? state.brawlRanks.map((r) => ({ ...r })) : null, // 복사 필수(델타 코덱)
     brawlPickups: state.brawlPickups ? state.brawlPickups.map((o) => ({ id: o.id, kind: o.kind, x: o.x, z: o.z })) : null,
     brawlTraps: state.brawlTraps ? state.brawlTraps.map((o) => ({ id: o.id, x: o.x, z: o.z, ice: !!o.ice })) : null,

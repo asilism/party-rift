@@ -621,7 +621,7 @@ export function loadBrawlRecords() {
     return { games: 0, wins: 0, top3: 0, best: null }
   }
 }
-// 대난투 전적 누적 — 판수/우승/포디움(3위 이내)/최고 순위
+// 난투전 전적 누적 — 판수/우승/포디움(3위 이내)/최고 순위
 export function recordBrawlRun(place) {
   const r = loadBrawlRecords()
   r.games += 1

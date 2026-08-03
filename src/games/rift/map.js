@@ -106,7 +106,7 @@ const MODE_SCALE = {
   boss: { x: 1, z: 1 },
   defense: { x: 1, z: 1 }, // 무한 방어 — 보스의 협곡 재사용
   arena: { x: 1, z: 1 }, // 콜로세움 — 전용 원형 경기장
-  brawl: { x: 1, z: 1 }, // 대난투 — 넓은 원형 낭떠러지 경기장
+  brawl: { x: 1, z: 1 }, // 난투전 — 넓은 원형 낭떠러지 경기장
 }
 
 // 호(弧)를 짧은 벽 선분들로 근사한다 — 보스 성곽(둥지)용. 각도는 도(°), z=+가 남쪽.
@@ -174,8 +174,8 @@ export const ARENA_LAYOUTS = {
   },
 }
 
-export const BRAWL_R = 40 // 대난투 경기장 반경 — 8인 난전+링 축소가 여유 있게
-// 대난투 스폰 8자리: 원둘레 45° 간격(반경 R-9). 팀 키 t0~t7 = 로스터의 고유 팀 id.
+export const BRAWL_R = 40 // 난투전 경기장 반경 — 8인 난전+링 축소가 여유 있게
+// 난투전 스폰 8자리: 원둘레 45° 간격(반경 R-9). 팀 키 t0~t7 = 로스터의 고유 팀 id.
 const BRAWL_SPAWNS = Object.fromEntries(Array.from({ length: 8 }, (_, k) => {
   const a = (k / 8) * Math.PI * 2
   return [`t${k}`, { x: Math.cos(a) * (BRAWL_R - 9), z: Math.sin(a) * (BRAWL_R - 9) }]
@@ -185,7 +185,7 @@ export const BRAWL_CANNONS = [0, 1, 2].map((k) => {
   const a = (k / 3) * Math.PI * 2 + Math.PI / 6
   return { x: Math.round(Math.cos(a) * 44 * 10) / 10, z: Math.round(Math.sin(a) * 44 * 10) / 10 }
 })
-// 대난투 경기장 3종 — 매판 랜덤 배정(구조물만 다르고 룰은 동일)
+// 난투전 경기장 3종 — 매판 랜덤 배정(구조물만 다르고 룰은 동일)
 export const BRAWL_LAYOUT_IDS = ['open', 'pillars', 'crater']
 const BRAWL_LAYOUTS = {
   open: { // 개활지 — 넉백이 곧 정의인 순수 난투판
@@ -216,7 +216,7 @@ const BRAWL_LAYOUTS = {
 }
 const BRAWL_BASE = {
   WORLD: { minX: -60, maxX: 60, minZ: -60, maxZ: 60 },
-  // 수호석은 대난투에서 순수 배경 장식 — 경기장 밖 남북 멀리(공격 불가·동선 무관)
+  // 수호석은 난투전에서 순수 배경 장식 — 경기장 밖 남북 멀리(공격 불가·동선 무관)
   NEXUS_POS: { blue: { x: 0, z: -56 }, red: { x: 0, z: 56 } },
   LANES: { // 더미(라인 없음) — buildMap 공용 코드가 접근만 한다
     top: [{ x: -30, z: 0 }, { x: 30, z: 0 }],
@@ -666,7 +666,7 @@ function findPathFor(geo, sx, sz, tx, tz) {
 export function buildMap(mode = '3v3', arenaLayout = null) {
   const raid = mode === 'boss' || mode === 'defense' // 방어전도 보스의 협곡 지형을 쓴다
   let base = mode === 'brawl' ? BRAWL_BASE : mode === 'arena' ? ARENA_BASE : raid ? BOSS_BASE : BASE // 모드별 전용 지형
-  if (mode === 'brawl' && BRAWL_LAYOUTS[arenaLayout]) base = { ...BRAWL_BASE, ...BRAWL_LAYOUTS[arenaLayout] } // 대난투 경기장 3종
+  if (mode === 'brawl' && BRAWL_LAYOUTS[arenaLayout]) base = { ...BRAWL_BASE, ...BRAWL_LAYOUTS[arenaLayout] } // 난투전 경기장 3종
   // 콜로세움 내부 구조: 레이아웃이 지정되면 엄폐벽·바위·부쉬를 통째로 갈아 끼운다
   if (mode === 'arena' && ARENA_LAYOUTS[arenaLayout]) {
     base = { ...ARENA_BASE, ...ARENA_LAYOUTS[arenaLayout] }
@@ -684,7 +684,7 @@ export function buildMap(mode = '3v3', arenaLayout = null) {
   //  부활·귀환·HP리필이 여기서만 일어나므로, 수호석에 붙어 무한 회복하며 버티지 못한다.
   //  보스전의 레드 우물은 옥좌 바로 뒤 — 보스는 성곽 안에서 잠들고, 우물 레이저가 러시를 응징.
   const FOUNTAIN_POS = mode === 'brawl' ? {
-    // 대난투: 8인 개별 스폰(t0~t7) + blue/red 더미(공용 우물 코드가 읽지만 도달 불가 위치)
+    // 난투전: 8인 개별 스폰(t0~t7) + blue/red 더미(공용 우물 코드가 읽지만 도달 불가 위치)
     ...BRAWL_SPAWNS,
     blue: { x: 0, z: -47 },
     red: { x: 0, z: 47 },
@@ -746,7 +746,7 @@ export function buildMap(mode = '3v3', arenaLayout = null) {
     ROCKS, BUSHES, WOLF_CAMPS, DRAGON_PIT, BARON_PIT,
     NEXUS_RADIUS, FOUNTAIN_RADIUS, TOWER_RADIUS, WALL_RADIUS, enemyOf,
     HOLES: [], // 콜로세움 붕괴 구멍(+경고) — 봇 경로탐색·조향 전용 가상 장애물(물리 충돌 아님: 밀쳐 떨어뜨리기 허용)
-    CANNONS: mode === 'brawl' ? BRAWL_CANNONS.map((c) => ({ ...c })) : [], // 대난투 대포 발판(링 밖 안전지대)
+    CANNONS: mode === 'brawl' ? BRAWL_CANNONS.map((c) => ({ ...c })) : [], // 난투전 대포 발판(링 밖 안전지대)
   }
   geo.bushIndexAt = (x, z) => bushIndexAtFor(geo, x, z)
   geo.nearestWp = (lane, x, z) => nearestWpFor(geo, lane, x, z)

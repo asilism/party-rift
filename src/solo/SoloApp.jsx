@@ -61,10 +61,10 @@ const MODE_OPTS = [
   { id: 'boss', emoji: '👹', name: '보스전', desc: '5명이 거대 보스에 도전 — 잡으면 승리', tag: '도전', price: 300 },
   { id: 'defense', emoji: '🌊', name: '무한 방어', desc: '끝없는 파도에서 수호석을 지켜라 — 기록에 도전!', tag: '생존', price: 300 },
   { id: 'arena', emoji: '🏟️', name: '콜로세움', desc: '12지신 2대2 토너먼트 — 최후의 팀이 되어라!', tag: '결투', price: 300 },
-  { id: 'brawl', emoji: '💥', name: '대난투', desc: '8인 자유 결투 — 밀쳐서 떨어뜨려라! 목숨 10개', tag: '난투', price: 300 },
+  { id: 'brawl', emoji: '💥', name: '난투전', desc: '8인 자유 결투 — 밀쳐서 떨어뜨려라! 목숨 10개', tag: '난투', price: 300 },
 ]
 
-// 대난투 순위 보상(1위→8위) — 콜로세움 순위 보상과 비슷한 곡선
+// 난투전 순위 보상(1위→8위) — 콜로세움 순위 보상과 비슷한 곡선
 const BRAWL_PLACE_COIN = [40, 28, 20, 15, 12, 10, 8, 6]
 
 // ── 보스 디버그(웹 ?boss 전용): 보스·티어를 골라 즉시 10레벨 진군전 — 기믹 실테스트 급행 ──
@@ -73,7 +73,7 @@ const BRAWL_PLACE_COIN = [40, 28, 20, 15, 12, 10, 8, 6]
 const BOSS_DEBUG = typeof location !== 'undefined' && new URLSearchParams(location.search).has('boss')
 const ULT_DEBUG = typeof location !== 'undefined' && new URLSearchParams(location.search).has('ult')
 
-// ── 궁극기 시험장(웹 ?ult 전용): 직업을 골라 대난투 허수아비 판에서 궁만 반복 시전 ──
+// ── 궁극기 시험장(웹 ?ult 전용): 직업을 골라 난투전 허수아비 판에서 궁만 반복 시전 ──
 function UltDebugScreen({ onStart }) {
   return (
     <div className="screen bossdebug-screen">
@@ -158,10 +158,10 @@ export default function SoloApp() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [exitAsk, setExitAsk] = useState(false) // 전투 중 뒤로가기 → "나갈까요?" 확인
   const [coinMsg, setCoinMsg] = useState(null)
-  const [brawlChamp, setBrawlChamp] = useState(null) // 대난투 시상식 — 상위 3 포디움 데이터
-  const brawlChampRef = useRef(null) // 대난투 포디움 상위 3 — 퇴장 때 무대를 켜기 위한 대기 데이터
+  const [brawlChamp, setBrawlChamp] = useState(null) // 난투전 시상식 — 상위 3 포디움 데이터
+  const brawlChampRef = useRef(null) // 난투전 포디움 상위 3 — 퇴장 때 무대를 켜기 위한 대기 데이터
   const champTimerRef = useRef(null) // 시상식 자동 종료 타이머(탭 스킵과 공유)
-  const [brawlResult, setBrawlResult] = useState(null) // 대난투 결과 카드(시상식이 끝난 뒤 표시)
+  const [brawlResult, setBrawlResult] = useState(null) // 난투전 결과 카드(시상식이 끝난 뒤 표시)
   const [tour, setTour] = useState(null) // 콜로세움 토너먼트 상태
   const [tourStage, setTourStage] = useState('bracket') // bracket(대진) | result(라운드 결과) | final(최종 순위)
   const arenaCarryRef = useRef({}) // 라운드 간 유저 팀 이월(레벨·골드·아이템)
@@ -339,7 +339,7 @@ export default function SoloApp() {
       players: [],
       config: {
         mode, roster: buildSoloRoster(pick), botLevel: dOpt.botLevel, bossTier: dOpt.bossTier,
-        // 대난투: 경기장 3종(개활지/기둥숲/분화구) 매판 랜덤
+        // 난투전: 경기장 3종(개활지/기둥숲/분화구) 매판 랜덤
         arenaLayout: mode === 'brawl' ? ['open', 'pillars', 'crater'][Math.floor(Math.random() * 3)] : undefined,
       },
       deviceId: 'solo',
@@ -360,7 +360,7 @@ export default function SoloApp() {
         //  방어전은 승패가 없다 — 버틴 파도만큼 번다(5 + 파도×2).
         const tier = view.mode === 'boss' ? (view.bossTier || 'normal') : null
         const tierOpt = tier && BOSS_TIER_OPTS.find((o) => o.id === tier)
-        // 대난투: 순위 보상(1위 40 → 8위 6). 우승만 '승'으로 취급(첫승 보너스 연동).
+        // 난투전: 순위 보상(1위 40 → 8위 6). 우승만 '승'으로 취급(첫승 보너스 연동).
         const brawlPlace = view.mode === 'brawl' ? (view.brawlRanks?.find((r) => r.id === 'solo')?.place || 8) : 0
         // 🏆 올림픽 포디움 — 매 판 상위 3명이 시상대에 오른다(무대는 '퇴장 시점'에 켠다:
         //  종료 즉시 켜면 유저가 아직 결과 모달을 보는 중이라, 나올 때쯤 이미 꺼져 못 본다)
@@ -650,7 +650,7 @@ export default function SoloApp() {
   return (
     <div className="shell">
       {brawlChamp ? (
-        // 대난투 시상식: 올림픽 포디움 — 🥇 만세만세, 🥈🥉 박수
+        // 난투전 시상식: 올림픽 포디움 — 🥇 만세만세, 🥈🥉 박수
         <ChampionStage duo={null} podium={brawlChamp} />
       ) : screen === 'colosseum' ? (
         // 우승 확정 최종 화면: 빈 경기장 대신 우승 듀오의 단상 만세 무대
@@ -665,7 +665,7 @@ export default function SoloApp() {
       {screen === 'profile' && (
         <ProfileScreen current={profile} onPick={pickProfile} onBack={profile ? () => go('menu') : null} />
       )}
-      {screen === 'champ' && ( // 대난투 시상식 — 무대를 가리지 않는 투명 스킵 레이어
+      {screen === 'champ' && ( // 난투전 시상식 — 무대를 가리지 않는 투명 스킵 레이어
         <div className="brawl-champ-skip" onPointerDown={endChampStage}>
           <span className="brawl-champ-skip__hint">{t('탭해서 계속')}</span>
         </div>
@@ -1324,7 +1324,7 @@ function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
 const RECORD_TABS = [
   { id: '3v3', label: '3 대 3' },
   { id: '5v5', label: '5 대 5' },
-  { id: 'brawl', label: '대난투' },
+  { id: 'brawl', label: '난투전' },
   { id: 'boss', label: '보스전' },
   { id: 'defense', label: '방어전' },
   { id: 'arena', label: '콜로세움' },
@@ -1418,7 +1418,7 @@ function BrawlRecordCard() {
         <div className="records-row"><span>🏅 {t('포디움(3위 이내)')}</span><b>{r.top3}{t('회')}</b></div>
         <div className="records-row"><span>⭐ {t('최고 순위')}</span><b>{r.best ? `${r.best}${t('위')}` : '—'}</b></div>
       </div>
-      {r.games === 0 && <p className="hats-note">{t('아직 기록이 없어 — 대난투에 출전해 보자!')}</p>}
+      {r.games === 0 && <p className="hats-note">{t('아직 기록이 없어 — 난투전에 출전해 보자!')}</p>}
     </div>
   )
 }
@@ -1707,7 +1707,7 @@ const HATS = [
   { id: 'nebulacrown', name: '성운의 관', trophy: { boss: 'boss_archmage', tier: 'normal' }, fx: true },
   { id: 'shadowmask', name: '그림자 가면', trophy: { boss: 'boss_shadow', tier: 'normal' }, fx: true },
   { id: 'thorncrown', name: '가시 왕관', trophy: { boss: 'boss_thorn', tier: 'normal' }, fx: true },
-  // ── 대난투 챔피언 세트(비매품): trophy = { brawl: N } — N위 이내 달성 시 지급 ──
+  // ── 난투전 챔피언 세트(비매품): trophy = { brawl: N } — N위 이내 달성 시 지급 ──
   { id: 'champlaurel', name: '난투 월계관', trophy: { brawl: 3 }, fx: true },
 ]
 
@@ -1837,12 +1837,12 @@ const WARDROBE_CATALOG = Object.entries(WARDROBE_TABS).flatMap(([tabId, def]) =>
 // ── 보스 전리품(비매품) — 코인 구매 불가, 해당 보스·난이도 토벌로만 지급 ──
 // 잠금 문구: "🏆 녹스 · 악몽 토벌" — 티어 표기는 승리 배너와 같은 BOSS_TIER_OPTS를 쓴다
 const trophyLockLabel = (trophy) => (trophy.brawl
-  ? `${t('대난투')} ${trophy.brawl}${t('위')}`
+  ? `${t('난투전')} ${trophy.brawl}${t('위')}`
   : `${t(BOSS_NAMES[trophy.boss] || '')} · ${t(BOSS_TIER_OPTS.find((o) => o.id === trophy.tier)?.label || '')} ${t('토벌')}`)
 
 // 토벌 승리 → 이 보스·이 티어에 걸린 전리품을 전부 지급(이미 보유분은 건너뜀).
 // 결과 배너에 띄울 새 획득 이름 목록을 돌려준다. 한 보스 3난이도를 다 깨면 세트 완성(세트 오라+PvE 소효과).
-// 대난투 순위 전리품: 3위 이내=월계관, 2위 이내=벨트, 1위=황금검(상위 순위는 하위 조각 포함)
+// 난투전 순위 전리품: 3위 이내=월계관, 2위 이내=벨트, 1위=황금검(상위 순위는 하위 조각 포함)
 function grantBrawlTrophies(place) {
   const drops = []
   for (const T of Object.values(WARDROBE_TABS)) {
@@ -2184,7 +2184,7 @@ function SoloHelp({ onClose }) {
               <li>⚔️ <b>3대3 / 5대5</b> — 위 목표 그대로의 정통 한판</li>
               <li>👹 <b>보스전</b> — 5명이 거대 보스에 도전, 난이도 3단계</li>
               <li>🌊 <b>무한 방어</b> — 끝없는 파도에서 수호석 사수</li>
-              <li>🏟️ <b>콜로세움</b> — 12지신 2대2 토너먼트 · <b>💥 대난투</b> — 8인 자유 결투</li>
+              <li>🏟️ <b>콜로세움</b> — 12지신 2대2 토너먼트 · <b>💥 난투전</b> — 8인 자유 결투</li>
             </ul>
           )}
         </div>
