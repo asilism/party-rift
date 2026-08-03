@@ -4925,7 +4925,7 @@ function buildFireballProj() {
 export const PROJ_BUILDERS = {
   tornado: buildTornadoProj, // 돌풍술사 회오리 — 빙글빙글 도는 입체 회오리
   rock: buildRockProj, // 대지술사 돌덩이 — 발광체가 아니라 진짜 돌
-  swordwave: (n) => { const g = buildSwordwaveProj(n); if (n.big) g.scale.setScalar(1.9); return g }, // 검성 무형검 검기 — 궁 대검기(big)는 1.9배
+  swordwave: (n) => { const g = buildSwordwaveProj(n); if (n.big) g.scale.setScalar(+n.big || 1.5); return g }, // 검성 무형검 검기 — 대난투 레이저 검기는 big 배율만큼
   pierce: buildPierceProj,
   lightarrow: buildLightArrowProj,
   hawk: buildHawkProj,
@@ -6848,6 +6848,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   let brawlPadsFallT = -1 // 발판 붕괴 진행 시계(-1=아직)
   const brawlUps = [] // 텍스트 팝업(1UP·콤보·SMASH) {spr, t, x, z}
   const brawlBursts = [] // 💥 타격 버스트 {spr, t, dur}
+  const brawlSanctObjs = new Map() // 🛡️ 성역 돔 — 히어로 id → 월드 고정 반구
   const brawlWedges = [] // 피니셔 쐐기 {g, t, dur}
   function brawlWedge(x, z, ang) {
     // 공격자→피격자로 찌르는 쐐기 다발 — 스매시의 방향성 슬래시. 본체+양옆 짧은 가시 3발.
@@ -6997,6 +6998,40 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       }
       for (const [id, o] of brawlPickupObjs) {
         if (!seenPk.has(id)) { scene.remove(o); brawlPickupObjs.delete(id) }
+      }
+      // 🛡️ 성역 돔 — 시전 위치에 고정된 금빛 격자 반구(반경 6.2)
+      const seenSanct = new Set()
+      for (const sh of view.heroes) {
+        if (!((sh.brawlSanctT || 0) > 0)) continue
+        seenSanct.add(sh.id)
+        let dome = brawlSanctObjs.get(sh.id)
+        if (!dome) {
+          dome = new THREE.Group()
+          const shell = new THREE.Mesh(
+            new THREE.SphereGeometry(6.2, 24, 14, 0, Math.PI * 2, 0, Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.34, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+          )
+          const wire = new THREE.Mesh(
+            new THREE.SphereGeometry(6.24, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: 0xfff6cf, transparent: true, opacity: 0.45, wireframe: true, depthWrite: false, blending: THREE.AdditiveBlending })
+          )
+          const rim = new THREE.Mesh(
+            new THREE.RingGeometry(5.85, 6.6, 44),
+            new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+          )
+          rim.rotation.x = -Math.PI / 2
+          rim.position.y = 0.15
+          dome.add(shell, wire, rim)
+          dome.userData.shell = shell
+          scene.add(dome)
+          brawlSanctObjs.set(sh.id, dome)
+        }
+        dome.position.set(sh.brawlSanctX || sh.x, 0.1, sh.brawlSanctZ || sh.z)
+        dome.scale.setScalar(1 + Math.sin(view.time * 5) * 0.03)
+        dome.userData.shell.material.opacity = 0.26 + Math.abs(Math.sin(view.time * 4)) * 0.14
+      }
+      for (const [sid, dome] of brawlSanctObjs) {
+        if (!seenSanct.has(sid)) { scene.remove(dome); brawlSanctObjs.delete(sid) }
       }
       // 바나나 트랩 — 바닥에 깔린 🍌 (설치자 눈에도 보인다 — 밟지 말라고)
       const seenTr = new Set()
@@ -7760,34 +7795,6 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             u.frogMark.scale.set(2.4 * finv, 2.4 * finv, 1)
             u.frogMark.position.set(0, 7 * finv, 0)
           } else if (u.frogMark) u.frogMark.visible = false
-          // 🛡️ 성역 돔 — 캐릭 3×3 반투명 금빛 반구가 수호기사를 따라다닌다
-          if ((h.brawlSanctT || 0) > 0) {
-            if (!u.sanctDome) {
-              u.sanctDome = new THREE.Group()
-              const shell = new THREE.Mesh(
-                new THREE.SphereGeometry(3.1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2),
-                new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
-              )
-              const wire = new THREE.Mesh( // 격자 실루엣 — 돔의 형태가 또렷이 읽히게
-                new THREE.SphereGeometry(3.12, 12, 7, 0, Math.PI * 2, 0, Math.PI / 2),
-                new THREE.MeshBasicMaterial({ color: 0xfff6cf, transparent: true, opacity: 0.5, wireframe: true, depthWrite: false, blending: THREE.AdditiveBlending })
-              )
-              const rim = new THREE.Mesh( // 바닥 테두리 링
-                new THREE.RingGeometry(2.9, 3.35, 36),
-                new THREE.MeshBasicMaterial({ color: 0xffe066, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
-              )
-              rim.rotation.x = -Math.PI / 2
-              rim.position.y = 0.15
-              u.sanctDome.add(shell, wire, rim)
-              u.sanctShell = shell
-              obj.add(u.sanctDome)
-            }
-            u.sanctDome.visible = true
-            const sinv = 1 / Math.max(0.3, obj.scale.x)
-            u.sanctDome.scale.setScalar(sinv * (1 + Math.sin(view.time * 5) * 0.04))
-            u.sanctDome.position.set(0, 0.1, 0)
-            u.sanctShell.material.opacity = 0.32 + Math.abs(Math.sin(view.time * 4)) * 0.14
-          } else if (u.sanctDome) u.sanctDome.visible = false
           // 💣 폭탄: 만세 포즈로 머리 위에 받쳐 들고 뛴다 — 만료가 다가올수록 시뻘겋게 깜빡
           if ((h.brawlBombT || 0) > 0) {
             if (!u.bombMark) {

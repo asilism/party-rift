@@ -4573,11 +4573,15 @@ test('대난투 ★★궁: 검성 발도 일섬 — 전방 반원 일괄 피니�
   const bHp = back.hp
   sm.brawlUltQ = 100
   castUlt(g, sm.id)
-  const wave = g.projectiles.find((pr) => pr.kind === 'swordwave' && pr.brawlUlt)
-  assert.ok(wave, '대검기 발사')
-  run(g, 0.5) // 초고속(~82/s) — 전방 8 지점 통과
-  assert.ok(front.hp < fHp, '전방 검기 명중')
-  assert.ok(front.brawlSmashT > 0 || front.knockT > 0 || front.x > 8, '전방 피니셔 발사')
+  assert.ok(sm.bladeT > 0, '무형검 개방(본래 궁 유지)')
+  sm.atkCd = 0
+  front.x = 8 // 사거리 안
+  castAttack(g, sm.id)
+  const wave = g.projectiles.find((pr) => pr.kind === 'swordwave')
+  assert.ok(wave, '평타가 검기로')
+  assert.ok((wave.range || 0) >= 28 && (wave.spd || 0) > 70, '레이저 검기 — 사거리 30·2.2배속')
+  run(g, 0.5)
+  assert.ok(front.hp < fHp, '검기 명중')
   assert.equal(back.hp, bHp, '후방 무사')
 })
 
@@ -4621,9 +4625,25 @@ test('대난투 궁: 수호기사 성역 — 돔 회복(5초 50%) + 돔 안 적 
   a.hp = Math.round(a.maxHp * 0.4)
   a.brawlUltQ = 100
   castUlt(g, a.id)
+  const cx = a.brawlSanctX
+  const cz = a.brawlSanctZ
   run(g, 2.0)
   assert.ok(a.hp >= a.maxHp * 0.55, `돔 회복 (${(a.hp / a.maxHp * 100).toFixed(0)}%)`)
-  assert.ok(Math.hypot(e.x - a.x, e.z - a.z) > 3.3, '돔 안 적은 밖으로')
+  assert.ok(Math.hypot(e.x - cx, e.z - cz) > 6.4, '돔 안 적은 밖으로(반경 6.2 축출)')
+  const hpMid = a.hp
+  a.x = cx + 15; a.z = cz // 돔을 떠나면
+  run(g, 1.0)
+  assert.ok(a.hp <= hpMid + 1, '돔 밖에선 회복 없음(시전 위치 고정)')
+})
+
+test('대난투: 얼음판 슬립 — 밟은 진행 방향으로 쭉 미끄러진다', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  const e = g.heroes[1]
+  g.brawlTraps.push({ id: 9999, x: e.x + 2, z: e.z, owner: a.id, t: 0, ice: true })
+  e.mx = 1; e.mz = 0 // +x로 달리는 중
+  run(g, 0.4)
+  assert.ok(e.knockVx > 0 && Math.abs(e.knockVz) < Math.abs(e.knockVx) * 0.3 || e.x > 0, '진행 방향(+x)으로 미끄러짐')
 })
 
 test('대난투 궁: 사슬잡이 단죄 — 내 자리로 끌어온 뒤 심판(하얀 사슬 시퀀스)', () => {
