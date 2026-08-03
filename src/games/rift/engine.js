@@ -3318,12 +3318,15 @@ function augOnKill(state, attacker, x, z, victimMaxHp, allowExplode = true) {
   if (!attacker) return
   const a = augOf(attacker)
   if (a.killGold > 0) awardGold(state, attacker, a.killGold, x, z)
-  // 증강(처치 흡혈): 적을 잡으면 최대 체력의 killHeal만큼 회복 — 공격적 지속 빌드 축(살아 있을 때만)
+  // 증강(처치 흡혈): 잡은 적 체력에 비례해 회복하되 내 최대 체력이 상한 — min(적 최대체력, 내 최대체력)×비율.
+  //  무한방어 후반 미니언 체력 인플레에 편승한 무한 회복 샛길 차단(2026-08-04, 웨이브 100+ 리포트)
   if (a.killHeal > 0 && attacker.respawnT <= 0 && attacker.hp > 0) {
-    attacker.hp = Math.min(attacker.maxHp, attacker.hp + attacker.maxHp * a.killHeal)
+    attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.min(victimMaxHp, attacker.maxHp) * a.killHeal)
   }
   if (allowExplode && a.explode > 0) {
-    const dmg = victimMaxHp * a.explode
+    // 폭발 규모도 같은 원리로 캡: min(적 최대체력, 내 공·주문력 평균)×비율 — 초반 손맛은 그대로,
+    //  후반 인플레(미니언 체력 수천)에 폭발이 같이 커져 난이도가 역주행하던 것만 막는다
+    const dmg = Math.min(victimMaxHp, powerStat(attacker)) * a.explode
     const r = 5.5
     const r2 = r * r
     for (const mm of state.minions.slice()) { // 복사본 순회 — 폭발 중 minions 배열이 변한다

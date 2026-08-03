@@ -64,11 +64,11 @@ export const AUGMENTS = [
   { id: 'c_thorns', rarity: 'common', icon: '🌵', name: '가시 살갗', desc: '받은 피해의 15%를 되돌린다', effect: { thorns: 0.15 } },
   { id: 'c_exec', rarity: 'common', icon: '🗡️', name: '마무리 일격', desc: '체력 30% 이하 적에게 주는 피해 +20%', effect: { execute: 0.2 } },
   { id: 'r_summon', rarity: 'rare', icon: '🐺', name: '야수의 군세', desc: '소환물 체력·피해 +35% · 이동 속도 +2', cls: ['beastmaster', 'engineer'], effect: { summonMul: 0.35, speed: 2 } },
-  { id: 'r_lifesteal', rarity: 'rare', icon: '🩸', name: '피의 향연', desc: '처치 시 최대 체력의 12% 회복', effect: { killHeal: 0.12 } },
+  { id: 'r_lifesteal', rarity: 'rare', icon: '🩸', name: '피의 향연', desc: '처치한 적 체력에 비례해 회복 (최대 내 체력의 12%)', effect: { killHeal: 0.12 } },
   { id: 'r_juggernaut', rarity: 'rare', icon: '🐗', name: '저돌맹진', desc: '최대 체력 +18% · 이동 속도 +2 · 주는 피해 +8%', effect: { hpMul: 0.18, speed: 2, dealMul: 0.08 } },
   { id: 'r_overclock', rarity: 'rare', icon: '⚡', name: '과부하', desc: '스킬 쿨다운 -12% · 스킬 시전 시 궁 쿨 -2초', effect: { cdr: 0.12, skillRefund: 2 } },
   { id: 'l_summon', rarity: 'legendary', icon: '🐻', name: '소환술의 극의', desc: '소환물 체력·피해 +65% · 처치 시 광역 폭발', cls: ['beastmaster', 'engineer'], effect: { summonMul: 0.65, explode: 0.4 } },
-  { id: 'l_bloodlord', rarity: 'legendary', icon: '🧛', name: '피의 군주', desc: '처치 시 최대 체력의 22% 회복 · 주는 피해 +20%', effect: { killHeal: 0.22, dealMul: 0.2 } },
+  { id: 'l_bloodlord', rarity: 'legendary', icon: '🧛', name: '피의 군주', desc: '처치한 적 체력에 비례해 회복 (최대 내 체력의 22%) · 주는 피해 +20%', effect: { killHeal: 0.22, dealMul: 0.2 } },
   { id: 'l_titan', rarity: 'legendary', icon: '🗿', name: '불괴의 거신', desc: '최대 체력 +35% · 받는 피해 -12% · 25% 반사', effect: { hpMul: 0.35, def: 0.12, thorns: 0.25 } },
 
   // ── 조디악 시그니처 (그 지신에게만 등장 — 정체성 축) ──
