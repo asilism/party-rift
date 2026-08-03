@@ -569,7 +569,7 @@ const SUMMON_SPEC = {
   turret: { hp: 90, hpCoef: 2.5, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity }, // 초반 ~210(4.7대) → 후반 ~490(3.3대)
   cannon: { hp: 480, hpCoef: 3.0, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 }, // 초반 ~620(13.7대) → 후반 ~960(6.4대)
   // 야수조련사 대난투 궁 전용: 진짜 용 — 크고 아프고 짧게 산다
-  dragonpet: { hp: 700, hpCoef: 6.0, dmg: 95, coef: 0.36, range: 4.4, aggro: 22, speed: 8.2, mobile: true, cd: 1.2, life: 14 },
+  dragonpet: { hp: 340, hpCoef: 2.4, dmg: 42, coef: 0.18, range: 4.4, aggro: 22, speed: 8.2, mobile: true, cd: 1.5, life: 8 }, // 시뮬 승률 편중 반복 너프(2026-08-03)
 }
 const BEAST_LEAP_DUR = 0.45 // 사냥 명령 시 야수가 적에게 달려드는(도약) 시간 — 거리 무시
 const BEAST_WOLVES = 2 // 야수조련사 늑대 소환 마릿수
@@ -2128,18 +2128,21 @@ export function castUlt(state, id) {
       for (const z of state.zones) {
         if (z.kind === 'meteor' && z.owner === h.id && z.t === 0) {
           z.r = Math.max(z.r, 6.5)
-          z.dmg = Math.max(z.dmg, 420)
+          z.dmg = Math.max(z.dmg, 340) // 시뮬 승률 65% → 재하향
           z.tag = '핵폭탄'
           z.brawlBlast = true
           z.brawlNuke = true
         }
       }
     } else if (h.cls === 'engineer') {
-      // 🛰️ 궤도 폭격: 주변 무작위 5발 시차 낙하
-      for (let k = 0; k < 5; k++) {
-        const ba = state.rng() * Math.PI * 2
-        const br = 4 + state.rng() * 9
-        state.zones.push({ id: state.nextId++, kind: 'meteor', team: h.team, owner: h.id, x: h.x + Math.cos(ba) * br, z: h.z + Math.sin(ba) * br, r: 5, t: 0, delay: 0.8 + k * 0.25, dmg: 300, tag: '궤도 폭격', brawlBlast: true })
+      // 🛰️ 레이저 거포: 본래 궁의 거포가 극태 레이저 포대가 된다 — 5발 쏘면 파티클로 분해
+      const gun = state.summons.filter((su) => su.kind === 'cannon' && su.owner === h.id).pop()
+      if (gun) {
+        gun.brawlLaserN = 5
+        gun.cd = 1.7
+        gun.atkCd = 0.8 // 첫 발은 이르게
+        gun.range = 22
+        gun.life = 30 // 수명이 아니라 발수로 끝난다
       }
     } else if (h.cls === 'windcaller') {
       h.brawlStormT = 3 // 🌪️ 태풍의 눈 — 3초간 주변을 계속 밀쳐낸다(stepBrawl)
@@ -2167,13 +2170,14 @@ export function castUlt(state, id) {
         if (z.kind === 'fissure' && z.owner === h.id && z.t === 0) {
           z.half = CHAR_W * 1.5
           z.brawlQuake = true
+          z.stun = Math.min(z.stun || 0, 0.9) // 본편 스턴 1.6이 새면 락이 된다 — 대난투 캡
         }
       }
       for (let k = 0; k < 3; k++) { // 이어서 40(맵 절반)까지 균열이 내달린다
         state.zones.push({
           id: state.nextId++, kind: 'fissure', team: h.team, owner: h.id,
           x: h.x + Math.cos(h.dir) * (FISSURE_LEN + k * 7.4), z: h.z + Math.sin(h.dir) * (FISSURE_LEN + k * 7.4),
-          dir: h.dir, len: 7.4, half: CHAR_W * 1.5, dmg: 240, stun: 0.9,
+          dir: h.dir, len: 7.4, half: CHAR_W * 1.5, dmg: 170, stun: 0.9, // 시뮬 승률 89% → 재하향
           r: 7.4, t: 0, delay: FISSURE_WAVES * FISSURE_WAVE_GAP + k * 0.12, brawlQuake: true, tag: '대지 균열',
         })
       }
@@ -2209,8 +2213,15 @@ export function castUlt(state, id) {
       h.brawlSanctZ = h.z
     } else if (h.cls === 'beastmaster') {
       // 🐻🐉 야수 대소집: 곰 하나, 그리고 진짜 용(정글 드래곤 모델) 한 마리
-      spawnSummon(state, h, 'bear', h.x + Math.cos(h.dir + 0.6) * 2.5, h.z + Math.sin(h.dir + 0.6) * 2.5)
-      spawnSummon(state, h, 'dragonpet', h.x + Math.cos(h.dir - 0.5) * 3.2, h.z + Math.sin(h.dir - 0.5) * 3.2)
+      //  — 위용은 그대로, 전투력은 대난투 사양으로 감쇠(시뮬 승률 63~75% 편중 교정)
+      const bb = spawnSummon(state, h, 'bear', h.x + Math.cos(h.dir + 0.6) * 2.5, h.z + Math.sin(h.dir + 0.6) * 2.5)
+      const dg = spawnSummon(state, h, 'dragonpet', h.x + Math.cos(h.dir - 0.5) * 3.2, h.z + Math.sin(h.dir - 0.5) * 3.2)
+      for (const pet of [bb, dg]) {
+        if (!pet) continue
+        pet.dmg = Math.round(pet.dmg * 0.6)
+        pet.hp = Math.round(pet.hp * 0.7)
+        pet.maxHp = pet.hp
+      }
       pushFeed(state, 'obj', `🐉 ${emojiOf(h.zodiacId)} ${h.name} — 용을 부렸다!`)
     } else if (h.cls === 'snarer') {
       // 🌿 넝쿨밭: 근방 전원 속박 후 중앙(내 쪽)으로 끌어온다
@@ -2229,6 +2240,9 @@ export function castUlt(state, id) {
       mine().slice(0, 7).forEach((cl, k) => {
         cl.dir = h.dir + (k / 7) * Math.PI * 2
         cl.sprintT = 0.55 // 우선 바깥으로 질주(연막 확산) — stepSummons가 집행
+        cl.dmg = Math.round(cl.dmg * 0.5) // 대난무 분신은 수로 밀어붙인다 — 개별은 약하게(시뮬 승률 57%)
+        cl.hp = Math.round(cl.hp * 0.6)
+        cl.maxHp = cl.hp
       })
     } else if (h.cls === 'terramancer') {
       // 🪨 감옥 발사: 본래 궁이 세운 바위 감옥이 0.8초 뒤 산산이 — 기둥들이 각 방향으로 경기장 끝까지 내달린다
@@ -3082,8 +3096,9 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   }
   // 대난투 코어: 모든 피해가 넉백을 동반 — 잃은 체력이 많을수록 크게 날아간다(스매시 %).
   //  가장자리는 낭떠러지라 넉백 자체가 처형 수단. 잔피해(<8)는 제외(도트 진동 방지).
-  if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && amount > 0 && !dot) {
-    // ⚡ 궁극기 게이지: 때리면 크게, 맞으면 절반 — 교전이 궁을 만든다(도트 제외)
+  if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && amount > 0 && !dot && !state._summonHit) {
+    // ⚡ 궁극기 게이지: 때리면 크게, 맞으면 절반 — 교전이 궁을 만든다(도트·소환수 대리 타격 제외
+    //  — 곰·용·분신이 게이지를 재생산해 궁 무한 루프가 되는 것을 막는다. 2026-08-03 시뮬로 적발)
     attacker.brawlUltQ = Math.min(100, (attacker.brawlUltQ || 0) + amount * 0.09)
     victim.brawlUltQ = Math.min(100, (victim.brawlUltQ || 0) + amount * 0.045)
   }
@@ -4004,6 +4019,7 @@ function stepBrawl(state, dt) {
     if (h.brawlSmashT > 0) h.brawlSmashT = Math.max(0, h.brawlSmashT - dt)
     if (h.brawlLaunchT > 0) h.brawlLaunchT = Math.max(0, h.brawlLaunchT - dt) // 🪨 융기 쳐올림 궤도
     if (h.brawlTitanT > 0) h.brawlTitanT = Math.max(0, h.brawlTitanT - dt) // 🏛️ 투기장의 거인
+    if (h.brawlQuakeCd > 0) h.brawlQuakeCd = Math.max(0, h.brawlQuakeCd - dt) // 🪨 균열 다단히트 면역
     if (h.brawlFrogT > 0) h.brawlFrogT = Math.max(0, h.brawlFrogT - dt) // 🐸 개구리 변이
     if (h.brawlCage) { // 🪨 감옥 발사 대기 — 시간이 되면 기둥들이 일제히 출발
       h.brawlCage.t -= dt
@@ -4058,7 +4074,7 @@ function stepBrawl(state, dt) {
             h.x = mk.x + Math.cos(mk.dir + Math.PI) * 1.1 // 등 뒤에서 나타난다
             h.z = mk.z + Math.sin(mk.dir + Math.PI) * 1.1
             h.dir = Math.atan2(mk.z - h.z, mk.x - h.x)
-            damageHero(state, mk, 330, h, false, '그림자 연무')
+            damageHero(state, mk, 270, h, false, '그림자 연무') // 시뮬 승률 43% → 하향
             if (mk.hp > 0) mk.stunT = Math.max(mk.stunT, 0.7)
             pushFx(state, 'shadowexec', mk.x, mk.z, 2.8, h.team, 0.9)
             h.brawlShadowHit.push(mk.id)
@@ -5429,7 +5445,7 @@ function stepZones(state, dt) {
         for (const e of state.heroes) {
           if (e.team === z.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
           if ((e.x - z.x) ** 2 + (e.z - z.z) ** 2 > rB2) continue
-          applyKnockback(state, e, z.x, z.z, z.brawlNuke ? 9 : 6)
+          applyKnockback(state, e, z.x, z.z, z.brawlNuke ? 6.5 : 6)
           if (z.brawlNuke) {
             e.brawlSmashT = 0.5
             e.brawlSmashA = Math.atan2(e.z - z.z, e.x - z.x)
@@ -5445,11 +5461,13 @@ function stepZones(state, dt) {
         const qz = Math.sin(z.dir)
         for (const e of state.heroes) {
           if (e.team === z.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
+          if ((e.brawlQuakeCd || 0) > 0) continue // 파도 전체에서 1인 1히트 — 다단 발사가 즉사를 만들던 것(시뮬 승률 89%)
           const dxq = e.x - z.x
           const dzq = e.z - z.z
           const alongQ = dxq * qx + dzq * qz
           if (alongQ < -1 || alongQ > z.len + 1) continue
           if (Math.abs(dxq * qz - dzq * qx) > z.half + 0.6) continue
+          e.brawlQuakeCd = 0.9
           applyKnockback(state, e, e.x - qx, e.z - qz, 13.5) // 균열 진행 방향으로 — 극태 레이저와 같은 거리
           e.brawlLaunchT = 0.9 // 하늘 높이 쳐올림(렌더러가 대궤도로 띄운다)
           e.airT = Math.max(e.airT, 1.5)
@@ -5504,7 +5522,7 @@ function spawnSummon(state, owner, kind, x, z) {
   // 증강(소환물 강화): 소환 시점 주인의 summonMul만큼 체력·피해를 함께 올린다 — 무한방어 소환사 빌드 축
   const smul = 1 + augOf(owner).summonMul
   const hp = Math.round((spec.hp + (spec.hpCoef || 0) * ps) * smul)
-  state.summons.push({
+  const su = {
     id: state.nextId++, kind, team: owner.team, owner: owner.id,
     x, z, dir: owner.dir, hp, maxHp: hp,
     atkCd: 0, dmg: Math.round((spec.dmg + (spec.coef || 0) * ps) * smul), range: spec.range, aggro: spec.aggro,
@@ -5512,7 +5530,9 @@ function spawnSummon(state, owner, kind, x, z) {
     chargeT: 0, // 과부하(엔지니어) 남은 시간
     idleT: 0, // 주인 이탈 누적 시간(엔지니어 포탑 휴면 유예)
     leapT: 0, leapDur: 0, leapTargetId: null, leapTk: null, // 사냥 명령 도약(야수조련사) 진행/표적
-  })
+  }
+  state.summons.push(su)
+  return su
 }
 
 function damageSummon(state, s, amount, attacker) {
@@ -5612,9 +5632,11 @@ function stepSummons(state, dt) {
           s.x = tgt.x // 착지 = 대상과 동일 위치
           s.z = tgt.z
           const att = owner && owner.respawnT <= 0 ? owner : { id: s.owner, team: s.team }
+          state._summonHit = true
           if (s.leapTk === 'hero') damageHero(state, tgt, s.dmg, att)
           else if (s.leapTk === 'minion') damageMinion(state, tgt, s.dmg, att)
           else damageMonster(state, tgt, s.dmg, att)
+          state._summonHit = false
           s.atkCd = s.cd * (s.chargeT > 0 ? OVERCHARGE_ASPD : 1) // 착지 무는 일격 후 평타 쿨 시작
         }
         s.leapFrom = null
@@ -5666,10 +5688,39 @@ function stepSummons(state, dt) {
         s.atkCd = s.cd * (s.chargeT > 0 ? OVERCHARGE_ASPD : 1)
         s.atkSeq = (s.atkSeq || 0) + 1 // 렌더러 공격 모션 트리거(분신 무기 휘두름 등)
         const att = owner && owner.respawnT <= 0 ? owner : { id: s.owner, team: s.team }
-        if (tk === 'hero') damageHero(state, target, s.dmg, att)
-        else if (tk === 'minion') damageMinion(state, target, s.dmg, att)
-        else damageMonster(state, target, s.dmg, att)
-        if (!s.mobile) pushFxDir(state, 'chain', s.x, s.z, d, s.dir, s.team) // 포탑 사격 시각
+        state._summonHit = true
+        if ((s.brawlLaserN || 0) > 0) {
+          // 🛰️ 거포 극태 레이저: 조준 직선의 적 전원을 꿰뚫고 날린다 — 발수가 곧 수명
+          const glx = Math.cos(s.dir)
+          const glz = Math.sin(s.dir)
+          for (const e of state.heroes) {
+            if (e.team === s.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) continue
+            const gdx = e.x - s.x
+            const gdz = e.z - s.z
+            const along = gdx * glx + gdz * glz
+            if (along < 0 || along > 30) continue
+            if (Math.abs(gdx * glz - gdz * glx) > 2.4) continue
+            damageHero(state, e, s.dmg, att)
+            if (e.hp > 0 && !(e.brawlMushT > 0)) {
+              applyKnockback(state, e, s.x, s.z, 12)
+              e.brawlSmashT = 0.5
+              e.brawlSmashA = s.dir
+            }
+          }
+          state.brawlLaserSeq = (state.brawlLaserSeq || 0) + 1
+          state.brawlLaserAt = { x: s.x, z: s.z, dir: s.dir }
+          s.brawlLaserN--
+          if (s.brawlLaserN <= 0) { // 탄창 소진 — 임무 완수, 파티클로 분해
+            pushFx(state, 'death', s.x, s.z, 2.4, s.team)
+            remove.add(s.id)
+          }
+        } else {
+          if (tk === 'hero') damageHero(state, target, s.dmg, att)
+          else if (tk === 'minion') damageMinion(state, target, s.dmg, att)
+          else damageMonster(state, target, s.dmg, att)
+          if (!s.mobile) pushFxDir(state, 'chain', s.x, s.z, d, s.dir, s.team) // 포탑 사격 시각
+        }
+        state._summonHit = false
       }
     } else if (s.mobile && owner && owner.respawnT <= 0) {
       const d = dist(s, owner)
@@ -9434,7 +9485,7 @@ export function makeView(state) {
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
       fallT: r2d(h.fallT),
-      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0), brawlStarT: r2d(h.brawlStarT || 0), brawlBananaN: h.brawlBananaN || 0, brawlComboN: h.brawlComboN || 0, brawlSmashT: r2d(h.brawlSmashT || 0), brawlSmashA: r2d(h.brawlSmashA || 0), brawlUltQ: Math.round(h.brawlUltQ || 0), brawlLaunchT: r2d(h.brawlLaunchT || 0), brawlTitanT: r2d(h.brawlTitanT || 0), brawlFrogT: r2d(h.brawlFrogT || 0), brawlSanctT: r2d(h.brawlSanctT || 0), brawlSanctX: r2d(h.brawlSanctX || 0), brawlSanctZ: r2d(h.brawlSanctZ || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
+      ...(state.mode === 'brawl' ? { brawlLives: h.brawlLives || 0, brawlGuardT: r2d(h.brawlGuardT || 0), brawlMushT: r2d(h.brawlMushT || 0), brawlBombT: r2d(h.brawlBombT || 0), brawlFlyT: r2d(h.brawlFlyT || 0), brawlFlyDur: r2d(h.brawlFlyDur || 0), brawlHammerT: r2d(h.brawlHammerT || 0), brawlStarT: r2d(h.brawlStarT || 0), brawlBananaN: h.brawlBananaN || 0, brawlComboN: h.brawlComboN || 0, brawlSmashT: r2d(h.brawlSmashT || 0), brawlSmashA: r2d(h.brawlSmashA || 0), brawlUltQ: Math.round(h.brawlUltQ || 0), brawlKillCredit: (h.brawlKillN || 0) % 3, brawlLaunchT: r2d(h.brawlLaunchT || 0), brawlTitanT: r2d(h.brawlTitanT || 0), brawlFrogT: r2d(h.brawlFrogT || 0), brawlSanctT: r2d(h.brawlSanctT || 0), brawlSanctX: r2d(h.brawlSanctX || 0), brawlSanctZ: r2d(h.brawlSanctZ || 0) } : null), // 콜로세움 추락 연출(씬이 아래로 가라앉힌다)
       bladeT: r2d(h.bladeT),
       hookWindT: r2d(h.hookWindT),
       pullT: r2d(h.pullT),

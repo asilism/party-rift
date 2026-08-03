@@ -782,6 +782,12 @@ function RiftPlay({
             </div>
             <span className="rift__me-items">
               {Array.from({ length: ITEM_SLOTS }).map((_, i) => {
+                // 대난투: 상점이 없으니 아이템창이 곧 1UP 크레딧판 — 킬마다 💚, 3개 모이면 1UP
+                if (me.brawlKillCredit != null && hud.mode === 'brawl') {
+                  return i < me.brawlKillCredit
+                    ? <span key={i} className="rift__me-item rift__me-item--life" title="1UP 크레딧 — 3킬마다 목숨 +1">💚</span>
+                    : <span key={i} className="rift__me-item rift__me-item--empty">-</span>
+                }
                 const it = getItem((me.items || [])[i])
                 // 액티브 아이템(물병/종)은 아이콘 자체가 사용 버튼 — 쿨다운 중엔 남은 초를 덮어 보여 준다
                 if (it?.active) {

@@ -4706,6 +4706,39 @@ test('대난투 궁: 대지술사 감옥 발사 — 기둥이 사방으로 내�
   assert.ok(far.hp < fHp || far.brawlSmashT > 0 || far.knockT > 0 || far.x > e.x + 13, '경로의 적 피격·넉백')
 })
 
+test('대난투 궁: 엔지니어 레이저 거포 — 직선 관통 5발 후 분해', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  a.cls = 'engineer'
+  a.x = -10; a.z = 0 // 중앙 근처 — 넉백당한 표적이 링 밖으로 안 떨어지게
+  const e = g.heroes[1]
+  e.x = 0; e.z = 0
+  g.heroes.slice(2).forEach((o) => { o.x = -30; o.z = -30 })
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  const gun = g.summons.find((su) => su.kind === 'cannon')
+  assert.ok(gun && gun.brawlLaserN === 5, '레이저 거포 장전 5발')
+  const hp0 = e.hp
+  const seq0 = g.brawlLaserSeq || 0
+  run(g, 2.0)
+  assert.ok(e.hp < hp0, '레이저 명중')
+  assert.ok((g.brawlLaserSeq || 0) > seq0, '레이저 빔 연출')
+  for (let i = 0; i < 16 && g.summons.some((su) => su.kind === 'cannon'); i++) {
+    e.x = 0; e.z = 0; e.hp = e.maxHp; e.knockT = 0; e.fallT = 0; e.respawnT = 0 // 표적을 계속 사선에 되돌린다
+    run(g, 1.0)
+  }
+  assert.ok(!g.summons.some((su) => su.kind === 'cannon'), '5발 소진 — 분해')
+})
+
+test('대난투: 킬 크레딧 뷰 — 아이템창 초록 하트용 필드', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  a.brawlKillN = 2
+  const v = makeView(g, 'solo')
+  const me = v.heroes.find((h2) => h2.id === 'solo')
+  assert.equal(me.brawlKillCredit, 2, '크레딧 2 (3이 되면 1UP 후 0으로)')
+})
+
 test('대난투: 용·이무기 미출현 — 스폰 봉인(콜로세움과 동일)', () => {
   const g = brawl8()
   const dragon = g.monsters.find((m) => m.kind === 'dragon')
