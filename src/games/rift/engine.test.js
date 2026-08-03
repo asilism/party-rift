@@ -703,17 +703,18 @@ test('증강(소환물 강화): summonMul이 소환물 체력·피해를 함께 
   assert.ok(petBuff.dmg > petBase.dmg * 1.15, `피해 +20%대 (${petBase.dmg}→${petBuff.dmg})`)
 })
 
-test('증강(처치 흡혈): killHeal이 적 처치 시 최대 체력만큼 회복시킨다', () => {
+test('증강(처치 흡혈): killHeal 회복은 잡은 적 체력 비례 — min(적 체력, 내 체력) 캡', () => {
   const g = duo('warrior', 'mage')
   startPlaying(g)
   const w = g.heroes[0]
-  w.augDraw = { choices: ['r_lifesteal'] } // 처치 시 12% 회복
+  w.augDraw = { choices: ['r_lifesteal'] } // 처치 시 비례 회복(상한 내 체력의 12%)
   pickAugment(g, w.id, 'r_lifesteal')
   w.hp = w.maxHp * 0.5 // 반피
   const before = w.hp
-  // 외딴 곳에 빈사 적 병사 — 전사가 직접 평타로 잡으면 흡혈
+  // 외딴 곳에 체력 두둑한 적 병사 — 잡으면 min(적 최대체력, 내 최대체력)×12% 회복
   w.x = 0; w.z = 0; w.dir = 0
-  plantMinion(g, 'red', 2.5, 0, 1)
+  const big = plantMinion(g, 'red', 2.5, 0, 400)
+  big.hp = 1 // 최대체력은 400, 남은 피는 빈사 — 한 방 처치
   castAttack(g, w.id)
   run(g, 0.5) // 탄/타격 적중 + 처치
   assert.ok(!g.minions.some((m) => m.team === 'red'), '병사 처치됨')
