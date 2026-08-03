@@ -323,6 +323,7 @@ export default function SoloApp() {
     const place = userPlacement(tour) || 6
     addCoins(ARENA_PLACE_COIN[place] || 10)
     recordArenaRun(place)
+    grantArenaTrophies(loadArenaRecords().wins) // 검투사 세트(우승 누적 1/3/5회)
     evaluateAchievements() // 완주/우승 업적 즉시 지급(라이브 게터)
     setTour(null)
     go('menu')
@@ -394,6 +395,8 @@ export default function SoloApp() {
         let defRec = null
         if (view.mode === 'defense') {
           defRec = { ...recordDefenseRun(view.wave || 0), wave: view.wave || 0 }
+          const defDrops = grantDefenseTrophies(view.wave || 0) // 수문장 세트(30/60/100파도)
+          if (defDrops.length) defRec.drops = defDrops
         }
         addCoins(earn)
         if (view.mode === 'brawl') {
@@ -1707,6 +1710,10 @@ const HATS = [
   { id: 'nebulacrown', name: '성운의 관', trophy: { boss: 'boss_archmage', tier: 'normal' }, fx: true },
   { id: 'shadowmask', name: '그림자 가면', trophy: { boss: 'boss_shadow', tier: 'normal' }, fx: true },
   { id: 'thorncrown', name: '가시 왕관', trophy: { boss: 'boss_thorn', tier: 'normal' }, fx: true },
+  // ── 무한방어 수문장 세트(비매품): trophy = { defense: N } — N파도 도달 시 지급 ──
+  { id: 'wardhelm', name: '파수꾼 투구', trophy: { defense: 30 }, fx: true },
+  // ── 콜로세움 검투사 세트(비매품): trophy = { arena: N } — 토너먼트 우승 누적 N회 ──
+  { id: 'gladhelm', name: '검투사 투구', trophy: { arena: 1 }, fx: true },
   // ── 난투전 챔피언 세트(비매품): trophy = { brawl: N } — N위 이내 달성 시 지급 ──
   { id: 'champlaurel', name: '난투 월계관', trophy: { brawl: 3 }, fx: true },
 ]
@@ -1733,6 +1740,8 @@ const COSTUMES = [
   { id: 'galaxyrobe', name: '은하 로브', trophy: { boss: 'boss_archmage', tier: 'hard' }, fx: true },
   { id: 'abysscloak', name: '심연 망토', trophy: { boss: 'boss_shadow', tier: 'hard' }, fx: true },
   { id: 'vinemail', name: '덩굴 갑옷', trophy: { boss: 'boss_thorn', tier: 'hard' }, fx: true },
+  { id: 'wardplate', name: '수문장 흉갑', trophy: { defense: 60 }, fx: true },
+  { id: 'gladpauldron', name: '백부장 견갑', trophy: { arena: 3 }, fx: true },
   { id: 'champbelt', name: '챔피언 벨트', trophy: { brawl: 2 }, fx: true },
 ]
 
@@ -1758,6 +1767,8 @@ const WEAPONS = [
   { id: 'cometstaff', name: '운석 지팡이', trophy: { boss: 'boss_archmage', tier: 'nightmare' }, fx: true },
   { id: 'crescentscythe', name: '그믐의 낫', trophy: { boss: 'boss_shadow', tier: 'nightmare' }, fx: true },
   { id: 'bramblesword', name: '가시 대검', trophy: { boss: 'boss_thorn', tier: 'nightmare' }, fx: true },
+  { id: 'wardmaul', name: '성벽 파쇄퇴', trophy: { defense: 100 }, fx: true },
+  { id: 'gladius', name: '투기장 글라디우스', trophy: { arena: 5 }, fx: true },
   { id: 'champblade', name: '우승자의 황금검', trophy: { brawl: 1 }, fx: true },
 ]
 
@@ -1838,10 +1849,42 @@ const WARDROBE_CATALOG = Object.entries(WARDROBE_TABS).flatMap(([tabId, def]) =>
 // 잠금 문구: "🏆 녹스 · 악몽 토벌" — 티어 표기는 승리 배너와 같은 BOSS_TIER_OPTS를 쓴다
 const trophyLockLabel = (trophy) => (trophy.brawl
   ? `${t('난투전')} ${trophy.brawl}${t('위')}`
-  : `${t(BOSS_NAMES[trophy.boss] || '')} · ${t(BOSS_TIER_OPTS.find((o) => o.id === trophy.tier)?.label || '')} ${t('토벌')}`)
+  : trophy.defense
+    ? `${t('무한방어')} ${trophy.defense}${t('파도')}`
+    : trophy.arena
+      ? `${t('콜로세움 우승')} ${trophy.arena}${t('회')}`
+      : `${t(BOSS_NAMES[trophy.boss] || '')} · ${t(BOSS_TIER_OPTS.find((o) => o.id === trophy.tier)?.label || '')} ${t('토벌')}`)
 
 // 토벌 승리 → 이 보스·이 티어에 걸린 전리품을 전부 지급(이미 보유분은 건너뜀).
 // 결과 배너에 띄울 새 획득 이름 목록을 돌려준다. 한 보스 3난이도를 다 깨면 세트 완성(세트 오라+PvE 소효과).
+// 무한방어 파도 전리품: 30=투구, 60=흉갑, 100=파쇄퇴 — 도달 파도 이하 조각 전부
+function grantDefenseTrophies(wave) {
+  const drops = []
+  for (const T of Object.values(WARDROBE_TABS)) {
+    for (const item of T.items) {
+      if (!item.trophy?.defense || wave < item.trophy.defense) continue
+      if (T.loadOwned().includes(item.id)) continue
+      T.addOwned(item.id)
+      drops.push(item.name)
+    }
+  }
+  return drops
+}
+
+// 콜로세움 우승 전리품: 누적 우승 1=투구, 3=견갑, 5=글라디우스
+function grantArenaTrophies(wins) {
+  const drops = []
+  for (const T of Object.values(WARDROBE_TABS)) {
+    for (const item of T.items) {
+      if (!item.trophy?.arena || wins < item.trophy.arena) continue
+      if (T.loadOwned().includes(item.id)) continue
+      T.addOwned(item.id)
+      drops.push(item.name)
+    }
+  }
+  return drops
+}
+
 // 난투전 순위 전리품: 3위 이내=월계관, 2위 이내=벨트, 1위=황금검(상위 순위는 하위 조각 포함)
 function grantBrawlTrophies(place) {
   const drops = []

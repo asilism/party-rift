@@ -714,6 +714,8 @@ export const TROPHY_SETS = {
   boss_shadow: { hat: 'shadowmask', costume: 'abysscloak', weapon: 'crescentscythe', fx: { speed: 0.4 } }, // 그림자 세트: 이속 +3%
   boss_thorn: { hat: 'thorncrown', costume: 'vinemail', weapon: 'bramblesword', fx: { def: 0.03 } }, // 가시 세트: 피해감소 +3%
   brawl_champ: { hat: 'champlaurel', costume: 'champbelt', weapon: 'champblade', fx: { speed: 0.3 } }, // 챔피언 세트(난투전 1·2·3위): 이속 소량
+  defense_ward: { hat: 'wardhelm', costume: 'wardplate', weapon: 'wardmaul', fx: { def: 0.03 } }, // 수문장 세트(무한방어 30/60/100파도): 피해감소
+  arena_glad: { hat: 'gladhelm', costume: 'gladpauldron', weapon: 'gladius', fx: { atkMul: 0.03 } }, // 검투사 세트(콜로세움 우승 1/3/5회): 공격력
 }
 // 장착 3피스가 한 보스의 전리품 세트면 그 보스 id — 로스터(클라)와 씬(오라)이 같이 쓴다
 export function trophySetOf(hat, costume, weapon) {
