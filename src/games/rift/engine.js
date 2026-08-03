@@ -568,6 +568,8 @@ const SUMMON_SPEC = {
   // 미니포탑: 주인이 사거리 안에 없으면 잠시 뒤 휴면(zzz). 수명 없음 — 부서지거나 회수 전까지 자리를 지킨다
   turret: { hp: 90, hpCoef: 2.5, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity }, // 초반 ~210(4.7대) → 후반 ~490(3.3대)
   cannon: { hp: 480, hpCoef: 3.0, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 }, // 초반 ~620(13.7대) → 후반 ~960(6.4대)
+  // 야수조련사 대난투 궁 전용: 진짜 용 — 크고 아프고 짧게 산다
+  dragonpet: { hp: 700, hpCoef: 6.0, dmg: 95, coef: 0.36, range: 4.4, aggro: 22, speed: 8.2, mobile: true, cd: 1.2, life: 14 },
 }
 const BEAST_LEAP_DUR = 0.45 // 사냥 명령 시 야수가 적에게 달려드는(도약) 시간 — 거리 무시
 const BEAST_WOLVES = 2 // 야수조련사 늑대 소환 마릿수
@@ -2206,11 +2208,10 @@ export function castUlt(state, id) {
       h.brawlSanctX = h.x
       h.brawlSanctZ = h.z
     } else if (h.cls === 'beastmaster') {
-      // 🐻 곰 무리: 셋이 저마다 다른 각도로 뛰쳐나간다(소환물 시스템 재사용)
-      for (let k = 0; k < 3; k++) {
-        const ba = h.dir + (k - 1) * 0.7
-        spawnSummon(state, h, 'bear', h.x + Math.cos(ba) * 2.5, h.z + Math.sin(ba) * 2.5)
-      }
+      // 🐻🐉 야수 대소집: 곰 하나, 그리고 진짜 용(정글 드래곤 모델) 한 마리
+      spawnSummon(state, h, 'bear', h.x + Math.cos(h.dir + 0.6) * 2.5, h.z + Math.sin(h.dir + 0.6) * 2.5)
+      spawnSummon(state, h, 'dragonpet', h.x + Math.cos(h.dir - 0.5) * 3.2, h.z + Math.sin(h.dir - 0.5) * 3.2)
+      pushFeed(state, 'obj', `🐉 ${emojiOf(h.zodiacId)} ${h.name} — 용을 부렸다!`)
     } else if (h.cls === 'snarer') {
       // 🌿 넝쿨밭: 근방 전원 속박 후 중앙(내 쪽)으로 끌어온다
       for (const e of state.heroes) {
@@ -2221,32 +2222,25 @@ export function castUlt(state, id) {
         applyKnockback(state, e, e.x * 2 - h.x, e.z * 2 - h.z, Math.min(ed - 2, 6))
       }
     } else if (h.cls === 'illusionist') {
-      // 🎭 환영 대난무: 전투형 분신을 왕창 — 누가 진짜냐
-      for (let k = 0; k < 5; k++) {
-        const ba = (k / 5) * Math.PI * 2 + state.rng()
-        spawnClone(state, h, ba, true, 2.5)
-      }
+      // 🎭 환영 대난무: 본래 궁 분신을 합쳐 총 7체 — 7방향으로 쫙 뻗어나간 뒤 저마다 싸운다
+      const mine = () => state.summons.filter((su) => su.kind === 'clone' && su.combat && su.owner === h.id)
+      const need = Math.max(0, 7 - mine().length)
+      for (let k = 0; k < need; k++) spawnClone(state, h, h.dir, true, 1.5)
+      mine().slice(0, 7).forEach((cl, k) => {
+        cl.dir = h.dir + (k / 7) * Math.PI * 2
+        cl.sprintT = 0.55 // 우선 바깥으로 질주(연막 확산) — stepSummons가 집행
+      })
     } else if (h.cls === 'terramancer') {
-      // 🪨 대륙 분열: 조준 직선의 대균열 — 양쪽으로 갈라 밀쳐낸다
-      const tf = Math.cos(h.dir)
-      const tz = Math.sin(h.dir)
-      for (const e of state.heroes) {
-        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
-        const dx = e.x - h.x
-        const dz = e.z - h.z
-        const along = dx * tf + dz * tz
-        if (along < 0 || along > 34) continue
-        const side = dx * tz - dz * tf // 부호 = 균열의 어느 쪽인가
-        if (Math.abs(side) > 6) continue
-        damageHero(state, e, 260, h, false, '대륙 분열')
-        if (e.hp > 0) { // 균열 수직 방향으로 밀쳐낸다
-          const px = h.x + tf * along
-          const pz = h.z + tz * along
-          applyKnockback(state, e, px, pz, 8)
+      // 🪨 감옥 발사: 본래 궁이 세운 바위 감옥이 0.8초 뒤 산산이 — 기둥들이 각 방향으로 경기장 끝까지 내달린다
+      const cage = state.tempWalls.filter((w) => w.alive && w.t === 0) // 방금 세운 감옥 기둥들
+      if (cage.length) {
+        h.brawlCage = {
+          ids: cage.map((w) => w.id),
+          x: cage.reduce((a, w) => a + w.x, 0) / cage.length,
+          z: cage.reduce((a, w) => a + w.z, 0) / cage.length,
+          t: 0.8,
         }
       }
-      pushFx(state, 'rocksplash', h.x + tf * 10, h.z + tz * 10, 7, h.team, 1.2)
-      pushFx(state, 'rocksplash', h.x + tf * 24, h.z + tz * 24, 7, h.team, 1.2)
     } else if (h.cls === 'assassin') {
       // 🗡️ 그림자 연무: 시간차 3연쇄 순간 베기 — 집행은 stepBrawl(0.3s 간격, 화면 암전은 씬)
       h.brawlShadowN = 3
@@ -3877,6 +3871,27 @@ function stepBrawl(state, dt) {
     }
   }
   // 🍌 바나나 트랩: 설치자 외 누구든 밟으면 미끄러진다
+  if (state.brawlPillars && state.brawlPillars.length) { // 🪨 달리는 감옥 기둥 — 닿는 적을 그 방향으로 날린다
+    for (let i = state.brawlPillars.length - 1; i >= 0; i--) {
+      const pl = state.brawlPillars[i]
+      pl.x += Math.cos(pl.dir) * 24 * dt
+      pl.z += Math.sin(pl.dir) * 24 * dt
+      for (const e of state.heroes) {
+        if (e.team === pl.team || e.respawnT > 0 || e.hp <= 0 || e.fallT > 0 || pl.hit.has(e.id)) continue
+        if ((e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
+        if (Math.hypot(e.x - pl.x, e.z - pl.z) > 2.1) continue
+        pl.hit.add(e.id)
+        const ow = state.heroes.find((o) => o.id === pl.owner) || null
+        damageHero(state, e, 230, ow, false, '감옥 발사')
+        if (e.hp > 0) {
+          applyKnockback(state, e, e.x - Math.cos(pl.dir), e.z - Math.sin(pl.dir), 11)
+          e.brawlSmashT = 0.5
+          e.brawlSmashA = pl.dir
+        }
+      }
+      if (Math.hypot(pl.x, pl.z) > 46) state.brawlPillars.splice(i, 1) // 경기장 끝에 닿으면 소멸
+    }
+  }
   for (let i = state.brawlTraps.length - 1; i >= 0; i--) {
     const tr = state.brawlTraps[i]
     tr.t += dt
@@ -3990,6 +4005,25 @@ function stepBrawl(state, dt) {
     if (h.brawlLaunchT > 0) h.brawlLaunchT = Math.max(0, h.brawlLaunchT - dt) // 🪨 융기 쳐올림 궤도
     if (h.brawlTitanT > 0) h.brawlTitanT = Math.max(0, h.brawlTitanT - dt) // 🏛️ 투기장의 거인
     if (h.brawlFrogT > 0) h.brawlFrogT = Math.max(0, h.brawlFrogT - dt) // 🐸 개구리 변이
+    if (h.brawlCage) { // 🪨 감옥 발사 대기 — 시간이 되면 기둥들이 일제히 출발
+      h.brawlCage.t -= dt
+      if (h.brawlCage.t <= 0) {
+        state.brawlPillars = state.brawlPillars || []
+        for (const wid of h.brawlCage.ids) {
+          const w = state.tempWalls.find((w2) => w2.id === wid && w2.alive)
+          if (!w) continue
+          state.brawlPillars.push({
+            id: state.nextId++, x: w.x, z: w.z,
+            dir: Math.atan2(w.z - h.brawlCage.z, w.x - h.brawlCage.x),
+            owner: h.id, team: h.team, hit: new Set(),
+          })
+          w.alive = false
+          w.life = 0 // 다음 틱에 벽 소멸 — 이제부터는 달리는 기둥
+        }
+        pushFx(state, 'rocksplash', h.brawlCage.x, h.brawlCage.z, 6, h.team, 1.0)
+        h.brawlCage = null
+      }
+    }
     if (h.brawlSanctT > 0) { // 🛡️ 성역: 시전 위치 고정 돔(반경 6.2) — 안의 나는 무적+빠른 회복, 안의 적은 축출
       h.brawlSanctT = Math.max(0, h.brawlSanctT - dt)
       const scx = h.brawlSanctX ?? h.x
@@ -5502,6 +5536,12 @@ function stepSummons(state, dt) {
       continue
     }
     const owner = state.heroes.find((h) => h.id === s.owner)
+    if (s.sprintT > 0) { // 🎭 대난무 확산 질주: 잠시 자기 방향으로 내달린 뒤 전투 모드로
+      s.sprintT -= dt
+      s.x += Math.cos(s.dir) * s.speed * 1.6 * dt
+      s.z += Math.sin(s.dir) * s.speed * 1.6 * dt
+      continue
+    }
     // 환영무희 미끼 분신(기본 스킬): 직진하다 보이는 적 영웅이 인지 반경에 들어오면 쫓아가고,
     //  코앞에 오면 내리찍기 모션(slamT) — 그동안 표적을 끝까지 따라붙어(도약) 반드시 명중 후 펑 사라진다.
     //  전투형 분신(궁극기)은 아래 공용 전투 로직(적 인지 → 추격 → 평타)을 그대로 탄다 — 봇처럼 싸운다.
@@ -9300,6 +9340,7 @@ export function makeView(state) {
     brawlPadsDead: !!state.brawlPadsDead, // 대포 발판 붕괴(씬 낙하 연출)
     brawlLaserSeq: state.brawlLaserSeq || 0,
     brawlChainSeq: state.brawlChainSeq || 0,
+    brawlPillars: state.brawlPillars ? state.brawlPillars.map((pl) => ({ id: pl.id, x: r2d(pl.x), z: r2d(pl.z), dir: r2d(pl.dir) })) : null,
     brawlChainAt: state.brawlChainAt ? { x: state.brawlChainAt.x, z: state.brawlChainAt.z, targets: state.brawlChainAt.targets.map((c) => ({ ...c })) } : null,
     brawlLaserAt: state.brawlLaserAt ? { ...state.brawlLaserAt } : null,
     brawlUltSeq: state.brawlUltSeq || 0,

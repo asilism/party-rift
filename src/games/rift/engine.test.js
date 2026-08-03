@@ -4663,6 +4663,49 @@ test('대난투 궁: 사슬잡이 단죄 — 내 자리로 끌어온 뒤 심판(
   assert.ok(e.hp < hp0, '단죄 집행')
 })
 
+test('대난투 궁: 야수조련사 — 곰1+용1 소환', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  a.cls = 'beastmaster'
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  const kinds = g.summons.map((su) => su.kind).sort()
+  assert.ok(kinds.includes('bear') && kinds.includes('dragonpet'), `곰+용 (${kinds})`)
+})
+
+test('대난투 궁: 환영무희 — 분신 7체가 7방향 확산', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  a.cls = 'illusionist'
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  const clones = g.summons.filter((su) => su.kind === 'clone' && su.combat)
+  assert.equal(clones.length, 7, '7체')
+  const d0 = clones.map((c) => Math.hypot(c.x - a.x, c.z - a.z))
+  run(g, 0.5)
+  const d1 = clones.map((c) => Math.hypot(c.x - a.x, c.z - a.z))
+  assert.ok(d1.every((d, i) => d > d0[i] + 1.5), '바깥으로 질주')
+})
+
+test('대난투 궁: 대지술사 감옥 발사 — 기둥이 사방으로 내달리며 적을 날린다', () => {
+  const g = brawl8()
+  const a = g.heroes[0]
+  a.cls = 'terramancer'
+  const e = g.heroes[1]
+  e.x = a.x + 6; e.z = a.z // 감옥 표적
+  const far = g.heroes[2]
+  far.x = e.x + 12; far.z = e.z // 동쪽으로 내달리는 기둥의 경로
+  g.heroes.slice(3).forEach((o) => { o.x = -30; o.z = -30 })
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  assert.ok(a.brawlCage && a.brawlCage.ids.length >= 6, '감옥 표식')
+  run(g, 1.0)
+  assert.ok((g.brawlPillars || []).length > 0, '기둥 발사')
+  const fHp = far.hp
+  run(g, 1.2)
+  assert.ok(far.hp < fHp || far.brawlSmashT > 0 || far.knockT > 0 || far.x > e.x + 13, '경로의 적 피격·넉백')
+})
+
 test('대난투: 용·이무기 미출현 — 스폰 봉인(콜로세움과 동일)', () => {
   const g = brawl8()
   const dragon = g.monsters.find((m) => m.kind === 'dragon')

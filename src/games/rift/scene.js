@@ -4518,6 +4518,13 @@ const SUMMON_LOOK = {
 }
 
 function buildSummon(s, barColor) {
+  if (s.kind === 'dragonpet') {
+    // 야수조련사 궁: 진짜 용 — 정글 드래곤 모델 재사용(0.72배). userData에 bar/body가 있어 소환물 규격과 호환.
+    const g = buildDragon(s)
+    g.scale.setScalar(0.72)
+    g.userData.turret = false
+    return g
+  }
   // 환영무희 분신: 본체와 완전히 똑같이 그린다(몸/무기/이모지/이름표) — 적을 속이는 미끼
   if (s.kind === 'clone') {
     const g = buildHero({ ...s, id: String(s.id), atkSeq: 0 }, false, barColor)
@@ -6849,6 +6856,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const brawlUps = [] // 텍스트 팝업(1UP·콤보·SMASH) {spr, t, x, z}
   const brawlBursts = [] // 💥 타격 버스트 {spr, t, dur}
   const brawlSanctObjs = new Map() // 🛡️ 성역 돔 — 히어로 id → 월드 고정 반구
+  const brawlPillarObjs = new Map() // 🪨 달리는 감옥 기둥 — id → 돌기둥
   const brawlWedges = [] // 피니셔 쐐기 {g, t, dur}
   function brawlWedge(x, z, ang) {
     // 공격자→피격자로 찌르는 쐐기 다발 — 스매시의 방향성 슬래시. 본체+양옆 짧은 가시 3발.
@@ -6998,6 +7006,35 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       }
       for (const [id, o] of brawlPickupObjs) {
         if (!seenPk.has(id)) { scene.remove(o); brawlPickupObjs.delete(id) }
+      }
+      // 🪨 달리는 감옥 기둥 — 돌기둥이 흙먼지를 끌며 미끄러져 나간다
+      const seenPl = new Set()
+      for (const pl of view.brawlPillars || []) {
+        seenPl.add(pl.id)
+        let o = brawlPillarObjs.get(pl.id)
+        if (!o) {
+          o = new THREE.Group()
+          const rock = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.85, 1.25, 3.4, 7),
+            new THREE.MeshLambertMaterial({ color: 0xb9a284, flatShading: true })
+          )
+          rock.position.y = 1.7
+          const cap = new THREE.Mesh(
+            new THREE.DodecahedronGeometry(0.9),
+            new THREE.MeshLambertMaterial({ color: 0xd8cdb8, flatShading: true })
+          )
+          cap.position.y = 3.6
+          o.add(rock, cap)
+          scene.add(o)
+          brawlPillarObjs.set(pl.id, o)
+        }
+        o.position.set(pl.x, 0, pl.z)
+        o.rotation.y = -pl.dir
+        o.rotation.z = -0.14 // 달리는 쪽으로 살짝 기울어진다
+        if (Math.random() < 0.5) particles.emit(pl.x, 0.4, pl.z, 0xcbb894, 2, { spread: 1.6, up: 1.4, gravity: 4, size: 1.2, lifeMin: 0.2, lifeMax: 0.4 })
+      }
+      for (const [pid, o] of brawlPillarObjs) {
+        if (!seenPl.has(pid)) { scene.remove(o); disposeObject(o); brawlPillarObjs.delete(pid) }
       }
       // 🛡️ 성역 돔 — 시전 위치에 고정된 금빛 격자 반구(반경 6.2)
       const seenSanct = new Set()
