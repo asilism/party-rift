@@ -3876,3 +3876,11 @@ body {
 /* 대난투 궁 게이지 — 체력바와 동일 규격, 보라→금 필 */
 .rift__bar--ult > div { background: linear-gradient(90deg, #b98bff, #ffd24a); }
 .rift__bar--ult.is-full > div { animation: ultFullPulse 0.7s ease-in-out infinite; }
+
+/* 암살자 그림자 연무 — 화면이 컥 어두워졌다 서서히 밝아진다 */
+.brawl-shadowdark {
+  position: absolute; inset: 0; z-index: 5; pointer-events: none;
+  background: radial-gradient(circle at 50% 45%, rgba(8, 4, 20, 0.45), rgba(4, 2, 12, 0.82));
+  animation: shadowDarkOut 1.2s ease-in forwards;
+}
+@keyframes shadowDarkOut { 0% { opacity: 1; } 55% { opacity: 1; } 100% { opacity: 0; } }

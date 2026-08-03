@@ -556,6 +556,20 @@ function RiftPlay({
     }
     return undefined
   }, [hud?.brawlBoltSeq, hud?.brawlNukeSeq])
+  const [shadowDark, setShadowDark] = useState(false)
+  const ultSeqRef = useRef(0)
+  useEffect(() => { // 🗡️ 그림자 연무 — 화면이 어두워지는 1.2초
+    const seq = hud?.brawlUltSeq || 0
+    if (seq && seq !== ultSeqRef.current) {
+      ultSeqRef.current = seq
+      if (hud?.brawlUltAt?.cls === 'assassin') {
+        setShadowDark(true)
+        const t = setTimeout(() => setShadowDark(false), 1200)
+        return () => clearTimeout(t)
+      }
+    }
+    return undefined
+  }, [hud?.brawlUltSeq])
   const myBrawlPlace = hud.mode === 'brawl'
     ? ((hud.brawlRanks || []).find((r) => r.id === myId)?.place || null) : null
   const winText = hud.mode === 'brawl'
@@ -634,6 +648,7 @@ function RiftPlay({
             </div>
           )}
           {boltFlash > 0 && <div className={`brawl-flash ${boltFlash === 2 ? 'brawl-flash--fade' : ''}`} />}
+          {shadowDark && <div className="brawl-shadowdark" />}
           {/* 대난투: 내 목숨 + 생존자 수 + 링 축소 경고 (같은 슬롯) */}
           {hud.mode === 'brawl' && !finished && (
             <div className="boss-bar-slot">

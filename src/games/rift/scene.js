@@ -6806,6 +6806,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   let brawlBoltSeen = 0 // 번개 낙뢰 시퀀스(중복 방지)
   const brawlBolts = [] // 낙뢰 기둥 {mesh, t}
   let brawlUltSeen = 0 // 궁극기 발동 연출 시퀀스
+  let brawlLaserSeen = 0 // 극태 레이저 발사 시퀀스
+  const brawlBeams = [] // 에너지 빔 {group, layers, t, dur} — 맥동·명멸하다 수렴 소멸
   let brawlUltGlow = null // 궁 시전자 스포트라이트 {id, t}
   let brawlNukeSeen = 0 // 폭탄 버섯구름 시퀀스
   const brawlNukes = [] // 버섯구름 {g, stem, cap, fire, ring, t, dur}
@@ -6968,7 +6970,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         seenTr.add(-tr.id) // 픽업과 키 충돌 방지(음수 키)
         let o = brawlPickupObjs.get(-tr.id)
         if (!o) {
-          o = emojiSprite('🍌', 2.4)
+          o = emojiSprite(tr.ice ? '🧊' : '🍌', tr.ice ? 2.7 : 2.4)
           scene.add(o)
           brawlPickupObjs.set(-tr.id, o)
         }
@@ -7117,20 +7119,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         brawlShakeT = Math.max(brawlShakeT, 0.25)
         brawlUltGlow = { id: at.id, t: 0.6 } // 시전자 스포트라이트(골드 발광)
         // ── 직업별 궁 전용 연출 ──
-        if (at.cls === 'archer') {
-          // 🌈 극태 레이저: 조준 방향으로 화면을 가로지르는 수평 광선(굵은 심 + 넓은 글로우)
-          for (const [rad, col, op] of [[0.7, 0xffffff, 0.95], [1.8, 0x8fd0ff, 0.45]]) {
-            const beamGeo = new THREE.CylinderGeometry(rad, rad, 38, 10)
-            beamGeo.translate(0, 19, 0)
-            const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false }))
-            beam.position.set(at.x, 2.4, at.z)
-            beam.rotation.z = -Math.PI / 2
-            beam.rotation.y = -(at.dir || 0)
-            beam.rotation.order = 'YZX'
-            scene.add(beam)
-            brawlBolts.push({ mesh: beam, t: 0.45 })
-          }
-        } else if (at.cls === 'healer') {
+        if (at.cls === 'healer') {
           // 🌸 꽃밭: 초록 파동 링 + 꽃잎 버스트가 사방에
           for (let fk = 0; fk < 8; fk++) {
             const fa = (fk / 8) * Math.PI * 2
@@ -7146,15 +7135,68 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           scene.add(bloom)
           brawlBolts.push({ mesh: bloom, t: 0.5 })
         } else if (at.cls === 'cryomancer') {
-          for (let fk = 0; fk < 5; fk++) { // ❄️ 전방 얼음 파편
-            const fa = (at.dir || 0) + (fk - 2) * 0.35
-            brawlBurst(at.x + Math.cos(fa) * (5 + fk * 2), at.z + Math.sin(fa) * (5 + fk * 2), 2.8, 0.4, '❄️')
+          // ❄️ 대빙원: 서리 파동 링이 크게 퍼지고, 전방 절반에 얼음 결정이 흩날린다
+          const frost = new THREE.Mesh(
+            new THREE.RingGeometry(0.9, 1.4, 40),
+            new THREE.MeshBasicMaterial({ color: 0x9fdcff, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+          )
+          frost.rotation.x = -Math.PI / 2
+          frost.position.set(at.x, 0.4, at.z)
+          scene.add(frost)
+          brawlBolts.push({ mesh: frost, t: 0.55 })
+          for (let fk = 0; fk < 9; fk++) {
+            const fa = (at.dir || 0) + (fk / 8 - 0.5) * 2.4
+            brawlBurst(at.x + Math.cos(fa) * (5 + (fk % 3) * 5.5), at.z + Math.sin(fa) * (5 + (fk % 3) * 5.5), 2.2, 0.45, '❄️')
           }
         }
       }
       if (brawlUltGlow) {
         brawlUltGlow.t -= dt
         if (brawlUltGlow.t <= 0) brawlUltGlow = null
+      }
+      // 🌈 극태 레이저: 정신집중이 끝난 순간 — 화면을 가로지르는 3겹 에너지 빔(1초 맥동)
+      if ((view.brawlLaserSeq || 0) !== brawlLaserSeen) {
+        brawlLaserSeen = view.brawlLaserSeq || 0
+        const at = view.brawlLaserAt || { x: 0, z: 0, dir: 0 }
+        const group = new THREE.Group()
+        const layers = []
+        for (const [rad, col, op] of [[1.3, 0xffffff, 1], [2.6, 0x8fd0ff, 0.55], [4.2, 0x5a86ff, 0.22]]) {
+          const geo = new THREE.CylinderGeometry(rad, rad, 40, 12, 1, true)
+          geo.translate(0, 20, 0)
+          const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, depthTest: false, side: THREE.DoubleSide }))
+          group.add(m)
+          layers.push({ m, op })
+        }
+        const muzzle = new THREE.Mesh(new THREE.SphereGeometry(2.6, 12, 10),
+          new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }))
+        group.add(muzzle)
+        layers.push({ m: muzzle, op: 0.9 })
+        group.position.set(at.x, 2.2, at.z)
+        group.rotation.order = 'YZX'
+        group.rotation.y = -(at.dir || 0)
+        group.rotation.z = -Math.PI / 2
+        scene.add(group)
+        brawlBeams.push({ group, layers, t: 1.0, dur: 1.0 })
+        brawlShakeT = Math.max(brawlShakeT, 0.35)
+      }
+      for (let bi = brawlBeams.length - 1; bi >= 0; bi--) {
+        const b = brawlBeams[bi]
+        b.t -= dt
+        if (b.t <= 0) {
+          scene.remove(b.group)
+          b.layers.forEach((l) => l.m.material.dispose())
+          brawlBeams.splice(bi, 1)
+          continue
+        }
+        const age = b.dur - b.t
+        // 에너지 느낌: 두께가 웅웅 맥동 + 밝기 명멸, 마지막 0.3초에 심으로 수렴하며 소멸
+        const pulse = 1 + Math.sin(age * 46) * 0.16 + Math.sin(age * 13) * 0.08
+        const collapse = b.t < 0.3 ? b.t / 0.3 : 1
+        for (let li = 0; li < b.layers.length; li++) {
+          const l = b.layers[li]
+          l.m.scale.x = l.m.scale.z = pulse * collapse
+          l.m.material.opacity = l.op * collapse * (0.8 + Math.sin(age * 60 + li * 2.1) * 0.2)
+        }
       }
       // 💣 폭탄: 핵버섯구름 — 화염 코어가 치솟아 연기 기둥·버섯머리가 부풀고 충격파 링이 퍼진다
       if ((view.brawlNukeSeq || 0) !== brawlNukeSeen) {
