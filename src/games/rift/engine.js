@@ -569,7 +569,7 @@ const SUMMON_SPEC = {
   turret: { hp: 90, hpCoef: 2.5, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity }, // 초반 ~210(4.7대) → 후반 ~490(3.3대)
   cannon: { hp: 480, hpCoef: 3.0, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 }, // 초반 ~620(13.7대) → 후반 ~960(6.4대)
   // 야수조련사 대난투 궁 전용: 진짜 용 — 크고 아프고 짧게 산다
-  dragonpet: { hp: 340, hpCoef: 2.4, dmg: 42, coef: 0.18, range: 4.4, aggro: 22, speed: 8.2, mobile: true, cd: 1.5, life: 8 }, // 시뮬 승률 편중 반복 너프(2026-08-03)
+  dragonpet: { hp: 300, hpCoef: 2.0, dmg: 36, coef: 0.15, range: 4.4, aggro: 22, speed: 8.2, mobile: true, cd: 1.6, life: 7 }, // 시뮬 승률 편중 반복 너프(2026-08-03, 최종 50%→)
 }
 const BEAST_LEAP_DUR = 0.45 // 사냥 명령 시 야수가 적에게 달려드는(도약) 시간 — 거리 무시
 const BEAST_WOLVES = 2 // 야수조련사 늑대 소환 마릿수
@@ -2218,7 +2218,7 @@ export function castUlt(state, id) {
       const dg = spawnSummon(state, h, 'dragonpet', h.x + Math.cos(h.dir - 0.5) * 3.2, h.z + Math.sin(h.dir - 0.5) * 3.2)
       for (const pet of [bb, dg]) {
         if (!pet) continue
-        pet.dmg = Math.round(pet.dmg * 0.6)
+        pet.dmg = Math.round(pet.dmg * 0.5)
         pet.hp = Math.round(pet.hp * 0.7)
         pet.maxHp = pet.hp
       }
@@ -2603,7 +2603,9 @@ function fireLightArrow(state, h) {
       const along = dx3 * lx + dz3 * lz
       if (along < 0 || along > 40) continue
       if (Math.abs(dx3 * lz - dz3 * lx) > 2.8) continue
+      state._ultHit = true
       damageHero(state, e, 220, h, false, '극태 레이저')
+      state._ultHit = false
       if (e.hp > 0 && !(e.brawlMushT > 0)) {
         applyKnockback(state, e, h.x, h.z, 13.5)
         e.brawlSmashT = 0.5
@@ -3096,11 +3098,13 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   }
   // 대난투 코어: 모든 피해가 넉백을 동반 — 잃은 체력이 많을수록 크게 날아간다(스매시 %).
   //  가장자리는 낭떠러지라 넉백 자체가 처형 수단. 잔피해(<8)는 제외(도트 진동 방지).
-  if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && amount > 0 && !dot && !state._summonHit) {
-    // ⚡ 궁극기 게이지: 때리면 크게, 맞으면 절반 — 교전이 궁을 만든다(도트·소환수 대리 타격 제외
-    //  — 곰·용·분신이 게이지를 재생산해 궁 무한 루프가 되는 것을 막는다. 2026-08-03 시뮬로 적발)
-    attacker.brawlUltQ = Math.min(100, (attacker.brawlUltQ || 0) + amount * 0.09)
-    victim.brawlUltQ = Math.min(100, (victim.brawlUltQ || 0) + amount * 0.045)
+  if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && amount > 0 && !dot && !state._summonHit && !state._ultHit) {
+    // ⚡ 궁극기 게이지: 때리면 크게, 맞으면 절반 — 교전이 궁을 만든다.
+    //  제외 3종(전부 시뮬로 적발한 무한 루프): 도트 / 소환수 대리 타격(_summonHit — 곰·용·분신이
+    //  게이지 재생산) / 궁 자체 피해(_ultHit — 핵 3연발 한 방이 게이지 ~90을 회수해 분당 10회 스팸).
+    //  계수도 0.09→0.05로 복원 — 설계 의도 "게이지 100 = 약 8~12초 교전, 판당 3~5회"(2026-08-03)
+    attacker.brawlUltQ = Math.min(100, (attacker.brawlUltQ || 0) + amount * 0.05)
+    victim.brawlUltQ = Math.min(100, (victim.brawlUltQ || 0) + amount * 0.025)
   }
   if (state.mode === 'brawl' && attacker && attacker.team !== victim.team && attacker.x != null
       && amount >= 8 && victim.hp > 0 && !(victim.fallT > 0) && !dot) {
@@ -3897,7 +3901,9 @@ function stepBrawl(state, dt) {
         if (Math.hypot(e.x - pl.x, e.z - pl.z) > 2.1) continue
         pl.hit.add(e.id)
         const ow = state.heroes.find((o) => o.id === pl.owner) || null
+        state._ultHit = true
         damageHero(state, e, 230, ow, false, '감옥 발사')
+        state._ultHit = false
         if (e.hp > 0) {
           applyKnockback(state, e, e.x - Math.cos(pl.dir), e.z - Math.sin(pl.dir), 11)
           e.brawlSmashT = 0.5
@@ -4074,7 +4080,9 @@ function stepBrawl(state, dt) {
             h.x = mk.x + Math.cos(mk.dir + Math.PI) * 1.1 // 등 뒤에서 나타난다
             h.z = mk.z + Math.sin(mk.dir + Math.PI) * 1.1
             h.dir = Math.atan2(mk.z - h.z, mk.x - h.x)
+            state._ultHit = true
             damageHero(state, mk, 270, h, false, '그림자 연무') // 시뮬 승률 43% → 하향
+            state._ultHit = false
             if (mk.hp > 0) mk.stunT = Math.max(mk.stunT, 0.7)
             pushFx(state, 'shadowexec', mk.x, mk.z, 2.8, h.team, 0.9)
             h.brawlShadowHit.push(mk.id)
@@ -4091,7 +4099,9 @@ function stepBrawl(state, dt) {
           if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || (e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0 || (e.brawlMushT || 0) > 0) continue
           const ed = Math.hypot(h.x - e.x, h.z - e.z)
           if (ed > 7) continue
+          state._ultHit = true
           damageHero(state, e, 340, h, false, '단죄')
+          state._ultHit = false
           if (e.hp > 0) {
             e.stunT = Math.max(e.stunT, 0.9)
             applyKnockback(state, e, h.x, h.z, 4) // 겹침만 풀 정도 — 날리기가 아니라 심판
@@ -5438,6 +5448,7 @@ function stepZones(state, dt) {
         state.brawlNukeSeq = (state.brawlNukeSeq || 0) + 1
         state.brawlNukeAt = { x: z.x, z: z.z }
       }
+      state._ultHit = !!z.brawlNuke // 궁 피해는 게이지를 재생산하지 않는다
       aoeDamage(state, owner, z.x, z.z, z.r, z.dmg, 0)
       pushFx(state, 'meteorhit', z.x, z.z, z.r, z.team)
       if (z.brawlBlast && state.mode === 'brawl') { // 폭풍이 밖으로 밀어낸다 — 핵은 스매시급
@@ -5452,8 +5463,10 @@ function stepZones(state, dt) {
           }
         }
       }
+      state._ultHit = false
     } else if (z.kind === 'fissure') {
       // 한 파(구간)가 터진다 — 그 구간의 적을 길게 기절
+      state._ultHit = !!z.brawlQuake
       lineDamage(state, owner, z.x, z.z, z.dir, z.len, z.half, z.dmg, z.stun)
       pushFxDir(state, 'fissure', z.x, z.z, z.len, z.dir, z.team)
       if (z.brawlQuake && state.mode === 'brawl') { // 대난투: 솟는 암석이 적을 하늘 높이 쳐올리며 날린다
@@ -5475,6 +5488,7 @@ function stepZones(state, dt) {
           e.brawlSmashA = z.dir
         }
       }
+      state._ultHit = false
     } else if (z.kind === 'vine') {
       // 한 단이 땅에서 솟는다 — 좁은 구간의 적을 속박(기절 아님)
       lineDamage(state, owner, z.x, z.z, z.dir, z.len, z.half, z.dmg, 0, z.root)
@@ -5520,7 +5534,9 @@ function spawnSummon(state, owner, kind, x, z) {
   // 소환 시점 주인의 주력 스탯(공·주 평균)을 계수만큼 피해·체력에 얹는다 — 하이브리드 스케일.
   const ps = powerStat(owner)
   // 증강(소환물 강화): 소환 시점 주인의 summonMul만큼 체력·피해를 함께 올린다 — 무한방어 소환사 빌드 축
-  const smul = 1 + augOf(owner).summonMul
+  let smul = 1 + augOf(owner).summonMul
+  // 대난투: 늑대·곰은 낙사도 링 축소도 무시하는 FFA 최적 병기 — 물량 가치만큼 개체를 감쇠(본편 무영향)
+  if (state.mode === 'brawl' && (kind === 'wolfpet' || kind === 'bear')) smul *= 0.72
   const hp = Math.round((spec.hp + (spec.hpCoef || 0) * ps) * smul)
   const su = {
     id: state.nextId++, kind, team: owner.team, owner: owner.id,
@@ -5578,6 +5594,7 @@ function stepSummons(state, dt) {
         }
         if (s.slamT <= 0) {
           const att = owner && owner.respawnT <= 0 ? owner : { id: s.owner, team: s.team }
+          state._summonHit = true
           if (tgt) {
             s.x = tgt.x // 착지 = 표적 머리 위 — 확정 명중
             s.z = tgt.z
@@ -5589,6 +5606,7 @@ function stepSummons(state, dt) {
             if (e === tgt || e.team === s.team || e.respawnT > 0 || dist2(s, e) > r2) continue
             damageHero(state, e, s.slamDmg, att)
           }
+          state._summonHit = false
           pushFx(state, 'poof', s.x, s.z, CLONE_SLAM_RADIUS, s.team)
           remove.add(s.id)
         }
@@ -9097,6 +9115,10 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     castUlt(state, h.id) // 환영난무 — 교란 + 은신
   } else if (h.cls === 'terramancer' && d < CAGE_RANGE - 1 && foe.hp < foe.maxHp * 0.55) {
     castUlt(state, h.id) // 바위감옥 — 빈사 적을 가둬 마무리
+  } else if (h.cls === 'guardian' && (h.hp < h.maxHp * 0.55 || nearCount >= 2)) {
+    castUlt(state, h.id) // 성역 — 몰리면 돔을 편다
+  } else if (h.cls === 'healer' && h.hp < h.maxHp * 0.5) {
+    castUlt(state, h.id) // 축복 — 위기에 회복
   }
   // 수호기사 궁극(불굴의 진형)은 stepBots 위쪽 능동 블록에서 챙긴다
 }
