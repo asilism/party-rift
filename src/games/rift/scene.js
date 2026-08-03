@@ -2925,50 +2925,111 @@ const WEAPON_SKINS = {
     g.userData.gem = glow
     g.add(handle, tower, band1, band2, glow)
   },
-  // 투기장 글라디우스(콜로세움 우승 5회): 폭 넓은 청동 단검 — 군중의 함성이 담긴 검
+  // 투기장 글라디우스(콜로세움 우승 5회): 로마식 광폭 양날검 — 잎사귀형 검신이
+  //  칼끝까지 한 몸으로 좁아지고, 큰 원판 가드와 구형 폼멜이 글라디우스의 정체성.
   gladius(g) {
-    const bronze = lamb(0xc98d4b)
-    const pale = lamb(0xe8c56a)
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.09, 0.44), bronze)
-    blade.position.x = 0.95
-    const ridge = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.11, 0.1), pale)
-    ridge.position.x = 0.95
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.45, 4), bronze)
-    tip.rotation.z = -Math.PI / 2
-    tip.scale.z = 0.3
-    tip.position.x = 1.85
-    const guard = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 0.14, 8), pale)
+    const bronze = new THREE.MeshLambertMaterial({ color: 0xc98d4b, emissive: 0x4a2e10, emissiveIntensity: 0.3 })
+    const ivory = new THREE.MeshLambertMaterial({ color: 0xf0e2c8, emissive: 0x6a5a38, emissiveIntensity: 0.25 })
+    const blade = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.3, 1.65, 4), bronze) // 잎사귀형 테이퍼 검신
+    blade.rotation.z = -Math.PI / 2
+    blade.scale.set(0.38, 1, 1.7)
+    blade.position.x = 1.2
+    const ridge = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.12, 1.6, 4), ivory)
+    ridge.rotation.z = -Math.PI / 2
+    ridge.scale.set(0.7, 1, 0.8)
+    ridge.position.x = 1.17
+    g.add(blade, ridge)
+    const guard = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.12, 14), ivory) // 로마식 원판 가드
     guard.rotation.z = Math.PI / 2
-    guard.position.x = 0.26
-    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.42, 8), lamb(0xd94a4a))
+    guard.position.x = 0.34
+    const guardRim = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.035, 6, 16), bronze)
+    guardRim.rotation.y = Math.PI / 2
+    guardRim.position.x = 0.34
+    g.add(guard, guardRim)
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.46, 8), new THREE.MeshLambertMaterial({ color: 0xd94a4a }))
     grip.rotation.z = Math.PI / 2
-    grip.position.x = -0.02
-    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), new THREE.MeshLambertMaterial({ color: 0xd94a4a, emissive: 0x7a1a1a, emissiveIntensity: 0.6 }))
-    pommel.position.x = -0.28
-    g.userData.gem = pommel
-    g.add(blade, ridge, tip, guard, grip, pommel)
+    grip.position.x = 0.02
+    g.add(grip)
+    for (const dx of [-0.1, 0.02, 0.14]) { // 손가락 홈(골 진 그립)
+      const groove = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.02, 6, 12), bronze)
+      groove.rotation.y = Math.PI / 2
+      groove.position.x = dx
+      g.add(groove)
+    }
+    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), ivory) // 큰 구형 폼멜
+    pommel.position.x = -0.3
+    const pommelBand = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.025, 6, 14), bronze)
+    pommelBand.rotation.y = Math.PI / 2
+    pommelBand.position.x = -0.3
+    g.add(pommel, pommelBand)
+    for (const sz of [1, -1]) { // 가드 옆 월계 잎 — 투기장의 영광
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 5), bronze)
+      leaf.scale.set(1, 1.8, 0.45)
+      leaf.position.set(0.44, sz * 0.2, 0)
+      leaf.rotation.z = sz * 0.7
+      g.add(leaf)
+    }
+    const gem = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), new THREE.MeshLambertMaterial({ color: 0xd94a4a, emissive: 0x7a1a1a, emissiveIntensity: 0.7 }))
+    gem.position.set(0.34, 0.24, 0)
+    g.userData.gem = gem
+    g.add(gem)
   },
-  // 우승자의 황금검(난투전 1위 전리품): 순금 대검 — 챔피언의 증표
+  // 우승자의 황금검(난투전 1위 전리품): 다이아 단면 테이퍼 대검 — 뿌리에서 칼끝까지
+  //  한 몸으로 좁아지는 진짜 검신. 칼끝 쪽으로 굽은 날개 가드 + 왕관 폼멜 — 최상급 실루엣.
   champblade(g) {
     const gold = new THREE.MeshLambertMaterial({ color: 0xffd34d, emissive: 0x6b4d00, emissiveIntensity: 0.4 })
-    const paleGold = new THREE.MeshLambertMaterial({ color: 0xfff2b0, emissive: 0x9a7500, emissiveIntensity: 0.45 })
-    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.1, 0.4), gold)
-    blade.position.x = 1.15
-    const edge = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.12, 0.1), paleGold)
-    edge.position.x = 1.15
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 4), gold)
-    tip.rotation.z = -Math.PI / 2
-    tip.scale.z = 0.35
-    tip.position.x = 2.25
-    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.24, 0.86), gold)
-    guard.position.x = 0.28
-    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.5, 8), new THREE.MeshLambertMaterial({ color: 0x8a2f2f }))
+    const pale = new THREE.MeshLambertMaterial({ color: 0xfff2b0, emissive: 0x9a7500, emissiveIntensity: 0.5 })
+    // 검신: 4각 단면 실린더를 납작하게 — 날 폭은 넓고 두께는 얇게, 칼끝(0)까지 자연 테이퍼
+    const blade = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.24, 2.35, 4), gold)
+    blade.rotation.z = -Math.PI / 2
+    blade.scale.set(0.42, 1, 1.5) // 로컬 x=두께 · z=날 폭
+    blade.position.x = 1.55
+    const ridge = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.1, 2.3, 4), pale) // 중앙 능선
+    ridge.rotation.z = -Math.PI / 2
+    ridge.scale.set(0.8, 1, 0.9)
+    ridge.position.x = 1.52
+    g.add(blade, ridge)
+    for (const dx of [0.85, 1.35, 1.85]) { // 검신 룬 장식 점
+      const rune = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), pale)
+      rune.position.set(dx, 0.075, 0)
+      g.add(rune)
+    }
+    const guardC = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.34), gold) // 가드 중심
+    guardC.position.x = 0.32
+    g.add(guardC)
+    for (const sz of [1, -1]) { // 칼끝 쪽으로 스윕한 날개 가드 + 끝 구슬
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.55), gold)
+      wing.position.set(0.42, 0, sz * 0.48)
+      wing.rotation.y = -sz * 0.5
+      g.add(wing)
+      const bead = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), pale)
+      bead.position.set(0.62, 0, sz * 0.7)
+      g.add(bead)
+    }
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.52, 8), new THREE.MeshLambertMaterial({ color: 0x8a2f2f }))
     grip.rotation.z = Math.PI / 2
-    grip.position.x = -0.05
-    const gem = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), new THREE.MeshLambertMaterial({ color: 0xff5a5a, emissive: 0xaa1111, emissiveIntensity: 0.7 }))
-    gem.position.x = 0.28
+    grip.position.x = -0.02
+    g.add(grip)
+    for (const dx of [-0.14, 0.1]) { // 그립 금 감김
+      const wrap = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.022, 6, 12), gold)
+      wrap.rotation.y = Math.PI / 2
+      wrap.position.x = dx
+      g.add(wrap)
+    }
+    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), gold) // 왕관 폼멜
+    pommel.position.x = -0.34
+    g.add(pommel)
+    for (let k = 0; k < 4; k++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.11, 5), pale)
+      const ka = (k / 4) * Math.PI * 2
+      spike.position.set(-0.41, Math.cos(ka) * 0.09, Math.sin(ka) * 0.09)
+      spike.rotation.z = Math.PI / 2
+      g.add(spike)
+    }
+    const gem = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), new THREE.MeshLambertMaterial({ color: 0xff5a5a, emissive: 0xaa1111, emissiveIntensity: 0.7 }))
+    gem.position.set(0.32, 0.12, 0)
     g.userData.gem = gem
-    g.add(blade, edge, tip, guard, grip, gem)
+    g.add(gem)
   },
   // 목검: 수수한 나무 검 — 입문용
   woodsword(g) {
