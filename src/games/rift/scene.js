@@ -3846,13 +3846,13 @@ function buildTrophyAura(s, setBoss) {
     haloG.add(sp)
     return sp
   }
-  const burstA = mkBurst(ringHue, 5.6 * s, 0.8)
-  const burstB = mkBurst(moteHue, 4.4 * s, 0.55)
+  const burstA = mkBurst(ringHue, 6.6 * s, 0.9)
+  const burstB = mkBurst(moteHue, 5.2 * s, 0.65)
   const haloCore = new THREE.Sprite(new THREE.SpriteMaterial({
     map: glowTexture(), color: moteHue, transparent: true, opacity: 0.5,
     depthWrite: false, blending: THREE.AdditiveBlending,
   }))
-  haloCore.scale.set(3.2 * s, 3.2 * s, 1)
+  haloCore.scale.set(3.8 * s, 3.8 * s, 1)
   haloG.add(haloCore)
   haloG.position.set(0, 2.3 * s, -0.55 * s) // 몸 뒤 — 스프라이트라 어느 각도든 카메라를 향한다
   g.add(haloG)
@@ -3861,11 +3861,11 @@ function buildTrophyAura(s, setBoss) {
     ring.material.opacity = 0.28 + 0.14 * Math.sin(t * 2.4)
     burstA.material.rotation = t * 0.06 // 거의 멈춘 듯 아주 느리게 — 고요한 성광
     burstB.material.rotation = -t * 0.09
-    burstA.material.opacity = 0.72 + 0.12 * Math.sin(t * 1.1)
-    burstB.material.opacity = 0.45 + 0.1 * Math.sin(t * 1.6 + 1.5)
-    haloCore.material.opacity = 0.42 + 0.12 * Math.sin(t * 1.4)
+    burstA.material.opacity = 0.85 + 0.13 * Math.sin(t * 1.1)
+    burstB.material.opacity = 0.58 + 0.12 * Math.sin(t * 1.6 + 1.5)
+    haloCore.material.opacity = 0.52 + 0.14 * Math.sin(t * 1.4)
     const br = 1 + 0.03 * Math.sin(t * 0.9)
-    burstA.scale.set(5.6 * s * br, 5.6 * s * br, 1) // 숨쉬듯 아주 은은하게
+    burstA.scale.set(6.6 * s * br, 6.6 * s * br, 1) // 숨쉬듯 아주 은은하게
     motes.forEach((m, i) => {
       const c = (t / 2.7 + i / 3) % 1 // 링 언저리에서 피어올라 녹아 사라지는 입자
       const a = i * 2.1 + t * 0.7
