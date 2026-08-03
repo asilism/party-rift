@@ -13,7 +13,7 @@ import {
   loadEquippedWeapon, saveEquippedWeapon, loadOwnedWeapons, addOwnedWeapon,
   loadEquippedTrail, saveEquippedTrail, loadOwnedTrails, addOwnedTrail,
   loadBossRecords, recordBossClear, bossTierUnlocked, loadRiftGfx, saveRiftGfx,
-  loadEquippedTitle, saveEquippedTitle, loadDefenseRecords, recordDefenseRun, loadArenaRecords, recordArenaRun,
+  loadEquippedTitle, saveEquippedTitle, loadDefenseRecords, recordDefenseRun, loadArenaRecords, recordArenaRun, recordBrawlRun, loadBrawlRecords,
 } from '../shared/storage.js'
 import { t, getLang, switchLang } from '../shared/i18n.js'
 import { unlockedClassIds, unlockedCount, STARTER_COUNT, unlockPrice } from './unlocks.js'
@@ -399,9 +399,11 @@ export default function SoloApp() {
         if (view.mode === 'brawl') {
           // 🏆 콜로세움과 같은 흐름: 종료 → (1.6s 여운) → 시상식 무대 → 결과 카드.
           //  RiftGame의 결과 모달은 suppressWin으로 막고 여기서 이어받는다.
+          recordBrawlRun(brawlPlace)
+          const drops = grantBrawlTrophies(brawlPlace) // 1·2·3위 챔피언 세트 조각
           setBrawlResult({
             ranks: [...(view.brawlRanks || [])].sort((r1, r2) => r1.place - r2.place),
-            place: brawlPlace, earn, firstWin,
+            place: brawlPlace, earn, firstWin, drops,
           })
           setTimeout(() => enterChampStage(), 1600)
         }
@@ -675,6 +677,9 @@ export default function SoloApp() {
               {brawlResult.place === 1 ? `🏆 ${t('우승!')}` : `${brawlResult.place}${t('위')}`}
             </h2>
             <p className="brawl-result-card__earn">🪙 +{brawlResult.earn}{brawlResult.firstWin ? ` (${t('오늘 첫 승리!')})` : ''}</p>
+            {brawlResult.drops?.length > 0 && (
+              <p className="brawl-result-card__drops">🏆 {t('전리품')}: {brawlResult.drops.map((d) => t(d)).join(' · ')}</p>
+            )}
             <div className="brawl-final">
               {brawlResult.ranks.map((r) => (
                 <div key={r.id} className={`brawl-final__row ${r.id === 'solo' ? 'is-me' : ''}`}>
@@ -1319,6 +1324,7 @@ function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
 const RECORD_TABS = [
   { id: '3v3', label: '3 대 3' },
   { id: '5v5', label: '5 대 5' },
+  { id: 'brawl', label: '대난투' },
   { id: 'boss', label: '보스전' },
   { id: 'defense', label: '방어전' },
   { id: 'arena', label: '콜로세움' },
@@ -1402,6 +1408,21 @@ function BossRecordCard({ bossRecs }) {
   )
 }
 
+function BrawlRecordCard() {
+  const r = loadBrawlRecords()
+  return (
+    <div className="toy-card records-card">
+      <div className="records-rows">
+        <div className="records-row"><span>💥 {t('출전')}</span><b>{r.games}{t('판')}</b></div>
+        <div className="records-row"><span>🏆 {t('우승')}</span><b>{r.wins}{t('회')}</b></div>
+        <div className="records-row"><span>🏅 {t('포디움(3위 이내)')}</span><b>{r.top3}{t('회')}</b></div>
+        <div className="records-row"><span>⭐ {t('최고 순위')}</span><b>{r.best ? `${r.best}${t('위')}` : '—'}</b></div>
+      </div>
+      {r.games === 0 && <p className="hats-note">{t('아직 기록이 없어 — 대난투에 출전해 보자!')}</p>}
+    </div>
+  )
+}
+
 function RecordsScreen({ onBack }) {
   const [tab, setTab] = useState('3v3')
   const byMode = loadRiftRecordsByMode()
@@ -1425,6 +1446,8 @@ function RecordsScreen({ onBack }) {
         ? <AchievementCard />
         : tab === 'arena'
           ? <ArenaRecordCard />
+          : tab === 'brawl'
+            ? <BrawlRecordCard />
           : tab === 'defense'
             ? <DefenseRecordCard />
           : tab === 'boss'
@@ -1684,6 +1707,8 @@ const HATS = [
   { id: 'nebulacrown', name: '성운의 관', trophy: { boss: 'boss_archmage', tier: 'normal' }, fx: true },
   { id: 'shadowmask', name: '그림자 가면', trophy: { boss: 'boss_shadow', tier: 'normal' }, fx: true },
   { id: 'thorncrown', name: '가시 왕관', trophy: { boss: 'boss_thorn', tier: 'normal' }, fx: true },
+  // ── 대난투 챔피언 세트(비매품): trophy = { brawl: N } — N위 이내 달성 시 지급 ──
+  { id: 'champlaurel', name: '난투 월계관', trophy: { brawl: 3 }, fx: true },
 ]
 
 // 옷 코스튬 목록 — 모자와 같은 구조(scene.js COSTUME_BUILDERS와 id 일치)
@@ -1708,6 +1733,7 @@ const COSTUMES = [
   { id: 'galaxyrobe', name: '은하 로브', trophy: { boss: 'boss_archmage', tier: 'hard' }, fx: true },
   { id: 'abysscloak', name: '심연 망토', trophy: { boss: 'boss_shadow', tier: 'hard' }, fx: true },
   { id: 'vinemail', name: '덩굴 갑옷', trophy: { boss: 'boss_thorn', tier: 'hard' }, fx: true },
+  { id: 'champbelt', name: '챔피언 벨트', trophy: { brawl: 2 }, fx: true },
 ]
 
 // 무기 스킨 목록 — 장착하면 직업 기본 무기를 대체한다(scene.js WEAPON_SKINS와 id 일치)
@@ -1732,6 +1758,7 @@ const WEAPONS = [
   { id: 'cometstaff', name: '운석 지팡이', trophy: { boss: 'boss_archmage', tier: 'nightmare' }, fx: true },
   { id: 'crescentscythe', name: '그믐의 낫', trophy: { boss: 'boss_shadow', tier: 'nightmare' }, fx: true },
   { id: 'bramblesword', name: '가시 대검', trophy: { boss: 'boss_thorn', tier: 'nightmare' }, fx: true },
+  { id: 'champblade', name: '우승자의 황금검', trophy: { brawl: 1 }, fx: true },
 ]
 
 // 이동 트레일 — 달릴 때 발밑에 흘리는 파티클 자취(scene.js TRAIL_STYLES와 id 일치).
@@ -1809,11 +1836,26 @@ const WARDROBE_CATALOG = Object.entries(WARDROBE_TABS).flatMap(([tabId, def]) =>
 
 // ── 보스 전리품(비매품) — 코인 구매 불가, 해당 보스·난이도 토벌로만 지급 ──
 // 잠금 문구: "🏆 녹스 · 악몽 토벌" — 티어 표기는 승리 배너와 같은 BOSS_TIER_OPTS를 쓴다
-const trophyLockLabel = (trophy) =>
-  `${t(BOSS_NAMES[trophy.boss] || '')} · ${t(BOSS_TIER_OPTS.find((o) => o.id === trophy.tier)?.label || '')} ${t('토벌')}`
+const trophyLockLabel = (trophy) => (trophy.brawl
+  ? `${t('대난투')} ${trophy.brawl}${t('위')}`
+  : `${t(BOSS_NAMES[trophy.boss] || '')} · ${t(BOSS_TIER_OPTS.find((o) => o.id === trophy.tier)?.label || '')} ${t('토벌')}`)
 
 // 토벌 승리 → 이 보스·이 티어에 걸린 전리품을 전부 지급(이미 보유분은 건너뜀).
 // 결과 배너에 띄울 새 획득 이름 목록을 돌려준다. 한 보스 3난이도를 다 깨면 세트 완성(세트 오라+PvE 소효과).
+// 대난투 순위 전리품: 3위 이내=월계관, 2위 이내=벨트, 1위=황금검(상위 순위는 하위 조각 포함)
+function grantBrawlTrophies(place) {
+  const drops = []
+  for (const T of Object.values(WARDROBE_TABS)) {
+    for (const item of T.items) {
+      if (!item.trophy?.brawl || place > item.trophy.brawl) continue
+      if (T.loadOwned().includes(item.id)) continue
+      T.addOwned(item.id)
+      drops.push(item.name)
+    }
+  }
+  return drops
+}
+
 function grantBossTrophies(bossCls, tier) {
   const drops = []
   for (const T of Object.values(WARDROBE_TABS)) {

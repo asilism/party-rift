@@ -56,6 +56,12 @@ export const ACHIEVEMENTS = [
   { id: 'games_100', icon: '📅', name: '베테랑', desc: '100판 출전', get: (c) => c.games || 0, target: 100, reward: 150 },
   { id: 'games_300', icon: '📅', name: '조디악의 전설', desc: '300판 출전', get: (c) => c.games || 0, target: 300, reward: 300, title: '조디악의 전설' },
 
+  // ── 대난투 ──
+  { id: 'brawl_first_win', icon: '💥', name: '난투 챔피언', desc: '대난투 첫 우승', get: (c) => c.brawlWins || 0, target: 1, reward: 100 },
+  { id: 'brawl_wins_10', icon: '💥', name: '단상의 상습범', desc: '대난투 우승 10회', get: (c) => c.brawlWins || 0, target: 10, reward: 250, title: '난투왕' },
+  { id: 'brawl_top3_10', icon: '🏅', name: '포디움 단골', desc: '대난투 3위 이내 10회', get: (c) => c.brawlTop3 || 0, target: 10, reward: 120 },
+  { id: 'brawl_games_30', icon: '🥊', name: '난투 중독', desc: '대난투 30판 출전', get: (c) => c.brawlGames || 0, target: 30, reward: 100 },
+
   // ── 콜로세움 (라이브 게터 — 토너먼트 완주 기록에서 직접 센다) ──
   { id: 'arena_first', icon: '🏟️', name: '검투사 데뷔', desc: '콜로세움 토너먼트 완주', get: () => loadArenaRecords().runs, target: 1, reward: 80 },
   { id: 'arena_final', icon: '🥈', name: '결승의 모래바람', desc: '콜로세움 2위 이내', get: () => (loadArenaRecords().best != null && loadArenaRecords().best <= 2 ? 1 : 0), target: 1, reward: 150 },
@@ -103,6 +109,12 @@ export function recordMatchForAchievements({ view, me, win }) {
   c.maxKillsGame = Math.max(c.maxKillsGame || 0, me.kills || 0)
   if (view.mode === 'defense') {
     c.defenseBestWave = Math.max(c.defenseBestWave || 0, view.wave || 0)
+  }
+  if (view.mode === 'brawl') {
+    const place = view.brawlRanks?.find((r) => r.id === 'solo')?.place || 8
+    c.brawlGames = (c.brawlGames || 0) + 1
+    if (place === 1) c.brawlWins = (c.brawlWins || 0) + 1
+    if (place <= 3) c.brawlTop3 = (c.brawlTop3 || 0) + 1
   }
   if (view.mode === 'boss' && win) {
     c.bossClears = (c.bossClears || 0) + 1

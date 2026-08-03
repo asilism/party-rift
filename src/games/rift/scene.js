@@ -1060,6 +1060,24 @@ export const HAT_IDS = [
 ]
 
 const HAT_BUILDERS = {
+  // 난투 월계관(대난투 3위 전리품): 금빛 잎사귀 링 — 챔피언의 첫 조각
+  champlaurel(s) {
+    const g = new THREE.Group()
+    const gold = new THREE.MeshLambertMaterial({ color: 0xffd34d, emissive: 0x6b4d00, emissiveIntensity: 0.35 })
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.95 * s, 0.09 * s, 6, 20), gold)
+    band.rotation.x = Math.PI / 2
+    g.add(band)
+    for (let i = 0; i < 10; i++) { // 잎사귀가 링을 따라 촘촘히
+      const a = (i / 10) * Math.PI * 2
+      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.2 * s, 6, 5), gold)
+      leaf.scale.set(1, 1.7, 0.5)
+      leaf.position.set(Math.cos(a) * 0.95 * s, 0.12 * s, Math.sin(a) * 0.95 * s)
+      leaf.rotation.y = -a
+      leaf.rotation.z = 0.5
+      g.add(leaf)
+    }
+    return g
+  },
   // 밀짚모자: 넓은 챙 + 낮은 꼭대기 + 갈색 밴드
   straw(s) {
     const g = new THREE.Group()
@@ -1671,6 +1689,7 @@ export const COSTUME_IDS = [
   'bowtie', 'scarf', 'lei', 'backpack', 'quiver', 'shield', 'tube', 'lantern',
   'goldcape', 'armor', 'redcloak', 'jetpack', 'wings', 'devilwings', 'starcape',
   'abysscloak', 'magmaplate', 'galaxyrobe', 'vinemail', // 보스 전리품(비매품) 4종
+  'champbelt', // 대난투 2위 전리품
 ]
 
 function equippedCostume() {
@@ -1731,6 +1750,29 @@ function waveCape(m, t, s) {
 }
 
 const COSTUME_BUILDERS = {
+  // 챔피언 벨트(대난투 2위 전리품): 금 버클이 박힌 복싱 챔피언 벨트
+  champbelt(s) {
+    const g = new THREE.Group()
+    const gold = new THREE.MeshLambertMaterial({ color: 0xffd34d, emissive: 0x6b4d00, emissiveIntensity: 0.35 })
+    const strap = new THREE.Mesh(new THREE.TorusGeometry(1.02 * s, 0.14 * s, 8, 22), new THREE.MeshLambertMaterial({ color: 0x8a2f2f }))
+    strap.rotation.x = Math.PI / 2
+    strap.position.y = -0.25 * s
+    g.add(strap)
+    const buckle = new THREE.Mesh(new THREE.CylinderGeometry(0.42 * s, 0.42 * s, 0.1 * s, 16), gold)
+    buckle.rotation.z = Math.PI / 2
+    buckle.position.set(1.02 * s, -0.25 * s, 0)
+    g.add(buckle)
+    const star = new THREE.Mesh(new THREE.SphereGeometry(0.15 * s, 6, 5), new THREE.MeshLambertMaterial({ color: 0xfff2b0, emissive: 0x9a7500, emissiveIntensity: 0.6 }))
+    star.position.set(1.1 * s, -0.25 * s, 0)
+    g.add(star)
+    for (const side of [-1, 1]) { // 좌우 작은 금 원판
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.2 * s, 0.2 * s, 0.08 * s, 12), gold)
+      disc.rotation.x = Math.PI / 2
+      disc.position.set(0.2 * s, -0.25 * s, side * 0.95 * s)
+      g.add(disc)
+    }
+    return g
+  },
   // 나비넥타이: 가슴 앞의 작은 멋 — 날개 두 장 + 매듭
   bowtie(s) {
     const g = new THREE.Group()
@@ -2636,6 +2678,7 @@ export const WEAPON_SKIN_IDS = [
   'woodsword', 'candycane', 'pan', 'mallet', 'fish', 'umbrella', 'trident',
   'doubleaxe', 'guitar', 'scythe', 'gemstaff', 'lightspear', 'flamesword', 'frostblade', 'excalibur',
   'crescentscythe', 'quakemaul', 'cometstaff', 'bramblesword', // 보스 전리품(비매품) 4종
+  'champblade', // 대난투 1위 전리품
 ]
 
 function equippedWeaponSkin() {
@@ -2740,6 +2783,28 @@ function bladeGlow(mesh, color, opacity = 0.3, sx = 1.05, sy = 2.0, sz = 1.8) {
 }
 
 const WEAPON_SKINS = {
+  // 우승자의 황금검(대난투 1위 전리품): 순금 대검 — 챔피언의 증표
+  champblade(g) {
+    const gold = new THREE.MeshLambertMaterial({ color: 0xffd34d, emissive: 0x6b4d00, emissiveIntensity: 0.4 })
+    const paleGold = new THREE.MeshLambertMaterial({ color: 0xfff2b0, emissive: 0x9a7500, emissiveIntensity: 0.45 })
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.1, 0.4), gold)
+    blade.position.x = 1.15
+    const edge = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.12, 0.1), paleGold)
+    edge.position.x = 1.15
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.5, 4), gold)
+    tip.rotation.z = -Math.PI / 2
+    tip.scale.z = 0.35
+    tip.position.x = 2.25
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.24, 0.86), gold)
+    guard.position.x = 0.28
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.5, 8), new THREE.MeshLambertMaterial({ color: 0x8a2f2f }))
+    grip.rotation.z = Math.PI / 2
+    grip.position.x = -0.05
+    const gem = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), new THREE.MeshLambertMaterial({ color: 0xff5a5a, emissive: 0xaa1111, emissiveIntensity: 0.7 }))
+    gem.position.x = 0.28
+    g.userData.gem = gem
+    g.add(blade, edge, tip, guard, grip, gem)
+  },
   // 목검: 수수한 나무 검 — 입문용
   woodsword(g) {
     const wood = lamb(0xc9a06a)
@@ -3116,6 +3181,15 @@ const WEAPON_SKINS = {
 
 // 무기 스킨 FX — 고가만. 검신을 따라 흐르는 글린트가 "샤링"의 핵심
 const WEAPON_FX = {
+  // 황금검: 검신을 훑는 금빛 광택 + 보석 고동
+  champblade(g) {
+    const glint = fxSprite(g, 0xfff2b0, 0.62)
+    return (t) => {
+      glint.position.set(0.6 + ((t * 1.1) % 1) * 1.5, 0.1, 0)
+      glint.material.opacity = Math.sin(((t * 1.1) % 1) * Math.PI) * 0.8
+      if (g.userData.gem) g.userData.gem.material.emissiveIntensity = 0.5 + Math.max(0, Math.sin(t * 2.4)) * 0.5
+    }
+  },
   gemstaff(g) {
     const glint = fxSprite(g, 0xe0b8ff, 0.7)
     const mote = fxSprite(g, 0xc9a0ff, 0.3, false)
@@ -3702,6 +3776,7 @@ const TROPHY_AURA_HUE = {
   boss_archmage: [0x6fb6ff, 0xb8dcff],
   boss_shadow: [0x8a4ee0, 0xb08aff],
   boss_thorn: [0x67d67f, 0xb0f0c0],
+  brawl_champ: [0xffd34d, 0xfff2b0], // 챔피언 골드
 }
 function buildTrophyAura(s, setBoss) {
   const [ringHue, moteHue] = TROPHY_AURA_HUE[setBoss] || TROPHY_AURA_HUE.boss_shadow
@@ -3717,9 +3792,37 @@ function buildTrophyAura(s, setBoss) {
   ring.position.y = 0.12
   g.add(ring)
   const motes = [0, 1, 2].map(() => fxSprite(g, moteHue, 0.5 * s, false))
+  // 🌟 후광 — 등 뒤에서 세트 색으로 뿜어 나오는 방사광(부드러운 글로우 + 광선 부챗살)
+  const haloG = new THREE.Group()
+  const haloGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture(), color: ringHue, transparent: true, opacity: 0.5,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }))
+  haloGlow.scale.set(6.4 * s, 6.4 * s, 1)
+  haloG.add(haloGlow)
+  const rays = []
+  for (let ri = 0; ri < 10; ri++) {
+    const len = (2.2 + (ri % 3) * 0.9) * s
+    const ray = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.34 * s, len),
+      new THREE.MeshBasicMaterial({ color: moteHue, transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+    )
+    const ra = (ri / 10) * Math.PI * 2
+    ray.position.set(Math.cos(ra) * len * 0.55, Math.sin(ra) * len * 0.55, 0)
+    ray.rotation.z = ra - Math.PI / 2
+    haloG.add(ray)
+    rays.push({ ray, ra, len })
+  }
+  haloG.position.set(0, 2.5 * s, -0.55 * s) // 몸 뒤 — 카메라를 향해 서 있는 후광판
+  g.add(haloG)
   g.userData.fxUpdate = (t) => {
     ring.rotation.z = t * 0.8
     ring.material.opacity = 0.28 + 0.14 * Math.sin(t * 2.4)
+    haloGlow.material.opacity = 0.4 + 0.16 * Math.sin(t * 1.9)
+    haloG.rotation.z = Math.sin(t * 0.6) * 0.1 // 후광이 천천히 숨쉬듯 흔들린다
+    rays.forEach(({ ray }, ri2) => {
+      ray.material.opacity = 0.28 + 0.2 * Math.abs(Math.sin(t * 1.6 + ri2 * 1.3))
+    })
     motes.forEach((m, i) => {
       const c = (t / 2.7 + i / 3) % 1 // 링 언저리에서 피어올라 녹아 사라지는 입자
       const a = i * 2.1 + t * 0.7
