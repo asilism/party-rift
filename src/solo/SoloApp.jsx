@@ -161,6 +161,7 @@ export default function SoloApp() {
   const [brawlChamp, setBrawlChamp] = useState(null) // 대난투 시상식 — 상위 3 포디움 데이터
   const brawlChampRef = useRef(null) // 대난투 포디움 상위 3 — 퇴장 때 무대를 켜기 위한 대기 데이터
   const champTimerRef = useRef(null) // 시상식 자동 종료 타이머(탭 스킵과 공유)
+  const [brawlResult, setBrawlResult] = useState(null) // 대난투 결과 카드(시상식이 끝난 뒤 표시)
   const [tour, setTour] = useState(null) // 콜로세움 토너먼트 상태
   const [tourStage, setTourStage] = useState('bracket') // bracket(대진) | result(라운드 결과) | final(최종 순위)
   const arenaCarryRef = useRef({}) // 라운드 간 유저 팀 이월(레벨·골드·아이템)
@@ -395,6 +396,15 @@ export default function SoloApp() {
           defRec = { ...recordDefenseRun(view.wave || 0), wave: view.wave || 0 }
         }
         addCoins(earn)
+        if (view.mode === 'brawl') {
+          // 🏆 콜로세움과 같은 흐름: 종료 → (1.6s 여운) → 시상식 무대 → 결과 카드.
+          //  RiftGame의 결과 모달은 suppressWin으로 막고 여기서 이어받는다.
+          setBrawlResult({
+            ranks: [...(view.brawlRanks || [])].sort((r1, r2) => r1.place - r2.place),
+            place: brawlPlace, earn, firstWin,
+          })
+          setTimeout(() => enterChampStage(), 1600)
+        }
         // 일일 미션 진행도 누적 (판수/승리/킬/어시/정글몹)
         recordMissionProgress({ win, kills: me.kills, assists: me.assists, jungle: me.jungleKills })
         // 업적 누적·판정 — 새로 달성한 업적은 결과 화면 배너로(보상 코인은 즉시 지급됨)
@@ -445,10 +455,26 @@ export default function SoloApp() {
     setScreen('play')
   }
 
-  function endChampStage() { // 시상식 종료(자동 6.5s/탭 스킵 공용) → 직업 선택으로
+  function enterChampStage() { // 경기 종료 → 시상식 무대(champ 화면 — 오버레이 없음)
+    if (!brawlChampRef.current) return
+    setBrawlChamp(brawlChampRef.current)
+    brawlChampRef.current = null
+    netRef.current?.close()
+    netRef.current = null
+    setNet(null)
+    setScreen('champ')
+    champTimerRef.current = setTimeout(endChampStage, 6500)
+  }
+
+  function endChampStage() { // 시상식 종료(자동 6.5s/탭 스킵 공용) → 무대 위에 결과 카드
     if (champTimerRef.current) { clearTimeout(champTimerRef.current); champTimerRef.current = null }
+    setScreen('brawlResult') // brawlChamp(무대)는 배경으로 유지
+  }
+
+  function closeBrawlResult(next) { // 결과 카드 닫기 → 다시 하기(char)/메뉴
     setBrawlChamp(null)
-    setScreen('char')
+    setBrawlResult(null)
+    setScreen(next)
   }
 
   function exitBattle() {
@@ -459,18 +485,6 @@ export default function SoloApp() {
       setBrawlChamp(null)
       brawlChampRef.current = null
       setScreen('ultdebug')
-      return
-    }
-    if (brawlChampRef.current) { // 대난투 시상식 — 경기장을 나온 순간 1위 만세·2/3위 박수
-      //  전용 화면(champ)으로 전환해 6.5초(탭하면 스킵) 보여준 뒤 "한 판 더" 직업 선택으로.
-      //  (예전엔 곧장 char로 가서 직업 선택 UI가 시상식을 통째로 덮었다 — 2026-08-03 수리)
-      setBrawlChamp(brawlChampRef.current)
-      brawlChampRef.current = null
-      netRef.current?.close()
-      netRef.current = null
-      setNet(null)
-      setScreen('champ')
-      champTimerRef.current = setTimeout(endChampStage, 6500)
       return
     }
     if (BOSS_DEBUG) { // 디버그 판 종료 → 디버그 화면으로 복귀(한 판 더 굴리기 흐름)
@@ -652,6 +666,28 @@ export default function SoloApp() {
       {screen === 'champ' && ( // 대난투 시상식 — 무대를 가리지 않는 투명 스킵 레이어
         <div className="brawl-champ-skip" onPointerDown={endChampStage}>
           <span className="brawl-champ-skip__hint">{t('탭해서 계속')}</span>
+        </div>
+      )}
+      {screen === 'brawlResult' && brawlResult && ( // 시상식 무대 위 결과 카드 — 콜로세움과 같은 흐름
+        <div className="brawl-result-screen">
+          <div className="toy-card brawl-result-card">
+            <h2 className="brawl-result-card__title">
+              {brawlResult.place === 1 ? `🏆 ${t('우승!')}` : `${brawlResult.place}${t('위')}`}
+            </h2>
+            <p className="brawl-result-card__earn">🪙 +{brawlResult.earn}{brawlResult.firstWin ? ` (${t('오늘 첫 승리!')})` : ''}</p>
+            <div className="brawl-final">
+              {brawlResult.ranks.map((r) => (
+                <div key={r.id} className={`brawl-final__row ${r.id === 'solo' ? 'is-me' : ''}`}>
+                  <span className="brawl-final__place">{r.place === 1 ? '🥇' : r.place === 2 ? '🥈' : r.place === 3 ? '🥉' : `${r.place}${t('위')}`}</span>
+                  <span className="brawl-final__name">{r.name}</span>
+                </div>
+              ))}
+            </div>
+            <div className="brawl-result-card__btns">
+              <button className="toy-btn toy-btn--yellow" onClick={() => closeBrawlResult('char')}>🔁 {t('다시 하기')}</button>
+              <button className="toy-btn" onClick={() => closeBrawlResult('menu')}>🏠 {t('메뉴로')}</button>
+            </div>
+          </div>
         </div>
       )}
       {screen === 'bossdebug' && <BossDebugScreen onStart={startDebugBoss} />}

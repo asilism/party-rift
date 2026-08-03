@@ -124,6 +124,7 @@ export default function RiftGame({ onExit, net, bonus = null, adButton = null })
       rtt={rtt}
       onTogglePause={net.rtPause ? () => net.rtPause(!view.paused) : null}
       exitLabel={view.mode === 'arena' ? t('📋 결과 보기') : net.local ? t('🔁 다시 하기') : t('🔁 새 매치 찾기')}
+      suppressWin={view.mode === 'brawl' && !!net.local} // 대난투(솔로): 결과 카드는 시상식 뒤 SoloApp이 띄운다
       bonus={bonus}
       adButton={adButton}
       onExit={onExit}
@@ -441,7 +442,7 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
 
 // 전투 화면 (호스트/게스트 공용). 3D 캔버스 + HUD + 터치 컨트롤.
 function RiftPlay({
-  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onEnhance, onPickAugment, onUseItem, rtt = 0, onTogglePause, exitLabel = '🔁 새 매치 찾기', onExit, soundOn, onToggleSound, bonus = null, adButton = null,
+  hud, sample, myId, ctrlRef, onCast, onBuy, onSell, onResetShop, onEnhance, onPickAugment, onUseItem, rtt = 0, onTogglePause, exitLabel = '🔁 새 매치 찾기', onExit, soundOn, onToggleSound, bonus = null, adButton = null, suppressWin = false,
 }) {
   useRiftSounds(hud, myId)
   const banner = useFeedBanner(hud)
@@ -897,7 +898,7 @@ function RiftPlay({
         <RiftAugmentDraw draw={me.augDraw} zodiacId={me.zodiacId} wave={hud.wave || 0} onPick={onPickAugment} />
       )}
 
-      {finished && showWin && (
+      {finished && showWin && !suppressWin && (
         <div className="win-modal" style={{ '--z-color': hud.mode === 'defense' ? '#4fc3ff' : hud.winner === 'red' ? '#ff6b6b' : '#4f8cff' }}>
           {(hud.mode === 'brawl' ? myBrawlPlace === 1 : hud.mode === 'defense' ? (hud.wave || 0) >= 20 : (!myTeam || hud.winner === myTeam)) && <Fireworks />}
           {/* 위쪽: 트로피 + 한 글자씩 나타나는 승리 메시지 */}
