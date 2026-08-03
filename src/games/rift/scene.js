@@ -5163,6 +5163,33 @@ function buildFxObject(n) {
       bar.scale.x = Math.min(1, t / 0.1) // 앞으로 쭉 뻗어 나가는 느낌
       if (!look.ground) bar.scale.y = 1 + tn * 1.5
     })
+    if (n.kind === 'fissure') {
+      // 🪨 암석 융기: 맵 돌멩이와 같은 십이면체가 균열을 따라 앞쪽부터 팍-팍-팍 솟아오른다
+      const rockMat = new THREE.MeshLambertMaterial({ color: 0xd8cdb8, flatShading: true })
+      const rocks = []
+      const nRocks = Math.max(4, Math.round(len / 2.4))
+      for (let ri = 0; ri < nRocks; ri++) {
+        const rf = (ri + 0.5) / nRocks
+        const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7 + ((ri * 37) % 10) / 10 * 0.9), rockMat)
+        rock.position.set(rf * len, -2.4, (((ri * 53) % 10) / 10 - 0.5) * (look.w || 3.4) * 0.9)
+        rock.rotation.set(ri * 1.7, ri * 2.3, ri * 0.9)
+        rock.visible = false
+        g.add(rock)
+        rocks.push({ rock, rf, ph: ri })
+      }
+      ups.push((t) => {
+        for (const { rock, rf, ph } of rocks) {
+          const local = (t - rf * 0.24) / 0.5 // 앞쪽부터 시차 융기
+          if (local <= 0) { rock.visible = false; continue }
+          rock.visible = true
+          const k = Math.min(1, local)
+          const up = k < 0.3 ? (k / 0.3) * 1.18 : 1.18 - ((k - 0.3) / 0.7) * 0.5 // 솟구쳤다 반쯤 가라앉고
+          rock.position.y = -2.4 + up * (3.3 + (ph % 3) * 0.9)
+          rock.rotation.x += 0.04
+          if (k >= 1) rock.position.y -= (local - 1) * 6 // 수명 끝엔 땅속으로 쑥
+        }
+      })
+    }
   }
   if (look.ring) {
     const ring = new THREE.Mesh(
@@ -7771,7 +7798,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           ? Math.sin(Math.min(1, 1 - h.bossLeapT / h.bossLeapT0) * Math.PI) : 0
         // 섬멸의 광선 비행: 빛에 쏘아져 날아가는 동안 붕 뜬 채 맹렬히 돈다
         const fling = (h.beamFlingT || 0) > 0 ? 2.6 : 0
-        obj.position.set(h.x, air * 3.2 + leap * 15 + fling, h.z)
+        const qlaunch = (h.brawlLaunchT || 0) > 0 ? Math.sin((1 - h.brawlLaunchT / 0.9) * Math.PI) : 0
+        obj.position.set(h.x, air * 3.2 + leap * 15 + fling + qlaunch * 9, h.z)
         if (u.lastSlamSeq !== undefined && (h.bossSlamSeq || 0) !== u.lastSlamSeq) {
           u.lastSlamSeq = h.bossSlamSeq || 0
           camShakeUntil = performance.now() / 1000 + CAM_SHAKE_T // 착지 쿵 — 전장 전체가 흔들린다
@@ -7785,7 +7813,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           if (fp >= 1) obj.visible = false
         }
         // 회전베기(궁극기) 중엔 팽이처럼 빠르게 돈다, 띄워지면 허우적, 평소엔 바라보는 방향
-        u.body.rotation.y = h.whirlT > 0 ? -view.time * 16 : (h.airT > 0 || h.beamFlingT > 0) ? -view.time * 8 : -h.dir
+        u.body.rotation.y = h.whirlT > 0 ? -view.time * 16 : (h.airT > 0 || h.beamFlingT > 0 || (h.brawlLaunchT || 0) > 0) ? -view.time * 8 : -h.dir
         // 걷기: 서 있으면 숨쉬기 둥실, 움직이면 통통 튀며 좌우로 뒤뚱(속도에 따라 걸음 빨라짐)
         const wk = walkBounce(u, h.x, h.z, dt)
         const idleBob = Math.sin(view.time * 2.2 + u.bobPhase) * 0.12 * (1 - wk.amt)
