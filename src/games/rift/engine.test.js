@@ -4578,7 +4578,7 @@ test('대난투 ★★궁: 검성 발도 일섬 — 전방 반원 일괄 피니�
   assert.equal(back.hp, bHp, '후방 무사')
 })
 
-test('대난투 궁: 암살자 그림자 연무 — 3명 연쇄 타격+경직', () => {
+test('대난투 궁: 암살자 그림자 연무 — 시간차 3연쇄 베기', () => {
   const g = brawl8('assassin')
   const a = g.heroes[0]
   const hp0 = g.heroes.slice(1, 4).map((e) => e.hp)
@@ -4588,10 +4588,30 @@ test('대난투 궁: 암살자 그림자 연무 — 3명 연쇄 타격+경직', 
   g.heroes.slice(4).forEach((e) => { e.x = 30; e.z = 30 })
   a.brawlUltQ = 100
   castUlt(g, a.id)
-  for (let i = 1; i <= 3; i++) {
-    assert.ok(g.heroes[i].hp < hp0[i - 1], `표적${i} 피해`)
-    assert.ok(g.heroes[i].stunT > 0, `표적${i} 경직`)
-  }
+  assert.equal(a.brawlShadowN, 3, '연쇄 예약')
+  run(g, 0.1)
+  const hitEarly = g.heroes.slice(1, 4).filter((e, i) => e.hp < hp0[i]).length
+  assert.equal(hitEarly, 1, '첫 발만 — 시간차 연쇄')
+  run(g, 1.2)
+  for (let i = 1; i <= 3; i++) assert.ok(g.heroes[i].hp < hp0[i - 1], `표적${i} 피해`)
+})
+
+test('대난투 궁: 궁수 극태 레이저 — 정신집중 후 발사·강넉백·본인 반동', () => {
+  const g = brawl8('archer')
+  const a = g.heroes[0]
+  const e = g.heroes[1]
+  e.x = a.x + 10; e.z = a.z
+  g.heroes.slice(2).forEach((o) => { o.x = -30; o.z = -30 })
+  a.brawlUltQ = 100
+  const hp0 = e.hp
+  castUlt(g, a.id)
+  assert.ok(a.castT > 0, '정신집중 시작')
+  assert.equal(e.hp, hp0, '집중 중엔 아직')
+  const ax0 = a.x
+  run(g, 1.4)
+  assert.ok(e.hp < hp0, '레이저 명중')
+  assert.ok(g.brawlLaserSeq >= 1, '빔 연출 시퀀스')
+  assert.ok(a.x < ax0, '반동으로 뒤로 밀림')
 })
 
 test('대난투 궁: 시간여행자 시간 정지 — 나 빼고 전원 결빙 슬로우', () => {
