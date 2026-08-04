@@ -9636,7 +9636,8 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'terramancer' && d < QUAKE_WALL_AHEAD + 2) castSkill2(state, h.id) // 융기 기절 → 돌팔매 연계
     else if (h.cls === 'runescribe' && nearCount >= 2 && runeStacks(state, foe) >= 2) castSkill2(state, h.id) // 뭉친 적에 인장 확산
     else if (h.cls === 'bloodknight' && d < BLOOD_CHAIN_RANGE - 1 && h.hp > h.maxHp * 0.35) castSkill2(state, h.id) // 사슬로 묶어 결투 강제
-    else if (h.cls === 'necromancer' && state.summons.some((su) => su.owner === h.id)) castSkill2(state, h.id) // 그림자 쇄도
+    else if (h.cls === 'necromancer' && d < NECRO_BOOM_R + 2
+      && state.summons.filter((su) => su.owner === h.id).length >= 2) castSkill2(state, h.id) // 그림자 폭발 — 둘 이상 모아 붙었을 때
     else if (h.cls === 'dreameater' && d < MIST_RANGE - 1) castSkill2(state, h.id) // 붙으면 미혹의 안개
   }
   const ready = h.skillCd <= 0
