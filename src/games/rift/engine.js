@@ -272,14 +272,14 @@ export const CLASSES = {
     name: '혈기사', icon: '🩸', desc: '자기 피를 태워 싸우는 근접 기사 — 스킬마다 체력을 대가로 치르고, 피가 모자랄수록 일격이 무거워진다',
     hp: 640, hpLvl: 74, atk: 50, atkLvl: 7, range: 4.0, atkCd: 0.8, speed: 12.6, def: 0.88,
     skill: { name: '혈인참', icon: '🗡️', cd: 6, desc: '체력 6%를 대가로 주변을 크게 베어 넘긴다 — 잃은 체력이 많을수록 피해가 커지고, 맞힌 수만큼 흡혈' },
-    skill2: { name: '핏빛 사슬', icon: '⛓️', cd: 16, desc: '체력 10%를 대가로 적 하나와 3초간 피의 사슬로 묶는다 — 멀어질 수 없고 계속 피를 빨아들인다' },
-    ult: { name: '혈우', icon: '🌧️', cd: 60, desc: '체력 20%를 대가로 주변에 피의 비를 뿌린다 — 광역 대피해 + 입힌 피해의 절반을 회복(다수에게 맞히면 만신창이에서 부활한다)' },
+    skill2: { name: '핏빛 사슬', icon: '⛓️', cd: 16, desc: '체력 10%를 대가로 적 하나와 3초간 피의 사슬로 묶는다 — 멀어질 수 없고, 묶여 있는 내내 상대의 피가 그대로 나에게 넘어온다' },
+    ult: { name: '혈우', icon: '🌧️', cd: 60, desc: '체력 20%를 대가로 아주 넓은 범위에 피의 비를 뿌린다 — 광역 대피해 + 입힌 피해의 절반을 회복(다수에게 맞히면 만신창이에서 부활한다)' },
   },
   necromancer: {
     name: '강령술사', icon: '💀', desc: '그림자를 부리는 소환 술사 — 마지막으로 쓰러뜨린 적을 그림자로 되살려 그 무기를 그대로 쓰게 만든다',
     hp: 490, hpLvl: 54, atk: 42, atkLvl: 6, range: 9.5, atkCd: 1.0, speed: 12.0,
     skill: { name: '그림자 소환', icon: '👤', cd: 8, desc: '그림자 병사를 불러낸다 — 최대 3기까지 거느린다(넘치면 가장 오래된 것이 흩어진다)' },
-    skill2: { name: '그림자 쇄도', icon: '🌑', cd: 14, desc: '거느린 그림자 전원이 적에게 달려든다 — 광폭화(공속↑)와 함께 도약' },
+    skill2: { name: '그림자 폭발', icon: '💥', cd: 14, desc: '거느린 그림자를 전부 터뜨린다 — 각자 그 자리에서 강력한 광역 자폭(그림자는 모두 소진된다)' },
     ult: { name: '그림자 사역', icon: '💀', cd: 65, desc: '마지막으로 처치한 적 영웅을 "그림자 ○○"로 되살려 20초간 부린다 — 그 직업의 평타를 그대로 쓴다(처치 기록이 없으면 그림자 병사 3기)' },
   },
   dreameater: {
@@ -287,7 +287,7 @@ export const CLASSES = {
     hp: 470, hpLvl: 52, atk: 43, atkLvl: 6, range: 10, atkCd: 1.0, speed: 12.4,
     skill: { name: '매혹의 입맞춤', icon: '💋', cd: 10, desc: '홀리는 입맞춤을 날린다 — 맞은 적은 1.5초간 홀려 나에게 걸어온다(행동 불가)' },
     skill2: { name: '미혹의 안개', icon: '🌫️', cd: 16, desc: '앞으로 미혹의 안개를 퍼뜨린다 — 닿은 적들이 갈피를 잃고 갈팡질팡한다' },
-    ult: { name: '꿈의 영토', icon: '🌙', cd: 70, desc: '지정한 곳에 3초간 꿈의 영토를 편다 — 그 안의 적들은 자기 편을 때린다(영토 밖으로 나가면 깨어난다)' },
+    ult: { name: '꿈의 영토', icon: '🌙', cd: 70, desc: '지정한 곳에 넓은 꿈의 영토를 편다 — 그 안의 적들은 제 뜻대로 움직이지 못하고 자기 편을 때린다(영토 밖으로 나가면 깨어난다)' },
   },
   // ── 보스전(5:1) 전용 보스 — boss:true는 선택 목록(CLASS_IDS)에서 제외되고 3배 덩치로 그려진다 ──
   boss_colossus: {
@@ -374,9 +374,9 @@ export const ABILITY_SCALING = {
   illusionist: { skill: { dmg: [50, 0.9], note: '분신이 적을 쫓아가 내리찍음(확정 명중) + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '연막 펑 — 3체 돌출, 전투 분신 2(평타 80%)' } },
   terramancer: { skill: { dmg: [30, 0.55], note: '0.5초 간격 3연투 · 각도는 첫 발에 고정' }, skill2: { dmg: [15, 0.25], note: '벽 명중 시 1.5초 기절 + 3초 길막' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
   runescribe: { skill: { dmg: [26, 0.45], note: '관통 · 인장 3스택' }, skill2: { note: '인장 최다 표적의 스택을 주변에 복제' }, ult: { dmg: [30, 0.5], note: '인장 1스택당 피해 · 처치 시 스택이 주변으로 전이' } },
-  bloodknight: { skill: { dmg: [40, 0.85], note: '체력 6% 소모 · 잃은 체력만큼 최대 +60% · 맞힌 수만큼 흡혈' }, skill2: { dot: [12, 0.18], dotDur: 3, note: '체력 10% 소모 · 3초 결속(멀어질 수 없음) + 흡혈' }, ult: { dmg: [70, 1.05], note: '체력 20% 소모 · 입힌 피해의 50% 회복' } },
-  necromancer: { skill: { note: '그림자 병사 1기 소환(최대 3 · 10초)' }, skill2: { note: '그림자 전원 광폭화 + 적에게 도약' }, ult: { note: '마지막 처치 영웅을 그림자로 20초 사역(없으면 그림자 3기)' } },
-  dreameater: { skill: { dmg: [30, 0.5], note: '명중 시 1.8초 매혹(시전자에게 강제 보행 · 행동 불가)' }, skill2: { dmg: [26, 0.45], note: '부채꼴 혼란 1.5초' }, ult: { note: '반경 7 · 3.5초 · 영토 안 적은 아군을 공격(이탈 시 즉시 해제)' } },
+  bloodknight: { skill: { dmg: [40, 0.85], note: '체력 6% 소모 · 잃은 체력만큼 최대 +60% · 맞힌 수만큼 흡혈' }, skill2: { dot: [12, 0.18], dotDur: 3, note: '체력 10% 소모 · 3초 결속(멀어질 수 없음) + 준 피해 전부 흡혈' }, ult: { dmg: [70, 1.05], note: '체력 20% 소모 · 반경 16 · 입힌 피해의 50% 회복' } },
+  necromancer: { skill: { note: '그림자 병사 1기 소환(최대 3 · 15초)' }, skill2: { dmg: [70, 0.85], note: '그림자 전원 자폭 — 각자 반경 6 광역' }, ult: { note: '마지막 처치 영웅을 그림자로 20초 사역(없으면 그림자 3기)' } },
+  dreameater: { skill: { dmg: [30, 0.5], note: '명중 시 1.8초 매혹(시전자에게 강제 보행 · 행동 불가)' }, skill2: { dmg: [26, 0.45], note: '부채꼴 혼란 1.5초' }, ult: { note: '반경 14 · 3.5초 · 영토 안 적은 조작 불능 + 아군을 공격(이탈 시 즉시 해제)' } },
 }
 
 // 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 하이브리드는 공·주 평균, 그 외는 공격력.
@@ -614,13 +614,15 @@ const SUMMON_SPEC = {
   turret: { hp: 90, hpCoef: 2.5, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity }, // 초반 ~210(4.7대) → 후반 ~490(3.3대)
   cannon: { hp: 480, hpCoef: 3.0, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 }, // 초반 ~620(13.7대) → 후반 ~960(6.4대)
   // 강령술사 그림자 병사: 약하지만 셋씩 몰려다닌다(자원이 아니라 쿨로 뽑는다)
-  shade: { hp: 190, hpCoef: 2.6, dmg: 34, coef: 0.2, range: 2.6, aggro: 16, speed: 9.8, mobile: true, cd: 1.0, life: 15 }, // 소환형 기준선(야조 60%) 대비 32.5% → 유지력 상향(2026-08-04)
+  shade: { hp: 380, hpCoef: 5.2, dmg: 34, coef: 0.2, range: 2.6, aggro: 16, speed: 9.8, mobile: true, cd: 1.0, life: 15 }, // 체력 2배 — 자폭까지 버텨야 한다(2026-08-05)
   // 야수조련사 난투전 궁 전용: 진짜 용 — 크고 아프고 짧게 산다
   dragonpet: { hp: 300, hpCoef: 2.0, dmg: 36, coef: 0.15, range: 4.4, aggro: 22, speed: 8.2, mobile: true, cd: 1.6, life: 7 }, // 시뮬 승률 편중 반복 너프(2026-08-03, 최종 50%→)
 }
 const BEAST_LEAP_DUR = 0.45 // 사냥 명령 시 야수가 적에게 달려드는(도약) 시간 — 거리 무시
 const BEAST_WOLVES = 2 // 야수조련사 늑대 소환 마릿수
 const NECRO_MAX_SHADES = 3 // 강령술사가 동시에 거느리는 그림자 병사 수(초과 시 가장 오래된 것이 흩어진다)
+const NECRO_BOOM_R = 6 // 그림자 폭발 반경
+const NECRO_BOOM_BASE = 70 // 그림자 폭발 기본 피해(주문력 계수와 합산)
 const NECRO_SHADOW_LIFE = 20 // 그림자 영웅(궁) 수명
 const NECRO_SHADOW_ATK = 1.0 // 그림자 영웅 평타 = 시전자 공격력의 이 비율(3v3 40% → 상향)
 const ENGI_MAX_TURRETS = 3 // 엔지니어가 동시에 둘 수 있는 미니포탑 수(초과 시 가장 오래된 것 회수)
@@ -1297,7 +1299,7 @@ const KISS_R = 1.5 // 명중 판정 반경
 const MIST_RANGE = 9 // 미혹의 안개 사거리
 const MIST_HALF_COS = 0.55 // 부채꼴 폭(코사인)
 const MIST_CONFUSE = 1.5 // 혼란 시간(공포 문법 재사용 — 갈팡질팡)
-const DREAM_R = 7 // 꿈의 영토 반경
+const DREAM_R = 14 // 꿈의 영토 반경(2배 — 한타를 통째로 삼킨다)
 const DREAM_TIME = 3.5 // 꿈의 영토 지속
 const DREAM_AIM = 7 // 조준 보조가 없을 때 앞쪽에 펴는 거리
 // 이 영웅이 지금 '누군가의 꿈의 영토' 안에 있는가 — 안이면 아군을 적으로 본다(오사).
@@ -1322,8 +1324,8 @@ const BLOOD_SLASH_LEECH = 0.10 // 혈인참: 명중 1인당 최대 체력의 이
 const BLOOD_CHAIN_RANGE = 9 // 사슬 표적 탐색 거리
 const BLOOD_CHAIN_MAX = 7 // 사슬 최대 길이 — 넘어가면 서로 당겨진다
 const BLOOD_CHAIN_TIME = 3 // 결속 지속
-const BLOOD_CHAIN_TICK = 0.5 // 사슬 피해 간격
-const BLOOD_RAIN_R = 8 // 혈우 반경
+const BLOOD_CHAIN_TICK = 0.4 // 사슬 피해 간격(촘촘하게 — 지속 흡혈 체감)
+const BLOOD_RAIN_R = 16 // 혈우 반경(2배 — 한타 전체를 적신다)
 const BLOOD_RAIN_LEECH = 0.5 // 혈우: 입힌 피해의 이 비율을 회복
 // 잃은 체력 비례 배수 — 빈사일수록 일격이 무거워진다(혈인참·혈우 공용)
 const bloodRage = (h) => 1 + Math.min(BLOOD_RAGE_MAX, 1 - h.hp / h.maxHp)
@@ -3316,28 +3318,30 @@ const SKILLS2 = {
     h.chainDmg = Math.round(skillDmg(h, 12, 0.18)) // 틱 피해 — 시전 시점 스냅샷
     pushFx(state, 'bloodchain', foe.x, foe.z, 2.4, h.team, 0.8)
   },
-  // 강령술사 그림자 쇄도: 거느린 그림자 전원이 광폭화하며 적에게 달려든다(야수조련사 사냥 명령 문법)
+  // 강령술사 그림자 폭발: 거느린 그림자를 전부 터뜨린다 — 각자 그 자리에서 광역 자폭.
+  //  "모아서 한 번에 터뜨린다"가 정체성 — 그림자는 소모품이고, 체력이 두꺼운 건 터질 때까지 버티라는 뜻.
   necromancer(state, h) {
-    let n = 0
-    for (const su of state.summons) {
-      if (su.owner !== h.id) continue
-      su.chargeT = OVERCHARGE_T
-      const found = nearestLeapTarget(state, su, su.aggro + 6) // 그림자는 더 멀리서도 달려든다
-      if (found) {
-        const t = found.target
-        su.dir = Math.atan2(t.z - su.z, t.x - su.x)
-        su.leapFrom = { x: su.x, z: su.z }
-        su.leapTo = { x: t.x, z: t.z }
-        su.leapTargetId = t.id
-        su.leapTk = found.tk
-        su.leapT = BEAST_LEAP_DUR
-        su.leapDur = BEAST_LEAP_DUR
-        pushFx(state, 'haste', su.x, su.z, 2, su.team)
+    const mine = state.summons.filter((su) => su.owner === h.id)
+    if (!mine.length) return false // 터뜨릴 그림자가 없으면 쿨을 안 쓴다
+    const dmg = skillDmg(h, NECRO_BOOM_BASE, 0.85) // 주문력 계수 (강령술사)
+    const r2 = NECRO_BOOM_R * NECRO_BOOM_R
+    for (const su of mine) {
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.hp <= 0) continue
+        if ((e.x - su.x) ** 2 + (e.z - su.z) ** 2 > r2) continue
+        damageHero(state, e, dmg, h, false, '그림자 폭발')
       }
-      n++
+      for (const m of [...state.minions]) {
+        if (m.team === h.team || (m.x - su.x) ** 2 + (m.z - su.z) ** 2 > r2) continue
+        damageMinion(state, m, dmg, h)
+      }
+      for (const m of state.monsters) {
+        if (!m.alive || (m.x - su.x) ** 2 + (m.z - su.z) ** 2 > r2) continue
+        damageMonster(state, m, dmg, h)
+      }
+      pushFx(state, 'shadowboom', su.x, su.z, NECRO_BOOM_R, h.team, 0.9)
     }
-    if (n === 0) return false // 부릴 그림자가 없으면 쿨을 안 쓴다
-    pushFx(state, 'shadowrise', h.x, h.z, 4, h.team, 0.7)
+    state.summons = state.summons.filter((su) => su.owner !== h.id) // 전부 소진 — 자폭이니까
   },
   // 몽마 미혹의 안개: 전방 부채꼴에 혼란 — 공포(통제 불능 갈팡질팡) 문법을 짧게 재사용
   dreameater(state, h) {
@@ -4926,7 +4930,7 @@ function stepHero(state, h, dt) {
         const before = tgt.hp
         damageHero(state, tgt, h.chainDmg, h, false, '핏빛 사슬')
         const drained = Math.max(0, before - tgt.hp)
-        if (drained > 0) h.hp = Math.min(h.maxHp, h.hp + lifestealAmount(drained * 0.5, state))
+        if (drained > 0) h.hp = Math.min(h.maxHp, h.hp + lifestealAmount(drained, state)) // 결속 중엔 빨아들인 만큼 그대로 돌아온다
       }
     }
   }
@@ -5142,6 +5146,26 @@ function stepHero(state, h, dt) {
     }
     if (h.knockT <= 0) { h.knockVx = 0; h.knockVz = 0; h.knockStun = 0 }
     h.bushI = state.map.bushIndexAt(h.x, h.z)
+  }
+  // 🌙 꿈의 영토 안: 제 뜻대로 못 움직인다 — 홀린 듯 가장 가까운 '아군'에게 다가가 때린다.
+  if (h.stunT <= 0 && h.rootT <= 0 && h.knockT <= 0 && !(h.charmT > 0) && !(h.fallT > 0) && dreamCharmed(state, h)) {
+    let ally = null
+    let ad = 1e9
+    for (const o of state.heroes) {
+      if (o === h || o.team !== h.team || o.respawnT > 0 || o.hp <= 0) continue
+      const d = dist(h, o)
+      if (d < ad) { ad = d; ally = o }
+    }
+    if (ally) {
+      h.dir = Math.atan2(ally.z - h.z, ally.x - h.x)
+      if (ad > heroRange(h) * 0.8) { // 사거리에 들 때까지만 걸어간다
+        const sp = heroSpeed(h) * CHARM_SPD * (h.freezeT > 0 ? FREEZE_MOVE : 1)
+        h.x += Math.cos(h.dir) * sp * dt
+        h.z += Math.sin(h.dir) * sp * dt
+      }
+    }
+    h.mx = 0 // 조작 입력은 먹지 않는다
+    h.mz = 0
   }
   // 🌙 매혹(몽마): 통제를 빼앗겨 홀린 듯 시전자에게 걸어간다 — 공포의 거울상(도주 ↔ 접근).
   if (h.charmT > 0 && h.stunT <= 0 && h.rootT <= 0 && h.knockT <= 0 && !(h.fallT > 0)) {

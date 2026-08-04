@@ -5397,19 +5397,25 @@ test('강령술사 그림자 사역: 처치 기록이 없으면 그림자 병사
   assert.equal(g.summons.filter((su) => su.kind === 'shade').length, 3, '그림자 병사 3기')
 })
 
-test('강령술사 그림자 쇄도: 그림자가 없으면 쿨을 안 쓴다', () => {
+test('강령술사 그림자 폭발: 그림자를 전부 터뜨려 광역 피해 — 없으면 불발', () => {
   const g = duo('necromancer', 'tank')
   startPlaying(g)
-  const n = g.heroes[0]
+  const [n, t] = g.heroes
   n.lvl = 18
+  n.x = 0; n.z = 0
   n.skill2Cd = 0
   castSkill2(g, n.id)
-  assert.equal(n.skill2Cd, 0, '부릴 그림자가 없으면 불발')
+  assert.equal(n.skill2Cd, 0, '터뜨릴 그림자가 없으면 불발')
   n.skillCd = 0
-  castSkill(g, n.id) // 하나 소환하고 나면
+  castSkill(g, n.id) // 그림자 하나 소환
+  const shade = g.summons.find((su) => su.owner === n.id)
+  assert.ok(shade, '그림자 소환됨')
+  t.x = shade.x + 2; t.z = shade.z // 폭심 반경 안으로
+  const hp0 = t.hp
   castSkill2(g, n.id)
   assert.ok(n.skill2Cd > 0, '그림자가 있으면 발동')
-  assert.ok(g.summons.some((su) => su.owner === n.id && su.chargeT > 0), '광폭화 부여')
+  assert.ok(t.hp < hp0, `자폭 광역 피해 (${hp0}→${Math.round(t.hp)})`)
+  assert.equal(g.summons.filter((su) => su.owner === n.id).length, 0, '자폭 — 그림자는 전부 소진')
 })
 
 test('강령술사 원혼의 손길: 평타가 그림자의 수명을 붙든다', () => {
@@ -5503,6 +5509,33 @@ test('몽마 꿈의 영토: 안의 적은 아군을 때리고, 나가면 깨어�
   const bHp1 = b.hp
   run(g, 1.5)
   assert.ok(b.hp >= bHp1 - 1, '영토를 벗어나면 오사가 멈춘다')
+})
+
+test('몽마 꿈의 영토: 안에 있는 적은 조작 입력을 잃는다(적군만 — 아군은 멀쩡)', () => {
+  const g = createGame([
+    { id: 'd', name: 'D', zodiacId: 'rat', color: '#abc', cls: 'dreameater', team: 'blue' },
+    { id: 'ally', name: 'AL', zodiacId: 'ox', color: '#abc', cls: 'warrior', team: 'blue' },
+    { id: 'foe', name: 'F', zodiacId: 'tiger', color: '#abc', cls: 'tank', team: 'red' },
+    { id: 'foe2', name: 'F2', zodiacId: 'dragon', color: '#abc', cls: 'archer', team: 'red' },
+  ], { mode: '3v3', rng: () => 0.5 })
+  startPlaying(g)
+  const [d, ally, foe, foe2] = g.heroes
+  d.lvl = 18
+  d.x = 0; d.z = 0
+  foe.x = 30; foe.z = 0
+  foe2.x = 33; foe2.z = 0
+  ally.x = 31; ally.z = 3 // 아군도 영토 안에 서 본다
+  d.ultCd = 0
+  castUlt(g, d.id)
+  d.dreamX = 31; d.dreamZ = 0
+  // 영토 안 적: 오른쪽으로 가려 해도 조작이 먹히지 않는다
+  setInput(g, foe.id, { mx: 1, mz: 0 })
+  setInput(g, ally.id, { mx: 1, mz: 0 })
+  const fx0 = foe.x
+  const ax0 = ally.x
+  run(g, 0.6)
+  assert.ok(Math.abs(foe.x - fx0) < 3, `적은 제 뜻대로 못 간다 (${fx0.toFixed(1)}→${foe.x.toFixed(1)})`)
+  assert.ok(ally.x > ax0 + 1, `아군은 멀쩡히 움직인다 (${ax0.toFixed(1)}→${ally.x.toFixed(1)})`)
 })
 
 test('몽마 꿈의 영토: 오사로 죽어도 킬 크레딧이 꼬이지 않는다(팀 판정 불변)', () => {
