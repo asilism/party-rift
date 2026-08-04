@@ -5441,3 +5441,111 @@ test('난투전 강령술사: 그림자 영웅의 평타가 적을 밀어낸다'
   run(g, 1.5) // 그림자가 평타를 친다
   assert.ok(e.knockT > 0 || Math.hypot(e.x - shadow.x, e.z - shadow.z) > 1.5, '평타에 밀려난다')
 })
+
+// ══════════ 몽마(dreameater) — 매혹·꿈의 영토(오사) ══════════
+
+test('몽마 매혹의 입맞춤: 맞은 적이 홀려서 시전자에게 걸어온다(행동 불가)', () => {
+  const g = duo('dreameater', 'tank')
+  startPlaying(g)
+  const [d, t] = g.heroes
+  d.x = 0; d.z = 0; d.dir = 0
+  t.x = 8; t.z = 0
+  castSkill(g, d.id)
+  run(g, 0.5) // 투사체 비행 + 명중
+  assert.ok(t.charmT > 0 && t.charmBy === d.id, '매혹 성립')
+  const d0 = Math.hypot(t.x - d.x, t.z - d.z)
+  run(g, 0.7)
+  assert.ok(Math.hypot(t.x - d.x, t.z - d.z) < d0, `홀려서 다가온다 (${d0.toFixed(1)}→${Math.hypot(t.x - d.x, t.z - d.z).toFixed(1)})`)
+  const hp0 = d.hp
+  castAttack(g, t.id) // 매혹 중엔 공격 불가
+  run(g, 0.5)
+  assert.equal(d.hp, hp0, '매혹 중엔 행동 불가')
+})
+
+test('몽마 매혹: 시전자가 죽으면 즉시 풀린다', () => {
+  const g = duo('dreameater', 'tank')
+  startPlaying(g)
+  const [d, t] = g.heroes
+  d.x = 0; d.z = 0; d.dir = 0
+  t.x = 6; t.z = 0
+  castSkill(g, d.id)
+  run(g, 0.5)
+  assert.ok(t.charmT > 0, '매혹 성립')
+  d.hp = 1
+  plantMinion(g, 'red', 0.5, 0, 9000) // 몽마를 잡을 병사
+  run(g, 3)
+  assert.ok(d.respawnT > 0, '몽마 사망')
+  assert.equal(t.charmT, 0, '홀린 적은 꿈에서 깬다')
+})
+
+test('몽마 꿈의 영토: 안의 적은 아군을 때리고, 나가면 깨어난다', () => {
+  const g = createGame([
+    { id: 'd', name: 'D', zodiacId: 'rat', color: '#abc', cls: 'dreameater', team: 'blue' },
+    { id: 'a', name: 'A', zodiacId: 'ox', color: '#abc', cls: 'warrior', team: 'red' },
+    { id: 'b', name: 'B', zodiacId: 'tiger', color: '#abc', cls: 'tank', team: 'red' },
+  ], { mode: '3v3', rng: () => 0.5 })
+  startPlaying(g)
+  const [d, a, b] = g.heroes
+  d.lvl = 18
+  d.x = 0; d.z = 0
+  a.x = 20; a.z = 0
+  b.x = 22; b.z = 0 // 서로 붙어 있는 적 둘
+  d.ultCd = 0
+  d.dir = 0
+  castUlt(g, d.id)
+  g.heroes[0].dreamX = 21; g.heroes[0].dreamZ = 0 // 두 적 사이에 영토
+  const bHp0 = b.hp
+  run(g, 2.0) // 영토 안에서 서로 때린다
+  assert.ok(b.hp < bHp0, `아군(warrior)이 아군(tank)을 때린다 — 오사 (${bHp0}→${Math.round(b.hp)})`)
+  const outside = g.heroes.find((h) => h.id === 'a')
+  outside.x = 60; outside.z = 60 // 영토 밖으로 이탈
+  const bHp1 = b.hp
+  run(g, 1.5)
+  assert.ok(b.hp >= bHp1 - 1, '영토를 벗어나면 오사가 멈춘다')
+})
+
+test('몽마 꿈의 영토: 오사로 죽어도 킬 크레딧이 꼬이지 않는다(팀 판정 불변)', () => {
+  const g = createGame([
+    { id: 'd', name: 'D', zodiacId: 'rat', color: '#abc', cls: 'dreameater', team: 'blue' },
+    { id: 'a', name: 'A', zodiacId: 'ox', color: '#abc', cls: 'warrior', team: 'red' },
+    { id: 'b', name: 'B', zodiacId: 'tiger', color: '#abc', cls: 'tank', team: 'red' },
+  ], { mode: '3v3', rng: () => 0.5 })
+  startPlaying(g)
+  const [d, a, b] = g.heroes
+  assert.equal(a.team, b.team, '오사 중에도 팀은 그대로 red')
+  d.lvl = 18
+  d.ultCd = 0
+  castUlt(g, d.id)
+  assert.ok(d.dreamT > 0, '영토 개시')
+  assert.equal(a.team, 'red', '팀 판정 불변 — 소유·크레딧 규칙이 흔들리지 않는다')
+})
+
+test('몽마 미혹의 안개: 전방 부채꼴을 혼란에 빠뜨린다 — 아무도 없으면 불발', () => {
+  const g = duo('dreameater', 'tank')
+  startPlaying(g)
+  const [d, t] = g.heroes
+  d.lvl = 18
+  d.x = 0; d.z = 0; d.dir = 0
+  t.x = 60; t.z = 60
+  d.skill2Cd = 0
+  castSkill2(g, d.id)
+  assert.equal(d.skill2Cd, 0, '대상이 없으면 불발')
+  t.x = 5; t.z = 0
+  castSkill2(g, d.id)
+  assert.ok(d.skill2Cd > 0 && t.fearT > 0, '부채꼴 안의 적이 갈팡질팡한다')
+})
+
+test('몽마: 콜로세움에서는 매혹 지속이 반감된다(2v2 리스크 보정)', () => {
+  const g = createGame([
+    { id: 'd', name: 'D', zodiacId: 'rat', color: '#abc', cls: 'dreameater', team: 'blue' },
+    { id: 't', name: 'T', zodiacId: 'ox', color: '#abc', cls: 'tank', team: 'red' },
+  ], { mode: 'arena', rng: () => 0.5 })
+  g.status = 'playing'
+  g.arenaPhase = 'fight'
+  const [d, t] = g.heroes
+  d.x = 0; d.z = 0; d.dir = 0
+  t.x = 6; t.z = 0
+  castSkill(g, d.id)
+  run(g, 0.5)
+  assert.ok(t.charmT > 0 && t.charmT <= 0.8, `아레나 반감 (${t.charmT.toFixed(2)}초)`)
+})

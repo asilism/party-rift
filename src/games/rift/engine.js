@@ -102,6 +102,7 @@ const ROLE_PREF = {
   runescribe: ['mid', 'bot', 'top'], // 인장 콤보 메이지 — 미드
   bloodknight: ['top', 'jungle', 'mid', 'bot'], // 자해 브루저 — 탑/정글
   necromancer: ['mid', 'jungle', 'bot', 'top'], // 그림자 소환사 — 미드/정글
+  dreameater: ['support', 'mid', 'bot', 'top'], // 매혹 서포터 — 서폿/미드
 }
 // 한 봇에게 그 모드의 역할 풀에서 직업 선호에 맞는 빈 역할을 고른다(겹치면 다음 후보 → 남은 자리).
 function pickRole(cls, mode, taken) {
@@ -281,6 +282,13 @@ export const CLASSES = {
     skill2: { name: '그림자 쇄도', icon: '🌑', cd: 14, desc: '거느린 그림자 전원이 적에게 달려든다 — 광폭화(공속↑)와 함께 도약' },
     ult: { name: '그림자 사역', icon: '💀', cd: 65, desc: '마지막으로 처치한 적 영웅을 "그림자 ○○"로 되살려 20초간 부린다 — 그 직업의 평타를 그대로 쓴다(처치 기록이 없으면 그림자 병사 3기)' },
   },
+  dreameater: {
+    name: '몽마', icon: '🌙', desc: '꿈으로 적을 홀리는 제어 술사 — 홀린 적은 나에게 걸어오고, 꿈의 영토 안에서는 자기 편을 때린다',
+    hp: 470, hpLvl: 52, atk: 38, atkLvl: 5, range: 10, atkCd: 1.0, speed: 12.4,
+    skill: { name: '매혹의 입맞춤', icon: '💋', cd: 10, desc: '홀리는 입맞춤을 날린다 — 맞은 적은 1.5초간 홀려 나에게 걸어온다(행동 불가)' },
+    skill2: { name: '미혹의 안개', icon: '🌫️', cd: 16, desc: '앞으로 미혹의 안개를 퍼뜨린다 — 닿은 적들이 갈피를 잃고 갈팡질팡한다' },
+    ult: { name: '꿈의 영토', icon: '🌙', cd: 70, desc: '지정한 곳에 3초간 꿈의 영토를 편다 — 그 안의 적들은 자기 편을 때린다(영토 밖으로 나가면 깨어난다)' },
+  },
   // ── 보스전(5:1) 전용 보스 — boss:true는 선택 목록(CLASS_IDS)에서 제외되고 3배 덩치로 그려진다 ──
   boss_colossus: {
     boss: true, name: '파멸의 거인', icon: '👹',
@@ -334,6 +342,7 @@ export const CLASS_ROLE = {
   runescribe: 'mage',
   bloodknight: 'fighter',
   necromancer: 'mage',
+  dreameater: 'support',
   assassin: 'jungle', catcher: 'jungle', snarer: 'jungle', chronomancer: 'jungle', illusionist: 'jungle',
 }
 // 봇 팀이 채우고 싶어하는 역할 우선순위(앞에서부터 한 자리씩) — 균형 잡힌 조합.
@@ -367,6 +376,7 @@ export const ABILITY_SCALING = {
   runescribe: { skill: { dmg: [26, 0.45], note: '관통 · 인장 3스택' }, skill2: { note: '인장 최다 표적의 스택을 주변에 복제' }, ult: { dmg: [30, 0.5], note: '인장 1스택당 피해 · 처치 시 스택이 주변으로 전이' } },
   bloodknight: { skill: { dmg: [40, 0.85], note: '체력 6% 소모 · 잃은 체력만큼 최대 +60% · 맞힌 수만큼 흡혈' }, skill2: { dot: [12, 0.18], dotDur: 3, note: '체력 10% 소모 · 3초 결속(멀어질 수 없음) + 흡혈' }, ult: { dmg: [70, 1.05], note: '체력 20% 소모 · 입힌 피해의 50% 회복' } },
   necromancer: { skill: { note: '그림자 병사 1기 소환(최대 3 · 10초)' }, skill2: { note: '그림자 전원 광폭화 + 적에게 도약' }, ult: { note: '마지막 처치 영웅을 그림자로 20초 사역(없으면 그림자 3기)' } },
+  dreameater: { skill: { dmg: [22, 0.35], note: '명중 시 1.5초 매혹(시전자에게 강제 보행 · 행동 불가)' }, skill2: { dmg: [18, 0.3], note: '부채꼴 혼란 1.2초' }, ult: { note: '반경 7 · 3초 · 영토 안 적은 아군을 공격(이탈 시 즉시 해제)' } },
 }
 
 // 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 하이브리드는 공·주 평균, 그 외는 공격력.
@@ -855,6 +865,11 @@ function makeHeroState(p, cls, pos, map, rng) {
       fearT: 0, // 공포(공포술사) — 통제 불능: 랜덤 방향 질주, 행동 불가
       fearDir: 0, // 공포 질주 방향(라디안) — FEAR_TURN_T마다 재추첨
       fearTurnT: 0, // 다음 방향 재추첨까지 남은 시간
+      charmT: 0, // 몽마 매혹 — 홀려서 시전자에게 걸어가는 남은 시간(행동 불가)
+      charmBy: null, // 나를 홀린 몽마 id
+      dreamT: 0, // 몽마 꿈의 영토 남은 시간(시전자 쪽 타이머)
+      dreamX: 0, // 영토 중심
+      dreamZ: 0,
       lastSlainHero: null, // 강령술사: 마지막으로 처치한 적 영웅 스냅샷 { cls, zodiacId, name }
       chainT: 0, // 혈기사 핏빛 사슬 — 남은 결속 시간(>0이면 표적과 묶여 있다)
       chainId: null, // 사슬로 묶은 표적 id
@@ -1180,7 +1195,7 @@ function trailSampleBack(h, secs) {
   return h.trail[i]
 }
 
-const canAct = (h) => h.respawnT <= 0 && h.stunT <= 0 && h.fearT <= 0 && !(h.fallT > 0) // 공포 중엔 공격/시전 불가(도망만), 낙하 중엔 아무것도 못 한다
+const canAct = (h) => h.respawnT <= 0 && h.stunT <= 0 && h.fearT <= 0 && !(h.charmT > 0) && !(h.fallT > 0) // 공포·매혹 중엔 공격/시전 불가, 낙하 중엔 아무것도 못 한다
 
 // ── 신규 직업 상수 ──
 // 공포술사: 공포 = 통제 불능(새 CC). 도망이 아니라 컨트롤을 잃고 아무 방향으로나 갈팡질팡 내달린다.
@@ -1272,6 +1287,30 @@ const atkOf = (h, st = null) => heroAtk(h) * dmgMult(h) * (st?.mode === 'brawl' 
 //  · 마법 계열(마법사·힐러)은 레벨로 성장하는 기본 주문력 + 아이템 주문력을 쓴다.
 //  · 그 외(전사·궁수·암살자·탱커)는 공격력(heroAtk)을 그대로 주력 스탯으로 쓴다.
 //  수호기사도 AP 인챈터로 편입 — 보호막이 주문력에 비례한다.
+// ── 몽마 매혹·꿈의 영토 — 공포(도주)의 거울상: 통제를 빼앗아 '나에게' 끌어온다.
+const CHARM_TIME = 1.5 // 매혹 지속
+const CHARM_SPD = 0.85 // 홀려 걸어오는 속도 배율
+const CHARM_STOP = 2.2 // 시전자 코앞에서는 멈춘다(겹침 방지)
+const KISS_RANGE = 12 // 매혹의 입맞춤 사거리
+const KISS_SPEED = 26 // 입맞춤 투사체 속도
+const KISS_R = 1.5 // 명중 판정 반경
+const MIST_RANGE = 9 // 미혹의 안개 사거리
+const MIST_HALF_COS = 0.55 // 부채꼴 폭(코사인)
+const MIST_CONFUSE = 1.2 // 혼란 시간(공포 문법 재사용 — 갈팡질팡)
+const DREAM_R = 7 // 꿈의 영토 반경
+const DREAM_TIME = 3 // 꿈의 영토 지속
+const DREAM_AIM = 7 // 조준 보조가 없을 때 앞쪽에 펴는 거리
+// 이 영웅이 지금 '누군가의 꿈의 영토' 안에 있는가 — 안이면 아군을 적으로 본다(오사).
+//  팀 판정 자체는 절대 바꾸지 않는다(킬 크레딧·소환물 소유가 꼬이지 않게) — 표적 선택만 뒤집는다.
+function dreamCharmed(state, h) {
+  if (!h || h.respawnT > 0) return false
+  for (const o of state.heroes) {
+    if (o.cls !== 'dreameater' || !(o.dreamT > 0) || o.team === h.team) continue
+    if ((h.x - o.dreamX) ** 2 + (h.z - o.dreamZ) ** 2 <= DREAM_R * DREAM_R) return true
+  }
+  return false
+}
+
 // ── 혈기사 혈법(血法) — 스킬 코스트가 마나가 아니라 '내 피'다. 절대 자멸하지 않게 최소 1은 남긴다.
 const BLOOD_BASIC_LIFESTEAL = 0.08 // 평타에 붙는 흡혈(코스트를 회수하는 기본 루프)
 const BLOOD_COST_SKILL = 0.06 // 혈인참 — 최대 체력 대비
@@ -1318,11 +1357,11 @@ function addRune(state, e, n, by) {
 }
 const clearRune = (e) => { e.markStacks = 0; e.markT = 0 }
 
-const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock', 'guardian', 'windcaller', 'chronomancer', 'fearmonger', 'terramancer', 'runescribe', 'necromancer'])
+const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock', 'guardian', 'windcaller', 'chronomancer', 'fearmonger', 'terramancer', 'runescribe', 'necromancer', 'dreameater'])
 //  하이브리드: 소환수 피해를 공격력·주문력 절반씩으로 키운다(AD/AP 아이템 어느 쪽이든 도움).
 const HYBRID_CLASSES = new Set(['beastmaster', 'engineer'])
-const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46, windcaller: 42, chronomancer: 44, fearmonger: 42, terramancer: 40, runescribe: 41, necromancer: 43 }
-const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7, windcaller: 10, chronomancer: 10, fearmonger: 10, terramancer: 9, runescribe: 10, necromancer: 9 }
+const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46, windcaller: 42, chronomancer: 44, fearmonger: 42, terramancer: 40, runescribe: 41, necromancer: 43, dreameater: 40 }
+const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7, windcaller: 10, chronomancer: 10, fearmonger: 10, terramancer: 9, runescribe: 10, necromancer: 9, dreameater: 9 }
 const spellPower = (h) =>
   ((SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power) * (h.statMul || 1) * (1 + augOf(h).powerMul) * (1 + trophyFx(h).powerMul)
 // 쿨다운 감소: 아이템 + 증강(가산), 실효 상한 0.6
@@ -1491,6 +1530,17 @@ function findLeapEntity(state, s) {
 }
 
 function findAttackTarget(state, h, range) {
+  if (dreamCharmed(state, h)) {
+    // 🌙 꿈의 영토 안: 아군이 적으로 보인다(오사). 팀은 그대로라 킬 크레딧·소유는 꼬이지 않는다.
+    let best = null
+    let bd = range * range
+    for (const e of state.heroes) {
+      if (e === h || e.team !== h.team || e.respawnT > 0 || e.hp <= 0) continue
+      const d = dist2(h, e)
+      if (d < bd) { bd = d; best = e }
+    }
+    if (best) return { tk: 'hero', id: best.id }
+  }
   // 영웅과 "분신"은 같은 우선순위 — 분신이 더 가까우면 평타가 분신에게 간다(미끼 성립)
   const hero = nearestFoeHeroLike(state, h, range)
   if (hero) return hero.clone ? { tk: 'summon', id: hero.e.id } : { tk: 'hero', id: hero.e.id }
@@ -2260,6 +2310,19 @@ const SKILLS = {
     spawnSummon(state, h, 'shade', h.x + Math.cos(a) * 2.4, h.z + Math.sin(a) * 2.4)
     pushFx(state, 'shadowrise', h.x, h.z, 3.2, h.team, 0.8)
   },
+  // 몽마 매혹의 입맞춤: 스킬샷 — 맞히면 그 적이 홀려서 나에게 걸어온다(맞히는 실력이 곧 실력)
+  dreameater(state, h) {
+    let dir = h.dir
+    const foe = nearestFoeHero(state, h, KISS_RANGE)
+    if (foe) dir = Math.atan2(foe.z - h.z, foe.x - h.x) // 조준 보조
+    h.dir = dir
+    state.projectiles.push({
+      id: state.nextId++, kind: 'charm', team: h.team, owner: h.id,
+      x: h.x, z: h.z, vx: Math.cos(dir) * KISS_SPEED, vz: Math.sin(dir) * KISS_SPEED,
+      travel: 0, max: KISS_RANGE, dmg: Math.round(skillDmg(h, 22, 0.35)), hit: new Set(),
+    })
+    pushFx(state, 'charmcast', h.x, h.z, 2, h.team, 0.5)
+  },
 }
 
 // ── 궁극기 (레벨 3부터) ──
@@ -2829,6 +2892,15 @@ const ULTS = {
     pushFx(state, 'shadowrise', sc.x, sc.z, 5, h.team, 1.1)
     pushFeed(state, 'obj', `💀 ${h.name} — 그림자 ${sl.name}을(를) 일으켰다!`)
   },
+  // 몽마 꿈의 영토: 지정한 곳에 3초간 영역 — 안의 적들은 자기 편을 때린다(밖으로 나가면 깨어난다)
+  dreameater(state, h) {
+    const foe = nearestFoeHero(state, h, DREAM_R + 8)
+    h.dreamX = foe ? foe.x : h.x + Math.cos(h.dir) * DREAM_AIM
+    h.dreamZ = foe ? foe.z : h.z + Math.sin(h.dir) * DREAM_AIM
+    h.dreamT = DREAM_TIME
+    pushFx(state, 'dream', h.dreamX, h.dreamZ, DREAM_R, h.team, 1.2)
+    pushFeed(state, 'obj', `🌙 ${h.name} — 꿈의 영토가 펼쳐졌다`)
+  },
 }
 
 // 사슬갈고리 발사: 발사 준비(hookWindT)가 끝났을 때 호출 — 고정 방향(hookDir)으로 직진 투사체.
@@ -3267,6 +3339,27 @@ const SKILLS2 = {
     if (n === 0) return false // 부릴 그림자가 없으면 쿨을 안 쓴다
     pushFx(state, 'shadowrise', h.x, h.z, 4, h.team, 0.7)
   },
+  // 몽마 미혹의 안개: 전방 부채꼴에 혼란 — 공포(통제 불능 갈팡질팡) 문법을 짧게 재사용
+  dreameater(state, h) {
+    const ux = Math.cos(h.dir)
+    const uz = Math.sin(h.dir)
+    const r2 = MIST_RANGE * MIST_RANGE
+    let hitAny = false
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.hp <= 0) continue
+      const dx = e.x - h.x
+      const dz = e.z - h.z
+      const d2 = dx * dx + dz * dz
+      if (d2 > r2 || d2 < 0.01) continue
+      const d = Math.sqrt(d2)
+      if ((dx * ux + dz * uz) / d < MIST_HALF_COS) continue // 부채꼴 밖
+      damageHero(state, e, skillDmg(h, 18, 0.3), h)
+      applyFear(state, e, MIST_CONFUSE) // 혼란 = 갈팡질팡(도주 문법 공용)
+      hitAny = true
+    }
+    pushFxDir(state, 'mist', h.x, h.z, MIST_RANGE, h.dir, h.team)
+    if (!hitAny) return false // 아무도 못 홀렸으면 쿨을 안 쓴다
+  },
 }
 
 // 술식 공통: 판정 함수 pred(e)에 걸리는 모든 적(영웅/병사/정글몹)에게 피해(+기절/빙결/속박)
@@ -3559,6 +3652,10 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   // 결속 해제: 내가 묶여 있었으면 풀고, 내가 결속을 건 수호기사였으면 묶인 아군을 모두 풀어 준다
   victim.bindT = 0
   victim.bindBy = null
+  victim.charmT = 0 // 죽으면 꿈에서 깬다
+  victim.charmBy = null
+  victim.dreamT = 0
+  for (const o of state.heroes) if (o.charmBy === victim.id) { o.charmT = 0; o.charmBy = null }
   victim.chainT = 0 // 핏빛 사슬은 죽으면 끊긴다(양쪽 다)
   victim.chainId = null
   for (const o of state.heroes) if (o.chainId === victim.id) { o.chainT = 0; o.chainId = null }
@@ -4802,6 +4899,8 @@ function stepHero(state, h, dt) {
   h.berserkT = Math.max(0, h.berserkT - dt)
   h.rageT = Math.max(0, h.rageT - dt)
   h.wardT = Math.max(0, h.wardT - dt)
+  if (h.charmT > 0 && (h.charmT = Math.max(0, h.charmT - dt)) === 0) h.charmBy = null // 🌙 매혹 해제
+  h.dreamT = Math.max(0, h.dreamT - dt)
   if (h.chainT > 0) { // 🩸 핏빛 사슬: 표적과 묶여 있는 동안 서로 멀어질 수 없고, 피가 계속 넘어온다
     h.chainT = Math.max(0, h.chainT - dt)
     const tgt = h.chainId ? state.heroes.find((o) => o.id === h.chainId) : null
@@ -5044,6 +5143,22 @@ function stepHero(state, h, dt) {
     if (h.knockT <= 0) { h.knockVx = 0; h.knockVz = 0; h.knockStun = 0 }
     h.bushI = state.map.bushIndexAt(h.x, h.z)
   }
+  // 🌙 매혹(몽마): 통제를 빼앗겨 홀린 듯 시전자에게 걸어간다 — 공포의 거울상(도주 ↔ 접근).
+  if (h.charmT > 0 && h.stunT <= 0 && h.rootT <= 0 && h.knockT <= 0 && !(h.fallT > 0)) {
+    const by = h.charmBy ? state.heroes.find((o) => o.id === h.charmBy) : null
+    if (!by || by.respawnT > 0 || by.hp <= 0) h.charmT = 0
+    else {
+      const dx = by.x - h.x
+      const dz = by.z - h.z
+      const cd2 = Math.hypot(dx, dz)
+      h.dir = Math.atan2(dz, dx)
+      if (cd2 > CHARM_STOP) {
+        const sp = heroSpeed(h) * CHARM_SPD * (h.freezeT > 0 ? FREEZE_MOVE : 1)
+        h.x += (dx / cd2) * sp * dt
+        h.z += (dz / cd2) * sp * dt
+      }
+    }
+  }
   // 공포(공포술사): 통제 불능 — 컨트롤을 잃고 랜덤한 방향으로 갈팡질팡 내달린다(약한 슬로우).
   //  이동 입력 무시 (기절/속박이 겹치면 그쪽이 우선). 방향은 FEAR_TURN_T마다 재추첨 — 어디로 튈지 모른다.
   if (h.fearT > 0 && h.stunT <= 0 && h.rootT <= 0 && h.knockT <= 0 && h.pullT <= 0) {
@@ -5058,7 +5173,7 @@ function stepHero(state, h, dt) {
     h.z += Math.sin(h.fearDir) * sp * dt
   }
   // 이동 — 기절·정신집중·귀환 채널·속박·발사준비·넉백·공포 중엔 제자리에 멈춘다(이동 입력 무시)
-  if (h.stunT <= 0 && h.castT <= 0 && h.recallT <= 0 && h.rootT <= 0 && h.hookWindT <= 0 && h.knockT <= 0 && h.fearT <= 0 && !(h.fallT > 0)) {
+  if (h.stunT <= 0 && h.castT <= 0 && h.recallT <= 0 && h.rootT <= 0 && h.hookWindT <= 0 && h.knockT <= 0 && h.fearT <= 0 && !(h.charmT > 0) && !(h.fallT > 0)) {
     const len = Math.hypot(h.mx, h.mz)
     if (len > 0.12) {
       // 공격 직후엔 발이 무겁고, 탱커는 방패막기 중 돌진 가속, 빙결 중엔 굼뜨다,
@@ -5601,6 +5716,29 @@ function stepProjectiles(state, dt) {
       } else if (p.travel >= ROCK_RANGE) {
         remove.add(p.id)
       }
+      continue
+    }
+    if (p.kind === 'charm') { // 💋 매혹의 입맞춤 — 처음 맞은 적 하나만 홀린다
+      p.x += p.vx * dt
+      p.z += p.vz * dt
+      p.travel += KISS_SPEED * dt
+      const owner = state.heroes.find((hh) => hh.id === p.owner)
+      let done = false
+      if (owner) {
+        for (const e of state.heroes) {
+          if (e.team === p.team || e.respawnT > 0 || e.hp <= 0 || dist2(p, e) > KISS_R * KISS_R) continue
+          damageHero(state, e, p.dmg, owner)
+          if (e.hp > 0) {
+            const cc = e.rageT > 0 ? RAGE_CC_CUT : 1 // 검투의 분노: 받는 CC 감소
+            e.charmT = Math.max(e.charmT || 0, CHARM_TIME * cc * (state.mode === 'arena' ? 0.5 : 1)) // 콜로세움은 반감(2v2 리스크)
+            e.charmBy = owner.id
+            pushFx(state, 'charmhit', e.x, e.z, 2.2, owner.team, 0.7)
+          }
+          done = true
+          break
+        }
+      }
+      if (done || p.travel >= p.max || !owner) remove.add(p.id)
       continue
     }
     if (p.kind === 'swordwave') {
@@ -6211,6 +6349,10 @@ function stepAutoAttack(state) {
       const tk = state.heroes.find((o) => o.id === h.tauntBy && o.team !== h.team && o.respawnT <= 0)
       if (tk && dist(h, tk) <= heroRange(h)) { castAttack(state, h.id); continue }
     }
+    if (dreamCharmed(state, h)) { // 🌙 꿈의 영토: 표적이 '아군'이라 적 존재 게이트로는 평타가 안 나간다
+      if (findAttackTarget(state, h, heroRange(h))) castAttack(state, h.id)
+      continue
+    }
     if (nearestFoeHeroLike(state, h, heroRange(h))) castAttack(state, h.id) // 분신도 영웅처럼 자동평타 대상
   }
 }
@@ -6259,6 +6401,8 @@ const BOT_BUILD = {
   bloodknight: ['dagger', 'vampire_scythe', 'berserker_axe', 'giant_heart', 'heal_flask'],
   // 강령술사: 소환 컨트롤러 — 주문력 + 소환물 강화 + 생존
   necromancer: ['orb', 'flame_core', 'wisdom_hat', 'guardian_cloak', 'heal_flask'],
+  // 몽마: 제어 서포터 — 쿨감 + 주문력 + 생존(딜보다 홀리는 빈도)
+  dreameater: ['wisdom_hat', 'orb', 'guardian_cloak', 'flame_core', 'heal_flask'],
 }
 
 // 콜로세움 봇 장보기 순서: 사람의 고승률 트리를 흉내 낸다 —
@@ -9469,6 +9613,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'runescribe' && nearCount >= 2 && runeStacks(state, foe) >= 2) castSkill2(state, h.id) // 뭉친 적에 인장 확산
     else if (h.cls === 'bloodknight' && d < BLOOD_CHAIN_RANGE - 1 && h.hp > h.maxHp * 0.35) castSkill2(state, h.id) // 사슬로 묶어 결투 강제
     else if (h.cls === 'necromancer' && state.summons.some((su) => su.owner === h.id)) castSkill2(state, h.id) // 그림자 쇄도
+    else if (h.cls === 'dreameater' && d < MIST_RANGE - 1) castSkill2(state, h.id) // 붙으면 미혹의 안개
   }
   const ready = h.skillCd <= 0
   if (ready) {
@@ -9491,6 +9636,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'runescribe' && d < SIGIL_RANGE - 2) castSkill(state, h.id) // 인장탄으로 스택 적립
     else if (h.cls === 'bloodknight' && d < BLOOD_SLASH_R && h.hp > h.maxHp * 0.2) castSkill(state, h.id) // 혈인참(피가 너무 없으면 자제)
     else if (h.cls === 'necromancer') castSkill(state, h.id) // 그림자는 쿨마다 채워 둔다
+    else if (h.cls === 'dreameater' && d < KISS_RANGE - 2) castSkill(state, h.id) // 매혹의 입맞춤
     // 힐러 치유·수호기사 보호막은 stepBots 위쪽에서 항상 챙긴다
   }
   if (h.ultCd > 0 || h.lvl < ULT_LEVEL) return
@@ -9528,6 +9674,8 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     castUlt(state, h.id) // 단말마 — 적진으로 파고들어 광역 공포 이니시
   } else if (h.cls === 'illusionist' && (nearCount >= 1 || h.hp < h.maxHp * 0.5)) {
     castUlt(state, h.id) // 환영난무 — 교란 + 은신
+  } else if (h.cls === 'dreameater' && nearCount >= 2 && d < DREAM_R + 6) {
+    castUlt(state, h.id) // 꿈의 영토 — 적이 뭉쳤을 때 서로 치게 만든다
   } else if (h.cls === 'necromancer' && (h.lastSlainHero || nearCount >= 1)) {
     castUlt(state, h.id) // 그림자 사역 — 처치 기록이 있으면 바로 되살린다
   } else if (h.cls === 'bloodknight' && d < BLOOD_RAIN_R - 1 && (nearCount >= 2 || h.hp < h.maxHp * 0.55)) {
@@ -9933,6 +10081,10 @@ export function makeView(state) {
       bindAnchorT: r2d(h.bindAnchorT), // 수호기사 앵커 (구체 연출)
       vulnT: r2d(h.vulnT),
       runeN: runeStacks(state, h), // 🔯 각인사 인장 스택(0~5) — 씬이 머리 위 문양으로 그린다
+      charmT: r2d(h.charmT || 0), // 🌙 매혹 — 씬이 머리 위 하트를 띄운다
+      dreamT: r2d(h.dreamT || 0), // 🌙 꿈의 영토(시전자) — 씬이 보랏빛 영역을 그린다
+      dreamX: r1(h.dreamX || 0),
+      dreamZ: r1(h.dreamZ || 0),
       chainT: r2d(h.chainT || 0), // ⛓️ 핏빛 사슬 — 씬이 시전자→표적 붉은 사슬을 그린다
       chainId: h.chainId || null,
       parryT: r2d(h.parryT),
