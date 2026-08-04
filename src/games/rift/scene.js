@@ -1073,7 +1073,7 @@ export const CLS_SCALE = {
   beastmaster: 1.08, swordmaster: 1.0, engineer: 1.0, snarer: 1.0,
   archer: 0.95, healer: 0.95, mage: 0.95, warlock: 0.95, cryomancer: 0.95, chronomancer: 0.95,
   windcaller: 0.92, assassin: 0.9,
-  terramancer: 1.15, fearmonger: 0.95, illusionist: 0.9, runescribe: 0.95, bloodknight: 1.12,
+  terramancer: 1.15, fearmonger: 0.95, illusionist: 0.9, runescribe: 0.95, bloodknight: 1.12, necromancer: 0.95,
   // 보스전 보스 — 3배급 거체. 얼굴·무기·이름표 높이도 이 배율을 따라간다(buildHero)
   boss_colossus: 2.8, boss_archmage: 2.5, boss_shadow: 2.4, boss_thorn: 2.6,
 }
@@ -2769,6 +2769,18 @@ export function buildClassParts(cls, s, body) {
       eye.position.set(-1.18 * s, 1.25 * s, dz * s)
       body.add(eye)
     }
+  } else if (cls === 'necromancer') {
+    // 어깨 위를 떠도는 보랏빛 원혼 불꽃 두 점 + 등의 해골 장식
+    const soul = new THREE.MeshLambertMaterial({ color: 0x9a6aff, emissive: 0x3a1a7a, emissiveIntensity: 0.7 })
+    for (const sz of [1, -1]) {
+      const flame = new THREE.Mesh(new THREE.SphereGeometry(0.17 * s, 6, 5), soul)
+      flame.scale.set(1, 1.5, 1)
+      flame.position.set(-0.2 * s, 1.9 * s, sz * 0.85 * s)
+      body.add(flame)
+    }
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.26 * s, 8, 6), new THREE.MeshLambertMaterial({ color: 0xe8e2d2 }))
+    skull.position.set(-1.02 * s, 1.35 * s, 0)
+    body.add(skull)
   } else if (cls === 'bloodknight') {
     // 붉은 가시 견갑 + 가슴의 핏빛 문장 — 자기 피로 싸우는 기사
     const iron = new THREE.MeshLambertMaterial({ color: 0x6a5f66, flatShading: true })
@@ -4002,6 +4014,30 @@ function buildWeapon(cls, skinId = null) {
       g.position.x = s * 0.7
       g.rotation.y = s * 1.4 // 교차 베기
     }
+  } else if (cls === 'necromancer') {
+    // 원혼 지팡이: 뒤틀린 자루 끝에 보랏빛 해골 — 그림자를 부르는 물건
+    const bone = new THREE.MeshLambertMaterial({ color: 0xe8e2d2 })
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 1.8), new THREE.MeshLambertMaterial({ color: 0x4a3a52 }))
+    shaft.position.y = 0.4
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), bone)
+    skull.position.y = 1.42
+    skull.scale.set(1, 0.9, 0.85)
+    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.1, 0.24), bone)
+    jaw.position.set(0.06, 1.24, 0)
+    const halo = new THREE.Mesh(
+      new THREE.TorusGeometry(0.36, 0.05, 6, 14),
+      new THREE.MeshLambertMaterial({ color: 0x9a6aff, emissive: 0x3a1a7a, emissiveIntensity: 0.6 })
+    )
+    halo.position.y = 1.42
+    halo.rotation.x = Math.PI / 2
+    g.userData.gem = halo
+    g.add(shaft, skull, jaw, halo)
+    g.position.set(0.5, 0.2, 0.9)
+    g.userData.pose = (t) => {
+      const sw = swing(t)
+      g.rotation.z = 0.25 - sw * 1.0
+      halo.rotation.z += 0.07
+    }
   } else if (cls === 'bloodknight') {
     // 혈검: 검신 중앙에 붉은 혈조(피홈)가 흐르는 육중한 대검
     const steel = new THREE.MeshLambertMaterial({ color: 0xc8ccd8, flatShading: true })
@@ -4956,6 +4992,7 @@ const SUMMON_LOOK = {
   bear: { emoji: '🐻', size: 3.2, body: 0x9b6b4a, r: 1.6, turret: false },
   turret: { emoji: '🔧', size: 1.7, body: 0x8d99b5, r: 1.0, turret: true },
   cannon: { emoji: '💥', size: 2.6, body: 0x6f7a93, r: 1.5, turret: true },
+  shade: { emoji: '👤', size: 2.0, body: 0x4a3f66, r: 1.0, turret: false }, // 강령술사 그림자 병사
 }
 
 function buildSummon(s, barColor) {
@@ -5048,6 +5085,7 @@ const BOLT_STYLE = {
   snarer: { kind: 'seed', color: 0x8ede5a }, // 가시 씨앗
   terramancer: { kind: 'rock', color: 0xd8b088 }, // 자갈
   runescribe: { kind: 'hex', color: 0xff5a7a, glow: 3.0 }, // 붉은 인장 문양탄
+  necromancer: { kind: 'orb', color: 0x9a6aff, glow: 3.2, trail: true }, // 원혼 구슬
   boss_archmage: { kind: 'orb', color: 0xff8c3a, glow: 6.5, trail: true }, // 아르케인 평타 = 대형 화염구(마법사 화염구 확장)
 }
 function buildClassBolt(st) {
@@ -5424,6 +5462,7 @@ const FX_LOOK = {
   bloodslash: { color: 0xd42a2a, ring: true, mode: 'out', pcolor: 0xff6a6a }, // 혈인참 — 붉은 참격 고리
   bloodchain: { color: 0xff4a4a, ring: true, mode: 'in', pcolor: 0xffa0a0 }, // 핏빛 사슬 결속
   bloodrain: { color: 0xb01818, ring: true, mode: 'out', pcolor: 0xff5050 }, // 혈우 — 피의 비
+  shadowrise: { color: 0x7a4ad0, ring: true, mode: 'rise', pcolor: 0xb08aff }, // 그림자 융기 — 땅에서 솟는 원혼
   volley: { color: 0xfff0a0, line: true, mode: 'forward', pcolor: 0xfff4c0, w: 1.4 },
   chain: { color: 0x9fd6ff, line: true, mode: 'forward', pcolor: 0xe0f2ff, w: 1.0 }, // 마법사 체인 라이트닝 — 푸른 번개 줄기
   frost: { color: 0x9fe0ff, line: true, mode: 'forward', pcolor: 0xe0f6ff, w: 3.2 }, // 한빙술사 서리파동 — 차가운 서리 분사
@@ -8927,6 +8966,16 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         const u = obj.userData
         // 분신: 영웅과 같은 몸이라 위치/회전/체력바 + 걷기 다리 흔들기만 얹는다
         if (u.isClone) {
+          if (s.shadow && !u.shadowTinted) { // 💀 그림자 영웅: 원본과 같은 모습이되 회흑빛으로 물들인다
+            u.shadowTinted = true
+            obj.traverse((o) => {
+              if (o.isMesh && o.material?.color) {
+                o.material = o.material.clone()
+                o.material.color.multiplyScalar(0.42)
+                if (o.material.emissive) o.material.emissive.setRGB(0.16, 0.06, 0.3)
+              }
+            })
+          }
           obj.position.set(s.x, 0, s.z)
           u.body.rotation.y = -(s.dir || 0)
           setHpBar(u.bar, s.hp / s.maxHp)
