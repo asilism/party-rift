@@ -3911,3 +3911,30 @@ body {
 .brawl-result-card__btns { display: flex; gap: 10px; justify-content: center; }
 
 .brawl-result-card__drops { margin: -4px 0 10px; font-weight: 700; color: #8a5a06; font-size: 0.92em; }
+
+/* 획득 증강 스트립 — 명패 위 가로줄(무한방어 빌드 한눈에), 탭하면 상세정보 */
+.rift__augstrip {
+  position: absolute; bottom: 74px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 3px; flex-wrap: wrap; justify-content: center; max-width: 46vw;
+  padding: 3px 8px; background: rgba(18, 14, 38, 0.72); border-radius: 12px; cursor: pointer; z-index: 6;
+}
+.rift__augstrip-ic { font-size: 15px; line-height: 1.2; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6)); }
+.rift__augstrip-ic--rare { filter: drop-shadow(0 0 3px #6fb6ff); }
+.rift__augstrip-ic--legendary { filter: drop-shadow(0 0 4px #ffd34d); }
+/* ℹ️ 상세정보 버튼 — 명패 왼쪽 끝 */
+.rift__statbtn {
+  background: none; border: none; font-size: 15px; cursor: pointer; padding: 0 2px 0 0;
+  opacity: 0.85; line-height: 1;
+}
+/* 상세정보 패널 — 스탯 격자 + 증강 목록(탭하면 닫힘) */
+.rift__statpanel {
+  position: absolute; bottom: 108px; left: 50%; transform: translateX(-50%);
+  background: rgba(18, 14, 38, 0.94); border: 1px solid rgba(255,255,255,0.18); border-radius: 14px;
+  padding: 10px 14px; z-index: 7; max-width: min(78vw, 420px); color: #efeaff; font-size: 13px; cursor: pointer;
+}
+.rift__statpanel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; white-space: nowrap; }
+.rift__statpanel-grid b { color: #ffd34d; }
+.rift__statpanel-augs { margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.14); padding-top: 6px; max-height: 30vh; overflow-y: auto; display: grid; gap: 3px; }
+.rift__statpanel-aug { font-size: 12px; opacity: 0.92; }
+.rift__statpanel-aug.is-rare b { color: #8ac8ff; }
+.rift__statpanel-aug.is-legendary b { color: #ffd34d; }
