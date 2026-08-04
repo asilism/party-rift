@@ -1073,7 +1073,7 @@ export const CLS_SCALE = {
   beastmaster: 1.08, swordmaster: 1.0, engineer: 1.0, snarer: 1.0,
   archer: 0.95, healer: 0.95, mage: 0.95, warlock: 0.95, cryomancer: 0.95, chronomancer: 0.95,
   windcaller: 0.92, assassin: 0.9,
-  terramancer: 1.15, fearmonger: 0.95, illusionist: 0.9, runescribe: 0.95,
+  terramancer: 1.15, fearmonger: 0.95, illusionist: 0.9, runescribe: 0.95, bloodknight: 1.12,
   // 보스전 보스 — 3배급 거체. 얼굴·무기·이름표 높이도 이 배율을 따라간다(buildHero)
   boss_colossus: 2.8, boss_archmage: 2.5, boss_shadow: 2.4, boss_thorn: 2.6,
 }
@@ -2769,6 +2769,22 @@ export function buildClassParts(cls, s, body) {
       eye.position.set(-1.18 * s, 1.25 * s, dz * s)
       body.add(eye)
     }
+  } else if (cls === 'bloodknight') {
+    // 붉은 가시 견갑 + 가슴의 핏빛 문장 — 자기 피로 싸우는 기사
+    const iron = new THREE.MeshLambertMaterial({ color: 0x6a5f66, flatShading: true })
+    const blood = new THREE.MeshLambertMaterial({ color: 0xd42a2a, emissive: 0x5a0808, emissiveIntensity: 0.45 })
+    for (const sz of [1, -1]) {
+      const pad = new THREE.Mesh(new THREE.SphereGeometry(0.44 * s, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2), iron)
+      pad.position.set(0, 1.5 * s, sz * 0.95 * s)
+      body.add(pad)
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.12 * s, 0.42 * s, 5), blood)
+      spike.position.set(0, 1.78 * s, sz * 0.95 * s)
+      body.add(spike)
+    }
+    const crest = new THREE.Mesh(new THREE.CylinderGeometry(0.22 * s, 0.22 * s, 0.08 * s, 6), blood)
+    crest.rotation.z = Math.PI / 2
+    crest.position.set(1.02 * s, 1.15 * s, 0)
+    body.add(crest)
   } else if (cls === 'runescribe') {
     // 등 뒤에 떠 있는 붉은 인장 고리 — 문양 술사의 표식
     const runeMat = new THREE.MeshLambertMaterial({ color: 0xff5a7a, emissive: 0x6a0f28, emissiveIntensity: 0.5 })
@@ -3985,6 +4001,33 @@ function buildWeapon(cls, skinId = null) {
       const s = swing(t)
       g.position.x = s * 0.7
       g.rotation.y = s * 1.4 // 교차 베기
+    }
+  } else if (cls === 'bloodknight') {
+    // 혈검: 검신 중앙에 붉은 혈조(피홈)가 흐르는 육중한 대검
+    const steel = new THREE.MeshLambertMaterial({ color: 0xc8ccd8, flatShading: true })
+    const blade = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.26, 2.1, 4), steel)
+    blade.rotation.z = -Math.PI / 2
+    blade.scale.set(0.4, 1, 1.45)
+    blade.position.x = 1.25
+    const fuller = new THREE.Mesh(
+      new THREE.BoxGeometry(1.7, 0.055, 0.1),
+      new THREE.MeshLambertMaterial({ color: 0xd42a2a, emissive: 0x6a0808, emissiveIntensity: 0.55 })
+    )
+    fuller.position.x = 1.15
+    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.2, 0.8), steel)
+    guard.position.x = 0.22
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.5, 8), new THREE.MeshLambertMaterial({ color: 0x5a2020 }))
+    grip.rotation.z = Math.PI / 2
+    grip.position.x = -0.1
+    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), new THREE.MeshLambertMaterial({ color: 0xd42a2a, emissive: 0x7a1010, emissiveIntensity: 0.6 }))
+    pommel.position.x = -0.38
+    g.userData.gem = fuller
+    g.add(blade, fuller, guard, grip, pommel)
+    g.position.set(0.5, 0.2, 0.9)
+    g.userData.pose = (t) => {
+      const sw = swing(t)
+      g.rotation.z = 0.45 - sw * 1.8 // 크게 내려베기
+      g.rotation.y = sw * 0.5
     }
   } else if (cls === 'runescribe') {
     // 인장 필: 붉은 문양이 새겨진 도장 지팡이 — 끝에 육각 인장판이 떠 있다
@@ -5378,6 +5421,9 @@ const FX_LOOK = {
   sigil: { color: 0xff5a7a, line: true, mode: 'forward', pcolor: 0xffb0c0, w: 2.4 }, // 각인사 인장탄 — 붉은 문양 궤적
   sigilspread: { color: 0xff7a9a, ring: true, mode: 'out', pcolor: 0xffc0d0 }, // 각인 확산 — 퍼지는 문양 고리
   sigilburst: { color: 0xff3a5a, ring: true, mode: 'out', pcolor: 0xffd0d8 }, // 파문 기폭 — 문양이 깨진다
+  bloodslash: { color: 0xd42a2a, ring: true, mode: 'out', pcolor: 0xff6a6a }, // 혈인참 — 붉은 참격 고리
+  bloodchain: { color: 0xff4a4a, ring: true, mode: 'in', pcolor: 0xffa0a0 }, // 핏빛 사슬 결속
+  bloodrain: { color: 0xb01818, ring: true, mode: 'out', pcolor: 0xff5050 }, // 혈우 — 피의 비
   volley: { color: 0xfff0a0, line: true, mode: 'forward', pcolor: 0xfff4c0, w: 1.4 },
   chain: { color: 0x9fd6ff, line: true, mode: 'forward', pcolor: 0xe0f2ff, w: 1.0 }, // 마법사 체인 라이트닝 — 푸른 번개 줄기
   frost: { color: 0x9fe0ff, line: true, mode: 'forward', pcolor: 0xe0f6ff, w: 3.2 }, // 한빙술사 서리파동 — 차가운 서리 분사
@@ -7184,6 +7230,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
     tank: { kind: 'heavy', color: 0xffd9a0 }, // 묵직한 한 방 — 넓고 느긋한 호
     guardian: { kind: 'heavy', color: 0xfff0b8 },
     gladiator: { kind: 'heavy', color: 0xffc9a0 },
+    bloodknight: { kind: 'heavy', color: 0xff5a5a }, // 혈기사 — 붉은 대검 궤적
     swordmaster: { kind: 'arc', color: 0xbfe8ff, r: 1.25 }, // 검성 — 길고 시린 검격
   }
   const trailArcGeo = new THREE.TorusGeometry(2.5, 0.38, 5, 22, Math.PI * 0.8)
@@ -7258,6 +7305,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const brawlUps = [] // 텍스트 팝업(1UP·콤보·SMASH) {spr, t, x, z}
   const brawlBursts = [] // 💥 타격 버스트 {spr, t, dur}
   const brawlSanctObjs = new Map() // 🛡️ 성역 돔 — 히어로 id → 월드 고정 반구
+  const brawlChainObjs = new Map() // ⛓️ 핏빛 사슬 — 시전자 id → 두 영웅을 잇는 실린더
   const brawlPillarObjs = new Map() // 🪨 달리는 감옥 기둥 — id → 돌기둥
   const brawlWedges = [] // 피니셔 쐐기 {g, t, dur}
   function brawlWedge(x, z, ang) {
@@ -7437,6 +7485,34 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       }
       for (const [pid, o] of brawlPillarObjs) {
         if (!seenPl.has(pid)) { scene.remove(o); disposeObject(o); brawlPillarObjs.delete(pid) }
+      }
+      // ⛓️ 핏빛 사슬 — 혈기사와 표적을 잇는 붉은 사슬(끊기면 즉시 사라진다)
+      const seenChain = new Set()
+      for (const ch of view.heroes) {
+        if (!((ch.chainT || 0) > 0) || !ch.chainId) continue
+        const tgt = view.heroes.find((o) => o.id === ch.chainId)
+        if (!tgt) continue
+        seenChain.add(ch.id)
+        let link = brawlChainObjs.get(ch.id)
+        if (!link) {
+          link = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.16, 0.16, 1, 6),
+            new THREE.MeshBasicMaterial({ color: 0xff3a3a, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending })
+          )
+          scene.add(link)
+          brawlChainObjs.set(ch.id, link)
+        }
+        const from = new THREE.Vector3(ch.x, 2.2, ch.z)
+        const to = new THREE.Vector3(tgt.x, 2.2, tgt.z)
+        const dv = to.clone().sub(from)
+        const dl = Math.max(0.2, dv.length())
+        link.position.copy(from.clone().add(dv.clone().multiplyScalar(0.5)))
+        link.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dv.clone().normalize())
+        link.scale.set(1, dl, 1)
+        link.material.opacity = 0.55 + Math.abs(Math.sin(view.time * 9)) * 0.35 // 피가 도는 맥동
+      }
+      for (const [cid, link] of brawlChainObjs) {
+        if (!seenChain.has(cid)) { scene.remove(link); link.geometry.dispose(); link.material.dispose(); brawlChainObjs.delete(cid) }
       }
       // 🛡️ 성역 돔 — 시전 위치에 고정된 금빛 격자 반구(반경 6.2)
       const seenSanct = new Set()

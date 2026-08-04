@@ -5248,3 +5248,109 @@ test('난투전 각인사: 파문이 스택만큼 날려버린다(완인은 피�
   assert.ok(e.knockT > 0, '넉백 발생')
   assert.ok(e.brawlSmashT > 0, '완인은 스매시 피니셔')
 })
+
+// ══════════ 혈기사(bloodknight) — HP 코스트·잃은 체력 비례·핏빛 사슬 ══════════
+
+test('혈기사: 스킬이 자기 체력을 대가로 쓰지만 그걸로 죽지는 않는다', () => {
+  const g = duo('bloodknight', 'tank')
+  startPlaying(g)
+  const b = g.heroes[0]
+  b.x = 0; b.z = 0
+  const hp0 = b.hp
+  castSkill(g, b.id)
+  assert.ok(b.hp < hp0, `혈인참이 피를 먹는다 (${hp0}→${Math.round(b.hp)})`)
+  b.hp = 3 // 빈사에서 연타해도 자멸하지 않아야 한다
+  b.skillCd = 0
+  for (let i = 0; i < 5; i++) { b.skillCd = 0; castSkill(g, b.id) }
+  assert.ok(b.hp >= 1, '코스트로는 절대 죽지 않는다(최소 1)')
+  assert.ok(b.respawnT <= 0, '자멸 없음')
+})
+
+test('혈기사: 잃은 체력이 많을수록 혈인참이 무거워진다', () => {
+  const mk = (hpFrac) => {
+    const g = duo('bloodknight', 'tank')
+    startPlaying(g)
+    const b = g.heroes[0]
+    b.x = 0; b.z = 0
+    const m = plantMinion(g, 'red', 3, 0, 90000)
+    b.hp = Math.round(b.maxHp * hpFrac)
+    castSkill(g, b.id)
+    return 90000 - m.hp
+  }
+  const healthy = mk(1.0)
+  const dying = mk(0.15)
+  assert.ok(healthy > 0 && dying > healthy * 1.3, `빈사 보정 (${healthy.toFixed(0)} → ${dying.toFixed(0)})`)
+})
+
+test('혈기사 혈인참: 맞힌 수만큼 피를 되찾는다', () => {
+  const g = duo('bloodknight', 'tank')
+  startPlaying(g)
+  const b = g.heroes[0]
+  b.x = 0; b.z = 0
+  b.hp = Math.round(b.maxHp * 0.5)
+  for (let i = 0; i < 4; i++) plantMinion(g, 'red', 2 + i * 0.5, 0, 90000) // 넉넉히 여러 명
+  const hp0 = b.hp
+  castSkill(g, b.id)
+  assert.ok(b.hp > hp0, `코스트를 치르고도 순증 (${hp0}→${Math.round(b.hp)})`)
+})
+
+test('혈기사 핏빛 사슬: 3초 결속 — 멀어질 수 없고 피가 계속 빨린다', () => {
+  const g = duo('bloodknight', 'tank')
+  startPlaying(g)
+  const [b, t] = g.heroes
+  b.lvl = 18 // 보조 스킬 해금(Lv3+)
+  b.x = 0; b.z = 0
+  t.x = 5; t.z = 0
+  castSkill2(g, b.id)
+  assert.ok(b.chainT > 0 && b.chainId === t.id, '결속 성립')
+  const thp0 = t.hp
+  t.x = 40; t.z = 0 // 도망 시도
+  const far0 = Math.hypot(t.x - b.x, t.z - b.z)
+  run(g, 0.8)
+  const far1 = Math.hypot(t.x - b.x, t.z - b.z)
+  assert.ok(far1 < far0 - 8, `사슬이 도망보다 빠르게 당긴다 (${far0.toFixed(1)}→${far1.toFixed(1)})`) // 실측 ~15/s > 이동속도 13
+  assert.ok(t.hp < thp0, '결속 중 지속 피해')
+  run(g, 3.2)
+  assert.equal(b.chainT, 0, '3초 뒤 자동 해제')
+})
+
+test('혈기사 핏빛 사슬: 묶을 상대가 없으면 피도 쿨도 쓰지 않는다', () => {
+  const g = duo('bloodknight', 'tank')
+  startPlaying(g)
+  const [b, t] = g.heroes
+  b.lvl = 18 // 보조 스킬 해금(Lv3+)
+  b.x = 0; b.z = 0
+  t.x = 60; t.z = 60 // 사거리 밖
+  const hp0 = b.hp
+  b.skill2Cd = 0
+  castSkill2(g, b.id)
+  assert.equal(b.skill2Cd, 0, '불발 — 쿨 유지')
+  assert.equal(b.hp, hp0, '불발 — 피도 안 쓴다')
+})
+
+test('혈기사 혈우: 광역 피해 + 입힌 피해의 절반을 회복한다', () => {
+  const g = duo('bloodknight', 'tank')
+  startPlaying(g)
+  const b = g.heroes[0]
+  b.lvl = 18
+  b.x = 0; b.z = 0
+  b.hp = Math.round(b.maxHp * 0.4)
+  const ms = [0, 1, 2, 3, 4, 5].map((i) => plantMinion(g, 'red', 2 + (i % 3), i - 2, 90000))
+  const hp0 = b.hp
+  const costOnly = hp0 - b.maxHp * 0.2 // 코스트만 치르고 흡혈이 없었다면 남았을 체력
+  b.ultCd = 0
+  castUlt(g, b.id)
+  assert.ok(ms.every((m) => m.hp < 90000), '주변 전원 피해')
+  assert.ok(b.hp > costOnly + 1, `입힌 피해의 절반을 회복 (코스트만이면 ${Math.round(costOnly)} → 실제 ${Math.round(b.hp)})`)
+})
+
+test('난투전 혈기사: 혈우가 주변을 밀어낸다', () => {
+  const g = brawl8('bloodknight')
+  const a = g.heroes[0]
+  const e = g.heroes[1]
+  e.x = a.x + 3; e.z = a.z
+  g.heroes.slice(2).forEach((o) => { o.x = 40; o.z = 40 })
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  assert.ok(e.knockT > 0, '넉백 발생')
+})
