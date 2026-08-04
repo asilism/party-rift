@@ -545,6 +545,7 @@ function RiftPlay({
   const [spectate, setSpectate] = useState(false)
   // ⚡ 번개: 낙뢰 순간 화면 전체가 하얗게 번쩍(짧게 2회 감쇠)
   const [boltFlash, setBoltFlash] = useState(0)
+  const [statOpen, setStatOpen] = useState(false) // ℹ️ 상세정보 패널(스탯 + 획득 증강)
   const boltSeqRef = useRef(0)
   useEffect(() => {
     const seq = (hud?.brawlBoltSeq || 0) + (hud?.brawlNukeSeq || 0) // 번개·핵폭발 공용 섬광
@@ -760,9 +761,41 @@ function RiftPlay({
           )}
         </div>
 
+        {/* 획득 증강 스트립 — 명패 바로 위, 무한방어에서 쌓이는 빌드가 한눈에 */}
+        {me && !finished && (me.augments?.length || 0) > 0 && (
+          <div className="rift__augstrip" onClick={() => setStatOpen((v) => !v)} title={t('탭하면 상세정보')}>
+            {me.augments.map((id, i) => (
+              <span key={i} className={`rift__augstrip-ic rift__augstrip-ic--${AUG_BY_ID[id]?.rarity || 'common'}`}>
+                {AUG_BY_ID[id]?.icon || '❓'}
+              </span>
+            ))}
+          </div>
+        )}
+        {/* ℹ️ 상세정보 패널 — 최종 스탯 + 획득 증강 목록 */}
+        {me && !finished && statOpen && (
+          <div className="rift__statpanel" onClick={() => setStatOpen(false)}>
+            <div className="rift__statpanel-grid">
+              <span>⚔️ {t('공격력')} <b>{me.stat?.atk}</b></span>
+              <span>🔮 {t('주문력')} <b>{me.stat?.power}</b></span>
+              <span>❤️ {t('최대 체력')} <b>{me.maxHp}</b></span>
+              <span>👟 {t('이동 속도')} <b>{(+me.stat?.speed || 0).toFixed(1)}</b></span>
+              <span>⏱️ {t('쿨다운 감소')} <b>{me.stat?.cdr}%</b></span>
+              <span>🛡️ {t('피해 감소')} <b>{me.stat?.def}%</b></span>
+            </div>
+            {(me.augments?.length || 0) > 0 && (
+              <div className="rift__statpanel-augs">
+                {me.augments.map((id, i) => {
+                  const a = AUG_BY_ID[id]
+                  return a ? <div key={i} className={`rift__statpanel-aug is-${a.rarity}`}>{a.icon} <b>{t(a.name)}</b> — {t(a.desc)}</div> : null
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {/* 하단 중앙: 내 영웅 명패 — 캐릭터/직업/레벨/HP/경험치 */}
         {me && !finished && (
           <div className="rift__me rift__nameplate">
+            <button className="rift__statbtn" onClick={() => setStatOpen((v) => !v)} title={t('상세정보')}>ℹ️</button>
             <span className="rift__me-emoji">{getZodiac(me.zodiacId)?.emoji}</span>
             <span className="rift__me-cls">{CLASSES[me.cls]?.icon}{t(CLASSES[me.cls]?.name)}</span>
             <span className="rift__me-lvl">Lv.{me.lvl}</span>

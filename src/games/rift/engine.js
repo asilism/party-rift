@@ -9499,6 +9499,13 @@ export function makeView(state) {
       enhanceSlot: h.enhanceSlot ?? -1,
       enhanceOk: !!h.enhanceOk,
       augments: h.augments ? h.augments.slice() : [], // 획득 증강(복사 — 앨리어싱 회피)
+      stat: { // 상세정보 패널용 최종 스탯 스냅샷(아이템·증강·세트 전부 반영된 값)
+        atk: Math.round(heroAtk(h)),
+        power: Math.round(spellPower(h)),
+        speed: r2d(heroSpeed(h)),
+        cdr: Math.round(cdrOf(h) * 100),
+        def: Math.round(Math.min(0.85, itemBonus(h).def + augOf(h).def + trophyFx(h).def) * 100),
+      },
       augStacks: r2d(h.augStacks || 0), // 파도 누적 공격 배율(HUD 표시용)
       augDraw: h.augDraw ? { choices: h.augDraw.choices.slice(), seq: h.augDraw.seq } : null, // 대기 중 뽑기
       power: Math.round(powerStat(h)), // 스킬 계수가 곱해지는 주력 스탯(공격력/주문력) — 툴팁 계산용
