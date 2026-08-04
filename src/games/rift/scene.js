@@ -1073,7 +1073,7 @@ export const CLS_SCALE = {
   beastmaster: 1.08, swordmaster: 1.0, engineer: 1.0, snarer: 1.0,
   archer: 0.95, healer: 0.95, mage: 0.95, warlock: 0.95, cryomancer: 0.95, chronomancer: 0.95,
   windcaller: 0.92, assassin: 0.9,
-  terramancer: 1.15, fearmonger: 0.95, illusionist: 0.9, runescribe: 0.95, bloodknight: 1.12, necromancer: 0.95,
+  terramancer: 1.15, fearmonger: 0.95, illusionist: 0.9, runescribe: 0.95, bloodknight: 1.12, necromancer: 0.95, dreameater: 0.92,
   // 보스전 보스 — 3배급 거체. 얼굴·무기·이름표 높이도 이 배율을 따라간다(buildHero)
   boss_colossus: 2.8, boss_archmage: 2.5, boss_shadow: 2.4, boss_thorn: 2.6,
 }
@@ -2769,6 +2769,23 @@ export function buildClassParts(cls, s, body) {
       eye.position.set(-1.18 * s, 1.25 * s, dz * s)
       body.add(eye)
     }
+  } else if (cls === 'dreameater') {
+    // 등의 작은 몽마 날개 + 머리의 뿔 — 꿈으로 홀리는 자
+    const wingMat = new THREE.MeshLambertMaterial({ color: 0x8a5ad0, side: THREE.DoubleSide, flatShading: true })
+    for (const sz of [1, -1]) {
+      const wing = new THREE.Mesh(new THREE.ConeGeometry(0.5 * s, 1.1 * s, 3), wingMat)
+      wing.position.set(-0.9 * s, 1.6 * s, sz * 0.5 * s)
+      wing.rotation.set(Math.PI / 2, 0, sz * 0.6)
+      wing.scale.z = 0.3
+      body.add(wing)
+    }
+    const hornMat = new THREE.MeshLambertMaterial({ color: 0xff8ad0, emissive: 0x6a1a4a, emissiveIntensity: 0.4 })
+    for (const sz of [1, -1]) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.11 * s, 0.4 * s, 5), hornMat)
+      horn.position.set(0.1 * s, 2.0 * s, sz * 0.42 * s) // 얼굴 영역(2.1s) 아래로 — 파츠 규약
+      horn.rotation.z = -sz * 0.25
+      body.add(horn)
+    }
   } else if (cls === 'necromancer') {
     // 어깨 위를 떠도는 보랏빛 원혼 불꽃 두 점 + 등의 해골 장식
     const soul = new THREE.MeshLambertMaterial({ color: 0x9a6aff, emissive: 0x3a1a7a, emissiveIntensity: 0.7 })
@@ -4014,6 +4031,26 @@ function buildWeapon(cls, skinId = null) {
       g.position.x = s * 0.7
       g.rotation.y = s * 1.4 // 교차 베기
     }
+  } else if (cls === 'dreameater') {
+    // 몽환의 초승달 지팡이: 가느다란 자루 끝에 분홍 초승달과 떠도는 꿈 방울
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.75), new THREE.MeshLambertMaterial({ color: 0x5a4a72 }))
+    rod.position.y = 0.4
+    const moon = new THREE.Mesh(
+      new THREE.TorusGeometry(0.32, 0.09, 6, 16, Math.PI * 1.25),
+      new THREE.MeshLambertMaterial({ color: 0xff8ad0, emissive: 0x7a1a5a, emissiveIntensity: 0.6 })
+    )
+    moon.position.y = 1.4
+    moon.rotation.z = 0.5
+    const bead = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), new THREE.MeshLambertMaterial({ color: 0xffd0ea, emissive: 0x9a3a7a, emissiveIntensity: 0.7 }))
+    bead.position.set(0.28, 1.2, 0)
+    g.userData.gem = moon
+    g.add(rod, moon, bead)
+    g.position.set(0.5, 0.2, 0.9)
+    g.userData.pose = (t) => {
+      const sw = swing(t)
+      g.rotation.z = 0.35 - sw * 1.1
+      moon.rotation.z += 0.05
+    }
   } else if (cls === 'necromancer') {
     // 원혼 지팡이: 뒤틀린 자루 끝에 보랏빛 해골 — 그림자를 부르는 물건
     const bone = new THREE.MeshLambertMaterial({ color: 0xe8e2d2 })
@@ -5086,6 +5123,7 @@ const BOLT_STYLE = {
   terramancer: { kind: 'rock', color: 0xd8b088 }, // 자갈
   runescribe: { kind: 'hex', color: 0xff5a7a, glow: 3.0 }, // 붉은 인장 문양탄
   necromancer: { kind: 'orb', color: 0x9a6aff, glow: 3.2, trail: true }, // 원혼 구슬
+  dreameater: { kind: 'orb', color: 0xff8ad0, glow: 3.4, trail: true }, // 몽마 — 분홍 꿈 구슬
   boss_archmage: { kind: 'orb', color: 0xff8c3a, glow: 6.5, trail: true }, // 아르케인 평타 = 대형 화염구(마법사 화염구 확장)
 }
 function buildClassBolt(st) {
@@ -5463,6 +5501,10 @@ const FX_LOOK = {
   bloodchain: { color: 0xff4a4a, ring: true, mode: 'in', pcolor: 0xffa0a0 }, // 핏빛 사슬 결속
   bloodrain: { color: 0xb01818, ring: true, mode: 'out', pcolor: 0xff5050 }, // 혈우 — 피의 비
   shadowrise: { color: 0x7a4ad0, ring: true, mode: 'rise', pcolor: 0xb08aff }, // 그림자 융기 — 땅에서 솟는 원혼
+  charmcast: { color: 0xff8ad0, ring: true, mode: 'out', pcolor: 0xffd0ea }, // 매혹 시전
+  charmhit: { color: 0xff5ab0, ring: true, mode: 'in', pcolor: 0xffc0e0 }, // 매혹 명중 — 홀린다
+  mist: { color: 0xc9a0ff, line: true, mode: 'forward', pcolor: 0xe8d0ff, w: 4.5 }, // 미혹의 안개
+  dream: { color: 0xb06aff, ring: true, mode: 'out', pcolor: 0xe0b0ff }, // 꿈의 영토 개시
   volley: { color: 0xfff0a0, line: true, mode: 'forward', pcolor: 0xfff4c0, w: 1.4 },
   chain: { color: 0x9fd6ff, line: true, mode: 'forward', pcolor: 0xe0f2ff, w: 1.0 }, // 마법사 체인 라이트닝 — 푸른 번개 줄기
   frost: { color: 0x9fe0ff, line: true, mode: 'forward', pcolor: 0xe0f6ff, w: 3.2 }, // 한빙술사 서리파동 — 차가운 서리 분사
@@ -7344,6 +7386,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const brawlUps = [] // 텍스트 팝업(1UP·콤보·SMASH) {spr, t, x, z}
   const brawlBursts = [] // 💥 타격 버스트 {spr, t, dur}
   const brawlSanctObjs = new Map() // 🛡️ 성역 돔 — 히어로 id → 월드 고정 반구
+  const dreamZoneObjs = new Map() // 🌙 꿈의 영토 — 몽마 id → 보랏빛 원판
   const brawlChainObjs = new Map() // ⛓️ 핏빛 사슬 — 시전자 id → 두 영웅을 잇는 실린더
   const brawlPillarObjs = new Map() // 🪨 달리는 감옥 기둥 — id → 돌기둥
   const brawlWedges = [] // 피니셔 쐐기 {g, t, dur}
@@ -7524,6 +7567,36 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       }
       for (const [pid, o] of brawlPillarObjs) {
         if (!seenPl.has(pid)) { scene.remove(o); disposeObject(o); brawlPillarObjs.delete(pid) }
+      }
+      // 🌙 꿈의 영토 — 보랏빛 원판이 천천히 돌며 숨쉰다(안에 있는 적은 자기 편을 때린다)
+      const seenDream = new Set()
+      for (const dh of view.heroes) {
+        if (!((dh.dreamT || 0) > 0)) continue
+        seenDream.add(dh.id)
+        let zone = dreamZoneObjs.get(dh.id)
+        if (!zone) {
+          zone = new THREE.Group()
+          const disc = new THREE.Mesh(
+            new THREE.CircleGeometry(7, 40),
+            new THREE.MeshBasicMaterial({ color: 0xb06aff, transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+          )
+          disc.rotation.x = -Math.PI / 2
+          const rim = new THREE.Mesh(
+            new THREE.RingGeometry(6.6, 7.2, 44),
+            new THREE.MeshBasicMaterial({ color: 0xe0b0ff, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
+          )
+          rim.rotation.x = -Math.PI / 2
+          zone.add(disc, rim)
+          zone.userData.disc = disc
+          scene.add(zone)
+          dreamZoneObjs.set(dh.id, zone)
+        }
+        zone.position.set(dh.dreamX || dh.x, 0.14, dh.dreamZ || dh.z)
+        zone.rotation.y = view.time * 0.4
+        zone.userData.disc.material.opacity = 0.15 + Math.abs(Math.sin(view.time * 2.2)) * 0.12
+      }
+      for (const [did, zone] of dreamZoneObjs) {
+        if (!seenDream.has(did)) { scene.remove(zone); disposeObject(zone); dreamZoneObjs.delete(did) }
       }
       // ⛓️ 핏빛 사슬 — 혈기사와 표적을 잇는 붉은 사슬(끊기면 즉시 사라진다)
       const seenChain = new Set()
@@ -8350,6 +8423,20 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             u.angelMark.position.set(0, (8 + Math.sin(view.time * 3) * 0.4) * ainv, 0)
             u.angelMark.material.opacity = h.brawlAngelT > 1.2 ? 0.95 : 0.4 + Math.abs(Math.sin(view.time * 8)) * 0.5 // 끝나기 직전 깜빡
           } else if (u.angelMark) u.angelMark.visible = false
+          // 🌙 매혹 표식 — 홀린 적 머리 위에 분홍 하트가 맴돈다
+          if ((h.charmT || 0) > 0) {
+            if (!u.charmMark) {
+              u.charmMark = emojiSprite('💗', 2.2)
+              u.charmMark.material.depthTest = false
+              u.charmMark.renderOrder = 5
+              obj.add(u.charmMark)
+            }
+            u.charmMark.visible = true
+            const cinv = 1 / Math.max(0.3, obj.scale.x)
+            const cs = (2.0 + Math.sin(view.time * 8) * 0.25) * cinv
+            u.charmMark.scale.set(cs, cs, 1)
+            u.charmMark.position.set(0, 6.8 * cinv, 0)
+          } else if (u.charmMark) u.charmMark.visible = false
           // 🔯 각인사 인장 — 스택이 쌓일수록 문양이 커지고, 완인(5)이면 붉게 맥동한다
           if ((h.runeN || 0) > 0) {
             if (!u.runeMark) {
