@@ -5354,3 +5354,90 @@ test('난투전 혈기사: 혈우가 주변을 밀어낸다', () => {
   castUlt(g, a.id)
   assert.ok(e.knockT > 0, '넉백 발생')
 })
+
+// ══════════ 강령술사(necromancer) — 그림자 병사·사역 ══════════
+
+test('강령술사 그림자 소환: 최대 3기 — 넘치면 가장 오래된 것이 흩어진다', () => {
+  const g = duo('necromancer', 'tank')
+  startPlaying(g)
+  const n = g.heroes[0]
+  for (let i = 0; i < 5; i++) { n.skillCd = 0; castSkill(g, n.id) }
+  const mine = g.summons.filter((su) => su.owner === n.id && su.kind === 'shade')
+  assert.equal(mine.length, 3, '상한 3기 유지')
+})
+
+test('강령술사: 처치한 적 영웅을 기억했다가 그림자로 되살린다', () => {
+  const g = duo('necromancer', 'archer')
+  startPlaying(g)
+  const [n, foe] = g.heroes
+  n.lvl = 18
+  n.x = 0; n.z = 0
+  foe.x = 3; foe.z = 0
+  foe.hp = 1 // 평타 한 방에 쓰러진다
+  castAttack(g, n.id)
+  run(g, 0.8)
+  assert.ok(n.lastSlainHero && n.lastSlainHero.cls === 'archer', '처치 기록 저장')
+  n.ultCd = 0
+  castUlt(g, n.id)
+  const shadow = g.summons.find((su) => su.shadowHero)
+  assert.ok(shadow, '그림자 영웅 소환')
+  assert.equal(shadow.cls, 'archer', '처치한 적의 직업 그대로')
+  assert.equal(shadow.range, CLASSES.archer.range, '그 직업의 평타 사거리를 쓴다')
+  assert.ok(shadow.name.includes('그림자'), `이름은 그림자 ○○ (${shadow.name})`)
+})
+
+test('강령술사 그림자 사역: 처치 기록이 없으면 그림자 병사 3기로 대신한다(불발 없음)', () => {
+  const g = duo('necromancer', 'tank')
+  startPlaying(g)
+  const n = g.heroes[0]
+  n.lvl = 18
+  n.ultCd = 0
+  castUlt(g, n.id)
+  assert.ok(n.ultCd > 0, '불발이 아니다 — 쿨 사용')
+  assert.equal(g.summons.filter((su) => su.kind === 'shade').length, 3, '그림자 병사 3기')
+})
+
+test('강령술사 그림자 쇄도: 그림자가 없으면 쿨을 안 쓴다', () => {
+  const g = duo('necromancer', 'tank')
+  startPlaying(g)
+  const n = g.heroes[0]
+  n.lvl = 18
+  n.skill2Cd = 0
+  castSkill2(g, n.id)
+  assert.equal(n.skill2Cd, 0, '부릴 그림자가 없으면 불발')
+  n.skillCd = 0
+  castSkill(g, n.id) // 하나 소환하고 나면
+  castSkill2(g, n.id)
+  assert.ok(n.skill2Cd > 0, '그림자가 있으면 발동')
+  assert.ok(g.summons.some((su) => su.owner === n.id && su.chargeT > 0), '광폭화 부여')
+})
+
+test('강령술사 원혼의 손길: 평타가 그림자의 수명을 붙든다', () => {
+  const g = duo('necromancer', 'tank')
+  startPlaying(g)
+  const [n, t] = g.heroes
+  n.x = 0; n.z = 0
+  t.x = 5; t.z = 0
+  n.skillCd = 0
+  castSkill(g, n.id)
+  const shade = g.summons.find((su) => su.kind === 'shade')
+  const life0 = shade.life
+  castAttack(g, n.id)
+  run(g, 0.5) // 명중 — 수명 +0.4, 그동안 자연 감소 0.5
+  assert.ok(shade.life > life0 - 0.5, `수명 연장 (${life0.toFixed(1)}→${shade.life.toFixed(1)})`)
+})
+
+test('난투전 강령술사: 그림자 영웅의 평타가 적을 밀어낸다', () => {
+  const g = brawl8('necromancer')
+  const a = g.heroes[0]
+  const e = g.heroes[1]
+  a.lastSlainHero = { cls: 'warrior', zodiacId: 'ox', name: '소봇' }
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  const shadow = g.summons.find((su) => su.shadowHero)
+  assert.ok(shadow, '그림자 영웅 소환')
+  e.x = shadow.x + 1.5; e.z = shadow.z
+  e.brawlGuardT = 0
+  run(g, 1.5) // 그림자가 평타를 친다
+  assert.ok(e.knockT > 0 || Math.hypot(e.x - shadow.x, e.z - shadow.z) > 1.5, '평타에 밀려난다')
+})

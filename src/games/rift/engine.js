@@ -101,6 +101,7 @@ const ROLE_PREF = {
   terramancer: ['top', 'support', 'mid', 'bot'], // 지형 브루저 — 탑/지원
   runescribe: ['mid', 'bot', 'top'], // 인장 콤보 메이지 — 미드
   bloodknight: ['top', 'jungle', 'mid', 'bot'], // 자해 브루저 — 탑/정글
+  necromancer: ['mid', 'jungle', 'bot', 'top'], // 그림자 소환사 — 미드/정글
 }
 // 한 봇에게 그 모드의 역할 풀에서 직업 선호에 맞는 빈 역할을 고른다(겹치면 다음 후보 → 남은 자리).
 function pickRole(cls, mode, taken) {
@@ -273,6 +274,13 @@ export const CLASSES = {
     skill2: { name: '핏빛 사슬', icon: '⛓️', cd: 16, desc: '체력 10%를 대가로 적 하나와 3초간 피의 사슬로 묶는다 — 멀어질 수 없고 계속 피를 빨아들인다' },
     ult: { name: '혈우', icon: '🌧️', cd: 60, desc: '체력 20%를 대가로 주변에 피의 비를 뿌린다 — 광역 대피해 + 입힌 피해의 절반을 회복(다수에게 맞히면 만신창이에서 부활한다)' },
   },
+  necromancer: {
+    name: '강령술사', icon: '💀', desc: '그림자를 부리는 소환 술사 — 마지막으로 쓰러뜨린 적을 그림자로 되살려 그 무기를 그대로 쓰게 만든다',
+    hp: 490, hpLvl: 54, atk: 42, atkLvl: 6, range: 9.5, atkCd: 1.0, speed: 12.0,
+    skill: { name: '그림자 소환', icon: '👤', cd: 10, desc: '그림자 병사를 불러낸다 — 최대 3기까지 거느린다(넘치면 가장 오래된 것이 흩어진다)' },
+    skill2: { name: '그림자 쇄도', icon: '🌑', cd: 14, desc: '거느린 그림자 전원이 적에게 달려든다 — 광폭화(공속↑)와 함께 도약' },
+    ult: { name: '그림자 사역', icon: '💀', cd: 65, desc: '마지막으로 처치한 적 영웅을 "그림자 ○○"로 되살려 20초간 부린다 — 그 직업의 평타를 그대로 쓴다(처치 기록이 없으면 그림자 병사 3기)' },
+  },
   // ── 보스전(5:1) 전용 보스 — boss:true는 선택 목록(CLASS_IDS)에서 제외되고 3배 덩치로 그려진다 ──
   boss_colossus: {
     boss: true, name: '파멸의 거인', icon: '👹',
@@ -325,6 +333,7 @@ export const CLASS_ROLE = {
   healer: 'support', guardian: 'support',
   runescribe: 'mage',
   bloodknight: 'fighter',
+  necromancer: 'mage',
   assassin: 'jungle', catcher: 'jungle', snarer: 'jungle', chronomancer: 'jungle', illusionist: 'jungle',
 }
 // 봇 팀이 채우고 싶어하는 역할 우선순위(앞에서부터 한 자리씩) — 균형 잡힌 조합.
@@ -357,6 +366,7 @@ export const ABILITY_SCALING = {
   terramancer: { skill: { dmg: [30, 0.55], note: '0.5초 간격 3연투 · 각도는 첫 발에 고정' }, skill2: { dmg: [15, 0.25], note: '벽 명중 시 1.5초 기절 + 3초 길막' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
   runescribe: { skill: { dmg: [26, 0.45], note: '관통 · 인장 3스택' }, skill2: { note: '인장 최다 표적의 스택을 주변에 복제' }, ult: { dmg: [30, 0.5], note: '인장 1스택당 피해 · 처치 시 스택이 주변으로 전이' } },
   bloodknight: { skill: { dmg: [40, 0.85], note: '체력 6% 소모 · 잃은 체력만큼 최대 +60% · 맞힌 수만큼 흡혈' }, skill2: { dot: [12, 0.18], dotDur: 3, note: '체력 10% 소모 · 3초 결속(멀어질 수 없음) + 흡혈' }, ult: { dmg: [70, 1.05], note: '체력 20% 소모 · 입힌 피해의 50% 회복' } },
+  necromancer: { skill: { note: '그림자 병사 1기 소환(최대 3 · 10초)' }, skill2: { note: '그림자 전원 광폭화 + 적에게 도약' }, ult: { note: '마지막 처치 영웅을 그림자로 20초 사역(없으면 그림자 3기)' } },
 }
 
 // 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 하이브리드는 공·주 평균, 그 외는 공격력.
@@ -593,11 +603,16 @@ const SUMMON_SPEC = {
   // 미니포탑: 주인이 사거리 안에 없으면 잠시 뒤 휴면(zzz). 수명 없음 — 부서지거나 회수 전까지 자리를 지킨다
   turret: { hp: 90, hpCoef: 2.5, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity }, // 초반 ~210(4.7대) → 후반 ~490(3.3대)
   cannon: { hp: 480, hpCoef: 3.0, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 }, // 초반 ~620(13.7대) → 후반 ~960(6.4대)
+  // 강령술사 그림자 병사: 약하지만 셋씩 몰려다닌다(자원이 아니라 쿨로 뽑는다)
+  shade: { hp: 150, hpCoef: 2.0, dmg: 24, coef: 0.14, range: 2.6, aggro: 16, speed: 9.8, mobile: true, cd: 1.0, life: 10 },
   // 야수조련사 난투전 궁 전용: 진짜 용 — 크고 아프고 짧게 산다
   dragonpet: { hp: 300, hpCoef: 2.0, dmg: 36, coef: 0.15, range: 4.4, aggro: 22, speed: 8.2, mobile: true, cd: 1.6, life: 7 }, // 시뮬 승률 편중 반복 너프(2026-08-03, 최종 50%→)
 }
 const BEAST_LEAP_DUR = 0.45 // 사냥 명령 시 야수가 적에게 달려드는(도약) 시간 — 거리 무시
 const BEAST_WOLVES = 2 // 야수조련사 늑대 소환 마릿수
+const NECRO_MAX_SHADES = 3 // 강령술사가 동시에 거느리는 그림자 병사 수(초과 시 가장 오래된 것이 흩어진다)
+const NECRO_SHADOW_LIFE = 20 // 그림자 영웅(궁) 수명
+const NECRO_SHADOW_ATK = 0.9 // 그림자 영웅 평타 = 시전자 공격력의 이 비율
 const ENGI_MAX_TURRETS = 3 // 엔지니어가 동시에 둘 수 있는 미니포탑 수(초과 시 가장 오래된 것 회수)
 const ENGI_IDLE_GRACE = 3 // 주인이 죽거나 사거리 밖으로 나가도 이 시간(초) 뒤에야 포탑이 휴면(그 전엔 타이머 표시)
 const OVERCHARGE_T = 4 // 과부하 지속(초)
@@ -840,6 +855,7 @@ function makeHeroState(p, cls, pos, map, rng) {
       fearT: 0, // 공포(공포술사) — 통제 불능: 랜덤 방향 질주, 행동 불가
       fearDir: 0, // 공포 질주 방향(라디안) — FEAR_TURN_T마다 재추첨
       fearTurnT: 0, // 다음 방향 재추첨까지 남은 시간
+      lastSlainHero: null, // 강령술사: 마지막으로 처치한 적 영웅 스냅샷 { cls, zodiacId, name }
       chainT: 0, // 혈기사 핏빛 사슬 — 남은 결속 시간(>0이면 표적과 묶여 있다)
       chainId: null, // 사슬로 묶은 표적 id
       chainTickT: 0, // 다음 사슬 피해까지
@@ -1302,11 +1318,11 @@ function addRune(state, e, n, by) {
 }
 const clearRune = (e) => { e.markStacks = 0; e.markT = 0 }
 
-const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock', 'guardian', 'windcaller', 'chronomancer', 'fearmonger', 'terramancer', 'runescribe'])
+const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock', 'guardian', 'windcaller', 'chronomancer', 'fearmonger', 'terramancer', 'runescribe', 'necromancer'])
 //  하이브리드: 소환수 피해를 공격력·주문력 절반씩으로 키운다(AD/AP 아이템 어느 쪽이든 도움).
 const HYBRID_CLASSES = new Set(['beastmaster', 'engineer'])
-const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46, windcaller: 42, chronomancer: 44, fearmonger: 42, terramancer: 40, runescribe: 41 }
-const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7, windcaller: 10, chronomancer: 10, fearmonger: 10, terramancer: 9, runescribe: 10 }
+const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46, windcaller: 42, chronomancer: 44, fearmonger: 42, terramancer: 40, runescribe: 41, necromancer: 43 }
+const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7, windcaller: 10, chronomancer: 10, fearmonger: 10, terramancer: 9, runescribe: 10, necromancer: 9 }
 const spellPower = (h) =>
   ((SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power) * (h.statMul || 1) * (1 + augOf(h).powerMul) * (1 + trophyFx(h).powerMul)
 // 쿨다운 감소: 아이템 + 증강(가산), 실효 상한 0.6
@@ -2232,6 +2248,18 @@ const SKILLS = {
     }
     pushFx(state, 'bloodslash', h.x, h.z, BLOOD_SLASH_R, h.team, 0.7)
   },
+  // 강령술사 그림자 소환: 그림자 병사 1기 — 상한을 넘으면 가장 오래된 것이 먼저 흩어진다
+  necromancer(state, h) {
+    const mine = state.summons.filter((su) => su.owner === h.id && su.kind === 'shade')
+    if (mine.length >= NECRO_MAX_SHADES) {
+      const oldest = mine.reduce((a, b) => (a.life <= b.life ? a : b))
+      state.summons = state.summons.filter((su) => su !== oldest)
+      pushFx(state, 'poof', oldest.x, oldest.z, 1.8, h.team, 0.5)
+    }
+    const a = h.dir + (state.rng() - 0.5) * 1.2
+    spawnSummon(state, h, 'shade', h.x + Math.cos(a) * 2.4, h.z + Math.sin(a) * 2.4)
+    pushFx(state, 'shadowrise', h.x, h.z, 3.2, h.team, 0.8)
+  },
 }
 
 // ── 궁극기 (레벨 3부터) ──
@@ -2777,6 +2805,30 @@ const ULTS = {
     }
     pushFx(state, 'bloodrain', h.x, h.z, BLOOD_RAIN_R, h.team, 1.1)
   },
+  // 강령술사 그림자 사역: 마지막으로 쓰러뜨린 적 영웅을 그림자로 되살린다 —
+  //  겉모습·평타 사거리·공속을 그 직업 그대로 쓰고(전투 분신 문법), 펫처럼 나를 따라다닌다.
+  necromancer(state, h) {
+    const sl = h.lastSlainHero
+    if (!sl || !CLASSES[sl.cls]) { // 처치 기록이 없으면 그림자 병사 셋으로 대신한다(불발 없음)
+      for (let k = 0; k < 3; k++) {
+        const a = h.dir + (k - 1) * 0.8
+        spawnSummon(state, h, 'shade', h.x + Math.cos(a) * 2.6, h.z + Math.sin(a) * 2.6)
+      }
+      pushFx(state, 'shadowrise', h.x, h.z, 5, h.team, 1.0)
+      return
+    }
+    const sc = spawnClone(state, h, h.dir, true, 2.6)
+    sc.cls = sl.cls // 겉모습·평타 규격을 처치당한 그 적에게서 가져온다
+    sc.zodiacId = sl.zodiacId
+    sc.name = `그림자 ${sl.name}`
+    sc.range = CLASSES[sl.cls].range
+    sc.cd = CLASSES[sl.cls].atkCd
+    sc.dmg = Math.round(atkOf(h) * NECRO_SHADOW_ATK)
+    sc.life = NECRO_SHADOW_LIFE
+    sc.shadowHero = true
+    pushFx(state, 'shadowrise', sc.x, sc.z, 5, h.team, 1.1)
+    pushFeed(state, 'obj', `💀 ${h.name} — 그림자 ${sl.name}을(를) 일으켰다!`)
+  },
 }
 
 // 사슬갈고리 발사: 발사 준비(hookWindT)가 끝났을 때 호출 — 고정 방향(hookDir)으로 직진 투사체.
@@ -3192,6 +3244,29 @@ const SKILLS2 = {
     h.chainDmg = Math.round(skillDmg(h, 12, 0.18)) // 틱 피해 — 시전 시점 스냅샷
     pushFx(state, 'bloodchain', foe.x, foe.z, 2.4, h.team, 0.8)
   },
+  // 강령술사 그림자 쇄도: 거느린 그림자 전원이 광폭화하며 적에게 달려든다(야수조련사 사냥 명령 문법)
+  necromancer(state, h) {
+    let n = 0
+    for (const su of state.summons) {
+      if (su.owner !== h.id) continue
+      su.chargeT = OVERCHARGE_T
+      const found = nearestLeapTarget(state, su, su.aggro + 6) // 그림자는 더 멀리서도 달려든다
+      if (found) {
+        const t = found.target
+        su.dir = Math.atan2(t.z - su.z, t.x - su.x)
+        su.leapFrom = { x: su.x, z: su.z }
+        su.leapTo = { x: t.x, z: t.z }
+        su.leapTargetId = t.id
+        su.leapTk = found.tk
+        su.leapT = BEAST_LEAP_DUR
+        su.leapDur = BEAST_LEAP_DUR
+        pushFx(state, 'haste', su.x, su.z, 2, su.team)
+      }
+      n++
+    }
+    if (n === 0) return false // 부릴 그림자가 없으면 쿨을 안 쓴다
+    pushFx(state, 'shadowrise', h.x, h.z, 4, h.team, 0.7)
+  },
 }
 
 // 술식 공통: 판정 함수 pred(e)에 걸리는 모든 적(영웅/병사/정글몹)에게 피해(+기절/빙결/속박)
@@ -3506,6 +3581,10 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   const killer = recent
     ? state.heroes.find((h) => h.id === victim.lastHitBy && h.team !== victim.team)
     : null
+  // 💀 강령술사: 방금 쓰러뜨린 적을 기억해 둔다 — 궁이 이 모습을 그림자로 되살린다(보스는 제외)
+  if (killer && killer.cls === 'necromancer' && !CLASSES[victim.cls]?.boss) {
+    killer.lastSlainHero = { cls: victim.cls, zodiacId: victim.zodiacId, name: victim.name }
+  }
   // 어시스트: 사망 직전 KILL_CREDIT_T 초 안에 피해를 준 적 영웅(막타=killer 제외).
   const damagers = state.heroes.filter((h) => (
     h !== killer && h.team !== victim.team &&
@@ -5600,6 +5679,9 @@ function stepProjectiles(state, dt) {
       let ls = p.kind === 'bolt' && owner.items ? itemBonus(owner).lifesteal : 0
       if (p.kind === 'bolt' && owner.cls === 'gladiator') ls += GLAD_BASIC_LIFESTEAL // 검투사 고유 평타 흡혈
       if (p.kind === 'bolt' && owner.cls === 'bloodknight') ls += BLOOD_BASIC_LIFESTEAL // 🩸 피의 대가
+      if (p.kind === 'bolt' && owner.cls === 'necromancer') { // 💀 원혼의 손길: 평타가 그림자들의 수명을 붙든다
+        for (const su of state.summons) if (su.owner === owner.id) su.life += 0.4
+      }
       if (ls > 0 && owner.respawnT <= 0 && (p.target.tk === 'hero' || p.target.tk === 'minion' || p.target.tk === 'monster')) {
         owner.hp = Math.min(owner.maxHp, owner.hp + lifestealAmount(p.dmg * ls, state)) // 로그 감쇠 적용
       }
@@ -6020,6 +6102,10 @@ function stepSummons(state, dt) {
         s.atkSeq = (s.atkSeq || 0) + 1 // 렌더러 공격 모션 트리거(분신 무기 휘두름 등)
         const att = owner && owner.respawnT <= 0 ? owner : { id: s.owner, team: s.team }
         state._summonHit = true
+        if (state.mode === 'brawl' && s.shadowHero && tk === 'hero' && target.hp > 0
+            && !(target.brawlGuardT > 0) && !(target.brawlStarT > 0) && !(target.brawlMushT > 0)) {
+          applyKnockback(state, target, s.x, s.z, 3.2) // 💀 그림자 반란: 매 타가 적을 밀어낸다
+        }
         if ((s.brawlLaserN || 0) > 0) {
           // 🛰️ 거포 극태 레이저: 조준 직선의 적 전원을 꿰뚫고 날린다 — 발수가 곧 수명
           const glx = Math.cos(s.dir)
@@ -6171,6 +6257,8 @@ const BOT_BUILD = {
   runescribe: ['orb', 'wisdom_hat', 'flame_core', 'void_staff', 'heal_flask'],
   // 혈기사: 자해 브루저 — 공격력 + 흡혈 + 체력(코스트를 감당할 몸)
   bloodknight: ['dagger', 'vampire_scythe', 'berserker_axe', 'giant_heart', 'heal_flask'],
+  // 강령술사: 소환 컨트롤러 — 주문력 + 소환물 강화 + 생존
+  necromancer: ['orb', 'flame_core', 'wisdom_hat', 'guardian_cloak', 'heal_flask'],
 }
 
 // 콜로세움 봇 장보기 순서: 사람의 고승률 트리를 흉내 낸다 —
@@ -9380,6 +9468,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'terramancer' && d < QUAKE_WALL_AHEAD + 2) castSkill2(state, h.id) // 융기 기절 → 돌팔매 연계
     else if (h.cls === 'runescribe' && nearCount >= 2 && runeStacks(state, foe) >= 2) castSkill2(state, h.id) // 뭉친 적에 인장 확산
     else if (h.cls === 'bloodknight' && d < BLOOD_CHAIN_RANGE - 1 && h.hp > h.maxHp * 0.35) castSkill2(state, h.id) // 사슬로 묶어 결투 강제
+    else if (h.cls === 'necromancer' && state.summons.some((su) => su.owner === h.id)) castSkill2(state, h.id) // 그림자 쇄도
   }
   const ready = h.skillCd <= 0
   if (ready) {
@@ -9401,6 +9490,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'terramancer' && d < SLING_RANGE - 2) castSkill(state, h.id) // 돌팔매 3연투
     else if (h.cls === 'runescribe' && d < SIGIL_RANGE - 2) castSkill(state, h.id) // 인장탄으로 스택 적립
     else if (h.cls === 'bloodknight' && d < BLOOD_SLASH_R && h.hp > h.maxHp * 0.2) castSkill(state, h.id) // 혈인참(피가 너무 없으면 자제)
+    else if (h.cls === 'necromancer') castSkill(state, h.id) // 그림자는 쿨마다 채워 둔다
     // 힐러 치유·수호기사 보호막은 stepBots 위쪽에서 항상 챙긴다
   }
   if (h.ultCd > 0 || h.lvl < ULT_LEVEL) return
@@ -9438,6 +9528,8 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     castUlt(state, h.id) // 단말마 — 적진으로 파고들어 광역 공포 이니시
   } else if (h.cls === 'illusionist' && (nearCount >= 1 || h.hp < h.maxHp * 0.5)) {
     castUlt(state, h.id) // 환영난무 — 교란 + 은신
+  } else if (h.cls === 'necromancer' && (h.lastSlainHero || nearCount >= 1)) {
+    castUlt(state, h.id) // 그림자 사역 — 처치 기록이 있으면 바로 되살린다
   } else if (h.cls === 'bloodknight' && d < BLOOD_RAIN_R - 1 && (nearCount >= 2 || h.hp < h.maxHp * 0.55)) {
     castUlt(state, h.id) // 혈우 — 몰렸을 때(또는 다수 명중) 흡혈로 역전
   } else if (h.cls === 'runescribe' && (runeStacks(state, foe) >= 4 || (nearCount >= 2 && runeStacks(state, foe) >= 2))) {
@@ -9954,7 +10046,7 @@ export function makeView(state) {
       hp: Math.ceil(s.hp), maxHp: s.maxHp, charge: s.chargeT > 0 ? 1 : 0, dormant: s.dormant ? 1 : 0,
       // 분신: 렌더러가 본체와 똑같이 그리도록 겉모습을 싣는다 (atkSeq=평타 모션, slam=내리찍기 모션)
       ...(s.kind === 'clone'
-        ? { zodiacId: s.zodiacId, cls: s.cls, name: s.name, lvl: s.lvl, isBot: s.isBot, atkSeq: s.atkSeq || 0, slam: r2d(s.slamT || 0) }
+        ? { zodiacId: s.zodiacId, cls: s.cls, name: s.name, lvl: s.lvl, isBot: s.isBot, atkSeq: s.atkSeq || 0, slam: r2d(s.slamT || 0), shadow: s.shadowHero ? 1 : 0 }
         : null),
       // leap: 도약 진행도(1→0, 점프 모션용) · idle: 포탑 휴면까지 남은 유예 시간(타이머 표시용)
       leap: s.leapT > 0 && s.leapDur > 0 ? r2d(s.leapT / s.leapDur) : 0,
