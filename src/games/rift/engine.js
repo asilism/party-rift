@@ -284,7 +284,7 @@ export const CLASSES = {
   },
   dreameater: {
     name: '몽마', icon: '🌙', desc: '꿈으로 적을 홀리는 제어 술사 — 홀린 적은 나에게 걸어오고, 꿈의 영토 안에서는 자기 편을 때린다',
-    hp: 470, hpLvl: 52, atk: 38, atkLvl: 5, range: 10, atkCd: 1.0, speed: 12.4,
+    hp: 470, hpLvl: 52, atk: 43, atkLvl: 6, range: 10, atkCd: 1.0, speed: 12.4,
     skill: { name: '매혹의 입맞춤', icon: '💋', cd: 10, desc: '홀리는 입맞춤을 날린다 — 맞은 적은 1.5초간 홀려 나에게 걸어온다(행동 불가)' },
     skill2: { name: '미혹의 안개', icon: '🌫️', cd: 16, desc: '앞으로 미혹의 안개를 퍼뜨린다 — 닿은 적들이 갈피를 잃고 갈팡질팡한다' },
     ult: { name: '꿈의 영토', icon: '🌙', cd: 70, desc: '지정한 곳에 3초간 꿈의 영토를 편다 — 그 안의 적들은 자기 편을 때린다(영토 밖으로 나가면 깨어난다)' },
@@ -376,7 +376,7 @@ export const ABILITY_SCALING = {
   runescribe: { skill: { dmg: [26, 0.45], note: '관통 · 인장 3스택' }, skill2: { note: '인장 최다 표적의 스택을 주변에 복제' }, ult: { dmg: [30, 0.5], note: '인장 1스택당 피해 · 처치 시 스택이 주변으로 전이' } },
   bloodknight: { skill: { dmg: [40, 0.85], note: '체력 6% 소모 · 잃은 체력만큼 최대 +60% · 맞힌 수만큼 흡혈' }, skill2: { dot: [12, 0.18], dotDur: 3, note: '체력 10% 소모 · 3초 결속(멀어질 수 없음) + 흡혈' }, ult: { dmg: [70, 1.05], note: '체력 20% 소모 · 입힌 피해의 50% 회복' } },
   necromancer: { skill: { note: '그림자 병사 1기 소환(최대 3 · 10초)' }, skill2: { note: '그림자 전원 광폭화 + 적에게 도약' }, ult: { note: '마지막 처치 영웅을 그림자로 20초 사역(없으면 그림자 3기)' } },
-  dreameater: { skill: { dmg: [22, 0.35], note: '명중 시 1.5초 매혹(시전자에게 강제 보행 · 행동 불가)' }, skill2: { dmg: [18, 0.3], note: '부채꼴 혼란 1.2초' }, ult: { note: '반경 7 · 3초 · 영토 안 적은 아군을 공격(이탈 시 즉시 해제)' } },
+  dreameater: { skill: { dmg: [30, 0.5], note: '명중 시 1.8초 매혹(시전자에게 강제 보행 · 행동 불가)' }, skill2: { dmg: [26, 0.45], note: '부채꼴 혼란 1.5초' }, ult: { note: '반경 7 · 3.5초 · 영토 안 적은 아군을 공격(이탈 시 즉시 해제)' } },
 }
 
 // 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 하이브리드는 공·주 평균, 그 외는 공격력.
@@ -614,7 +614,7 @@ const SUMMON_SPEC = {
   turret: { hp: 90, hpCoef: 2.5, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity }, // 초반 ~210(4.7대) → 후반 ~490(3.3대)
   cannon: { hp: 480, hpCoef: 3.0, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 }, // 초반 ~620(13.7대) → 후반 ~960(6.4대)
   // 강령술사 그림자 병사: 약하지만 셋씩 몰려다닌다(자원이 아니라 쿨로 뽑는다)
-  shade: { hp: 150, hpCoef: 2.0, dmg: 24, coef: 0.14, range: 2.6, aggro: 16, speed: 9.8, mobile: true, cd: 1.0, life: 10 },
+  shade: { hp: 190, hpCoef: 2.6, dmg: 30, coef: 0.18, range: 2.6, aggro: 16, speed: 9.8, mobile: true, cd: 1.0, life: 10 }, // 3v3 40% → 상향(2026-08-04)
   // 야수조련사 난투전 궁 전용: 진짜 용 — 크고 아프고 짧게 산다
   dragonpet: { hp: 300, hpCoef: 2.0, dmg: 36, coef: 0.15, range: 4.4, aggro: 22, speed: 8.2, mobile: true, cd: 1.6, life: 7 }, // 시뮬 승률 편중 반복 너프(2026-08-03, 최종 50%→)
 }
@@ -622,7 +622,7 @@ const BEAST_LEAP_DUR = 0.45 // 사냥 명령 시 야수가 적에게 달려드�
 const BEAST_WOLVES = 2 // 야수조련사 늑대 소환 마릿수
 const NECRO_MAX_SHADES = 3 // 강령술사가 동시에 거느리는 그림자 병사 수(초과 시 가장 오래된 것이 흩어진다)
 const NECRO_SHADOW_LIFE = 20 // 그림자 영웅(궁) 수명
-const NECRO_SHADOW_ATK = 0.9 // 그림자 영웅 평타 = 시전자 공격력의 이 비율
+const NECRO_SHADOW_ATK = 1.0 // 그림자 영웅 평타 = 시전자 공격력의 이 비율(3v3 40% → 상향)
 const ENGI_MAX_TURRETS = 3 // 엔지니어가 동시에 둘 수 있는 미니포탑 수(초과 시 가장 오래된 것 회수)
 const ENGI_IDLE_GRACE = 3 // 주인이 죽거나 사거리 밖으로 나가도 이 시간(초) 뒤에야 포탑이 휴면(그 전엔 타이머 표시)
 const OVERCHARGE_T = 4 // 과부하 지속(초)
@@ -1288,7 +1288,7 @@ const atkOf = (h, st = null) => heroAtk(h) * dmgMult(h) * (st?.mode === 'brawl' 
 //  · 그 외(전사·궁수·암살자·탱커)는 공격력(heroAtk)을 그대로 주력 스탯으로 쓴다.
 //  수호기사도 AP 인챈터로 편입 — 보호막이 주문력에 비례한다.
 // ── 몽마 매혹·꿈의 영토 — 공포(도주)의 거울상: 통제를 빼앗아 '나에게' 끌어온다.
-const CHARM_TIME = 1.5 // 매혹 지속
+const CHARM_TIME = 1.8 // 매혹 지속(3v3 22.5% → 상향)
 const CHARM_SPD = 0.85 // 홀려 걸어오는 속도 배율
 const CHARM_STOP = 2.2 // 시전자 코앞에서는 멈춘다(겹침 방지)
 const KISS_RANGE = 12 // 매혹의 입맞춤 사거리
@@ -1296,9 +1296,9 @@ const KISS_SPEED = 26 // 입맞춤 투사체 속도
 const KISS_R = 1.5 // 명중 판정 반경
 const MIST_RANGE = 9 // 미혹의 안개 사거리
 const MIST_HALF_COS = 0.55 // 부채꼴 폭(코사인)
-const MIST_CONFUSE = 1.2 // 혼란 시간(공포 문법 재사용 — 갈팡질팡)
+const MIST_CONFUSE = 1.5 // 혼란 시간(공포 문법 재사용 — 갈팡질팡)
 const DREAM_R = 7 // 꿈의 영토 반경
-const DREAM_TIME = 3 // 꿈의 영토 지속
+const DREAM_TIME = 3.5 // 꿈의 영토 지속
 const DREAM_AIM = 7 // 조준 보조가 없을 때 앞쪽에 펴는 거리
 // 이 영웅이 지금 '누군가의 꿈의 영토' 안에 있는가 — 안이면 아군을 적으로 본다(오사).
 //  팀 판정 자체는 절대 바꾸지 않는다(킬 크레딧·소환물 소유가 꼬이지 않게) — 표적 선택만 뒤집는다.
@@ -2319,7 +2319,7 @@ const SKILLS = {
     state.projectiles.push({
       id: state.nextId++, kind: 'charm', team: h.team, owner: h.id,
       x: h.x, z: h.z, vx: Math.cos(dir) * KISS_SPEED, vz: Math.sin(dir) * KISS_SPEED,
-      travel: 0, max: KISS_RANGE, dmg: Math.round(skillDmg(h, 22, 0.35)), hit: new Set(),
+      travel: 0, max: KISS_RANGE, dmg: Math.round(skillDmg(h, 30, 0.5)), hit: new Set(),
     })
     pushFx(state, 'charmcast', h.x, h.z, 2, h.team, 0.5)
   },
@@ -3353,7 +3353,7 @@ const SKILLS2 = {
       if (d2 > r2 || d2 < 0.01) continue
       const d = Math.sqrt(d2)
       if ((dx * ux + dz * uz) / d < MIST_HALF_COS) continue // 부채꼴 밖
-      damageHero(state, e, skillDmg(h, 18, 0.3), h)
+      damageHero(state, e, skillDmg(h, 26, 0.45), h)
       applyFear(state, e, MIST_CONFUSE) // 혼란 = 갈팡질팡(도주 문법 공용)
       hitAny = true
     }

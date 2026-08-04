@@ -5443,6 +5443,7 @@ test('난투전 강령술사: 그림자 영웅의 평타가 적을 밀어낸다'
 })
 
 // ══════════ 몽마(dreameater) — 매혹·꿈의 영토(오사) ══════════
+const CHARM_HALF_MAX = 1.0 // 아레나 반감 상한(기본 1.8초의 절반 = 0.9)
 
 test('몽마 매혹의 입맞춤: 맞은 적이 홀려서 시전자에게 걸어온다(행동 불가)', () => {
   const g = duo('dreameater', 'tank')
@@ -5547,5 +5548,5 @@ test('몽마: 콜로세움에서는 매혹 지속이 반감된다(2v2 리스크 
   t.x = 6; t.z = 0
   castSkill(g, d.id)
   run(g, 0.5)
-  assert.ok(t.charmT > 0 && t.charmT <= 0.8, `아레나 반감 (${t.charmT.toFixed(2)}초)`)
+  assert.ok(t.charmT > 0 && t.charmT <= CHARM_HALF_MAX, `아레나 반감 (${t.charmT.toFixed(2)}초)`)
 })
