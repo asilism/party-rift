@@ -5128,3 +5128,123 @@ test('어둠의 정적: 돌진으로 사망자가 나오면 지체 없이 연쇄
     assert.ok(boss.stillVanishAt == null)
   }
 })
+
+// ══════════ 각인사(runescribe) — 인장·완인·파문 ══════════
+
+test('각인사: 평타가 인장 2스택을 새기고 지속이 끝나면 만료된다', () => {
+  const g = duo('runescribe', 'tank')
+  startPlaying(g)
+  const [r, t] = g.heroes
+  r.x = 0; r.z = 0; r.dir = 0
+  t.x = 5; t.z = 0
+  castAttack(g, r.id)
+  run(g, 0.6) // 탄 비행 + 명중
+  assert.equal(makeView(g, 'rat').heroes.find((h) => h.id === 'ox').runeN, 2, '평타 = 인장 2스택')
+  t.x = 60; t.z = 60 // 사거리 밖으로 — 자동 평타가 스택을 갱신하지 않게
+  run(g, 9.3) // 지속(9초) 경과
+  assert.equal(makeView(g, 'rat').heroes.find((h) => h.id === 'ox').runeN, 0, '만료되면 0으로 읽힌다')
+})
+
+test('각인사 인장탄: 직선 관통 — 맞은 적 전원에게 3스택 + 피해', () => {
+  const g = duo('runescribe', 'tank')
+  startPlaying(g)
+  const [r, t] = g.heroes
+  r.x = 0; r.z = 0; r.dir = 0
+  t.x = 7; t.z = 0
+  const m1 = plantMinion(g, 'red', 4, 0, 400)
+  const hp0 = t.hp
+  castSkill(g, r.id)
+  const v = makeView(g, 'rat')
+  assert.equal(v.heroes.find((h) => h.id === 'ox').runeN, 3, '영웅 3스택')
+  assert.equal(m1.markStacks, 3, '경로의 병사도 3스택')
+  assert.ok(t.hp < hp0, '관통 피해')
+})
+
+test('각인사 완인: 인장 5스택이면 받는 피해가 늘어난다(+15%)', () => {
+  const g = duo('runescribe', 'tank')
+  startPlaying(g)
+  const r = g.heroes[0]
+  r.x = 0; r.z = 0; r.dir = 0
+  // 같은 조건의 병사 둘 — 하나만 완인 상태로 만들어 같은 인장탄을 맞힌다
+  const plain = plantMinion(g, 'red', 4, 0, 9000)
+  const full = plantMinion(g, 'red', 5, 0, 9000)
+  full.markStacks = 5
+  full.markT = g.time + 6
+  castSkill(g, r.id)
+  const dmgPlain = 9000 - plain.hp
+  const dmgFull = 9000 - full.hp
+  assert.ok(dmgPlain > 0 && dmgFull > dmgPlain * 1.1, `완인 증폭 (${dmgPlain.toFixed(0)} → ${dmgFull.toFixed(0)})`)
+})
+
+test('각인사 파문: 인장 스택에 비례해 터지고 인장은 소모된다 — 인장이 없으면 불발', () => {
+  const g = duo('runescribe', 'tank')
+  startPlaying(g)
+  const r = g.heroes[0]
+  r.lvl = 18
+  r.x = 0; r.z = 0
+  const one = plantMinion(g, 'red', 4, 1, 9000)
+  const four = plantMinion(g, 'red', 4, -1, 9000)
+  one.markStacks = 1; one.markT = g.time + 6
+  four.markStacks = 4; four.markT = g.time + 6
+  // 인장 없는 상태에서는 쿨을 안 쓴다
+  const g2 = duo('runescribe', 'tank')
+  startPlaying(g2)
+  g2.heroes[0].lvl = 18
+  g2.heroes[0].ultCd = 0
+  castUlt(g2, g2.heroes[0].id)
+  assert.equal(g2.heroes[0].ultCd, 0, '터뜨릴 인장이 없으면 불발(쿨 유지)')
+  r.ultCd = 0
+  castUlt(g, r.id)
+  const d1 = 9000 - one.hp
+  const d4 = 9000 - four.hp
+  assert.ok(d1 > 0, '1스택도 터진다')
+  assert.ok(d4 > d1 * 3, `스택 비례 (${d1.toFixed(0)} vs ${d4.toFixed(0)})`)
+  assert.equal(one.markStacks, 0, '기폭 후 인장 소모')
+})
+
+test('각인사 도미노: 파문으로 쓰러진 적의 인장이 주변으로 옮겨간다', () => {
+  const g = duo('runescribe', 'tank')
+  startPlaying(g)
+  const r = g.heroes[0]
+  r.lvl = 18
+  r.x = 0; r.z = 0
+  const dying = plantMinion(g, 'red', 4, 0, 1) // 기폭에 확실히 쓰러진다
+  dying.markStacks = 3
+  dying.markT = g.time + 6
+  const nearby = plantMinion(g, 'red', 6, 1, 9000) // 전파 반경(6.5) 안
+  r.ultCd = 0
+  castUlt(g, r.id)
+  assert.ok(!g.minions.includes(dying), '기폭으로 쓰러짐')
+  assert.equal(nearby.markStacks, 3, '이웃에게 인장 3스택 전이')
+})
+
+test('각인사 각인 확산: 최다 스택을 주변 적에게 복제한다 — 인장이 없으면 불발', () => {
+  const g = duo('runescribe', 'tank')
+  startPlaying(g)
+  const r = g.heroes[0]
+  r.lvl = 18
+  r.x = 0; r.z = 0
+  r.skill2Cd = 0
+  castSkill2(g, r.id)
+  assert.equal(r.skill2Cd, 0, '퍼뜨릴 인장이 없으면 불발')
+  const src = plantMinion(g, 'red', 5, 0, 9000)
+  const near = plantMinion(g, 'red', 7, 1, 9000)
+  src.markStacks = 4
+  src.markT = g.time + 6
+  castSkill2(g, r.id)
+  assert.equal(near.markStacks, 4, '주변 적에게 그대로 복제')
+})
+
+test('난투전 각인사: 파문이 스택만큼 날려버린다(완인은 피니셔)', () => {
+  const g = brawl8('runescribe')
+  const a = g.heroes[0]
+  const e = g.heroes[1]
+  e.x = a.x + 5; e.z = a.z
+  e.markStacks = 5
+  e.markT = g.time + 6
+  g.heroes.slice(2).forEach((o) => { o.x = 40; o.z = 40 })
+  a.brawlUltQ = 100
+  castUlt(g, a.id)
+  assert.ok(e.knockT > 0, '넉백 발생')
+  assert.ok(e.brawlSmashT > 0, '완인은 스매시 피니셔')
+})

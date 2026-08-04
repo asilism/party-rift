@@ -1,5 +1,5 @@
 import { t } from '../shared/i18n.js'
-import { CLASS_IDS, BOSS_IDS, CLASSES, TEAM_SIZE, TEAM_SIZES, trophySetOf } from '../games/rift/engine.js'
+import { CLASS_IDS, RELEASED_CLASSES, BOSS_IDS, CLASSES, TEAM_SIZE, TEAM_SIZES, trophySetOf } from '../games/rift/engine.js'
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
 import { loadEquippedTitle, loadEquippedHat, loadEquippedCostume, loadEquippedWeapon } from '../shared/storage.js'
 
@@ -36,7 +36,7 @@ export function buildSoloRoster({ zodiacId, cls, mode }) {
     // 난투전: 8인 FFA — 각자 고유 팀(t0~t7), 지신·직업 중복 없음. 내가 t0.
     roster[0].team = 't0'
     for (let i = 1; i < 8; i++) {
-      const botCls = shuffle(CLASS_IDS.filter((c) => !takenCls.has(c)))[0]
+      const botCls = shuffle(RELEASED_CLASSES.filter((c) => !takenCls.has(c)))[0]
       const z = freeZ.shift()
       if (!botCls || !z) break
       takenCls.add(botCls)
@@ -47,7 +47,7 @@ export function buildSoloRoster({ zodiacId, cls, mode }) {
   if (mode === 'boss') {
     // 보스전: 아군 봇 4 + 무작위 타입의 보스 1 (zodiacId=클래스 id → 얼굴/피드 아이콘이 보스 아이콘)
     for (let i = 1; i < size; i++) {
-      const botCls = shuffle(CLASS_IDS.filter((c) => !takenCls.has(c)))[0]
+      const botCls = shuffle(RELEASED_CLASSES.filter((c) => !takenCls.has(c)))[0]
       const z = freeZ.shift()
       if (!botCls || !z) break
       takenCls.add(botCls)
@@ -63,7 +63,7 @@ export function buildSoloRoster({ zodiacId, cls, mode }) {
   if (mode === 'defense') {
     // 무한 방어: 아군 5인뿐 — 레드는 영웅 없이 엔진이 소환하는 파도(병사·그림자 정예)가 전부
     for (let i = 1; i < size; i++) {
-      const botCls = shuffle(CLASS_IDS.filter((c) => !takenCls.has(c)))[0]
+      const botCls = shuffle(RELEASED_CLASSES.filter((c) => !takenCls.has(c)))[0]
       const z = freeZ.shift()
       if (!botCls || !z) break
       takenCls.add(botCls)
@@ -73,7 +73,7 @@ export function buildSoloRoster({ zodiacId, cls, mode }) {
   }
   for (const team of ['blue', 'red']) {
     for (let i = team === 'blue' ? 1 : 0; i < size; i++) {
-      const botCls = shuffle(CLASS_IDS.filter((c) => !takenCls.has(c)))[0]
+      const botCls = shuffle(RELEASED_CLASSES.filter((c) => !takenCls.has(c)))[0]
       if (!botCls) break
       takenCls.add(botCls)
       const z = freeZ.shift()

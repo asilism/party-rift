@@ -99,6 +99,7 @@ const ROLE_PREF = {
   fearmonger: ['mid', 'bot', 'top'], // 공포 메이지 — 미드
   illusionist: ['jungle', 'mid', 'top', 'bot'], // 분신 암살자 — 정글
   terramancer: ['top', 'support', 'mid', 'bot'], // 지형 브루저 — 탑/지원
+  runescribe: ['mid', 'bot', 'top'], // 인장 콤보 메이지 — 미드
 }
 // 한 봇에게 그 모드의 역할 풀에서 직업 선호에 맞는 빈 역할을 고른다(겹치면 다음 후보 → 남은 자리).
 function pickRole(cls, mode, taken) {
@@ -257,6 +258,13 @@ export const CLASSES = {
     skill2: { name: '융기', icon: '⛰️', cd: 14, desc: '먼 전방에 돌벽을 솟게 해 3초간 길을 막는다 — 벽에 맞은 적은 밀쳐지며 1.2초 기절(돌팔매 연계)' },
     ult: { name: '바위감옥', icon: '🏔️', cd: 65, desc: '보이는 적 하나를 원형 돌벽으로 2.5초 가둔다 — 강제 1:1' },
   },
+  runescribe: {
+    name: '각인사', icon: '🔯', desc: '적의 몸에 인장을 새겼다가 한꺼번에 터뜨리는 콤보 술사 — 평타마다 인장이 쌓이고, 5스택(완인)이면 그 적은 받는 피해가 늘어난다',
+    hp: 455, hpLvl: 49, atk: 40, atkLvl: 6, range: 11, atkCd: 1.0, speed: 12.1,
+    skill: { name: '인장탄', icon: '🌀', cd: 7, desc: '앞으로 인장탄을 쏴 일직선의 적을 관통 — 맞은 적 모두에게 인장 3스택 + 피해' },
+    skill2: { name: '각인 확산', icon: '🕸️', cd: 14, desc: '인장이 가장 많은 적의 인장을 주변 적들에게 그대로 퍼뜨린다' },
+    ult: { name: '파문', icon: '💠', cd: 60, desc: '보이는 모든 인장을 일제히 기폭 — 스택이 많을수록 큰 피해. 기폭으로 쓰러진 적의 인장은 주변 적에게 옮겨간다(연쇄)' },
+  },
   // ── 보스전(5:1) 전용 보스 — boss:true는 선택 목록(CLASS_IDS)에서 제외되고 3배 덩치로 그려진다 ──
   boss_colossus: {
     boss: true, name: '파멸의 거인', icon: '👹',
@@ -293,6 +301,11 @@ export const CLASSES = {
 }
 export const BOSS_IDS = Object.keys(CLASSES).filter((c) => CLASSES[c].boss)
 export const CLASS_IDS = Object.keys(CLASSES).filter((c) => !CLASSES[c].boss)
+// 출시 게이트 — 여기 없는 직업은 선택 UI·봇 픽에 안 나온다(빌드에는 들어 있다).
+//  엔진·시뮬·테스트·?ult 시험장은 CLASS_IDS 전체를 그대로 안다 — 잠금은 '노출' 층에서만.
+//  오픈은 이 Set에서 id 한 줄 빼는 것이 전부.
+const UNRELEASED_CLASSES = new Set(['runescribe', 'bloodknight', 'necromancer', 'dreameater'])
+export const RELEASED_CLASSES = CLASS_IDS.filter((c) => !UNRELEASED_CLASSES.has(c))
 
 // 직업의 드래프트 역할 분류 — 봇이 팀 조합 밸런스를 맞춰 픽할 때 쓴다(전투 레인 배정과 별개).
 //  mage(AP 딜) · marksman(AD 원거리) · fighter(AD 근접/브루저/탱) · support(서폿)
@@ -302,6 +315,7 @@ export const CLASS_ROLE = {
   archer: 'marksman', engineer: 'marksman',
   warrior: 'fighter', gladiator: 'fighter', swordmaster: 'fighter', tank: 'fighter', beastmaster: 'fighter', terramancer: 'fighter',
   healer: 'support', guardian: 'support',
+  runescribe: 'mage',
   assassin: 'jungle', catcher: 'jungle', snarer: 'jungle', chronomancer: 'jungle', illusionist: 'jungle',
 }
 // 봇 팀이 채우고 싶어하는 역할 우선순위(앞에서부터 한 자리씩) — 균형 잡힌 조합.
@@ -332,6 +346,7 @@ export const ABILITY_SCALING = {
   fearmonger: { skill: { dmg: [30, 0.55], note: '1.5초 공포(통제 불능 질주 + 둔화)' }, skill2: { shield: [45, 0.7], note: '가속 + 어둠 장막' }, ult: { dmg: [40, 0.6], dot: [10, 0.18], dotDur: 2, note: '적에게 순간이동 · 주변 전체 1.6초 공포' } },
   illusionist: { skill: { dmg: [50, 0.9], note: '분신이 적을 쫓아가 내리찍음(확정 명중) + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '연막 펑 — 3체 돌출, 전투 분신 2(평타 80%)' } },
   terramancer: { skill: { dmg: [30, 0.55], note: '0.5초 간격 3연투 · 각도는 첫 발에 고정' }, skill2: { dmg: [15, 0.25], note: '벽 명중 시 1.5초 기절 + 3초 길막' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
+  runescribe: { skill: { dmg: [26, 0.45], note: '관통 · 인장 3스택' }, skill2: { note: '인장 최다 표적의 스택을 주변에 복제' }, ult: { dmg: [30, 0.5], note: '인장 1스택당 피해 · 처치 시 스택이 주변으로 전이' } },
 }
 
 // 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 하이브리드는 공·주 평균, 그 외는 공격력.
@@ -1227,11 +1242,36 @@ const atkOf = (h, st = null) => heroAtk(h) * dmgMult(h) * (st?.mode === 'brawl' 
 //  · 마법 계열(마법사·힐러)은 레벨로 성장하는 기본 주문력 + 아이템 주문력을 쓴다.
 //  · 그 외(전사·궁수·암살자·탱커)는 공격력(heroAtk)을 그대로 주력 스탯으로 쓴다.
 //  수호기사도 AP 인챈터로 편입 — 보호막이 주문력에 비례한다.
-const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock', 'guardian', 'windcaller', 'chronomancer', 'fearmonger', 'terramancer'])
+// ── 각인사 인장(印章) — 적 몸에 쌓이는 스택. 만료는 '읽을 때' 판정하는 지연 방식이라
+//  히어로·병사·정글몹 어디에 붙어도 감쇠 루프가 필요 없다(runeStacks가 유일한 진입점).
+const RUNE_MAX = 5 // 최대 스택 = 완인(完印)
+const RUNE_DUR = 9 // 인장 지속(초) — 새로 새기면 갱신(6초는 셋업 전에 말랐다: 3v3 계측)
+const RUNE_FULL_AMP = 0.15 // 완인: 그 적이 받는 모든 피해 +15%
+const SIGIL_RANGE = 13 // 인장탄 사거리
+const SIGIL_HALF = 1.4 // 인장탄 폭(반)
+const SPREAD_RANGE = 12 // 각인 확산: 원본 표적 탐색 거리
+const SPREAD_RADIUS = 6.5 // 각인 확산·도미노 전파 반경
+const BURST_RANGE = 17 // 파문 사거리
+function runeStacks(state, e) {
+  if (!e || !e.markStacks) return 0
+  if (state.time > (e.markT || 0)) return 0 // 만료 — 값은 남아도 0으로 읽는다
+  return e.markStacks
+}
+function addRune(state, e, n, by) {
+  const cur = runeStacks(state, e)
+  e.markStacks = Math.min(RUNE_MAX, cur + n)
+  e.markT = state.time + RUNE_DUR
+  if (cur < RUNE_MAX && e.markStacks >= RUNE_MAX && by && e.name) {
+    pushFeed(state, 'obj', `🔯 ${e.name} — 완인! (받는 피해 증가)`) // 전장 전체가 "터지기 직전"을 안다
+  }
+}
+const clearRune = (e) => { e.markStacks = 0; e.markT = 0 }
+
+const AP_CLASSES = new Set(['mage', 'healer', 'cryomancer', 'warlock', 'guardian', 'windcaller', 'chronomancer', 'fearmonger', 'terramancer', 'runescribe'])
 //  하이브리드: 소환수 피해를 공격력·주문력 절반씩으로 키운다(AD/AP 아이템 어느 쪽이든 도움).
 const HYBRID_CLASSES = new Set(['beastmaster', 'engineer'])
-const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46, windcaller: 42, chronomancer: 44, fearmonger: 42, terramancer: 40 }
-const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7, windcaller: 10, chronomancer: 10, fearmonger: 10, terramancer: 9 }
+const SPELL_BASE = { mage: 45, healer: 32, cryomancer: 42, warlock: 40, guardian: 60, beastmaster: 48, engineer: 46, windcaller: 42, chronomancer: 44, fearmonger: 42, terramancer: 40, runescribe: 41 }
+const SPELL_LVL = { mage: 11, healer: 7, cryomancer: 10, warlock: 9, guardian: 26, beastmaster: 7, engineer: 7, windcaller: 10, chronomancer: 10, fearmonger: 10, terramancer: 9, runescribe: 10 }
 const spellPower = (h) =>
   ((SPELL_BASE[h.cls] || 0) + (SPELL_LVL[h.cls] || 0) * (h.lvl - 1) + itemBonus(h).power) * (h.statMul || 1) * (1 + augOf(h).powerMul) * (1 + trophyFx(h).powerMul)
 // 쿨다운 감소: 아이템 + 증강(가산), 실효 상한 0.6
@@ -2104,6 +2144,33 @@ const SKILLS = {
     h.slingT = 0 // 첫 발은 즉시
     h.slingDmg = Math.round(skillDmg(h, 30, 0.55)) // 발당 피해 — 시전 시점 스냅샷(주문력 계수)
   },
+  // 각인사 인장탄: 직선 관통 — 맞은 적 전원에게 인장 2스택 + 소량 피해(셋업기)
+  runescribe(state, h) {
+    let dir = h.dir
+    const foe = nearestFoeHero(state, h, SIGIL_RANGE)
+    if (foe) dir = Math.atan2(foe.z - h.z, foe.x - h.x) // 조준 보조
+    h.dir = dir
+    const ux = Math.cos(dir)
+    const uz = Math.sin(dir)
+    const inLine = (e) => {
+      const rx = e.x - h.x
+      const rz = e.z - h.z
+      const along = rx * ux + rz * uz
+      if (along < 0 || along > SIGIL_RANGE) return false
+      return Math.abs(rx * uz - rz * ux) <= SIGIL_HALF + 0.8
+    }
+    for (const e of state.heroes) { // 인장 먼저 새기고(완인이면 이 타격부터 증폭) 피해
+      if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || !inLine(e)) continue
+      addRune(state, e, 3, h)
+    }
+    for (const m of [...state.minions]) if (m.team !== h.team && inLine(m)) addRune(state, m, 3, h)
+    lineDamage(state, h, h.x, h.z, dir, SIGIL_RANGE, SIGIL_HALF, skillDmg(h, 26, 0.45), 0) // 주문력 계수 (각인사)
+    state.projectiles.push({ // 시각: 앞으로 뻗는 인장 문양탄
+      id: state.nextId++, kind: 'pierce', team: h.team, owner: h.id,
+      x: h.x, z: h.z, vx: ux * 40, vz: uz * 40, travel: 0, max: SIGIL_RANGE,
+    })
+    pushFxDir(state, 'sigil', h.x, h.z, SIGIL_RANGE, dir, h.team)
+  },
 }
 
 // ── 궁극기 (레벨 3부터) ──
@@ -2567,6 +2634,54 @@ const ULTS = {
     damageHero(state, foe, skillDmg(h, 35, 0.5), h)
     pushFx(state, 'cage', foe.x, foe.z, CAGE_RADIUS, h.team)
   },
+  // 각인사 파문: 보이는 인장을 전부 일제 기폭 — 스택당 피해.
+  //  도미노: 기폭으로 쓰러진 적의 인장은 주변 적에게 옮겨가 다음 파문의 씨앗이 된다.
+  runescribe(state, h) {
+    const per = skillDmg(h, 30, 0.5) // 스택 1개당 피해 (주문력 계수 — 각인사)
+    const r2 = BURST_RANGE * BURST_RANGE
+    const marked = []
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || dist2(h, e) > r2) continue
+      if (!isHeroVisible(state, e, h.team)) continue
+      const n = runeStacks(state, e)
+      if (n > 0) marked.push({ e, n, hero: true })
+    }
+    for (const m of [...state.minions]) {
+      if (m.team === h.team || dist2(h, m) > r2) continue
+      const n = runeStacks(state, m)
+      if (n > 0) marked.push({ e: m, n, hero: false })
+    }
+    if (!marked.length) return false // 터뜨릴 인장이 없으면 쿨을 안 쓴다
+    state._ultHit = true // 궁 피해는 난투전 게이지를 재생산하지 않는다
+    for (const mk of marked) {
+      const { e, n } = mk
+      const x = e.x
+      const z = e.z
+      clearRune(e) // 완인 증폭은 기폭 직전 값으로 이미 반영됨 — 터지면 인장은 사라진다
+      if (mk.hero) damageHero(state, e, per * n, h, false, '파문')
+      else damageMinion(state, e, per * n, h)
+      pushFx(state, 'sigilburst', x, z, 2.2 + n * 0.55, h.team, 0.8)
+      if (state.mode === 'brawl' && mk.hero && e.hp > 0 && !(e.brawlGuardT > 0) && !(e.brawlStarT > 0) && !(e.brawlMushT > 0)) {
+        applyKnockback(state, e, h.x, h.z, n * 2.5) // 난투전 대파문: 스택만큼 날아간다
+        if (n >= RUNE_MAX) { // 완인은 피니셔급
+          e.brawlSmashT = 0.55
+          e.brawlSmashA = Math.atan2(e.z - h.z, e.x - h.x)
+        }
+      }
+      const died = mk.hero ? (e.hp <= 0 || e.respawnT > 0) : e.hp <= 0
+      if (!died) continue
+      const dr2 = SPREAD_RADIUS * SPREAD_RADIUS // 💠 도미노 — 쓰러진 자리의 인장이 옆으로 번진다
+      for (const o of state.heroes) {
+        if (o.team === h.team || o.respawnT > 0 || o.hp <= 0 || (o.x - x) ** 2 + (o.z - z) ** 2 > dr2) continue
+        addRune(state, o, n, h)
+      }
+      for (const o of state.minions) {
+        if (o.team === h.team || (o.x - x) ** 2 + (o.z - z) ** 2 > dr2) continue
+        addRune(state, o, n, h)
+      }
+    }
+    state._ultHit = false
+  },
 }
 
 // 사슬갈고리 발사: 발사 준비(hookWindT)가 끝났을 때 호출 — 고정 방향(hookDir)으로 직진 투사체.
@@ -2944,6 +3059,33 @@ const SKILLS2 = {
     const half = QUAKE_WALL_SPAN * 1.5 + 1.2
     pushFxDir(state, 'quake', cx - Math.cos(along) * half, cz - Math.sin(along) * half, half * 2, along, h.team)
   },
+  // 각인사 각인 확산: 인장이 가장 많은 적을 찾아 그 스택을 주변 적들에게 복제(광역 셋업)
+  runescribe(state, h) {
+    let src = null
+    let best = 0
+    const r2 = SPREAD_RANGE * SPREAD_RANGE
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || dist2(h, e) > r2) continue
+      const n = runeStacks(state, e)
+      if (n > best) { best = n; src = e }
+    }
+    for (const m of state.minions) {
+      if (m.team === h.team || dist2(h, m) > r2) continue
+      const n = runeStacks(state, m)
+      if (n > best) { best = n; src = m }
+    }
+    if (!src || best <= 0) return false // 퍼뜨릴 인장이 없으면 쿨을 안 쓴다
+    const sr2 = SPREAD_RADIUS * SPREAD_RADIUS
+    for (const e of state.heroes) {
+      if (e === src || e.team === h.team || e.respawnT > 0 || e.hp <= 0 || dist2(src, e) > sr2) continue
+      addRune(state, e, best, h)
+    }
+    for (const m of state.minions) {
+      if (m === src || m.team === h.team || dist2(src, m) > sr2) continue
+      addRune(state, m, best, h)
+    }
+    pushFx(state, 'sigilspread', src.x, src.z, SPREAD_RADIUS, h.team, 0.9)
+  },
 }
 
 // 술식 공통: 판정 함수 pred(e)에 걸리는 모든 적(영웅/병사/정글몹)에게 피해(+기절/빙결/속박)
@@ -3089,6 +3231,7 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   if (victim.whirlT > 0) amount *= 1 - WHIRL_DR // 전사 회전베기 중 방어 ↑(앞라인 탱킹)
   if (victim.wardT > 0) amount *= WARD_CUT // 수호기사 결속(아군 피해 감소)
   if (victim.vulnT > 0) amount *= 1 + DOOM_VULN_AMP // 주술사 낙인(받는 피해 증가)
+  if (runeStacks(state, victim) >= RUNE_MAX) amount *= 1 + RUNE_FULL_AMP // 🔯 완인: 인장 5스택이면 몸이 무너진다
   if (victim.barrierHp > 0) { // 수호기사 보호막: 흡수 풀에서 먼저 깎인다
     const absorb = Math.min(victim.barrierHp, amount)
     victim.barrierHp -= absorb
@@ -3353,6 +3496,7 @@ function damageMinion(state, m, amount, attacker, allowExplode = true) {
     if (m.heart) pushFeed(state, 'obj', '🥀 덩굴 심장이 부서졌다 — 가시밭이 시든다')
     return
   }
+  if (runeStacks(state, m) >= RUNE_MAX) amount *= 1 + RUNE_FULL_AMP // 🔯 완인: 병사에게도 똑같이 새겨진다
   m.hp -= amount
   if (m.hp > 0) return
   const mx = m.x
@@ -5311,6 +5455,10 @@ function stepProjectiles(state, dt) {
       const owner = state.heroes.find((h) => h.id === p.owner) || { team: p.team }
       applyDamage(state, p.target, p.dmg, owner)
       // 흡혈: 기본공격 탄(bolt)이 적 유닛에 적중하면 시전자가 회복 (구조물 제외)
+      // 🔯 각인사 평타: 명중한 대상에 인장 1스택 — 콤보의 시작(스킬 없이도 쌓인다)
+      if (p.kind === 'bolt' && owner.cls === 'runescribe' && p.target.tk !== 'tower' && p.target.tk !== 'nexus') {
+        addRune(state, e, 2, owner) // 평타 2스택 — 세 대면 완인, 콤보가 실제로 굴러가는 리듬
+      }
       let ls = p.kind === 'bolt' && owner.items ? itemBonus(owner).lifesteal : 0
       if (p.kind === 'bolt' && owner.cls === 'gladiator') ls += GLAD_BASIC_LIFESTEAL // 검투사 고유 평타 흡혈
       if (ls > 0 && owner.respawnT <= 0 && (p.target.tk === 'hero' || p.target.tk === 'minion' || p.target.tk === 'monster')) {
@@ -5880,6 +6028,8 @@ const BOT_BUILD = {
   illusionist: ['dagger', 'berserker_axe', 'vampire_scythe', 'executioner', 'heal_flask'],
   // 대지술사: 지형 브루저 — 단단함 + 주문력 겸용
   terramancer: ['leather', 'frost_staff', 'mirror_shield', 'giant_heart', 'heal_flask'],
+  // 각인사: 셋업형 폭딜 메이지 — 주문력 + 쿨감(스택을 자주 쌓는다)
+  runescribe: ['orb', 'wisdom_hat', 'flame_core', 'void_staff', 'heal_flask'],
 }
 
 // 콜로세움 봇 장보기 순서: 사람의 고승률 트리를 흉내 낸다 —
@@ -6222,6 +6372,7 @@ const FARM_SKILL_RANGE = {
   cryomancer: FROST_RANGE - 1, // 서리파동 (부채꼴)
   gladiator: GLAD_SLASH_RADIUS, // 휘둘러베기 (자기 중심 + 흡혈)
   terramancer: SLING_RANGE - 2, // 돌팔매 (스플래시 3연투)
+  runescribe: SIGIL_RANGE - 3, // 인장탄 (관통)
   windcaller: GUST_RANGE * 0.6, // 돌풍 (굴러가는 회오리)
 }
 function botFarmSkills(state, h) {
@@ -6275,6 +6426,7 @@ function botMonsterSkills(state, h, big) {
   else if (h.cls === 'archer' && d < VOLLEY_RANGE - 4) { aim(); castSkill(state, h.id) }
   else if (h.cls === 'cryomancer' && d < FROST_RANGE - 1) { aim(); castSkill(state, h.id) }
   else if (h.cls === 'terramancer' && d < SLING_RANGE - 2) { aim(); castSkill(state, h.id) }
+  else if (h.cls === 'runescribe' && d < SIGIL_RANGE - 2) { aim(); castSkill(state, h.id) }
   else if (h.cls === 'windcaller' && d < GUST_RANGE - 2) { aim(); castSkill(state, h.id) }
   else if (h.cls === 'tank' && big.aggro === h.id && d < 6) castSkill(state, h.id) // 물렸으면 방패막기
 }
@@ -9083,6 +9235,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'fearmonger' && h.hp < h.maxHp * 0.6) castSkill2(state, h.id) // 망령걸음(장막)으로 버틴다
     else if (h.cls === 'illusionist' && h.hp < h.maxHp * 0.45) castSkill2(state, h.id) // 분신과 자리바꿈으로 이탈
     else if (h.cls === 'terramancer' && d < QUAKE_WALL_AHEAD + 2) castSkill2(state, h.id) // 융기 기절 → 돌팔매 연계
+    else if (h.cls === 'runescribe' && nearCount >= 2 && runeStacks(state, foe) >= 2) castSkill2(state, h.id) // 뭉친 적에 인장 확산
   }
   const ready = h.skillCd <= 0
   if (ready) {
@@ -9102,6 +9255,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'fearmonger' && d < FEAR_RANGE - 1) castSkill(state, h.id) // 공포의 시선으로 흩어놓는다
     else if (h.cls === 'illusionist' && d < 10) castSkill(state, h.id) // 분신+은신으로 교란
     else if (h.cls === 'terramancer' && d < SLING_RANGE - 2) castSkill(state, h.id) // 돌팔매 3연투
+    else if (h.cls === 'runescribe' && d < SIGIL_RANGE - 2) castSkill(state, h.id) // 인장탄으로 스택 적립
     // 힐러 치유·수호기사 보호막은 stepBots 위쪽에서 항상 챙긴다
   }
   if (h.ultCd > 0 || h.lvl < ULT_LEVEL) return
@@ -9139,6 +9293,8 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     castUlt(state, h.id) // 단말마 — 적진으로 파고들어 광역 공포 이니시
   } else if (h.cls === 'illusionist' && (nearCount >= 1 || h.hp < h.maxHp * 0.5)) {
     castUlt(state, h.id) // 환영난무 — 교란 + 은신
+  } else if (h.cls === 'runescribe' && (runeStacks(state, foe) >= 4 || (nearCount >= 2 && runeStacks(state, foe) >= 2))) {
+    castUlt(state, h.id) // 파문 — 스택이 익었을 때 터뜨린다
   } else if (h.cls === 'terramancer' && d < CAGE_RANGE - 1 && foe.hp < foe.maxHp * 0.55) {
     castUlt(state, h.id) // 바위감옥 — 빈사 적을 가둬 마무리
   } else if (h.cls === 'guardian' && (h.hp < h.maxHp * 0.55 || nearCount >= 2)) {
@@ -9537,6 +9693,7 @@ export function makeView(state) {
       bindBy: h.bindBy, // 나를 결속한 수호기사 id (링크 연출)
       bindAnchorT: r2d(h.bindAnchorT), // 수호기사 앵커 (구체 연출)
       vulnT: r2d(h.vulnT),
+      runeN: runeStacks(state, h), // 🔯 각인사 인장 스택(0~5) — 씬이 머리 위 문양으로 그린다
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
       fallT: r2d(h.fallT),

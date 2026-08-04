@@ -1073,7 +1073,7 @@ export const CLS_SCALE = {
   beastmaster: 1.08, swordmaster: 1.0, engineer: 1.0, snarer: 1.0,
   archer: 0.95, healer: 0.95, mage: 0.95, warlock: 0.95, cryomancer: 0.95, chronomancer: 0.95,
   windcaller: 0.92, assassin: 0.9,
-  terramancer: 1.15, fearmonger: 0.95, illusionist: 0.9,
+  terramancer: 1.15, fearmonger: 0.95, illusionist: 0.9, runescribe: 0.95,
   // 보스전 보스 — 3배급 거체. 얼굴·무기·이름표 높이도 이 배율을 따라간다(buildHero)
   boss_colossus: 2.8, boss_archmage: 2.5, boss_shadow: 2.4, boss_thorn: 2.6,
 }
@@ -2769,6 +2769,18 @@ export function buildClassParts(cls, s, body) {
       eye.position.set(-1.18 * s, 1.25 * s, dz * s)
       body.add(eye)
     }
+  } else if (cls === 'runescribe') {
+    // 등 뒤에 떠 있는 붉은 인장 고리 — 문양 술사의 표식
+    const runeMat = new THREE.MeshLambertMaterial({ color: 0xff5a7a, emissive: 0x6a0f28, emissiveIntensity: 0.5 })
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.55 * s, 0.07 * s, 6, 6), runeMat)
+    ring.position.set(-1.05 * s, 1.55 * s, 0)
+    ring.rotation.y = Math.PI / 2
+    body.add(ring)
+    for (const sz of [1, -1]) {
+      const tick = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.26 * s, 0.06 * s), runeMat)
+      tick.position.set(-1.05 * s, 1.55 * s, sz * 0.62 * s)
+      body.add(tick)
+    }
   } else if (cls === 'terramancer') {
     // 어깨의 바위 덩어리 + 등에 떠 있는 잔돌
     const stone = new THREE.MeshLambertMaterial({ color: 0x9a8f7c, flatShading: true })
@@ -3974,6 +3986,26 @@ function buildWeapon(cls, skinId = null) {
       g.position.x = s * 0.7
       g.rotation.y = s * 1.4 // 교차 베기
     }
+  } else if (cls === 'runescribe') {
+    // 인장 필: 붉은 문양이 새겨진 도장 지팡이 — 끝에 육각 인장판이 떠 있다
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 1.7), wood)
+    shaft.position.y = 0.35
+    const seal = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.34, 0.34, 0.12, 6),
+      new THREE.MeshLambertMaterial({ color: 0xff5a7a, emissive: 0x7a1030, emissiveIntensity: 0.55 })
+    )
+    seal.position.y = 1.35
+    seal.rotation.x = Math.PI / 2
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.05, 6, 6), new THREE.MeshLambertMaterial({ color: 0xffd0c0 }))
+    rim.position.y = 1.35
+    g.add(shaft, seal, rim)
+    g.userData.gem = seal
+    g.position.set(0.5, 0.2, 0.9)
+    g.userData.pose = (t) => {
+      const sw = swing(t)
+      g.rotation.z = 0.3 - sw * 1.2 // 도장을 꾹 찍는 동작
+      seal.rotation.z += 0.06
+    }
   } else if (cls === 'terramancer') {
     // 돌망치: 굵은 자루 + 큰 바윗덩이 — 땅을 쿵 찍는다
     const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 1.9), wood)
@@ -4972,6 +5004,7 @@ const BOLT_STYLE = {
   engineer: { kind: 'hex', color: 0xffd94a }, // 스패너 너트
   snarer: { kind: 'seed', color: 0x8ede5a }, // 가시 씨앗
   terramancer: { kind: 'rock', color: 0xd8b088 }, // 자갈
+  runescribe: { kind: 'hex', color: 0xff5a7a, glow: 3.0 }, // 붉은 인장 문양탄
   boss_archmage: { kind: 'orb', color: 0xff8c3a, glow: 6.5, trail: true }, // 아르케인 평타 = 대형 화염구(마법사 화염구 확장)
 }
 function buildClassBolt(st) {
@@ -5342,6 +5375,9 @@ const FX_LOOK = {
   // 앞으로 뻗는 방향성 스킬
   dash: { color: 0xffffff, line: true, mode: 'forward', pcolor: 0xffffff, w: 2.2 },
   fissure: { color: 0xc9863c, line: true, mode: 'forward', pcolor: 0xffb060, w: 3.4, ground: true },
+  sigil: { color: 0xff5a7a, line: true, mode: 'forward', pcolor: 0xffb0c0, w: 2.4 }, // 각인사 인장탄 — 붉은 문양 궤적
+  sigilspread: { color: 0xff7a9a, ring: true, mode: 'out', pcolor: 0xffc0d0 }, // 각인 확산 — 퍼지는 문양 고리
+  sigilburst: { color: 0xff3a5a, ring: true, mode: 'out', pcolor: 0xffd0d8 }, // 파문 기폭 — 문양이 깨진다
   volley: { color: 0xfff0a0, line: true, mode: 'forward', pcolor: 0xfff4c0, w: 1.4 },
   chain: { color: 0x9fd6ff, line: true, mode: 'forward', pcolor: 0xe0f2ff, w: 1.0 }, // 마법사 체인 라이트닝 — 푸른 번개 줄기
   frost: { color: 0x9fe0ff, line: true, mode: 'forward', pcolor: 0xe0f6ff, w: 3.2 }, // 한빙술사 서리파동 — 차가운 서리 분사
@@ -8199,6 +8235,22 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             u.angelMark.position.set(0, (8 + Math.sin(view.time * 3) * 0.4) * ainv, 0)
             u.angelMark.material.opacity = h.brawlAngelT > 1.2 ? 0.95 : 0.4 + Math.abs(Math.sin(view.time * 8)) * 0.5 // 끝나기 직전 깜빡
           } else if (u.angelMark) u.angelMark.visible = false
+          // 🔯 각인사 인장 — 스택이 쌓일수록 문양이 커지고, 완인(5)이면 붉게 맥동한다
+          if ((h.runeN || 0) > 0) {
+            if (!u.runeMark) {
+              u.runeMark = emojiSprite('🔯', 2.0)
+              u.runeMark.material.depthTest = false
+              u.runeMark.renderOrder = 5
+              obj.add(u.runeMark)
+            }
+            u.runeMark.visible = true
+            const rinv = 1 / Math.max(0.3, obj.scale.x)
+            const full = h.runeN >= 5
+            const rsc = (1.1 + h.runeN * 0.26) * rinv * (full ? 1.15 + Math.sin(view.time * 7) * 0.12 : 1)
+            u.runeMark.scale.set(rsc, rsc, 1)
+            u.runeMark.position.set(0, 6.2 * rinv, 0)
+            u.runeMark.material.opacity = full ? 1 : 0.55 + h.runeN * 0.1
+          } else if (u.runeMark) u.runeMark.visible = false
           // 🐸 개구리 변이 표식 — 머리 위 개구리(몸은 0.45배로 쪼그라든다)
           if ((h.brawlFrogT || 0) > 0) {
             if (!u.frogMark) {
