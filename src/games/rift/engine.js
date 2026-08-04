@@ -100,6 +100,7 @@ const ROLE_PREF = {
   illusionist: ['jungle', 'mid', 'top', 'bot'], // 분신 암살자 — 정글
   terramancer: ['top', 'support', 'mid', 'bot'], // 지형 브루저 — 탑/지원
   runescribe: ['mid', 'bot', 'top'], // 인장 콤보 메이지 — 미드
+  bloodknight: ['top', 'jungle', 'mid', 'bot'], // 자해 브루저 — 탑/정글
 }
 // 한 봇에게 그 모드의 역할 풀에서 직업 선호에 맞는 빈 역할을 고른다(겹치면 다음 후보 → 남은 자리).
 function pickRole(cls, mode, taken) {
@@ -265,6 +266,13 @@ export const CLASSES = {
     skill2: { name: '각인 확산', icon: '🕸️', cd: 14, desc: '인장이 가장 많은 적의 인장을 주변 적들에게 그대로 퍼뜨린다' },
     ult: { name: '파문', icon: '💠', cd: 60, desc: '보이는 모든 인장을 일제히 기폭 — 스택이 많을수록 큰 피해. 기폭으로 쓰러진 적의 인장은 주변 적에게 옮겨간다(연쇄)' },
   },
+  bloodknight: {
+    name: '혈기사', icon: '🩸', desc: '자기 피를 태워 싸우는 근접 기사 — 스킬마다 체력을 대가로 치르고, 피가 모자랄수록 일격이 무거워진다',
+    hp: 640, hpLvl: 74, atk: 50, atkLvl: 7, range: 4.0, atkCd: 0.8, speed: 12.6, def: 0.88,
+    skill: { name: '혈인참', icon: '🗡️', cd: 6, desc: '체력 6%를 대가로 주변을 크게 베어 넘긴다 — 잃은 체력이 많을수록 피해가 커지고, 맞힌 수만큼 흡혈' },
+    skill2: { name: '핏빛 사슬', icon: '⛓️', cd: 16, desc: '체력 10%를 대가로 적 하나와 3초간 피의 사슬로 묶는다 — 멀어질 수 없고 계속 피를 빨아들인다' },
+    ult: { name: '혈우', icon: '🌧️', cd: 60, desc: '체력 20%를 대가로 주변에 피의 비를 뿌린다 — 광역 대피해 + 입힌 피해의 절반을 회복(다수에게 맞히면 만신창이에서 부활한다)' },
+  },
   // ── 보스전(5:1) 전용 보스 — boss:true는 선택 목록(CLASS_IDS)에서 제외되고 3배 덩치로 그려진다 ──
   boss_colossus: {
     boss: true, name: '파멸의 거인', icon: '👹',
@@ -316,6 +324,7 @@ export const CLASS_ROLE = {
   warrior: 'fighter', gladiator: 'fighter', swordmaster: 'fighter', tank: 'fighter', beastmaster: 'fighter', terramancer: 'fighter',
   healer: 'support', guardian: 'support',
   runescribe: 'mage',
+  bloodknight: 'fighter',
   assassin: 'jungle', catcher: 'jungle', snarer: 'jungle', chronomancer: 'jungle', illusionist: 'jungle',
 }
 // 봇 팀이 채우고 싶어하는 역할 우선순위(앞에서부터 한 자리씩) — 균형 잡힌 조합.
@@ -347,6 +356,7 @@ export const ABILITY_SCALING = {
   illusionist: { skill: { dmg: [50, 0.9], note: '분신이 적을 쫓아가 내리찍음(확정 명중) + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '연막 펑 — 3체 돌출, 전투 분신 2(평타 80%)' } },
   terramancer: { skill: { dmg: [30, 0.55], note: '0.5초 간격 3연투 · 각도는 첫 발에 고정' }, skill2: { dmg: [15, 0.25], note: '벽 명중 시 1.5초 기절 + 3초 길막' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
   runescribe: { skill: { dmg: [26, 0.45], note: '관통 · 인장 3스택' }, skill2: { note: '인장 최다 표적의 스택을 주변에 복제' }, ult: { dmg: [30, 0.5], note: '인장 1스택당 피해 · 처치 시 스택이 주변으로 전이' } },
+  bloodknight: { skill: { dmg: [40, 0.85], note: '체력 6% 소모 · 잃은 체력만큼 최대 +60% · 맞힌 수만큼 흡혈' }, skill2: { dot: [12, 0.18], dotDur: 3, note: '체력 10% 소모 · 3초 결속(멀어질 수 없음) + 흡혈' }, ult: { dmg: [70, 1.05], note: '체력 20% 소모 · 입힌 피해의 50% 회복' } },
 }
 
 // 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 하이브리드는 공·주 평균, 그 외는 공격력.
@@ -830,6 +840,10 @@ function makeHeroState(p, cls, pos, map, rng) {
       fearT: 0, // 공포(공포술사) — 통제 불능: 랜덤 방향 질주, 행동 불가
       fearDir: 0, // 공포 질주 방향(라디안) — FEAR_TURN_T마다 재추첨
       fearTurnT: 0, // 다음 방향 재추첨까지 남은 시간
+      chainT: 0, // 혈기사 핏빛 사슬 — 남은 결속 시간(>0이면 표적과 묶여 있다)
+      chainId: null, // 사슬로 묶은 표적 id
+      chainTickT: 0, // 다음 사슬 피해까지
+      chainDmg: 0, // 사슬 틱 피해(시전 시점 스냅샷)
       slingN: 0, // 대지술사 돌팔매 — 남은 연투 수 (>0이면 시퀀스 진행 중)
       slingT: 0, // 다음 발사까지 남은 시간
       slingDir: 0, // 첫 발에 고정된 발사 각도
@@ -1242,6 +1256,27 @@ const atkOf = (h, st = null) => heroAtk(h) * dmgMult(h) * (st?.mode === 'brawl' 
 //  · 마법 계열(마법사·힐러)은 레벨로 성장하는 기본 주문력 + 아이템 주문력을 쓴다.
 //  · 그 외(전사·궁수·암살자·탱커)는 공격력(heroAtk)을 그대로 주력 스탯으로 쓴다.
 //  수호기사도 AP 인챈터로 편입 — 보호막이 주문력에 비례한다.
+// ── 혈기사 혈법(血法) — 스킬 코스트가 마나가 아니라 '내 피'다. 절대 자멸하지 않게 최소 1은 남긴다.
+const BLOOD_BASIC_LIFESTEAL = 0.08 // 평타에 붙는 흡혈(코스트를 회수하는 기본 루프)
+const BLOOD_COST_SKILL = 0.06 // 혈인참 — 최대 체력 대비
+const BLOOD_COST_CHAIN = 0.10 // 핏빛 사슬
+const BLOOD_COST_ULT = 0.20 // 혈우
+const BLOOD_RAGE_MAX = 0.6 // 잃은 체력 비례 피해 증가 상한(+60%)
+const BLOOD_SLASH_R = 5.5 // 혈인참 반경
+const BLOOD_SLASH_LEECH = 0.10 // 혈인참: 명중 1인당 최대 체력의 이 비율만큼 흡혈
+const BLOOD_CHAIN_RANGE = 9 // 사슬 표적 탐색 거리
+const BLOOD_CHAIN_MAX = 7 // 사슬 최대 길이 — 넘어가면 서로 당겨진다
+const BLOOD_CHAIN_TIME = 3 // 결속 지속
+const BLOOD_CHAIN_TICK = 0.5 // 사슬 피해 간격
+const BLOOD_RAIN_R = 8 // 혈우 반경
+const BLOOD_RAIN_LEECH = 0.5 // 혈우: 입힌 피해의 이 비율을 회복
+// 잃은 체력 비례 배수 — 빈사일수록 일격이 무거워진다(혈인참·혈우 공용)
+const bloodRage = (h) => 1 + Math.min(BLOOD_RAGE_MAX, 1 - h.hp / h.maxHp)
+// 피의 대가: 최대 체력의 frac만큼 치른다. 이걸로는 죽지 않는다(최소 1 보장).
+function payBlood(h, frac) {
+  h.hp = Math.max(1, h.hp - h.maxHp * frac)
+}
+
 // ── 각인사 인장(印章) — 적 몸에 쌓이는 스택. 만료는 '읽을 때' 판정하는 지연 방식이라
 //  히어로·병사·정글몹 어디에 붙어도 감쇠 루프가 필요 없다(runeStacks가 유일한 진입점).
 const RUNE_MAX = 5 // 최대 스택 = 완인(完印)
@@ -2171,6 +2206,32 @@ const SKILLS = {
     })
     pushFxDir(state, 'sigil', h.x, h.z, SIGIL_RANGE, dir, h.team)
   },
+  // 혈기사 혈인참: 체력을 대가로 주변을 크게 벤다 — 잃은 체력에 비례해 무거워지고, 맞힌 수만큼 흡혈
+  bloodknight(state, h) {
+    payBlood(h, BLOOD_COST_SKILL) // 코스트 먼저 — 그만큼 이 일격이 세진다(자기 피가 곧 위력)
+    const dmg = skillDmg(h, 40, 0.85) * bloodRage(h) // 공격력 계수 (혈기사)
+    const r2 = BLOOD_SLASH_R * BLOOD_SLASH_R
+    let hits = 0
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || dist2(h, e) > r2) continue
+      damageHero(state, e, dmg, h)
+      hits++
+    }
+    for (const m of [...state.minions]) {
+      if (m.team === h.team || dist2(h, m) > r2) continue
+      damageMinion(state, m, dmg, h)
+      hits++
+    }
+    for (const m of state.monsters) {
+      if (!m.alive || dist2(h, m) > r2) continue
+      damageMonster(state, m, dmg, h)
+      hits++
+    }
+    if (hits > 0 && h.hp > 0) { // 벤 수만큼 피를 되돌려 받는다 — 난전일수록 이득
+      h.hp = Math.min(h.maxHp, h.hp + lifestealAmount(h.maxHp * BLOOD_SLASH_LEECH * hits, state))
+    }
+    pushFx(state, 'bloodslash', h.x, h.z, BLOOD_SLASH_R, h.team, 0.7)
+  },
 }
 
 // ── 궁극기 (레벨 3부터) ──
@@ -2682,6 +2743,40 @@ const ULTS = {
     }
     state._ultHit = false
   },
+  // 혈기사 혈우: 체력을 크게 치르고 주변에 피의 비 — 입힌 피해의 절반을 회복(다수 명중 시 대역전)
+  bloodknight(state, h) {
+    payBlood(h, BLOOD_COST_ULT)
+    const dmg = skillDmg(h, 70, 1.05) * bloodRage(h) // 공격력 계수 (혈기사) — 코스트 후 체력이라 더 무겁다
+    const r2 = BLOOD_RAIN_R * BLOOD_RAIN_R
+    let dealt = 0
+    state._ultHit = true // 궁 피해는 난투전 게이지를 재생산하지 않는다
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || dist2(h, e) > r2) continue
+      const before = e.hp
+      damageHero(state, e, dmg, h, false, '혈우')
+      dealt += Math.max(0, before - e.hp)
+      if (state.mode === 'brawl' && e.hp > 0 && !(e.brawlGuardT > 0) && !(e.brawlStarT > 0) && !(e.brawlMushT > 0)) {
+        applyKnockback(state, e, h.x, h.z, 6) // 난투전 대혈우: 피의 폭풍이 전원을 밀어낸다
+      }
+    }
+    for (const m of [...state.minions]) {
+      if (m.team === h.team || dist2(h, m) > r2) continue
+      const before = m.hp
+      damageMinion(state, m, dmg, h)
+      dealt += Math.max(0, before - m.hp)
+    }
+    for (const m of state.monsters) {
+      if (!m.alive || dist2(h, m) > r2) continue
+      const before = m.hp
+      damageMonster(state, m, dmg, h)
+      dealt += Math.max(0, before - m.hp)
+    }
+    state._ultHit = false
+    if (dealt > 0 && h.hp > 0) {
+      h.hp = Math.min(h.maxHp, h.hp + lifestealAmount(dealt * BLOOD_RAIN_LEECH, state))
+    }
+    pushFx(state, 'bloodrain', h.x, h.z, BLOOD_RAIN_R, h.team, 1.1)
+  },
 }
 
 // 사슬갈고리 발사: 발사 준비(hookWindT)가 끝났을 때 호출 — 고정 방향(hookDir)으로 직진 투사체.
@@ -3086,6 +3181,17 @@ const SKILLS2 = {
     }
     pushFx(state, 'sigilspread', src.x, src.z, SPREAD_RADIUS, h.team, 0.9)
   },
+  // 혈기사 핏빛 사슬: 적 하나와 피로 묶인다 — 3초간 멀어질 수 없고(양쪽이 서로 당겨짐) 계속 빨린다
+  bloodknight(state, h) {
+    const foe = nearestFoeHero(state, h, BLOOD_CHAIN_RANGE)
+    if (!foe) return false // 묶을 상대가 없으면 피도 쿨도 쓰지 않는다
+    payBlood(h, BLOOD_COST_CHAIN)
+    h.chainT = BLOOD_CHAIN_TIME
+    h.chainId = foe.id
+    h.chainTickT = BLOOD_CHAIN_TICK
+    h.chainDmg = Math.round(skillDmg(h, 12, 0.18)) // 틱 피해 — 시전 시점 스냅샷
+    pushFx(state, 'bloodchain', foe.x, foe.z, 2.4, h.team, 0.8)
+  },
 }
 
 // 술식 공통: 판정 함수 pred(e)에 걸리는 모든 적(영웅/병사/정글몹)에게 피해(+기절/빙결/속박)
@@ -3378,6 +3484,9 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   // 결속 해제: 내가 묶여 있었으면 풀고, 내가 결속을 건 수호기사였으면 묶인 아군을 모두 풀어 준다
   victim.bindT = 0
   victim.bindBy = null
+  victim.chainT = 0 // 핏빛 사슬은 죽으면 끊긴다(양쪽 다)
+  victim.chainId = null
+  for (const o of state.heroes) if (o.chainId === victim.id) { o.chainT = 0; o.chainId = null }
   if (victim.bindAnchorT > 0) {
     victim.bindAnchorT = 0
     for (const a of state.heroes) if (a.bindBy === victim.id) { a.bindT = 0; a.bindBy = null }
@@ -4614,6 +4723,35 @@ function stepHero(state, h, dt) {
   h.berserkT = Math.max(0, h.berserkT - dt)
   h.rageT = Math.max(0, h.rageT - dt)
   h.wardT = Math.max(0, h.wardT - dt)
+  if (h.chainT > 0) { // 🩸 핏빛 사슬: 표적과 묶여 있는 동안 서로 멀어질 수 없고, 피가 계속 넘어온다
+    h.chainT = Math.max(0, h.chainT - dt)
+    const tgt = h.chainId ? state.heroes.find((o) => o.id === h.chainId) : null
+    if (!tgt || tgt.respawnT > 0 || tgt.hp <= 0 || h.hp <= 0 || h.respawnT > 0 || h.chainT === 0) {
+      h.chainT = 0
+      h.chainId = null
+    } else {
+      const cd = dist(h, tgt)
+      if (cd > BLOOD_CHAIN_MAX) { // 사슬이 팽팽해지면 양쪽을 가운데로 끌어당긴다(도망 봉쇄)
+        const pull = Math.min(cd - BLOOD_CHAIN_MAX, 24 * dt) // 히어로 이동속도(12~13)보다 빠르게 — 사슬은 도망을 이긴다
+        const ux = (tgt.x - h.x) / cd
+        const uz = (tgt.z - h.z) / cd
+        h.x += ux * pull * 0.5
+        h.z += uz * pull * 0.5
+        tgt.x -= ux * pull * 0.5
+        tgt.z -= uz * pull * 0.5
+        state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
+        state.map.resolveTerrain(tgt, HERO_RADIUS, colliders(state))
+      }
+      h.chainTickT -= dt
+      if (h.chainTickT <= 0) {
+        h.chainTickT = BLOOD_CHAIN_TICK
+        const before = tgt.hp
+        damageHero(state, tgt, h.chainDmg, h, false, '핏빛 사슬')
+        const drained = Math.max(0, before - tgt.hp)
+        if (drained > 0) h.hp = Math.min(h.maxHp, h.hp + lifestealAmount(drained * 0.5, state))
+      }
+    }
+  }
   if (h.bindT > 0 && (h.bindT = Math.max(0, h.bindT - dt)) === 0) h.bindBy = null
   h.bindAnchorT = Math.max(0, h.bindAnchorT - dt)
   h.vulnT = Math.max(0, h.vulnT - dt)
@@ -5461,6 +5599,7 @@ function stepProjectiles(state, dt) {
       }
       let ls = p.kind === 'bolt' && owner.items ? itemBonus(owner).lifesteal : 0
       if (p.kind === 'bolt' && owner.cls === 'gladiator') ls += GLAD_BASIC_LIFESTEAL // 검투사 고유 평타 흡혈
+      if (p.kind === 'bolt' && owner.cls === 'bloodknight') ls += BLOOD_BASIC_LIFESTEAL // 🩸 피의 대가
       if (ls > 0 && owner.respawnT <= 0 && (p.target.tk === 'hero' || p.target.tk === 'minion' || p.target.tk === 'monster')) {
         owner.hp = Math.min(owner.maxHp, owner.hp + lifestealAmount(p.dmg * ls, state)) // 로그 감쇠 적용
       }
@@ -6030,6 +6169,8 @@ const BOT_BUILD = {
   terramancer: ['leather', 'frost_staff', 'mirror_shield', 'giant_heart', 'heal_flask'],
   // 각인사: 셋업형 폭딜 메이지 — 주문력 + 쿨감(스택을 자주 쌓는다)
   runescribe: ['orb', 'wisdom_hat', 'flame_core', 'void_staff', 'heal_flask'],
+  // 혈기사: 자해 브루저 — 공격력 + 흡혈 + 체력(코스트를 감당할 몸)
+  bloodknight: ['dagger', 'vampire_scythe', 'berserker_axe', 'giant_heart', 'heal_flask'],
 }
 
 // 콜로세움 봇 장보기 순서: 사람의 고승률 트리를 흉내 낸다 —
@@ -6373,6 +6514,7 @@ const FARM_SKILL_RANGE = {
   gladiator: GLAD_SLASH_RADIUS, // 휘둘러베기 (자기 중심 + 흡혈)
   terramancer: SLING_RANGE - 2, // 돌팔매 (스플래시 3연투)
   runescribe: SIGIL_RANGE - 3, // 인장탄 (관통)
+  bloodknight: BLOOD_SLASH_R, // 혈인참 (자기 중심 광역)
   windcaller: GUST_RANGE * 0.6, // 돌풍 (굴러가는 회오리)
 }
 function botFarmSkills(state, h) {
@@ -6427,6 +6569,7 @@ function botMonsterSkills(state, h, big) {
   else if (h.cls === 'cryomancer' && d < FROST_RANGE - 1) { aim(); castSkill(state, h.id) }
   else if (h.cls === 'terramancer' && d < SLING_RANGE - 2) { aim(); castSkill(state, h.id) }
   else if (h.cls === 'runescribe' && d < SIGIL_RANGE - 2) { aim(); castSkill(state, h.id) }
+  else if (h.cls === 'bloodknight' && d < BLOOD_SLASH_R && h.hp > h.maxHp * 0.35) castSkill(state, h.id)
   else if (h.cls === 'windcaller' && d < GUST_RANGE - 2) { aim(); castSkill(state, h.id) }
   else if (h.cls === 'tank' && big.aggro === h.id && d < 6) castSkill(state, h.id) // 물렸으면 방패막기
 }
@@ -9236,6 +9379,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'illusionist' && h.hp < h.maxHp * 0.45) castSkill2(state, h.id) // 분신과 자리바꿈으로 이탈
     else if (h.cls === 'terramancer' && d < QUAKE_WALL_AHEAD + 2) castSkill2(state, h.id) // 융기 기절 → 돌팔매 연계
     else if (h.cls === 'runescribe' && nearCount >= 2 && runeStacks(state, foe) >= 2) castSkill2(state, h.id) // 뭉친 적에 인장 확산
+    else if (h.cls === 'bloodknight' && d < BLOOD_CHAIN_RANGE - 1 && h.hp > h.maxHp * 0.35) castSkill2(state, h.id) // 사슬로 묶어 결투 강제
   }
   const ready = h.skillCd <= 0
   if (ready) {
@@ -9256,6 +9400,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'illusionist' && d < 10) castSkill(state, h.id) // 분신+은신으로 교란
     else if (h.cls === 'terramancer' && d < SLING_RANGE - 2) castSkill(state, h.id) // 돌팔매 3연투
     else if (h.cls === 'runescribe' && d < SIGIL_RANGE - 2) castSkill(state, h.id) // 인장탄으로 스택 적립
+    else if (h.cls === 'bloodknight' && d < BLOOD_SLASH_R && h.hp > h.maxHp * 0.2) castSkill(state, h.id) // 혈인참(피가 너무 없으면 자제)
     // 힐러 치유·수호기사 보호막은 stepBots 위쪽에서 항상 챙긴다
   }
   if (h.ultCd > 0 || h.lvl < ULT_LEVEL) return
@@ -9293,6 +9438,8 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     castUlt(state, h.id) // 단말마 — 적진으로 파고들어 광역 공포 이니시
   } else if (h.cls === 'illusionist' && (nearCount >= 1 || h.hp < h.maxHp * 0.5)) {
     castUlt(state, h.id) // 환영난무 — 교란 + 은신
+  } else if (h.cls === 'bloodknight' && d < BLOOD_RAIN_R - 1 && (nearCount >= 2 || h.hp < h.maxHp * 0.55)) {
+    castUlt(state, h.id) // 혈우 — 몰렸을 때(또는 다수 명중) 흡혈로 역전
   } else if (h.cls === 'runescribe' && (runeStacks(state, foe) >= 4 || (nearCount >= 2 && runeStacks(state, foe) >= 2))) {
     castUlt(state, h.id) // 파문 — 스택이 익었을 때 터뜨린다
   } else if (h.cls === 'terramancer' && d < CAGE_RANGE - 1 && foe.hp < foe.maxHp * 0.55) {
@@ -9694,6 +9841,8 @@ export function makeView(state) {
       bindAnchorT: r2d(h.bindAnchorT), // 수호기사 앵커 (구체 연출)
       vulnT: r2d(h.vulnT),
       runeN: runeStacks(state, h), // 🔯 각인사 인장 스택(0~5) — 씬이 머리 위 문양으로 그린다
+      chainT: r2d(h.chainT || 0), // ⛓️ 핏빛 사슬 — 씬이 시전자→표적 붉은 사슬을 그린다
+      chainId: h.chainId || null,
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
       fallT: r2d(h.fallT),
