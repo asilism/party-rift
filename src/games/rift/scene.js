@@ -5501,6 +5501,7 @@ const FX_LOOK = {
   bloodchain: { color: 0xff4a4a, ring: true, mode: 'in', pcolor: 0xffa0a0 }, // 핏빛 사슬 결속
   bloodrain: { color: 0xb01818, ring: true, mode: 'out', pcolor: 0xff5050 }, // 혈우 — 피의 비
   shadowrise: { color: 0x7a4ad0, ring: true, mode: 'rise', pcolor: 0xb08aff }, // 그림자 융기 — 땅에서 솟는 원혼
+  shadowboom: { color: 0x8a3ad0, ring: true, mode: 'out', pcolor: 0xd0a0ff }, // 그림자 폭발 — 자폭하는 원혼
   charmcast: { color: 0xff8ad0, ring: true, mode: 'out', pcolor: 0xffd0ea }, // 매혹 시전
   charmhit: { color: 0xff5ab0, ring: true, mode: 'in', pcolor: 0xffc0e0 }, // 매혹 명중 — 홀린다
   mist: { color: 0xc9a0ff, line: true, mode: 'forward', pcolor: 0xe8d0ff, w: 4.5 }, // 미혹의 안개
@@ -7577,12 +7578,12 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         if (!zone) {
           zone = new THREE.Group()
           const disc = new THREE.Mesh(
-            new THREE.CircleGeometry(7, 40),
+            new THREE.CircleGeometry(14, 48),
             new THREE.MeshBasicMaterial({ color: 0xb06aff, transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
           )
           disc.rotation.x = -Math.PI / 2
           const rim = new THREE.Mesh(
-            new THREE.RingGeometry(6.6, 7.2, 44),
+            new THREE.RingGeometry(13.4, 14.4, 52),
             new THREE.MeshBasicMaterial({ color: 0xe0b0ff, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
           )
           rim.rotation.x = -Math.PI / 2
