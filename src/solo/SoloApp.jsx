@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { CLASSES, CLASS_IDS, TEAM_SIZES, BOSS_IDS } from '../games/rift/engine.js'
+import { CLASSES, CLASS_IDS, RELEASED_CLASSES, TEAM_SIZES, BOSS_IDS } from '../games/rift/engine.js'
 import { ZODIAC, getZodiac } from '../shared/zodiac.js'
 import { riftNet } from '../games/rift/netgame.js'
 import { createLocalNet } from '../net/localNet.js'
@@ -1274,7 +1274,7 @@ function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
 
         <section className="char-screen__pick">
           <div className="char-grid">
-            {CLASS_IDS.map((id, idx) => {
+            {RELEASED_CLASSES.map((id, idx) => {
               const cc = CLASSES[id]
               const rr = records[id]
               const locked = !unlocked.has(id)
@@ -1336,7 +1336,7 @@ const RECORD_TABS = [
 
 // 직업 전적 카드(3v3/5v5 공용) — 한 모드의 직업별 승패·KDA
 function ClassRecordCard({ records }) {
-  const rows = CLASS_IDS.filter((id) => records[id]?.games > 0)
+  const rows = RELEASED_CLASSES.filter((id) => records[id]?.games > 0)
   const total = rows.reduce(
     (a, id) => ({ games: a.games + records[id].games, wins: a.wins + records[id].wins }),
     { games: 0, wins: 0 }
