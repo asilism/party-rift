@@ -278,7 +278,7 @@ export const CLASSES = {
   necromancer: {
     name: '강령술사', icon: '💀', desc: '그림자를 부리는 소환 술사 — 마지막으로 쓰러뜨린 적을 그림자로 되살려 그 무기를 그대로 쓰게 만든다',
     hp: 490, hpLvl: 54, atk: 42, atkLvl: 6, range: 9.5, atkCd: 1.0, speed: 12.0,
-    skill: { name: '그림자 소환', icon: '👤', cd: 10, desc: '그림자 병사를 불러낸다 — 최대 3기까지 거느린다(넘치면 가장 오래된 것이 흩어진다)' },
+    skill: { name: '그림자 소환', icon: '👤', cd: 8, desc: '그림자 병사를 불러낸다 — 최대 3기까지 거느린다(넘치면 가장 오래된 것이 흩어진다)' },
     skill2: { name: '그림자 쇄도', icon: '🌑', cd: 14, desc: '거느린 그림자 전원이 적에게 달려든다 — 광폭화(공속↑)와 함께 도약' },
     ult: { name: '그림자 사역', icon: '💀', cd: 65, desc: '마지막으로 처치한 적 영웅을 "그림자 ○○"로 되살려 20초간 부린다 — 그 직업의 평타를 그대로 쓴다(처치 기록이 없으면 그림자 병사 3기)' },
   },
@@ -614,7 +614,7 @@ const SUMMON_SPEC = {
   turret: { hp: 90, hpCoef: 2.5, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity }, // 초반 ~210(4.7대) → 후반 ~490(3.3대)
   cannon: { hp: 480, hpCoef: 3.0, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 }, // 초반 ~620(13.7대) → 후반 ~960(6.4대)
   // 강령술사 그림자 병사: 약하지만 셋씩 몰려다닌다(자원이 아니라 쿨로 뽑는다)
-  shade: { hp: 190, hpCoef: 2.6, dmg: 30, coef: 0.18, range: 2.6, aggro: 16, speed: 9.8, mobile: true, cd: 1.0, life: 10 }, // 3v3 40% → 상향(2026-08-04)
+  shade: { hp: 190, hpCoef: 2.6, dmg: 34, coef: 0.2, range: 2.6, aggro: 16, speed: 9.8, mobile: true, cd: 1.0, life: 15 }, // 소환형 기준선(야조 60%) 대비 32.5% → 유지력 상향(2026-08-04)
   // 야수조련사 난투전 궁 전용: 진짜 용 — 크고 아프고 짧게 산다
   dragonpet: { hp: 300, hpCoef: 2.0, dmg: 36, coef: 0.15, range: 4.4, aggro: 22, speed: 8.2, mobile: true, cd: 1.6, life: 7 }, // 시뮬 승률 편중 반복 너프(2026-08-03, 최종 50%→)
 }
