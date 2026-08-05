@@ -5618,7 +5618,7 @@ test('몽마 미혹의 구체: 관통해 날아갔다가 되돌아오며 한 번
   const hp1 = t.hp
   assert.ok(hp1 < hp0, '전진 중 관통 피해')
   assert.ok(t.slowT > 0, '스치면 둔화')
-  run(g, 1.6) // 끝점에서 되돌아와 다시 지나간다
+  run(g, 2.6) // 끝점(30)에서 되돌아와 다시 지나간다
   assert.ok(t.hp < hp1, `귀환 길에 한 번 더 (${Math.round(hp1)}→${Math.round(t.hp)})`)
   run(g, 2.0)
   assert.ok(!g.projectiles.some((p) => p.kind === 'mistorb'), '손에 돌아오면 사라진다')
@@ -5631,7 +5631,7 @@ test('몽마 미혹의 구체: 내가 움직이면 돌아오는 궤적도 따라
   d.x = 0; d.z = 0; d.dir = 0
   t.x = 40; t.z = 40 // 방해 없이
   castSkill(g, d.id)
-  run(g, 0.75) // 끝점(15) 도달 → 귀환 시작 (속도 22이므로 ~0.68초)
+  run(g, 1.45) // 끝점(30) 도달 → 귀환 시작 (속도 22이므로 ~1.36초)
   const orb = g.projectiles.find((p) => p.kind === 'mistorb')
   assert.ok(orb && orb.back, '귀환 단계')
   d.x = 0; d.z = 14 // 몽마가 옆으로 크게 이동
