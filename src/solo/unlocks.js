@@ -1,4 +1,4 @@
-import { CLASS_IDS } from '../games/rift/engine.js'
+import { CLASS_IDS, TEST_OPEN_NEW_CLASSES, NEW_CLASS_IDS } from '../games/rift/engine.js'
 import { loadCoinUnlocks } from '../shared/storage.js'
 import { hasUnlockAll } from '../shared/iap.js'
 
@@ -11,7 +11,9 @@ export const STARTER_COUNT = 6
 export function unlockedClassIds() {
   if (hasUnlockAll()) return [...CLASS_IDS]
   const coins = loadCoinUnlocks().filter((id) => CLASS_IDS.includes(id))
-  return [...new Set([...CLASS_IDS.slice(0, STARTER_COUNT), ...coins])]
+  // 🧪 테스트 개방 중인 신규 직업은 코인 없이 바로 쓴다(해금 가격 곡선에는 영향 없음)
+  const testOpen = TEST_OPEN_NEW_CLASSES ? NEW_CLASS_IDS : []
+  return [...new Set([...CLASS_IDS.slice(0, STARTER_COUNT), ...coins, ...testOpen])]
 }
 
 export function unlockedCount() {
