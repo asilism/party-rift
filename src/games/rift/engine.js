@@ -273,7 +273,7 @@ export const CLASSES = {
     hp: 640, hpLvl: 74, atk: 50, atkLvl: 7, range: 4.0, atkCd: 0.8, speed: 12.6, def: 0.88,
     skill: { name: '혈인참', icon: '🗡️', cd: 6, desc: '체력 6%를 대가로 주변을 크게 베어 넘긴다 — 잃은 체력이 많을수록 피해가 커지고, 맞힌 수만큼 흡혈' },
     skill2: { name: '핏빛 사슬', icon: '⛓️', cd: 16, desc: '체력 10%를 대가로 주변의 적 전원을 3초간 피의 사슬로 묶는다 — 아무도 멀어질 수 없고, 묶여 있는 내내 그들의 피가 나에게 넘어온다' },
-    ult: { name: '혈우', icon: '🌧️', cd: 60, desc: '체력 20%를 대가로 아주 넓은 범위에 피의 비를 뿌린다 — 광역 대피해 + 입힌 피해의 절반을 회복(다수에게 맞히면 만신창이에서 부활한다)' },
+    ult: { name: '혈우', icon: '🌧️', cd: 72, desc: '체력 20%를 대가로 아주 넓은 범위에 피의 비를 뿌린다 — 광역 대피해 + 입힌 피해의 절반을 회복(다수에게 맞히면 만신창이에서 부활한다)' },
   },
   necromancer: {
     name: '강령술사', icon: '💀', desc: '그림자를 부리는 소환 술사 — 마지막으로 쓰러뜨린 적을 그림자로 되살려 그 무기를 그대로 쓰게 만든다',
@@ -374,7 +374,7 @@ export const ABILITY_SCALING = {
   illusionist: { skill: { dmg: [50, 0.9], note: '분신이 적을 쫓아가 내리찍음(확정 명중) + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '연막 펑 — 3체 돌출, 전투 분신 2(평타 80%)' } },
   terramancer: { skill: { dmg: [30, 0.55], note: '0.5초 간격 3연투 · 각도는 첫 발에 고정' }, skill2: { dmg: [15, 0.25], note: '벽 명중 시 1.5초 기절 + 3초 길막' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
   runescribe: { skill: { dmg: [26, 0.45], note: '관통 · 인장 3스택' }, skill2: { note: '인장 최다 표적의 스택을 주변에 복제' }, ult: { dmg: [30, 0.5], note: '인장 1스택당 피해 · 처치 시 스택이 주변으로 전이' } },
-  bloodknight: { skill: { dmg: [40, 0.85], note: '체력 6% 소모 · 잃은 체력만큼 최대 +60% · 맞힌 수만큼 흡혈' }, skill2: { dot: [12, 0.18], dotDur: 3, note: '체력 10% 소모 · 3초 결속(멀어질 수 없음) + 준 피해 전부 흡혈' }, ult: { dmg: [70, 1.05], note: '체력 20% 소모 · 반경 16 · 입힌 피해의 50% 회복' } },
+  bloodknight: { skill: { dmg: [40, 0.85], note: '체력 6% 소모 · 잃은 체력만큼 최대 +60% · 맞힌 수만큼 흡혈' }, skill2: { dot: [12, 0.18], dotDur: 3, note: '체력 10% 소모 · 3초 결속(멀어질 수 없음) + 준 피해 전부 흡혈' }, ult: { dmg: [52, 0.78], note: '체력 20% 소모 · 반경 16 · 입힌 피해의 35% 회복(최대 체력 35% 상한)' } },
   necromancer: { skill: { note: '그림자 병사 1기 소환(최대 3 · 15초)' }, skill2: { dmg: [70, 0.85], note: '그림자 전원 자폭 — 각자 반경 6 광역' }, ult: { note: '마지막 처치 영웅을 그림자로 20초 사역(없으면 그림자 3기)' } },
   dreameater: { skill: { dmg: [30, 0.5], note: '명중 시 1.8초 매혹(시전자에게 강제 보행 · 행동 불가)' }, skill2: { dmg: [26, 0.45], note: '부채꼴 혼란 1.5초' }, ult: { note: '내 자리 중심 반경 14 · 3.5초 · 영토 안 적은 조작 불능 + 서로를 공격(이탈 시 해제)' } },
 }
@@ -1332,19 +1332,20 @@ function dreamVictimTarget(state, h, range) {
 // ── 혈기사 혈법(血法) — 스킬 코스트가 마나가 아니라 '내 피'다. 절대 자멸하지 않게 최소 1은 남긴다.
 const BLOOD_BASIC_LIFESTEAL = 0.08 // 평타에 붙는 흡혈(코스트를 회수하는 기본 루프)
 const BLOOD_COST_SKILL = 0.06 // 혈인참 — 최대 체력 대비
-const BLOOD_COST_CHAIN = 0.10 // 핏빛 사슬
+const BLOOD_COST_CHAIN = 0.15 // 핏빛 사슬(전원 결속은 강력한 봉쇄 — 대가도 그만큼)
 const BLOOD_COST_ULT = 0.20 // 혈우
 const BLOOD_RAGE_MAX = 0.6 // 잃은 체력 비례 피해 증가 상한(+60%)
 const BLOOD_SLASH_R = 5.5 // 혈인참 반경
-const BLOOD_SLASH_LEECH = 0.10 // 혈인참: 명중 1인당 최대 체력의 이 비율만큼 흡혈
+const BLOOD_SLASH_LEECH = 0.06 // 혈인참: 명중 1인당 최대 체력의 이 비율만큼 흡혈
+const BLOOD_SLASH_LEECH_CAP = 0.22 // 혈인참 1회 흡혈 상한(최대 체력 대비) — 병사 떼를 베어도 풀피가 되진 않게
 const BLOOD_CHAIN_RANGE = 9 // 사슬 결속 반경 — 이 안의 적 '전원'이 함께 묶인다
-const BLOOD_CHAIN_MAX = 7 // 사슬 최대 길이 — 넘어가면 서로 당겨진다
-const BLOOD_CHAIN_TIME = 3 // 결속 지속
+const BLOOD_CHAIN_MAX = 8.5 // 사슬 최대 길이 — 묶여도 숨 쉴 틈은 준다 — 넘어가면 서로 당겨진다
+const BLOOD_CHAIN_TIME = 2.4 // 결속 지속(3초 전원 봉쇄는 3v3에서 과했다)
 const BLOOD_CHAIN_TICK = 0.4 // 사슬 피해 간격(촘촘하게 — 지속 흡혈 체감)
-const BLOOD_CHAIN_LEECH = 1.6 // 사슬 흡혈 배율 — 묶어 둔 만큼 확실히 돌려받는다
+const BLOOD_CHAIN_LEECH = 1.1 // 사슬 흡혈 배율(개당) — 묶은 수만큼 쌓인다(코스트 10%는 넘게)
 const BLOOD_RAIN_R = 16 // 혈우 반경(2배 — 한타 전체를 적신다)
-const BLOOD_RAIN_LEECH = 0.5 // 혈우: 입힌 피해의 이 비율을 회복
-const BLOOD_RAIN_HEAL_CAP = 0.7 // 혈우 회복 상한(최대 체력 대비) — 코스트 20%를 확실히 넘어 '역전기'가 되게
+const BLOOD_RAIN_LEECH = 0.35 // 혈우: 입힌 피해의 이 비율을 회복(반경 16이라 다수 명중이 쉽다 — 3v3 75% 조정)
+const BLOOD_RAIN_HEAL_CAP = 0.35 // 혈우 회복 상한(최대 체력 대비) — 코스트 20%를 넘되 무한 부활은 아니게
 // 잃은 체력 비례 배수 — 빈사일수록 일격이 무거워진다(혈인참·혈우 공용)
 const bloodRage = (h) => 1 + Math.min(BLOOD_RAGE_MAX, 1 - h.hp / h.maxHp)
 // 피의 대가: 최대 체력의 frac만큼 치른다. 이걸로는 죽지 않는다(최소 1 보장).
@@ -2307,8 +2308,9 @@ const SKILLS = {
       damageMonster(state, m, dmg, h)
       hits++
     }
-    if (hits > 0 && h.hp > 0) { // 벤 수만큼 피를 되돌려 받는다 — 난전일수록 이득
-      h.hp = Math.min(h.maxHp, h.hp + lifestealAmount(h.maxHp * BLOOD_SLASH_LEECH * hits, state))
+    if (hits > 0 && h.hp > 0) { // 벤 수만큼 피를 되돌려 받는다 — 난전일수록 이득(단, 1회 상한)
+      const leech = Math.min(h.maxHp * BLOOD_SLASH_LEECH * hits, h.maxHp * BLOOD_SLASH_LEECH_CAP)
+      h.hp = Math.min(h.maxHp, h.hp + lifestealAmount(leech, state))
     }
     pushFx(state, 'bloodslash', h.x, h.z, BLOOD_SLASH_R, h.team, 0.7)
   },
@@ -2851,7 +2853,7 @@ const ULTS = {
   // 혈기사 혈우: 체력을 크게 치르고 주변에 피의 비 — 입힌 피해의 절반을 회복(다수 명중 시 대역전)
   bloodknight(state, h) {
     payBlood(h, BLOOD_COST_ULT)
-    const dmg = skillDmg(h, 70, 1.05) * bloodRage(h) // 공격력 계수 (혈기사) — 코스트 후 체력이라 더 무겁다
+    const dmg = skillDmg(h, 52, 0.78) * bloodRage(h) // 공격력 계수 (혈기사) — 반경 16이라 위력은 낮춘다(3v3 70%)
     const r2 = BLOOD_RAIN_R * BLOOD_RAIN_R
     let dealt = 0
     state._ultHit = true // 궁 피해는 난투전 게이지를 재생산하지 않는다
