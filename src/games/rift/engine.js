@@ -327,8 +327,12 @@ export const BOSS_IDS = Object.keys(CLASSES).filter((c) => CLASSES[c].boss)
 export const CLASS_IDS = Object.keys(CLASSES).filter((c) => !CLASSES[c].boss)
 // 출시 게이트 — 여기 없는 직업은 선택 UI·봇 픽에 안 나온다(빌드에는 들어 있다).
 //  엔진·시뮬·테스트·?ult 시험장은 CLASS_IDS 전체를 그대로 안다 — 잠금은 '노출' 층에서만.
-//  오픈은 이 Set에서 id 한 줄 빼는 것이 전부.
-const UNRELEASED_CLASSES = new Set(['runescribe', 'bloodknight', 'necromancer', 'dreameater'])
+export const NEW_CLASS_IDS = ['runescribe', 'bloodknight', 'necromancer', 'dreameater']
+// 🧪 테스트 개방: true면 신규 4종이 직업 선택에 나오고 코인 없이 바로 쓸 수 있다(봇도 픽한다).
+//  스토어 출시 전에는 false로 되돌려 잠근다. 정식 오픈은 이 플래그가 아니라
+//  UNRELEASED_CLASSES에서 id를 하나씩 빼는 방식으로 한다(하나씩 여는 계획).
+export const TEST_OPEN_NEW_CLASSES = true
+const UNRELEASED_CLASSES = new Set(TEST_OPEN_NEW_CLASSES ? [] : NEW_CLASS_IDS)
 export const RELEASED_CLASSES = CLASS_IDS.filter((c) => !UNRELEASED_CLASSES.has(c))
 
 // 직업의 드래프트 역할 분류 — 봇이 팀 조합 밸런스를 맞춰 픽할 때 쓴다(전투 레인 배정과 별개).
