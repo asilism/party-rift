@@ -7683,12 +7683,12 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         if (!zone) {
           zone = new THREE.Group()
           const disc = new THREE.Mesh(
-            new THREE.CircleGeometry(14, 48),
+            new THREE.CircleGeometry(11.2, 48),
             new THREE.MeshBasicMaterial({ color: 0xb06aff, transparent: true, opacity: 0.2, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
           )
           disc.rotation.x = -Math.PI / 2
           const rim = new THREE.Mesh(
-            new THREE.RingGeometry(13.4, 14.4, 52),
+            new THREE.RingGeometry(10.7, 11.6, 52),
             new THREE.MeshBasicMaterial({ color: 0xe0b0ff, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })
           )
           rim.rotation.x = -Math.PI / 2
