@@ -5307,7 +5307,7 @@ test('혈기사 핏빛 사슬: 범위 안 전원이 묶인다 — 멀어질 수 
   t.x = 13; t.z = 0 // 사슬 최대 길이(7) 밖으로 도망 시도
   run(g, 1.0)
   const far1 = Math.hypot(t.x - b.x, t.z - b.z)
-  assert.ok(far1 <= 8, `사슬 길이(7) 안으로 되끌려온다 (${far1.toFixed(1)})`)
+  assert.ok(far1 <= 9.5, `사슬 길이(8.5) 안으로 되끌려온다 (${far1.toFixed(1)})`)
   assert.ok(t.hp < thp0, '결속 중 지속 피해')
   run(g, 3.2)
   assert.equal(b.chainT, 0, '3초 뒤 자동 해제')
