@@ -5447,7 +5447,54 @@ function buildFireballProj() {
 }
 
 // 전용 조형이 있는 투사체 kind → 빌더. 없으면 PROJ_LOOK 발광 구체로 그린다.
+// 💋 매혹의 입맞춤 — 날아가는 입술 자국(빌보드 스프라이트라 어느 각도에서도 읽힌다)
+function buildCharmProj() {
+  const g = new THREE.Group()
+  const lips = emojiSprite('💋', 2.2)
+  lips.material.depthTest = false
+  lips.renderOrder = 5
+  g.add(lips)
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: glowTexture(), color: 0xff5ab0, transparent: true, opacity: 0.65,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }))
+  glow.scale.set(3.2, 3.2, 1)
+  g.add(glow)
+  g.userData.fxUpdate = (t) => {
+    lips.material.rotation = Math.sin(t * 8) * 0.35 // 톡톡 튀듯 갸웃거린다
+    glow.material.opacity = 0.5 + Math.abs(Math.sin(t * 9)) * 0.3
+  }
+  return g
+}
+// 🔮 미혹의 구체 — 얼굴만 한 꿈의 구슬(빙글 돌며 잔광을 흘린다)
+function buildMistOrbProj() {
+  const g = new THREE.Group()
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.95, 14, 10),
+    new THREE.MeshLambertMaterial({ color: 0xc9a0ff, emissive: 0x5a1a8a, emissiveIntensity: 0.75, transparent: true, opacity: 0.92 })
+  )
+  const shell = new THREE.Mesh(
+    new THREE.SphereGeometry(1.25, 12, 9),
+    new THREE.MeshBasicMaterial({ color: 0xff8ad0, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending })
+  )
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(1.35, 0.09, 6, 20),
+    new THREE.MeshBasicMaterial({ color: 0xe0b0ff, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending })
+  )
+  ring.rotation.x = Math.PI / 2
+  g.add(core, shell, ring)
+  g.position.y = 2.2
+  g.userData.fxUpdate = (t) => {
+    g.rotation.y = t * 3.4
+    ring.rotation.z = t * 2.2
+    shell.scale.setScalar(1 + Math.sin(t * 7) * 0.09)
+  }
+  return g
+}
+
 export const PROJ_BUILDERS = {
+  charm: buildCharmProj, // 💋 매혹의 입맞춤
+  mistorb: buildMistOrbProj, // 🔮 미혹의 구체(관통·부메랑)
   tornado: buildTornadoProj, // 돌풍술사 회오리 — 빙글빙글 도는 입체 회오리
   rock: buildRockProj, // 대지술사 돌덩이 — 발광체가 아니라 진짜 돌
   swordwave: (n) => { const g = buildSwordwaveProj(n); if (n.big) g.scale.setScalar(+n.big || 1.5); return g }, // 검성 무형검 검기 — 난투전 레이저 검기는 big 배율만큼
@@ -9160,6 +9207,11 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
             u.body.rotation.z = 0
           }
           return
+        }
+        if (s.kind === 'shade') { // 💀 그림자 강화: 단계가 오를수록 덩치가 커진다(1→3단계)
+          const want = 1 + ((s.tier || 1) - 1) * 0.35
+          const cur = obj.scale.x
+          if (Math.abs(cur - want) > 0.01) obj.scale.setScalar(cur + (want - cur) * Math.min(1, dt * 5))
         }
         // 포탑은 고정, 펫은 걸을 때 통통 튄다(멈추면 숨쉬기 둥실)
         const wkS = u.turret ? null : walkBounce(u, s.x, s.z, dt)
