@@ -5145,6 +5145,23 @@ test('각인사: 평타가 인장 2스택을 새기고 지속이 끝나면 만�
   assert.equal(makeView(g, 'rat').heroes.find((h) => h.id === 'ox').runeN, 0, '만료되면 0으로 읽힌다')
 })
 
+test('각인사: 인장을 지닌 채 죽으면 부활한 몸에는 남지 않는다', () => {
+  const g = duo('runescribe', 'tank')
+  startPlaying(g)
+  const [r, t] = g.heroes
+  r.x = 0; r.z = 0; r.dir = 0
+  t.x = 5; t.z = 0
+  t.markStacks = 5
+  t.markT = g.time + 6
+  assert.equal(makeView(g, 'rat').heroes.find((h) => h.id === 'ox').runeN, 5, '인장 5스택')
+  t.hp = 1
+  plantMinion(g, 'blue', 5.5, 0, 9000) // 아군 병사가 마무리
+  run(g, 3)
+  assert.ok(t.respawnT > 0, '사망')
+  assert.equal(t.markStacks, 0, '죽으면 인장이 지워진다')
+  assert.equal(makeView(g, 'rat').heroes.find((h) => h.id === 'ox').runeN, 0, '부활해도 0')
+})
+
 test('각인사 인장탄: 직선 관통 — 맞은 적 전원에게 3스택 + 피해', () => {
   const g = duo('runescribe', 'tank')
   startPlaying(g)
@@ -5407,6 +5424,8 @@ test('강령술사: 처치한 적 영웅을 기억했다가 그림자로 되살�
   assert.ok(shadow, '그림자 영웅 소환')
   assert.equal(shadow.cls, 'archer', '처치한 적의 직업 그대로')
   assert.equal(shadow.range, CLASSES.archer.range, '그 직업의 평타 사거리를 쓴다')
+  assert.equal(shadow.maxHp, n.lastSlainHero.maxHp, '체력도 그 적의 것을 복사')
+  assert.ok(shadow.life >= 29, `30초 사역 (${shadow.life})`)
   assert.ok(shadow.name.includes('그림자'), `이름은 그림자 ○○ (${shadow.name})`)
 })
 
@@ -5421,25 +5440,30 @@ test('강령술사 그림자 사역: 처치 기록이 없으면 그림자 병사
   assert.equal(g.summons.filter((su) => su.kind === 'shade').length, 3, '그림자 병사 3기')
 })
 
-test('강령술사 그림자 폭발: 그림자를 전부 터뜨려 광역 피해 — 없으면 불발', () => {
+test('강령술사 그림자 강화: 3단계까지 키운다 — 키울 그림자가 없으면 불발', () => {
   const g = duo('necromancer', 'tank')
   startPlaying(g)
-  const [n, t] = g.heroes
+  const n = g.heroes[0]
   n.lvl = 18
   n.x = 0; n.z = 0
   n.skill2Cd = 0
   castSkill2(g, n.id)
-  assert.equal(n.skill2Cd, 0, '터뜨릴 그림자가 없으면 불발')
+  assert.equal(n.skill2Cd, 0, '키울 그림자가 없으면 불발')
   n.skillCd = 0
-  castSkill(g, n.id) // 그림자 하나 소환
+  castSkill(g, n.id)
   const shade = g.summons.find((su) => su.owner === n.id)
-  assert.ok(shade, '그림자 소환됨')
-  t.x = shade.x + 2; t.z = shade.z // 폭심 반경 안으로
-  const hp0 = t.hp
+  const dmg0 = shade.dmg
+  const hp0 = shade.maxHp
   castSkill2(g, n.id)
-  assert.ok(n.skill2Cd > 0, '그림자가 있으면 발동')
-  assert.ok(t.hp < hp0, `자폭 광역 피해 (${hp0}→${Math.round(t.hp)})`)
-  assert.equal(g.summons.filter((su) => su.owner === n.id).length, 0, '자폭 — 그림자는 전부 소진')
+  assert.equal(shade.tier, 2, '2단계')
+  assert.ok(shade.dmg > dmg0 && shade.maxHp > hp0, `강해진다 (dmg ${dmg0}→${shade.dmg})`)
+  n.skill2Cd = 0
+  castSkill2(g, n.id)
+  assert.equal(shade.tier, 3, '3단계')
+  n.skill2Cd = 0
+  castSkill2(g, n.id)
+  assert.equal(shade.tier, 3, '상한 3단계에서 멈춘다')
+  assert.equal(n.skill2Cd, 0, '전부 만렙이면 쿨을 아낀다')
 })
 
 test('강령술사 원혼의 손길: 평타가 그림자의 수명을 붙든다', () => {
@@ -5475,13 +5499,14 @@ test('난투전 강령술사: 그림자 영웅의 평타가 적을 밀어낸다'
 // ══════════ 몽마(dreameater) — 매혹·꿈의 영토(오사) ══════════
 const CHARM_HALF_MAX = 1.0 // 아레나 반감 상한(기본 1.8초의 절반 = 0.9)
 
-test('몽마 매혹의 입맞춤: 맞은 적이 홀려서 시전자에게 걸어온다(행동 불가)', () => {
+test('몽마 매혹의 입맞춤(Lv3): 맞은 적이 홀려서 시전자에게 걸어온다(행동 불가)', () => {
   const g = duo('dreameater', 'tank')
   startPlaying(g)
   const [d, t] = g.heroes
+  d.lvl = 18 // 보조 스킬 해금
   d.x = 0; d.z = 0; d.dir = 0
   t.x = 8; t.z = 0
-  castSkill(g, d.id)
+  castSkill2(g, d.id)
   run(g, 0.5) // 투사체 비행 + 명중
   assert.ok(t.charmT > 0 && t.charmBy === d.id, '매혹 성립')
   const d0 = Math.hypot(t.x - d.x, t.z - d.z)
@@ -5497,9 +5522,10 @@ test('몽마 매혹: 시전자가 죽으면 즉시 풀린다', () => {
   const g = duo('dreameater', 'tank')
   startPlaying(g)
   const [d, t] = g.heroes
+  d.lvl = 18
   d.x = 0; d.z = 0; d.dir = 0
   t.x = 6; t.z = 0
-  castSkill(g, d.id)
+  castSkill2(g, d.id)
   run(g, 0.5)
   assert.ok(t.charmT > 0, '매혹 성립')
   d.hp = 1
@@ -5578,19 +5604,41 @@ test('몽마 꿈의 영토: 오사로 죽어도 킬 크레딧이 꼬이지 않�
   assert.equal(a.team, 'red', '팀 판정 불변 — 소유·크레딧 규칙이 흔들리지 않는다')
 })
 
-test('몽마 미혹의 안개: 전방 부채꼴을 혼란에 빠뜨린다 — 아무도 없으면 불발', () => {
+test('몽마 미혹의 구체: 관통해 날아갔다가 되돌아오며 한 번 더 때린다', () => {
   const g = duo('dreameater', 'tank')
   startPlaying(g)
   const [d, t] = g.heroes
-  d.lvl = 18
   d.x = 0; d.z = 0; d.dir = 0
-  t.x = 60; t.z = 60
-  d.skill2Cd = 0
-  castSkill2(g, d.id)
-  assert.equal(d.skill2Cd, 0, '대상이 없으면 불발')
-  t.x = 5; t.z = 0
-  castSkill2(g, d.id)
-  assert.ok(d.skill2Cd > 0 && t.fearT > 0, '부채꼴 안의 적이 갈팡질팡한다')
+  t.x = 7; t.z = 0
+  const hp0 = t.hp
+  castSkill(g, d.id)
+  const orb = g.projectiles.find((p) => p.kind === 'mistorb')
+  assert.ok(orb, '구체 발사')
+  run(g, 0.5) // 가는 길에 한 번 맞는다
+  const hp1 = t.hp
+  assert.ok(hp1 < hp0, '전진 중 관통 피해')
+  assert.ok(t.slowT > 0, '스치면 둔화')
+  run(g, 1.6) // 끝점에서 되돌아와 다시 지나간다
+  assert.ok(t.hp < hp1, `귀환 길에 한 번 더 (${Math.round(hp1)}→${Math.round(t.hp)})`)
+  run(g, 2.0)
+  assert.ok(!g.projectiles.some((p) => p.kind === 'mistorb'), '손에 돌아오면 사라진다')
+})
+
+test('몽마 미혹의 구체: 내가 움직이면 돌아오는 궤적도 따라온다', () => {
+  const g = duo('dreameater', 'tank')
+  startPlaying(g)
+  const [d, t] = g.heroes
+  d.x = 0; d.z = 0; d.dir = 0
+  t.x = 40; t.z = 40 // 방해 없이
+  castSkill(g, d.id)
+  run(g, 0.75) // 끝점(15) 도달 → 귀환 시작 (속도 22이므로 ~0.68초)
+  const orb = g.projectiles.find((p) => p.kind === 'mistorb')
+  assert.ok(orb && orb.back, '귀환 단계')
+  d.x = 0; d.z = 14 // 몽마가 옆으로 크게 이동
+  run(g, 0.3)
+  const o2 = g.projectiles.find((p) => p.kind === 'mistorb')
+  assert.ok(o2, '아직 비행 중')
+  assert.ok(o2.z > 1.5, `옮겨간 내 쪽으로 휘어온다 (z=${o2.z.toFixed(1)})`)
 })
 
 test('몽마: 콜로세움에서는 매혹 지속이 반감된다(2v2 리스크 보정)', () => {
@@ -5601,9 +5649,10 @@ test('몽마: 콜로세움에서는 매혹 지속이 반감된다(2v2 리스크 
   g.status = 'playing'
   g.arenaPhase = 'fight'
   const [d, t] = g.heroes
+  d.lvl = 18
   d.x = 0; d.z = 0; d.dir = 0
   t.x = 6; t.z = 0
-  castSkill(g, d.id)
+  castSkill2(g, d.id)
   run(g, 0.5)
   assert.ok(t.charmT > 0 && t.charmT <= CHARM_HALF_MAX, `아레나 반감 (${t.charmT.toFixed(2)}초)`)
 })
