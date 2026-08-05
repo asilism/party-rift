@@ -272,7 +272,7 @@ export const CLASSES = {
     name: '혈기사', icon: '🩸', desc: '자기 피를 태워 싸우는 근접 기사 — 스킬마다 체력을 대가로 치르고, 피가 모자랄수록 일격이 무거워진다',
     hp: 640, hpLvl: 74, atk: 50, atkLvl: 7, range: 4.0, atkCd: 0.8, speed: 12.6, def: 0.88,
     skill: { name: '혈인참', icon: '🗡️', cd: 6, desc: '체력 6%를 대가로 주변을 크게 베어 넘긴다 — 잃은 체력이 많을수록 피해가 커지고, 맞힌 수만큼 흡혈' },
-    skill2: { name: '핏빛 사슬', icon: '⛓️', cd: 16, desc: '체력 10%를 대가로 적 하나와 3초간 피의 사슬로 묶는다 — 멀어질 수 없고, 묶여 있는 내내 상대의 피가 그대로 나에게 넘어온다' },
+    skill2: { name: '핏빛 사슬', icon: '⛓️', cd: 16, desc: '체력 10%를 대가로 주변의 적 전원을 3초간 피의 사슬로 묶는다 — 아무도 멀어질 수 없고, 묶여 있는 내내 그들의 피가 나에게 넘어온다' },
     ult: { name: '혈우', icon: '🌧️', cd: 60, desc: '체력 20%를 대가로 아주 넓은 범위에 피의 비를 뿌린다 — 광역 대피해 + 입힌 피해의 절반을 회복(다수에게 맞히면 만신창이에서 부활한다)' },
   },
   necromancer: {
@@ -287,7 +287,7 @@ export const CLASSES = {
     hp: 470, hpLvl: 52, atk: 43, atkLvl: 6, range: 10, atkCd: 1.0, speed: 12.4,
     skill: { name: '매혹의 입맞춤', icon: '💋', cd: 10, desc: '홀리는 입맞춤을 날린다 — 맞은 적은 1.5초간 홀려 나에게 걸어온다(행동 불가)' },
     skill2: { name: '미혹의 안개', icon: '🌫️', cd: 16, desc: '앞으로 미혹의 안개를 퍼뜨린다 — 닿은 적들이 갈피를 잃고 갈팡질팡한다' },
-    ult: { name: '꿈의 영토', icon: '🌙', cd: 70, desc: '지정한 곳에 넓은 꿈의 영토를 편다 — 그 안의 적들은 제 뜻대로 움직이지 못하고 자기 편을 때린다(영토 밖으로 나가면 깨어난다)' },
+    ult: { name: '꿈의 영토', icon: '🌙', cd: 70, desc: '내가 선 자리를 중심으로 넓은 꿈의 영토를 편다 — 그 안의 적들은 제 뜻대로 움직이지 못하고 서로를 때린다(영토 밖으로 나가면 깨어난다)' },
   },
   // ── 보스전(5:1) 전용 보스 — boss:true는 선택 목록(CLASS_IDS)에서 제외되고 3배 덩치로 그려진다 ──
   boss_colossus: {
@@ -376,7 +376,7 @@ export const ABILITY_SCALING = {
   runescribe: { skill: { dmg: [26, 0.45], note: '관통 · 인장 3스택' }, skill2: { note: '인장 최다 표적의 스택을 주변에 복제' }, ult: { dmg: [30, 0.5], note: '인장 1스택당 피해 · 처치 시 스택이 주변으로 전이' } },
   bloodknight: { skill: { dmg: [40, 0.85], note: '체력 6% 소모 · 잃은 체력만큼 최대 +60% · 맞힌 수만큼 흡혈' }, skill2: { dot: [12, 0.18], dotDur: 3, note: '체력 10% 소모 · 3초 결속(멀어질 수 없음) + 준 피해 전부 흡혈' }, ult: { dmg: [70, 1.05], note: '체력 20% 소모 · 반경 16 · 입힌 피해의 50% 회복' } },
   necromancer: { skill: { note: '그림자 병사 1기 소환(최대 3 · 15초)' }, skill2: { dmg: [70, 0.85], note: '그림자 전원 자폭 — 각자 반경 6 광역' }, ult: { note: '마지막 처치 영웅을 그림자로 20초 사역(없으면 그림자 3기)' } },
-  dreameater: { skill: { dmg: [30, 0.5], note: '명중 시 1.8초 매혹(시전자에게 강제 보행 · 행동 불가)' }, skill2: { dmg: [26, 0.45], note: '부채꼴 혼란 1.5초' }, ult: { note: '반경 14 · 3.5초 · 영토 안 적은 조작 불능 + 아군을 공격(이탈 시 즉시 해제)' } },
+  dreameater: { skill: { dmg: [30, 0.5], note: '명중 시 1.8초 매혹(시전자에게 강제 보행 · 행동 불가)' }, skill2: { dmg: [26, 0.45], note: '부채꼴 혼란 1.5초' }, ult: { note: '내 자리 중심 반경 14 · 3.5초 · 영토 안 적은 조작 불능 + 서로를 공격(이탈 시 해제)' } },
 }
 
 // 직업 주력 스탯 이름(툴팁 표기용): 마법 계열은 주문력, 하이브리드는 공·주 평균, 그 외는 공격력.
@@ -874,7 +874,7 @@ function makeHeroState(p, cls, pos, map, rng) {
       dreamZ: 0,
       lastSlainHero: null, // 강령술사: 마지막으로 처치한 적 영웅 스냅샷 { cls, zodiacId, name }
       chainT: 0, // 혈기사 핏빛 사슬 — 남은 결속 시간(>0이면 표적과 묶여 있다)
-      chainId: null, // 사슬로 묶은 표적 id
+      chainIds: [], // 사슬로 묶은 표적 id들(반경 안 전원)
       chainTickT: 0, // 다음 사슬 피해까지
       chainDmg: 0, // 사슬 틱 피해(시전 시점 스냅샷)
       slingN: 0, // 대지술사 돌팔매 — 남은 연투 수 (>0이면 시퀀스 진행 중)
@@ -1302,15 +1302,31 @@ const MIST_CONFUSE = 1.5 // 혼란 시간(공포 문법 재사용 — 갈팡질�
 const DREAM_R = 14 // 꿈의 영토 반경(2배 — 한타를 통째로 삼킨다)
 const DREAM_TIME = 3.5 // 꿈의 영토 지속
 const DREAM_AIM = 7 // 조준 보조가 없을 때 앞쪽에 펴는 거리
-// 이 영웅이 지금 '누군가의 꿈의 영토' 안에 있는가 — 안이면 아군을 적으로 본다(오사).
+// 이 영웅을 지금 홀리고 있는 몽마(꿈의 영토 시전자)를 돌려준다 — 없으면 null.
 //  팀 판정 자체는 절대 바꾸지 않는다(킬 크레딧·소환물 소유가 꼬이지 않게) — 표적 선택만 뒤집는다.
-function dreamCharmed(state, h) {
-  if (!h || h.respawnT > 0) return false
+function dreamCasterOf(state, h) {
+  if (!h || h.respawnT > 0) return null
   for (const o of state.heroes) {
-    if (o.cls !== 'dreameater' || !(o.dreamT > 0) || o.team === h.team) continue
-    if ((h.x - o.dreamX) ** 2 + (h.z - o.dreamZ) ** 2 <= DREAM_R * DREAM_R) return true
+    if (o.cls !== 'dreameater' || !(o.dreamT > 0) || o === h) continue
+    if (state.mode !== 'brawl' && o.team === h.team) continue // 일반 모드: 적만 홀린다
+    if ((h.x - o.dreamX) ** 2 + (h.z - o.dreamZ) ** 2 <= DREAM_R * DREAM_R) return o
   }
-  return false
+  return null
+}
+const dreamCharmed = (state, h) => !!dreamCasterOf(state, h)
+// 홀린 자가 지금 때려야 할 상대 — 일반 모드는 '아군', 난투전은 아군이 없으니 '몽마만 빼고 아무나'.
+function dreamVictimTarget(state, h, range) {
+  const caster = dreamCasterOf(state, h)
+  if (!caster) return null
+  let best = null
+  let bd = range * range
+  for (const e of state.heroes) {
+    if (e === h || e === caster || e.respawnT > 0 || e.hp <= 0) continue
+    if (state.mode !== 'brawl' && e.team !== h.team) continue // 일반 모드: 자기 편만 친다
+    const d = dist2(h, e)
+    if (d < bd) { bd = d; best = e }
+  }
+  return best
 }
 
 // ── 혈기사 혈법(血法) — 스킬 코스트가 마나가 아니라 '내 피'다. 절대 자멸하지 않게 최소 1은 남긴다.
@@ -1321,12 +1337,14 @@ const BLOOD_COST_ULT = 0.20 // 혈우
 const BLOOD_RAGE_MAX = 0.6 // 잃은 체력 비례 피해 증가 상한(+60%)
 const BLOOD_SLASH_R = 5.5 // 혈인참 반경
 const BLOOD_SLASH_LEECH = 0.10 // 혈인참: 명중 1인당 최대 체력의 이 비율만큼 흡혈
-const BLOOD_CHAIN_RANGE = 9 // 사슬 표적 탐색 거리
+const BLOOD_CHAIN_RANGE = 9 // 사슬 결속 반경 — 이 안의 적 '전원'이 함께 묶인다
 const BLOOD_CHAIN_MAX = 7 // 사슬 최대 길이 — 넘어가면 서로 당겨진다
 const BLOOD_CHAIN_TIME = 3 // 결속 지속
 const BLOOD_CHAIN_TICK = 0.4 // 사슬 피해 간격(촘촘하게 — 지속 흡혈 체감)
+const BLOOD_CHAIN_LEECH = 1.6 // 사슬 흡혈 배율 — 묶어 둔 만큼 확실히 돌려받는다
 const BLOOD_RAIN_R = 16 // 혈우 반경(2배 — 한타 전체를 적신다)
 const BLOOD_RAIN_LEECH = 0.5 // 혈우: 입힌 피해의 이 비율을 회복
+const BLOOD_RAIN_HEAL_CAP = 0.7 // 혈우 회복 상한(최대 체력 대비) — 코스트 20%를 확실히 넘어 '역전기'가 되게
 // 잃은 체력 비례 배수 — 빈사일수록 일격이 무거워진다(혈인참·혈우 공용)
 const bloodRage = (h) => 1 + Math.min(BLOOD_RAGE_MAX, 1 - h.hp / h.maxHp)
 // 피의 대가: 최대 체력의 frac만큼 치른다. 이걸로는 죽지 않는다(최소 1 보장).
@@ -1532,16 +1550,10 @@ function findLeapEntity(state, s) {
 }
 
 function findAttackTarget(state, h, range) {
-  if (dreamCharmed(state, h)) {
-    // 🌙 꿈의 영토 안: 아군이 적으로 보인다(오사). 팀은 그대로라 킬 크레딧·소유는 꼬이지 않는다.
-    let best = null
-    let bd = range * range
-    for (const e of state.heroes) {
-      if (e === h || e.team !== h.team || e.respawnT > 0 || e.hp <= 0) continue
-      const d = dist2(h, e)
-      if (d < bd) { bd = d; best = e }
-    }
-    if (best) return { tk: 'hero', id: best.id }
+  {
+    // 🌙 꿈의 영토 안: 편이 뒤바뀌어 보인다(오사). 팀은 그대로라 킬 크레딧·소유는 꼬이지 않는다.
+    const victim = dreamVictimTarget(state, h, range)
+    if (victim) return { tk: 'hero', id: victim.id }
   }
   // 영웅과 "분신"은 같은 우선순위 — 분신이 더 가까우면 평타가 분신에게 간다(미끼 성립)
   const hero = nearestFoeHeroLike(state, h, range)
@@ -2866,9 +2878,14 @@ const ULTS = {
     }
     state._ultHit = false
     if (dealt > 0 && h.hp > 0) {
-      h.hp = Math.min(h.maxHp, h.hp + lifestealAmount(dealt * BLOOD_RAIN_LEECH, state))
+      // 혈우 회복은 일반 흡혈의 로그 감쇠를 타지 않는다 — 감쇠를 태우면 코스트 20%보다 적게 돌아와
+      //  '피를 쏟고 굶는' 궁이 된다(원본 1500 → 132만 회복되던 문제). 대신 상한으로 통제한다.
+      const heal = Math.min(dealt * BLOOD_RAIN_LEECH, h.maxHp * BLOOD_RAIN_HEAL_CAP) * (state.mode === 'arena' ? 0.35 : 1)
+      h.hp = Math.min(h.maxHp, h.hp + heal)
     }
     pushFx(state, 'bloodrain', h.x, h.z, BLOOD_RAIN_R, h.team, 1.1)
+    state.bloodRainSeq = (state.bloodRainSeq || 0) + 1 // 씬: 하늘에서 피가 쏟아지는 연출
+    state.bloodRainAt = { x: h.x, z: h.z, r: BLOOD_RAIN_R }
   },
   // 강령술사 그림자 사역: 마지막으로 쓰러뜨린 적 영웅을 그림자로 되살린다 —
   //  겉모습·평타 사거리·공속을 그 직업 그대로 쓰고(전투 분신 문법), 펫처럼 나를 따라다닌다.
@@ -2896,9 +2913,8 @@ const ULTS = {
   },
   // 몽마 꿈의 영토: 지정한 곳에 3초간 영역 — 안의 적들은 자기 편을 때린다(밖으로 나가면 깨어난다)
   dreameater(state, h) {
-    const foe = nearestFoeHero(state, h, DREAM_R + 8)
-    h.dreamX = foe ? foe.x : h.x + Math.cos(h.dir) * DREAM_AIM
-    h.dreamZ = foe ? foe.z : h.z + Math.sin(h.dir) * DREAM_AIM
+    h.dreamX = h.x // 몽마 자신이 영토의 중심 — 조준하는 게 아니라 '내가 선 자리'가 꿈이 된다
+    h.dreamZ = h.z
     h.dreamT = DREAM_TIME
     pushFx(state, 'dream', h.dreamX, h.dreamZ, DREAM_R, h.team, 1.2)
     pushFeed(state, 'obj', `🌙 ${h.name} — 꿈의 영토가 펼쳐졌다`)
@@ -3309,14 +3325,17 @@ const SKILLS2 = {
   },
   // 혈기사 핏빛 사슬: 적 하나와 피로 묶인다 — 3초간 멀어질 수 없고(양쪽이 서로 당겨짐) 계속 빨린다
   bloodknight(state, h) {
-    const foe = nearestFoeHero(state, h, BLOOD_CHAIN_RANGE)
-    if (!foe) return false // 묶을 상대가 없으면 피도 쿨도 쓰지 않는다
+    const r2 = BLOOD_CHAIN_RANGE * BLOOD_CHAIN_RANGE
+    const caught = state.heroes.filter((e) => (
+      e.team !== h.team && e.respawnT <= 0 && e.hp > 0 && dist2(h, e) <= r2
+    ))
+    if (!caught.length) return false // 묶을 상대가 없으면 피도 쿨도 쓰지 않는다
     payBlood(h, BLOOD_COST_CHAIN)
     h.chainT = BLOOD_CHAIN_TIME
-    h.chainId = foe.id
+    h.chainIds = caught.map((e) => e.id) // 반경 안 '전원'이 한 번에 묶인다
     h.chainTickT = BLOOD_CHAIN_TICK
     h.chainDmg = Math.round(skillDmg(h, 12, 0.18)) // 틱 피해 — 시전 시점 스냅샷
-    pushFx(state, 'bloodchain', foe.x, foe.z, 2.4, h.team, 0.8)
+    for (const e of caught) pushFx(state, 'bloodchain', e.x, e.z, 2.4, h.team, 0.8)
   },
   // 강령술사 그림자 폭발: 거느린 그림자를 전부 터뜨린다 — 각자 그 자리에서 광역 자폭.
   //  "모아서 한 번에 터뜨린다"가 정체성 — 그림자는 소모품이고, 체력이 두꺼운 건 터질 때까지 버티라는 뜻.
@@ -3661,8 +3680,12 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   victim.dreamT = 0
   for (const o of state.heroes) if (o.charmBy === victim.id) { o.charmT = 0; o.charmBy = null }
   victim.chainT = 0 // 핏빛 사슬은 죽으면 끊긴다(양쪽 다)
-  victim.chainId = null
-  for (const o of state.heroes) if (o.chainId === victim.id) { o.chainT = 0; o.chainId = null }
+  victim.chainIds = []
+  for (const o of state.heroes) {
+    if (!o.chainIds || !o.chainIds.includes(victim.id)) continue
+    o.chainIds = o.chainIds.filter((id) => id !== victim.id)
+    if (!o.chainIds.length) o.chainT = 0
+  }
   if (victim.bindAnchorT > 0) {
     victim.bindAnchorT = 0
     for (const a of state.heroes) if (a.bindBy === victim.id) { a.bindT = 0; a.bindBy = null }
@@ -4905,32 +4928,38 @@ function stepHero(state, h, dt) {
   h.wardT = Math.max(0, h.wardT - dt)
   if (h.charmT > 0 && (h.charmT = Math.max(0, h.charmT - dt)) === 0) h.charmBy = null // 🌙 매혹 해제
   h.dreamT = Math.max(0, h.dreamT - dt)
-  if (h.chainT > 0) { // 🩸 핏빛 사슬: 표적과 묶여 있는 동안 서로 멀어질 수 없고, 피가 계속 넘어온다
+  if (h.chainT > 0) { // 🩸 핏빛 사슬: 묶인 전원이 멀어질 수 없고, 그 피가 전부 나에게 넘어온다
     h.chainT = Math.max(0, h.chainT - dt)
-    const tgt = h.chainId ? state.heroes.find((o) => o.id === h.chainId) : null
-    if (!tgt || tgt.respawnT > 0 || tgt.hp <= 0 || h.hp <= 0 || h.respawnT > 0 || h.chainT === 0) {
+    const bound = (h.chainIds || [])
+      .map((id) => state.heroes.find((o) => o.id === id))
+      .filter((o) => o && o.respawnT <= 0 && o.hp > 0)
+    if (!bound.length || h.hp <= 0 || h.respawnT > 0 || h.chainT === 0) {
       h.chainT = 0
-      h.chainId = null
+      h.chainIds = []
     } else {
-      const cd = dist(h, tgt)
-      if (cd > BLOOD_CHAIN_MAX) { // 사슬이 팽팽해지면 양쪽을 가운데로 끌어당긴다(도망 봉쇄)
-        const pull = Math.min(cd - BLOOD_CHAIN_MAX, 24 * dt) // 히어로 이동속도(12~13)보다 빠르게 — 사슬은 도망을 이긴다
-        const ux = (tgt.x - h.x) / cd
-        const uz = (tgt.z - h.z) / cd
-        h.x += ux * pull * 0.5
-        h.z += uz * pull * 0.5
-        tgt.x -= ux * pull * 0.5
-        tgt.z -= uz * pull * 0.5
-        state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
-        state.map.resolveTerrain(tgt, HERO_RADIUS, colliders(state))
+      for (const tgt of bound) {
+        const cd = dist(h, tgt)
+        if (cd > BLOOD_CHAIN_MAX && cd > 0.01) { // 팽팽해지면 서로 당긴다(도망 봉쇄)
+          const pull = Math.min(cd - BLOOD_CHAIN_MAX, 24 * dt) // 이동속도(12~13)보다 빠르게 — 사슬은 도망을 이긴다
+          const ux = (tgt.x - h.x) / cd
+          const uz = (tgt.z - h.z) / cd
+          h.x += ux * pull * 0.25 // 여럿을 끌 땐 내가 덜 끌려간다
+          h.z += uz * pull * 0.25
+          tgt.x -= ux * pull * 0.75
+          tgt.z -= uz * pull * 0.75
+          state.map.resolveTerrain(tgt, HERO_RADIUS, colliders(state))
+        }
       }
+      state.map.resolveTerrain(h, HERO_RADIUS, colliders(state))
       h.chainTickT -= dt
       if (h.chainTickT <= 0) {
         h.chainTickT = BLOOD_CHAIN_TICK
-        const before = tgt.hp
-        damageHero(state, tgt, h.chainDmg, h, false, '핏빛 사슬')
-        const drained = Math.max(0, before - tgt.hp)
-        if (drained > 0) h.hp = Math.min(h.maxHp, h.hp + lifestealAmount(drained, state)) // 결속 중엔 빨아들인 만큼 그대로 돌아온다
+        for (const tgt of bound) {
+          const before = tgt.hp
+          damageHero(state, tgt, h.chainDmg, h, false, '핏빛 사슬')
+          const drained = Math.max(0, before - tgt.hp)
+          if (drained > 0) h.hp = Math.min(h.maxHp, h.hp + lifestealAmount(drained * BLOOD_CHAIN_LEECH, state))
+        }
       }
     }
   }
@@ -5149,15 +5178,10 @@ function stepHero(state, h, dt) {
   }
   // 🌙 꿈의 영토 안: 제 뜻대로 못 움직인다 — 홀린 듯 가장 가까운 '아군'에게 다가가 때린다.
   if (h.stunT <= 0 && h.rootT <= 0 && h.knockT <= 0 && !(h.charmT > 0) && !(h.fallT > 0) && dreamCharmed(state, h)) {
-    let ally = null
-    let ad = 1e9
-    for (const o of state.heroes) {
-      if (o === h || o.team !== h.team || o.respawnT > 0 || o.hp <= 0) continue
-      const d = dist(h, o)
-      if (d < ad) { ad = d; ally = o }
-    }
-    if (ally) {
-      h.dir = Math.atan2(ally.z - h.z, ally.x - h.x)
+    const prey = dreamVictimTarget(state, h, 999) // 홀린 눈에 '먹잇감'으로 보이는 상대
+    if (prey) {
+      const ad = dist(h, prey)
+      h.dir = Math.atan2(prey.z - h.z, prey.x - h.x)
       if (ad > heroRange(h) * 0.8) { // 사거리에 들 때까지만 걸어간다
         const sp = heroSpeed(h) * CHARM_SPD * (h.freezeT > 0 ? FREEZE_MOVE : 1)
         h.x += Math.cos(h.dir) * sp * dt
@@ -9699,8 +9723,8 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     castUlt(state, h.id) // 단말마 — 적진으로 파고들어 광역 공포 이니시
   } else if (h.cls === 'illusionist' && (nearCount >= 1 || h.hp < h.maxHp * 0.5)) {
     castUlt(state, h.id) // 환영난무 — 교란 + 은신
-  } else if (h.cls === 'dreameater' && nearCount >= 2 && d < DREAM_R + 6) {
-    castUlt(state, h.id) // 꿈의 영토 — 적이 뭉쳤을 때 서로 치게 만든다
+  } else if (h.cls === 'dreameater' && nearCount >= 2 && d < DREAM_R - 2) {
+    castUlt(state, h.id) // 꿈의 영토 — 내 자리가 중심이라 적 무리에 붙어서 펴야 한다
   } else if (h.cls === 'necromancer' && (h.lastSlainHero || nearCount >= 1)) {
     castUlt(state, h.id) // 그림자 사역 — 처치 기록이 있으면 바로 되살린다
   } else if (h.cls === 'bloodknight' && d < BLOOD_RAIN_R - 1 && (nearCount >= 2 || h.hp < h.maxHp * 0.55)) {
@@ -10005,6 +10029,8 @@ export function makeView(state) {
     brawlCannons: state.brawlCannons ? state.brawlCannons.map((c) => ({ id: c.id, x: c.x, z: c.z, cd: r2d(c.cd) })) : null,
     brawlBoltSeq: state.brawlBoltSeq || 0,
     brawlPadsDead: !!state.brawlPadsDead, // 대포 발판 붕괴(씬 낙하 연출)
+    bloodRainSeq: state.bloodRainSeq || 0, // 🩸 혈우 — 하늘에서 쏟아지는 피
+    bloodRainAt: state.bloodRainAt ? { ...state.bloodRainAt } : null,
     brawlLaserSeq: state.brawlLaserSeq || 0,
     brawlChainSeq: state.brawlChainSeq || 0,
     brawlPillars: state.brawlPillars ? state.brawlPillars.map((pl) => ({ id: pl.id, x: r2d(pl.x), z: r2d(pl.z), dir: r2d(pl.dir) })) : null,
@@ -10110,8 +10136,8 @@ export function makeView(state) {
       dreamT: r2d(h.dreamT || 0), // 🌙 꿈의 영토(시전자) — 씬이 보랏빛 영역을 그린다
       dreamX: r1(h.dreamX || 0),
       dreamZ: r1(h.dreamZ || 0),
-      chainT: r2d(h.chainT || 0), // ⛓️ 핏빛 사슬 — 씬이 시전자→표적 붉은 사슬을 그린다
-      chainId: h.chainId || null,
+      chainT: r2d(h.chainT || 0), // ⛓️ 핏빛 사슬 — 씬이 시전자→표적들 붉은 사슬을 그린다
+      chainIds: h.chainIds && h.chainIds.length ? h.chainIds.slice() : null,
       parryT: r2d(h.parryT),
       rootT: r2d(h.rootT),
       fallT: r2d(h.fallT),

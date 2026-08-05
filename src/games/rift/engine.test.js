@@ -5294,7 +5294,7 @@ test('혈기사 혈인참: 맞힌 수만큼 피를 되찾는다', () => {
   assert.ok(b.hp > hp0, `코스트를 치르고도 순증 (${hp0}→${Math.round(b.hp)})`)
 })
 
-test('혈기사 핏빛 사슬: 3초 결속 — 멀어질 수 없고 피가 계속 빨린다', () => {
+test('혈기사 핏빛 사슬: 범위 안 전원이 묶인다 — 멀어질 수 없고 피가 계속 빨린다', () => {
   const g = duo('bloodknight', 'tank')
   startPlaying(g)
   const [b, t] = g.heroes
@@ -5302,16 +5302,40 @@ test('혈기사 핏빛 사슬: 3초 결속 — 멀어질 수 없고 피가 계�
   b.x = 0; b.z = 0
   t.x = 5; t.z = 0
   castSkill2(g, b.id)
-  assert.ok(b.chainT > 0 && b.chainId === t.id, '결속 성립')
+  assert.ok(b.chainT > 0 && (b.chainIds || []).includes(t.id), '결속 성립')
   const thp0 = t.hp
-  t.x = 40; t.z = 0 // 도망 시도
-  const far0 = Math.hypot(t.x - b.x, t.z - b.z)
-  run(g, 0.8)
+  t.x = 13; t.z = 0 // 사슬 최대 길이(7) 밖으로 도망 시도
+  run(g, 1.0)
   const far1 = Math.hypot(t.x - b.x, t.z - b.z)
-  assert.ok(far1 < far0 - 8, `사슬이 도망보다 빠르게 당긴다 (${far0.toFixed(1)}→${far1.toFixed(1)})`) // 실측 ~15/s > 이동속도 13
+  assert.ok(far1 <= 8, `사슬 길이(7) 안으로 되끌려온다 (${far1.toFixed(1)})`)
   assert.ok(t.hp < thp0, '결속 중 지속 피해')
   run(g, 3.2)
   assert.equal(b.chainT, 0, '3초 뒤 자동 해제')
+})
+
+test('혈기사 핏빛 사슬: 반경 안 적을 한꺼번에 묶고 모두에게서 흡혈한다', () => {
+  const g = createGame([
+    { id: 'b', name: 'B', zodiacId: 'rat', color: '#abc', cls: 'bloodknight', team: 'blue' },
+    { id: 'e1', name: 'E1', zodiacId: 'ox', color: '#abc', cls: 'tank', team: 'red' },
+    { id: 'e2', name: 'E2', zodiacId: 'tiger', color: '#abc', cls: 'archer', team: 'red' },
+    { id: 'e3', name: 'E3', zodiacId: 'dragon', color: '#abc', cls: 'mage', team: 'red' },
+  ], { mode: '3v3', rng: () => 0.5 })
+  startPlaying(g)
+  const [b, e1, e2, e3] = g.heroes
+  b.lvl = 18
+  b.x = 0; b.z = 0
+  e1.x = 3; e1.z = 0
+  e2.x = 0; e2.z = 4 // 둘은 반경(9) 안
+  e3.x = 40; e3.z = 0 // 하나는 멀리
+  b.hp = Math.round(b.maxHp * 0.6)
+  castSkill2(g, b.id)
+  assert.equal(b.chainIds.length, 2, '반경 안 둘만 묶인다')
+  const hpAfterCost = b.hp
+  const hp1 = e1.hp
+  const hp2 = e2.hp
+  run(g, 1.0)
+  assert.ok(e1.hp < hp1 && e2.hp < hp2, '묶인 전원에게 지속 피해')
+  assert.ok(b.hp > hpAfterCost, `여럿에게서 빨아들여 순증 (${hpAfterCost}→${Math.round(b.hp)})`)
 })
 
 test('혈기사 핏빛 사슬: 묶을 상대가 없으면 피도 쿨도 쓰지 않는다', () => {

@@ -7388,6 +7388,8 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
   const brawlBursts = [] // 💥 타격 버스트 {spr, t, dur}
   const brawlSanctObjs = new Map() // 🛡️ 성역 돔 — 히어로 id → 월드 고정 반구
   const dreamZoneObjs = new Map() // 🌙 꿈의 영토 — 몽마 id → 보랏빛 원판
+  let bloodRainSeen = 0 // 🩸 혈우 시퀀스
+  const bloodRains = [] // 쏟아지는 핏빗줄기 {group, drops, t, dur, r}
   const brawlChainObjs = new Map() // ⛓️ 핏빛 사슬 — 시전자 id → 두 영웅을 잇는 실린더
   const brawlPillarObjs = new Map() // 🪨 달리는 감옥 기둥 — id → 돌기둥
   const brawlWedges = [] // 피니셔 쐐기 {g, t, dur}
@@ -7569,6 +7571,62 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       for (const [pid, o] of brawlPillarObjs) {
         if (!seenPl.has(pid)) { scene.remove(o); disposeObject(o); brawlPillarObjs.delete(pid) }
       }
+      // 🩸 혈우 — 하늘에서 붉은 비가 쏟아진다(위에서 아래로 낙하 + 바닥에 번지는 웅덩이)
+      if ((view.bloodRainSeq || 0) !== bloodRainSeen) {
+        bloodRainSeen = view.bloodRainSeq || 0
+        const at = view.bloodRainAt || { x: 0, z: 0, r: 16 }
+        const group = new THREE.Group()
+        group.position.set(at.x, 0, at.z)
+        const dropMat = new THREE.MeshBasicMaterial({ color: 0xd42a2a, transparent: true, opacity: 0.9, depthWrite: false })
+        const drops = []
+        for (let di = 0; di < 90; di++) { // 굵은 핏방울들이 제각각 높이에서 떨어진다
+          const dr = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.05, 1.6, 4), dropMat)
+          const ang = Math.random() * Math.PI * 2
+          const rad = Math.sqrt(Math.random()) * at.r // 원 안에 고르게
+          const x = Math.cos(ang) * rad
+          const z = Math.sin(ang) * rad
+          const y0 = 16 + Math.random() * 20
+          dr.position.set(x, y0, z)
+          group.add(dr)
+          drops.push({ dr, x, z, y0, spd: 34 + Math.random() * 16, delay: Math.random() * 0.35 })
+        }
+        const pool = new THREE.Mesh( // 바닥에 번지는 핏빛 웅덩이
+          new THREE.CircleGeometry(at.r, 44),
+          new THREE.MeshBasicMaterial({ color: 0x8a1010, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide })
+        )
+        pool.rotation.x = -Math.PI / 2
+        pool.position.y = 0.12
+        group.add(pool)
+        scene.add(group)
+        bloodRains.push({ group, drops, pool, t: 0, dur: 1.5, r: at.r })
+        brawlShakeT = Math.max(brawlShakeT, 0.2)
+      }
+      for (let bi = bloodRains.length - 1; bi >= 0; bi--) {
+        const br = bloodRains[bi]
+        br.t += dt
+        if (br.t >= br.dur) {
+          scene.remove(br.group)
+          disposeObject(br.group)
+          bloodRains.splice(bi, 1)
+          continue
+        }
+        const fade = br.t > br.dur - 0.4 ? (br.dur - br.t) / 0.4 : 1
+        for (const d of br.drops) {
+          const lt = br.t - d.delay
+          if (lt <= 0) { d.dr.visible = false; continue }
+          d.dr.visible = true
+          const y = d.y0 - lt * d.spd
+          if (y <= 0.2) { // 바닥에 닿으면 다시 위에서 — 계속 쏟아지는 비
+            d.y0 = 16 + Math.random() * 20
+            d.delay = br.t
+            d.dr.position.y = d.y0
+          } else {
+            d.dr.position.y = y
+          }
+          d.dr.material.opacity = 0.9 * fade
+        }
+        br.pool.material.opacity = Math.min(0.42, br.t * 0.7) * fade // 서서히 흥건해진다
+      }
       // 🌙 꿈의 영토 — 보랏빛 원판이 천천히 돌며 숨쉰다(안에 있는 적은 자기 편을 때린다)
       const seenDream = new Set()
       for (const dh of view.heroes) {
@@ -7602,27 +7660,30 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       // ⛓️ 핏빛 사슬 — 혈기사와 표적을 잇는 붉은 사슬(끊기면 즉시 사라진다)
       const seenChain = new Set()
       for (const ch of view.heroes) {
-        if (!((ch.chainT || 0) > 0) || !ch.chainId) continue
-        const tgt = view.heroes.find((o) => o.id === ch.chainId)
-        if (!tgt) continue
-        seenChain.add(ch.id)
-        let link = brawlChainObjs.get(ch.id)
-        if (!link) {
-          link = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.16, 0.16, 1, 6),
-            new THREE.MeshBasicMaterial({ color: 0xff3a3a, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending })
-          )
-          scene.add(link)
-          brawlChainObjs.set(ch.id, link)
-        }
-        const from = new THREE.Vector3(ch.x, 2.2, ch.z)
-        const to = new THREE.Vector3(tgt.x, 2.2, tgt.z)
-        const dv = to.clone().sub(from)
-        const dl = Math.max(0.2, dv.length())
-        link.position.copy(from.clone().add(dv.clone().multiplyScalar(0.5)))
-        link.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dv.clone().normalize())
-        link.scale.set(1, dl, 1)
-        link.material.opacity = 0.55 + Math.abs(Math.sin(view.time * 9)) * 0.35 // 피가 도는 맥동
+        if (!((ch.chainT || 0) > 0) || !ch.chainIds) continue
+        ch.chainIds.forEach((tid, li) => {
+          const tgt = view.heroes.find((o) => o.id === tid)
+          if (!tgt) return
+          const key = `${ch.id}|${li}`
+          seenChain.add(key)
+          let link = brawlChainObjs.get(key)
+          if (!link) {
+            link = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.16, 0.16, 1, 6),
+              new THREE.MeshBasicMaterial({ color: 0xff3a3a, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending })
+            )
+            scene.add(link)
+            brawlChainObjs.set(key, link)
+          }
+          const from = new THREE.Vector3(ch.x, 2.2, ch.z)
+          const to = new THREE.Vector3(tgt.x, 2.2, tgt.z)
+          const dv = to.clone().sub(from)
+          const dl = Math.max(0.2, dv.length())
+          link.position.copy(from.clone().add(dv.clone().multiplyScalar(0.5)))
+          link.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dv.clone().normalize())
+          link.scale.set(1, dl, 1)
+          link.material.opacity = 0.55 + Math.abs(Math.sin(view.time * 9 + li)) * 0.35 // 피가 도는 맥동
+        })
       }
       for (const [cid, link] of brawlChainObjs) {
         if (!seenChain.has(cid)) { scene.remove(link); link.geometry.dispose(); link.material.dispose(); brawlChainObjs.delete(cid) }
