@@ -2012,6 +2012,7 @@ function HatScreen({ profile, onBack }) {
           <div className="hats-grid">
             {T.items.map((item) => {
               const isOwned = item.id === null || owned[tab].includes(item.id)
+                || (hasUnlockAll() && !item.trophy) // 올인원 구매 — 카드 라벨도 '보유'로(전리품 제외). 장착(pick)과 같은 규칙
               const isOn = (equipped[tab] || null) === item.id
               const isPreview = (preview[tab] || null) === item.id
               const isTrophy = !!item.trophy // 보스 전리품 — 비매품: 해금 전 자물쇠, 해금 후 금테+리본
