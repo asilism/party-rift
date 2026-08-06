@@ -1075,7 +1075,7 @@ export const CLS_SCALE = {
   windcaller: 0.92, assassin: 0.9,
   terramancer: 1.15, fearmonger: 0.95, illusionist: 0.9, runescribe: 0.95, bloodknight: 1.12, necromancer: 0.95, dreameater: 0.92,
   // 보스전 보스 — 3배급 거체. 얼굴·무기·이름표 높이도 이 배율을 따라간다(buildHero)
-  boss_colossus: 2.8, boss_archmage: 2.5, boss_shadow: 2.4, boss_thorn: 2.6,
+  boss_colossus: 2.8, boss_archmage: 2.5, boss_shadow: 2.4, boss_thorn: 2.6, boss_priest: 2.5,
 }
 
 const ATK_ANIM_T = 0.35 // 공격 모션 길이 (초)
@@ -4168,6 +4168,7 @@ const TROPHY_AURA_HUE = {
   boss_archmage: [0x6fb6ff, 0xb8dcff],
   boss_shadow: [0x8a4ee0, 0xb08aff],
   boss_thorn: [0x67d67f, 0xb0f0c0],
+  boss_priest: [0xf0d060, 0xfff2c0], // 타락 대사제 — 바랜 금빛 성광
   brawl_champ: [0xffd34d, 0xfff2b0], // 챔피언 골드
   defense_ward: [0x3d8fff, 0x8ac8ff], // 수문장 강청 — 가산 합성에서 모래 배경에 묻히지 않게 진하게
   arena_glad: [0xff3d3d, 0xff8a5a], // 검투사 진홍·청동 (챔피언 골드와 구분)
@@ -4504,7 +4505,7 @@ function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkin
   // 직업 무기 — 오른팔(손)에 쥐게 한다. 팔 그룹은 어깨가 피벗이라 걸을 때 앞뒤로 흔들린다.
   // 무기 스킨(꾸미기)을 장착했으면 직업 무기를 대체한다.
   // 보스는 타입별 기본 무기를 차용(전사 검/마법사 지팡이/암살자 단검)해 거체에 맞게 키운다
-  const BOSS_WEAPON = { boss_shadow: 'assassin', boss_thorn: 'snarer' } // 카르곤=돌몽둥이·아르케인=대보석 지팡이(buildWeapon 분기)
+  const BOSS_WEAPON = { boss_shadow: 'assassin', boss_thorn: 'snarer', boss_priest: 'healer' } // 카르곤=돌몽둥이·아르케인=대보석 지팡이(buildWeapon 분기)
   const weapon = buildWeapon(BOSS_WEAPON[h.cls] || h.cls, weaponSkinId)
   if (s > 1.5) weapon.scale.setScalar(s * 0.8) // 거인의 손엔 거인의 무기
   // 손 위치 = 무기 그룹의 원점(=손잡이). 무기마다 달라서 각자에 맞춰 팔을 뻗는다(고정값이면 어깨에 뜬 것처럼 보인다).
@@ -9040,6 +9041,10 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         obj.position.set(m.x, 0, m.z)
         const u = obj.userData
         setHpBar(u.bar, m.hp / m.maxHp)
+        { // 📿 군세 축복(타락 대사제): 축성 스택만큼 병사가 부풀어 오른다 — 커진 놈이 위협 표식
+          const want = 1 + (m.bless || 0) * 0.22
+          if (Math.abs(obj.scale.x - want) > 0.01) obj.scale.setScalar(obj.scale.x + (want - obj.scale.x) * Math.min(1, dt * 4))
+        }
         // 덩굴 심장: 고동 + 잠식 원 성장 — 물리 정보라 안개 무관 표시, 만개 예고 땐 분홍 점멸
         if (u.heart) {
           obj.visible = true

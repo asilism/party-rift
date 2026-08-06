@@ -322,6 +322,14 @@ export const CLASSES = {
     skill2: { name: '휘감는 채찍', icon: '🌿', cd: 13, desc: '덩굴 채찍으로 먼 적을 낚아채 끌어온다' },
     ult: { name: '만개', icon: '🌸', cd: 40, desc: '잠식된 가시밭 전체가 일제히 개화 폭발한다' },
   },
+  boss_priest: {
+    boss: true, name: '타락 대사제', icon: '🕯️',
+    desc: '군세를 기르고 되살리는 사제형 보스 — 병사를 방치하면 괴물이 되어 돌아온다',
+    hp: 24000, hpLvl: 700, atk: 88, atkLvl: 7, range: 14.5, atkCd: 0.95, speed: 7.0, def: 0.55,
+    skill: { name: '축성 낙뢰', icon: '⚡', cd: 8, desc: '적들 머리 위로 성스러운 낙뢰를 예고하고 내리친다' },
+    skill2: { name: '군세 축복', icon: '📿', cd: 13, desc: '주변 병사를 축성한다 — 더 크고 더 세게, 최대 3축성' },
+    ult: { name: '성역의 물결', icon: '💫', cd: 24, desc: '빛의 물결로 자신과 군세의 상처를 씻어낸다' },
+  },
 }
 export const BOSS_IDS = Object.keys(CLASSES).filter((c) => CLASSES[c].boss)
 export const CLASS_IDS = Object.keys(CLASSES).filter((c) => !CLASSES[c].boss)
@@ -3828,8 +3836,9 @@ function augOnKill(state, attacker, x, z, victimMaxHp, allowExplode = true) {
   }
   if (allowExplode && a.explode > 0) {
     // 폭발 규모도 같은 원리로 캡: min(적 최대체력, 내 공·주문력 평균)×비율 — 초반 손맛은 그대로,
-    //  후반 인플레(미니언 체력 수천)에 폭발이 같이 커져 난이도가 역주행하던 것만 막는다
-    const dmg = Math.min(victimMaxHp, powerStat(attacker)) * a.explode
+    //  후반 인플레(미니언 체력 수천)에 폭발이 같이 커져 난이도가 역주행하던 것만 막는다.
+    //  min 캡을 걸고도 웨이브를 통째로 지우는 지배력이 남아(실기기 100웨+ 리포트) 60%로 한 번 더 감쇠
+    const dmg = Math.min(victimMaxHp, powerStat(attacker)) * a.explode * 0.6
     const r = 5.5
     const r2 = r * r
     for (const mm of state.minions.slice()) { // 복사본 순회 — 폭발 중 minions 배열이 변한다
@@ -4126,7 +4135,7 @@ function stepDefenseWaves(state, dt) {
   const count = Math.max(0, Math.min(Math.min(24, 7 + Math.floor(w / 5)), 45 - alive))
   // 미니언 성장 0.10/웨. ⚠️ 봇은 완벽 AoE라 미니언 HP에 둔감(오히려 farm↑로 역효과 — 시뮬 확인) →
   //  증강 시대의 난이도 튜닝은 미니언 HP가 아니라 그림자/보스·적 화력, 그리고 실기기 유저 체감으로 잡는다.
-  if (count > 0) bossSummon(state, gate, { count, hpMul: 1 + 0.10 * w })
+  if (count > 0) bossSummon(state, gate, { count, hpMul: 1 + 0.12 * w }) // 성장 소폭 상향(0.10→0.12/웨)
   // 보스 — 10의 배수 파도, 20마다 1마리씩(10·20→1, 30·40→2, 50·60→3…). 종류 랜덤·중복 허용.
   const bossN = w % 10 === 0 ? Math.floor((w / 10 + 1) / 2) : 0
   const bosses = []
@@ -4143,7 +4152,8 @@ function stepDefenseWaves(state, dt) {
     const avg = Math.round(blues.reduce((sum, e) => sum + e.lvl, 0) / Math.max(1, blues.length))
     for (let i = 0; i < shadowN; i++) {
       const cls = pool[Math.floor(state.rng() * pool.length)]
-      spawnShadowAdd(state, { cls, lvl: Math.max(1, avg - 1) }, gate.x + (state.rng() - 0.5) * 8, gate.z + (state.rng() - 0.5) * 8)
+      // 레벨은 만렙(18)에서 멈추므로 50웨+에선 먹잇감이 된다 — 웨이브 비례 배율로 계속 자라게
+      spawnShadowAdd(state, { cls, lvl: Math.max(1, avg - 1), wave: w }, gate.x + (state.rng() - 0.5) * 8, gate.z + (state.rng() - 0.5) * 8)
     }
   }
   // 파도 피드 — 보스/그림자/일반 조합별 안내
@@ -4282,8 +4292,9 @@ function stepBrawl(state, dt) {
     }
     state.brawlR = Math.max(BRAWL_RING_MIN, state.brawlR - BRAWL_RING_SPEED * dt)
   }
-  // ☠️ 서든데스: 링이 최소에 닿으면 8초 뒤 대지가 모두를 태운다(누적 도트) — 만렙 유지력으로도
-  //  못 버티는 확정 종결 장치. 드롭도 멈춰 회복 수단이 사라진다.
+  // ☠️ 서든데스: 링이 최소에 닿으면 대지가 서서히 타오른다 — 확정 종결이 아니라 '압박'.
+  //  도트를 미미하게 눌러 남은 목숨이 아니라 마지막 난전이 승부를 가른다(역전 여지).
+  //  아이템 드롭은 멈추되 심판의 광선은 계속 떨어져 운·변수를 만든다(아래 디렉터).
   if (state.brawlR <= BRAWL_RING_MIN + 0.01) {
     state.brawlSuddenT = (state.brawlSuddenT || 0) + dt
     if (!state.brawlSuddenFed) {
@@ -4294,7 +4305,7 @@ function stepBrawl(state, dt) {
       state.brawlSuddenTickT = (state.brawlSuddenTickT || 0) - dt
       if (state.brawlSuddenTickT <= 0) {
         state.brawlSuddenTickT = 0.5
-        const rate = 0.035 + (state.brawlSuddenT - 5) * 0.003 // 갈수록 매섭게
+        const rate = 0.008 + (state.brawlSuddenT - 5) * 0.0006 // 아주 완만하게 — 초당 0.8%에서 시작
         for (const h of state.heroes) {
           if (h.respawnT > 0 || h.hp <= 0 || h.fallT > 0) continue
           damageHero(state, h, h.maxHp * rate * 0.5, null, false, '최후의 결전')
@@ -4316,14 +4327,15 @@ function stepBrawl(state, dt) {
   }
   // ── 하늘 이벤트 디렉터: 개전 15초 후부터, 시간이 갈수록 잦아진다 ──
   state.brawlEventT = (state.brawlEventT ?? 8) - dt
-  if (state.brawlEventT <= 0 && !((state.brawlSuddenT || 0) > 5) && !state.brawlUltDebug) { // 서든데스·시험장엔 하늘도 침묵
+  if (state.brawlEventT <= 0 && !state.brawlUltDebug) { // 시험장에만 하늘이 침묵
+    const sudden = (state.brawlSuddenT || 0) > 5 // 서든데스: 드롭은 끊기고 심판의 광선만 계속 — 운이 승부를 흔든다
     state.brawlEventT = Math.max(5, 10 - state.time / 60)
     const a = state.rng() * Math.PI * 2
     const rr = Math.sqrt(state.rng()) * (state.brawlR - 5)
     const x = Math.cos(a) * rr
     const z = Math.sin(a) * rr
     const roll = state.rng()
-    if (roll < 0.3) {
+    if (roll < 0.3 || sudden) {
       // ☄️ 심판의 광선 — 예고 원 뒤 낙뢰. 중립(team 'sky')이라 전원이 피해자, 명중 시 밖으로 밀쳐낸다
       state.zones.push({ id: state.nextId++, kind: 'meteor', team: 'sky', owner: null, x, z, r: 6.5, t: 0, delay: 1.7, dmg: 370, tag: '심판의 광선', brawlBlast: true })
     } else {
@@ -5463,6 +5475,7 @@ function stepMinions(state, dt) {
           m.atkSeq++
           // 상대가 병사이면 피해를 깎아 라인 교전이 천천히 풀리게 한다
           let out = tgt.ref.tk === 'minion' ? spec.dmg * MINION_VS_MINION : spec.dmg
+          out *= m.blessMul || 1 // 📿 군세 축복(타락 대사제): 축성된 병사는 더 아프다
           // 보스전 역할 분리: 병사의 일은 건물 철거 — 영웅에겐 잽 수준. 영웅 사냥은 보스의 몫
           if (isRaidMode(state.mode) && m.team === 'red' && tgt.ref.tk === 'hero') out *= state.mode === 'defense' ? 0.75 : 0.55
           if (m.ranged) {
@@ -7038,7 +7051,7 @@ const THORNWALL_LIFE = 6 // 벽 지속 — 돌벽(3s)보다 길게 짓누른다
 const BLOOM_CD = 38 // 만개(궁극, P2+)
 const BLOOM_WARN = 1.6 // 예고 — 잠식 밖까지 빠듯한 시간(2.2는 전원 완벽 대피)
 const BLOOM_DMG = [230, 4.2] // 잠식 위 개화 폭발
-const BOSS_HUE = { boss_colossus: 'lava', boss_archmage: 'frost', boss_shadow: 'shadow', boss_thorn: 'venom' } // 예고 장판 색조
+const BOSS_HUE = { boss_colossus: 'lava', boss_archmage: 'frost', boss_shadow: 'shadow', boss_thorn: 'venom', boss_priest: 'holy' } // 예고 장판 색조
 const BOSS_AWAKEN_T = 30 // 국면 전환 각성 휴지기(초) — 무적·정지, 아군의 재정비/파밍 시간
 const BOSS_AGGRO = 16 // 이 거리 안의 영웅을 상대한다(그 밖이면 진군)
 const BOSS_LEASH = 18 // 진군 축(공성 목표)에서 이 이상 벗어난 적은 쫓지 않는다 — 술래잡기 방지
@@ -7761,6 +7774,7 @@ function bossThink(state, h, dt) {
     if (h.cls === 'boss_colossus') bossColossus(state, h, foe)
     else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
     else if (h.cls === 'boss_thorn') bossThorn(state, h, foe)
+    else if (h.cls === 'boss_priest') bossPriest(state, h, foe)
     else bossShadow(state, h, foe, { x: throne.x, z: throne.z })
     if (h.cls === 'boss_colossus' && h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
       h.bossCd.fan = 6 * BOSS_PHASE_CD[h.bossPhase - 1] * bossTierOf(state).cd
@@ -7850,6 +7864,7 @@ function bossThink(state, h, dt) {
   if (h.cls === 'boss_colossus') bossColossus(state, h, foe)
   else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
   else if (h.cls === 'boss_thorn') bossThorn(state, h, foe)
+  else if (h.cls === 'boss_priest') bossPriest(state, h, foe)
   else bossShadow(state, h, foe, siege)
   // 파멸의 삼중격 — 카르곤 전용(전사형의 정체성). 전방 세 갈래 검기, 근거리는 겹쳐 맞는다
   if (h.cls === 'boss_colossus' && h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
@@ -7935,6 +7950,7 @@ const BOSS_ADD_SQUADS = {
   boss_archmage: ['mage', 'cryomancer', 'warlock', 'terramancer', 'chronomancer'],
   boss_thorn: ['snarer', 'beastmaster', 'terramancer', 'windcaller', 'catcher'], // 자연군 — 덩굴 정령들
   boss_shadow: ['assassin', 'illusionist', 'fearmonger', 'snarer', 'catcher'],
+  boss_priest: ['healer', 'guardian', 'chronomancer', 'windcaller', 'terramancer'], // 성직군 — 지키고 되살리는 자들
 }
 // 정예 소환은 두 박자다: ① 바닥에 예고 장판(강림 자리) → ② delay 뒤 그 자리에서 강림.
 //  · 장판이 흩뿌려져 깔리므로 아군 봇은 '공격 스킬처럼' 인지해 흩어진다(botDodgeBossZone) —
@@ -7973,6 +7989,9 @@ function spawnShadowAdd(state, spec, x, z) {
   add.isBossAdd = true // 부활 없음·후퇴 없음(damageHero/stepBots)
   add.role = 'mid'
   add.lvl = spec.lvl
+  // 웨이브 성장: 25웨부터 3.5%/웨 복리 없는 선형 배율 — 체력·공격력이 같이 자란다(heroMaxHp·heroAtk가 statMul을 읽음).
+  //  아군 만렙(18) 도달 후에도 그림자가 위협으로 남는 축 — 50웨 1.9×, 100웨 3.6×.
+  if (spec.wave > 25) add.statMul = 1 + 0.035 * (spec.wave - 25)
   add.maxHp = heroMaxHp(add)
   add.hp = add.maxHp
   add.gold = 0
@@ -8124,6 +8143,77 @@ function bossColossus(state, h, foe) {
 // 마법사형(전면 개편) — "인게임에 나오는 마법을 아주 크게 쓰는" 대마도사.
 //  평타 = 대형 화염구(BOLT_STYLE, 씬) · 밀쳐내기(돌풍술사) · 바위감옥+운석 3연타(대지술사+마법사 연계)
 //  · 소환 의식(시그니처: 소환석 DPS 체크, 무적 채널) · 궁극기 섬멸의 광선(궁수 빛의 화살 — 즉사)
+// 타락 대사제: '군세'가 곧 무기 — 직접 딜은 낙뢰뿐, 병사를 키우고(축복) 되살리고(물결)
+//  마지막 국면엔 남은 군세를 통째로 복제한다. 병사 정리를 미루는 파티일수록 눈덩이가 커진다.
+//  무한 방어에선 웨이브 병사가 재료가 되어 파도와의 시너지가 정체성이 된다.
+function bossPriest(state, h, foe) {
+  const p = h.bossPhase || 1
+  const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd
+  // 🕯️ 군세 복제(3국면 1회): 살아 있는 병사를 그대로 복사 — 축성 스택까지 복제된다.
+  //  상한 12기(모바일 프레임 보호). 무한 방어에선 30웨+ 보스가 3국면으로 시작해 즉시 발동.
+  if (p >= 3 && !h.priestCloned) {
+    h.priestCloned = true
+    const mine = state.minions.filter((m) => m.team === h.team && !m.stone && !m.heart).slice(0, 12)
+    for (const m of mine) {
+      state.minions.push({
+        ...m, id: state.nextId++, atkCd: 0.6,
+        x: m.x + (state.rng() - 0.5) * 3, z: m.z + (state.rng() - 0.5) * 3,
+      })
+    }
+    if (mine.length) {
+      pushFx(state, 'summon', h.x, h.z, 14, h.team, 1.3)
+      pushFeed(state, 'obj', `🕯️ ${h.name} — 군세가 둘로 늘어난다! (${mine.length}기 복제)`)
+    }
+  }
+  // ⚡ 축성 낙뢰: 보이는 적 영웅들 머리 위 예고 낙뢰 — 국면당 한 줄기씩 늘어난다(1+p).
+  //  '중간중간 떨어지는 낙뢰'가 이 보스의 유일한 직접 딜 — 자리만 옮기면 피할 수 있다.
+  if (h.bossCd.a <= 0) {
+    const targets = state.heroes.filter((e) =>
+      e.team !== h.team && e.respawnT <= 0 && !e.isBoss && isHeroVisible(state, e, h.team) && dist(h, e) < 32)
+    if (targets.length) {
+      h.bossCd.a = 8 * cdMul
+      const picks = targets.sort(() => state.rng() - 0.5).slice(0, 1 + p)
+      for (const e of picks) {
+        pushBossZone(state, h, { x: e.x, z: e.z, r: 4.2, delay: 1.5, dmg: skillDmg(h, 50, 0.85), aim: true, tag: '축성 낙뢰' })
+      }
+    }
+  }
+  // 📿 군세 축복: 주변 병사를 영구 강화(피해 +50%·체력 +45%/축성, 최대 3) + 그 자리에서 온전해진다.
+  //  씬은 bless 스택만큼 병사를 키워 그린다 — '커지는 이펙트'가 곧 위협 표시.
+  //  ⚠️ 레이드 초반 파밍 국면(대량 소환)엔 축성하지 않는다 — 저레벨 파티가 축성 물량에
+  //  2~3분 만에 쓸려나갔다(시뮬 보통 38%). 군세의 공포는 정예 국면부터 시작된다.
+  if (h.bossCd.b <= 0 && (h.defenseBoss || state.time >= BOSS_MASS_END)) {
+    const near = state.minions.filter((m) =>
+      m.team === h.team && !m.stone && !m.heart && (m.bless || 0) < 3 && dist2(h, m) <= 18 * 18)
+    if (near.length >= 3) {
+      h.bossCd.b = 13 * cdMul
+      for (const m of near.slice(0, 10)) {
+        m.bless = (m.bless || 0) + 1
+        m.blessMul = 1 + 0.35 * m.bless // 3축성 = ×2.05 — 위협은 덩치·체력이 주연
+        m.maxHp = Math.round(m.maxHp * 1.45)
+        m.hp = m.maxHp
+      }
+      pushFx(state, 'summon', h.x, h.z, 10, h.team, 0.9)
+      pushFeed(state, 'obj', '📿 군세 축복 — 병사들이 부풀어 오른다, 커진 놈부터 잘라라!')
+    }
+  }
+  // 💫 성역의 물결: 자신 소량 + 군세 완전 회복 — 보스를 눕히는 지름길은 병사부터 끊는 것.
+  //  자힐은 4%(레이드 정체 방지)·무한 방어 3%. 다친 대상이 있을 때만 쓴다(쿨 낭비 없음).
+  if (h.bossCd.c <= 0) {
+    const hurtMinion = state.minions.some((m) => m.team === h.team && !m.stone && !m.heart && m.hp < m.maxHp && dist2(h, m) <= 16 * 16)
+    if (hurtMinion || h.hp < h.maxHp * 0.97) {
+      h.bossCd.c = 24 * cdMul
+      h.hp = Math.min(h.maxHp, h.hp + h.maxHp * (h.defenseBoss ? 0.03 : 0.04))
+      for (const m of state.minions) {
+        if (m.team !== h.team || m.stone || m.heart || dist2(h, m) > 16 * 16) continue
+        m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.5) // 잃은 만큼이 아니라 절반 — 군세 벽이 영원하지 않게
+      }
+      pushFx(state, 'summon', h.x, h.z, 16, h.team, 1.1)
+      pushFeed(state, 'obj', '💫 성역의 물결 — 대사제와 군세의 상처가 씻겨 나간다')
+    }
+  }
+}
+
 function bossArchmage(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd // 페이즈 가속 × 난이도 티어
@@ -10304,6 +10394,7 @@ export function makeView(state) {
       id: m.id,
       team: m.team,
       ranged: m.ranged,
+      ...(m.bless ? { bless: m.bless } : null), // 📿 축성 — 씬이 스택만큼 키워 그린다
       x: r1(m.x),
       z: r1(m.z),
       dir: r2d(m.dir),
