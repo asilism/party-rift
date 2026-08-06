@@ -279,7 +279,7 @@ export const CLASSES = {
     name: '강령술사', icon: '💀', desc: '그림자를 부리는 소환 술사 — 마지막으로 쓰러뜨린 적을 그림자로 되살려 그 무기를 그대로 쓰게 만든다',
     hp: 490, hpLvl: 54, atk: 42, atkLvl: 6, range: 9.5, atkCd: 1.0, speed: 12.0,
     skill: { name: '그림자 소환', icon: '👤', cd: 8, desc: '그림자 병사를 불러낸다 — 최대 3기까지 거느린다(넘치면 가장 오래된 것이 흩어진다)' },
-    skill2: { name: '그림자 강화', icon: '⬆️', cd: 14, desc: '거느린 그림자를 한 단계 키운다(최대 3단계) — 커질수록 더 아프고 더 오래 버틴다' },
+    skill2: { name: '영혼 흡수', icon: '🌫️', cd: 12, desc: '앞으로 원혼의 격류를 뿜어 적을 관통한다 — 맞히면 그 영혼을 먹고 내 그림자들이 한 단계 자란다(최대 3단계, 커지고 강해진다)' },
     ult: { name: '그림자 사역', icon: '💀', cd: 65, desc: '마지막으로 처치한 적 영웅을 "그림자 ○○"로 되살려 30초간 부린다 — 그때 그 적의 체력·공격력·평타를 그대로 쓴다(처치 기록이 없으면 그림자 병사 3기)' },
   },
   dreameater: {
@@ -379,7 +379,7 @@ export const ABILITY_SCALING = {
   terramancer: { skill: { dmg: [30, 0.55], note: '0.5초 간격 3연투 · 각도는 첫 발에 고정' }, skill2: { dmg: [15, 0.25], note: '벽 명중 시 1.5초 기절 + 3초 길막' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
   runescribe: { skill: { dmg: [26, 0.45], note: '관통 · 인장 3스택' }, skill2: { note: '인장 최다 표적의 스택을 주변에 복제' }, ult: { dmg: [30, 0.5], note: '인장 1스택당 피해 · 처치 시 스택이 주변으로 전이' } },
   bloodknight: { skill: { dmg: [40, 0.85], note: '체력 6% 소모 · 잃은 체력만큼 최대 +60% · 맞힌 수만큼 흡혈' }, skill2: { dot: [12, 0.18], dotDur: 3, note: '체력 15% 소모 · 최대 3인 결속(멀어질 수 없음) + 준 피해 흡혈' }, ult: { dmg: [52, 0.78], note: '체력 20% 소모 · 반경 16 · 입힌 피해의 35% 회복(최대 체력 35% 상한)' } },
-  necromancer: { skill: { note: '그림자 병사 1기 소환(최대 3 · 15초)' }, skill2: { note: '그림자 한 단계 강화(최대 3단계 · 피해+55%·체력+45%/단계)' }, ult: { note: '마지막 처치 영웅을 그 스탯 그대로 30초 사역(없으면 그림자 3기)' } },
+  necromancer: { skill: { note: '그림자 병사 1기 소환(최대 3 · 15초)' }, skill2: { dmg: [40, 0.7], note: '관통 · 명중 시 그림자 한 단계 강화(최대 3단계 · 피해+55%·체력+45%)' }, ult: { note: '마지막 처치 영웅을 그 스탯 그대로 30초 사역(없으면 그림자 3기)' } },
   dreameater: { skill: { dmg: [26, 0.45], note: '멀리 관통(30) + 되돌아오며 한 번 더 · 스치면 둔화' }, skill2: { dmg: [30, 0.5], note: '명중 시 1.8초 매혹(시전자에게 강제 보행 · 행동 불가)' }, ult: { note: '내 자리 중심 반경 11 · 2.5초 · 영토 안 적은 조작 불능 + 서로를 공격(이탈 시 해제)' } },
 }
 
@@ -625,6 +625,8 @@ const SUMMON_SPEC = {
 const BEAST_LEAP_DUR = 0.45 // 사냥 명령 시 야수가 적에게 달려드는(도약) 시간 — 거리 무시
 const BEAST_WOLVES = 2 // 야수조련사 늑대 소환 마릿수
 const NECRO_MAX_SHADES = 3 // 강령술사가 동시에 거느리는 그림자 병사 수(초과 시 가장 오래된 것이 흩어진다)
+const DRAIN_RANGE = 13 // 영혼 흡수 사거리
+const DRAIN_HALF = 1.9 // 영혼 흡수 폭(반)
 const NECRO_TIER_MAX = 3 // 그림자 강화 단계 상한
 const NECRO_TIER_DMG = 0.55 // 단계당 피해 증가율
 const NECRO_TIER_HP = 0.45 // 단계당 체력 증가율
@@ -1302,7 +1304,7 @@ const KISS_RANGE = 12 // 매혹의 입맞춤 사거리
 const KISS_SPEED = 26 // 입맞춤 투사체 속도
 const KISS_R = 1.5 // 명중 판정 반경
 const ORB_RANGE = 30 // 미혹의 구체 비행 거리(2배 — 멀리 던져 왕복으로 훑는다)
-const ORB_SPEED = 22 // 구체 속도
+const ORB_SPEED = 44 // 구체 속도(2배 — 시원하게 쏘고 빠르게 회수)
 const ORB_R = 1.6 // 구체 명중 판정 반경
 const MIST_RANGE = 9 // (구버전 안개 — 미사용)
 const MIST_HALF_COS = 0.55 // 부채꼴 폭(코사인)
@@ -3354,13 +3356,35 @@ const SKILLS2 = {
     h.chainDmg = Math.round(skillDmg(h, 12, 0.18)) // 틱 피해 — 시전 시점 스냅샷
     for (const e of caught) pushFx(state, 'bloodchain', e.x, e.z, 2.4, h.team, 0.8)
   },
-  // 강령술사 그림자 강화: 거느린 그림자를 한 단계 키운다(최대 3단계).
-  //  단계가 오를수록 더 아프고 더 커진다 — 그림자를 '키워서' 데려가는 육성형 소환사.
+  // 강령술사 영혼 흡수: 앞으로 원혼의 격류를 뿜어 적을 관통한다.
+  //  **맞히면** 빨아낸 영혼을 그림자들에게 먹여 한 단계 키운다(최대 3단계 — 커지고 아파진다).
+  //  가만히 소환만 하는 게 아니라, 직접 맞혀야 그림자가 자란다.
   necromancer(state, h) {
-    const mine = state.summons.filter((su) => su.owner === h.id && su.kind === 'shade')
-    if (!mine.length) return false // 키울 그림자가 없으면 쿨을 안 쓴다
+    let dir = h.dir
+    const foe = nearestFoeHero(state, h, DRAIN_RANGE)
+    if (foe) dir = Math.atan2(foe.z - h.z, foe.x - h.x) // 조준 보조
+    h.dir = dir
+    const ux = Math.cos(dir)
+    const uz = Math.sin(dir)
+    const inBeam = (e) => {
+      const rx = e.x - h.x
+      const rz = e.z - h.z
+      const along = rx * ux + rz * uz
+      if (along < 0 || along > DRAIN_RANGE) return false
+      return Math.abs(rx * uz - rz * ux) <= DRAIN_HALF + 0.8
+    }
+    let souls = 0 // 빨아낸 영혼 수 = 그림자를 먹일 재료
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.hp <= 0 || !inBeam(e)) continue
+      souls++
+    }
+    for (const m of state.minions) if (m.team !== h.team && inBeam(m)) souls++
+    lineDamage(state, h, h.x, h.z, dir, DRAIN_RANGE, DRAIN_HALF, skillDmg(h, 40, 0.7), 0) // 주문력 계수 (강령술사)
+    pushFxDir(state, 'souldrain', h.x, h.z, DRAIN_RANGE, dir, h.team)
+    if (!souls) return false // 아무것도 못 빨았으면 쿨을 안 쓴다 — 맞히는 게 조건
     let grew = 0
-    for (const su of mine) {
+    for (const su of state.summons) {
+      if (su.owner !== h.id || su.kind !== 'shade') continue
       if ((su.tier || 1) >= NECRO_TIER_MAX) continue // 이미 만렙 그림자는 그대로
       su.tier = (su.tier || 1) + 1
       su.dmg = Math.round(su.dmg * (1 + NECRO_TIER_DMG))
@@ -3371,8 +3395,7 @@ const SKILLS2 = {
       pushFx(state, 'shadowrise', su.x, su.z, 2.6 + su.tier, h.team, 0.8)
       grew++
     }
-    if (!grew) return false // 전부 만렙이면 쿨을 아낀다
-    pushFeed(state, 'obj', `💀 ${h.name} — 그림자가 자라났다 (${grew}기)`)
+    if (grew) pushFeed(state, 'obj', `💀 ${h.name} — 영혼을 먹고 그림자가 자랐다 (${grew}기)`)
   },
   // 몽마 매혹의 입맞춤(Lv3): 스킬샷 — 맞히면 그 적이 홀려서 나에게 걸어온다(맞히는 실력이 곧 실력)
   dreameater(state, h) {
@@ -3680,6 +3703,13 @@ function damageHero(state, victim, amount, attacker, redirected = false, tag = n
   victim.bindT = 0
   victim.bindBy = null
   clearRune(victim) // 🔯 인장은 죽음과 함께 지워진다 — 부활한 몸에 남아 있으면 안 된다
+  if (victim.cls === 'necromancer' && state.summons.length) {
+    // 💀 부리던 자가 쓰러지면 그림자도 함께 스러진다(주인 없는 그림자는 남지 않는다)
+    for (const su of state.summons) {
+      if (su.owner === victim.id) pushFx(state, 'poof', su.x, su.z, 2, su.team, 0.5)
+    }
+    state.summons = state.summons.filter((su) => su.owner !== victim.id)
+  }
   victim.charmT = 0 // 죽으면 꿈에서 깬다
   victim.charmBy = null
   victim.dreamT = 0
@@ -9701,10 +9731,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     else if (h.cls === 'terramancer' && d < QUAKE_WALL_AHEAD + 2) castSkill2(state, h.id) // 융기 기절 → 돌팔매 연계
     else if (h.cls === 'runescribe' && nearCount >= 2 && runeStacks(state, foe) >= 2) castSkill2(state, h.id) // 뭉친 적에 인장 확산
     else if (h.cls === 'bloodknight' && d < BLOOD_CHAIN_RANGE - 1 && h.hp > h.maxHp * 0.35) castSkill2(state, h.id) // 사슬로 묶어 결투 강제
-    else if (h.cls === 'necromancer'
-      && state.summons.some((su) => su.owner === h.id && su.kind === 'shade' && (su.tier || 1) < NECRO_TIER_MAX)) {
-      castSkill2(state, h.id) // 그림자 강화 — 키울 여지가 있으면 바로 키운다
-    }
+    else if (h.cls === 'necromancer' && d < DRAIN_RANGE - 2) castSkill2(state, h.id) // 영혼 흡수 — 맞혀서 그림자를 키운다
     else if (h.cls === 'dreameater' && d < KISS_RANGE - 2) castSkill2(state, h.id) // 매혹의 입맞춤(Lv3)
   }
   const ready = h.skillCd <= 0

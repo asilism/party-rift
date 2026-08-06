@@ -5440,22 +5440,41 @@ test('강령술사 그림자 사역: 처치 기록이 없으면 그림자 병사
   assert.equal(g.summons.filter((su) => su.kind === 'shade').length, 3, '그림자 병사 3기')
 })
 
-test('강령술사 그림자 강화: 3단계까지 키운다 — 키울 그림자가 없으면 불발', () => {
+test('강령술사: 주인이 쓰러지면 그림자도 함께 스러진다', () => {
   const g = duo('necromancer', 'tank')
   startPlaying(g)
   const n = g.heroes[0]
   n.lvl = 18
-  n.x = 0; n.z = 0
+  for (let i = 0; i < 2; i++) { n.skillCd = 0; castSkill(g, n.id) }
+  assert.ok(g.summons.filter((su) => su.owner === n.id).length >= 2, '그림자 소환')
+  const foe = g.heroes[1] // 적 영웅이 자동평타로 마무리한다
+  foe.x = n.x + 2; foe.z = n.z
+  n.hp = 1
+  run(g, 3)
+  assert.ok(n.respawnT > 0, '강령술사 사망')
+  assert.equal(g.summons.filter((su) => su.owner === n.id).length, 0, '그림자도 전부 사라진다')
+})
+
+test('강령술사 영혼 흡수: 맞히면 관통 피해 + 그림자가 3단계까지 자란다', () => {
+  const g = duo('necromancer', 'tank')
+  startPlaying(g)
+  const [n, t] = g.heroes
+  n.lvl = 18
+  n.x = 0; n.z = 0; n.dir = 0
+  t.x = 40; t.z = 40 // 사거리 밖
   n.skill2Cd = 0
   castSkill2(g, n.id)
-  assert.equal(n.skill2Cd, 0, '키울 그림자가 없으면 불발')
+  assert.equal(n.skill2Cd, 0, '아무도 못 맞히면 불발 — 맞히는 게 조건')
   n.skillCd = 0
-  castSkill(g, n.id)
+  castSkill(g, n.id) // 그림자 하나
   const shade = g.summons.find((su) => su.owner === n.id)
   const dmg0 = shade.dmg
   const hp0 = shade.maxHp
+  t.x = 6; t.z = 0 // 정면 사거리 안
+  const thp0 = t.hp
   castSkill2(g, n.id)
-  assert.equal(shade.tier, 2, '2단계')
+  assert.ok(t.hp < thp0, '관통 피해')
+  assert.equal(shade.tier, 2, '맞히면 2단계')
   assert.ok(shade.dmg > dmg0 && shade.maxHp > hp0, `강해진다 (dmg ${dmg0}→${shade.dmg})`)
   n.skill2Cd = 0
   castSkill2(g, n.id)
@@ -5463,7 +5482,7 @@ test('강령술사 그림자 강화: 3단계까지 키운다 — 키울 그림�
   n.skill2Cd = 0
   castSkill2(g, n.id)
   assert.equal(shade.tier, 3, '상한 3단계에서 멈춘다')
-  assert.equal(n.skill2Cd, 0, '전부 만렙이면 쿨을 아낀다')
+  assert.ok(n.skill2Cd > 0, '단계가 안 올라도 공격 스킬이라 쿨은 돈다')
 })
 
 test('강령술사 원혼의 손길: 평타가 그림자의 수명을 붙든다', () => {
@@ -5618,7 +5637,7 @@ test('몽마 미혹의 구체: 관통해 날아갔다가 되돌아오며 한 번
   const hp1 = t.hp
   assert.ok(hp1 < hp0, '전진 중 관통 피해')
   assert.ok(t.slowT > 0, '스치면 둔화')
-  run(g, 2.6) // 끝점(30)에서 되돌아와 다시 지나간다
+  run(g, 1.3) // 끝점(30)에서 되돌아와 다시 지나간다(속도 44)
   assert.ok(t.hp < hp1, `귀환 길에 한 번 더 (${Math.round(hp1)}→${Math.round(t.hp)})`)
   run(g, 2.0)
   assert.ok(!g.projectiles.some((p) => p.kind === 'mistorb'), '손에 돌아오면 사라진다')
@@ -5631,7 +5650,7 @@ test('몽마 미혹의 구체: 내가 움직이면 돌아오는 궤적도 따라
   d.x = 0; d.z = 0; d.dir = 0
   t.x = 40; t.z = 40 // 방해 없이
   castSkill(g, d.id)
-  run(g, 1.45) // 끝점(30) 도달 → 귀환 시작 (속도 22이므로 ~1.36초)
+  run(g, 0.75) // 끝점(30) 도달 → 귀환 시작 (속도 44이므로 ~0.68초)
   const orb = g.projectiles.find((p) => p.kind === 'mistorb')
   assert.ok(orb && orb.back, '귀환 단계')
   d.x = 0; d.z = 14 // 몽마가 옆으로 크게 이동
