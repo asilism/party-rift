@@ -5396,7 +5396,7 @@ function findDefendTarget(state, m) {
 
 function stepMinions(state, dt) {
   for (const m of [...state.minions]) {
-    if (m.stone || m.heart) continue // 소환석·덩굴 심장: 움직이지도 때리지도 않는다 — 부수라고 있는 구조물
+    if (m.stone || m.heart || m.candle) continue // 소환석·덩굴 심장·성가 촛대: 움직이지도 때리지도 않는다 — 부수라고 있는 구조물
     m.atkCd = Math.max(0, m.atkCd - dt)
     m.returnT = Math.max(0, (m.returnT || 0) - dt)
     const spec = m.ranged ? RANGED : MELEE

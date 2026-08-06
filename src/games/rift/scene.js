@@ -4687,18 +4687,18 @@ function buildMinion(m, barColor) {
       new THREE.CylinderGeometry(0.55, 0.75, 2.6, 8),
       new THREE.MeshLambertMaterial({ color: 0xf0e0b0, emissive: 0x6a5010, emissiveIntensity: 0.35 })
     )
-    wax.position.y = 1.3
+    wax.position.y = 2.4 // 공중 부유 — 아르케인 수정구처럼 땅에서 떠 있다
     g.add(wax)
     const flame = glowSprite(0xffc040, 3.6)
-    flame.position.y = 3.2
+    flame.position.y = 4.3
     g.add(flame)
     const halo = glowSprite(0xf0d060, 5.5)
-    halo.position.y = 1.6
+    halo.position.y = 2.6
     g.add(halo)
     const bar = makeHpBar(2.2, barColor)
-    bar.position.y = 4.6
+    bar.position.y = 5.6
     g.add(bar)
-    g.userData = { bar, candle: true, flame, halo, bobPhase: Math.random() * 6 }
+    g.userData = { bar, candle: true, wax, flame, halo, bobPhase: Math.random() * 6 }
     return g
   }
   if (m.stone) {
@@ -9093,7 +9093,12 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           return
         }
         // 소환석: 위아래 부유 + 자전 + 타격 시 반짝 — 병사 로직(걷기·공격 모션)은 안 탄다
-        if (u.candle) { // 🕯️ 성가 촛대 — 불꽃 일렁임 + 타격당 1 피드백. 걷기 경로(u.body)로 떨어지면 크래시
+        if (u.candle) { // 🕯️ 성가 촛대 — 수정구처럼 둥둥 뜬 채 불꽃이 일렁인다. 걷기 경로(u.body)로 떨어지면 크래시
+          const cbob = Math.sin(view.time * 2.1 + u.bobPhase) * 0.4
+          u.wax.position.y = 2.4 + cbob
+          u.flame.position.y = 4.3 + cbob
+          u.halo.position.y = 2.6 + cbob
+          u.wax.rotation.y = view.time * 0.7
           u.flame.material.opacity = 0.65 + 0.3 * Math.abs(Math.sin(view.time * 8 + u.bobPhase))
           u.flame.scale.setScalar(3.0 + Math.sin(view.time * 6.5 + u.bobPhase) * 0.5)
           u.halo.material.opacity = 0.35 + 0.15 * Math.sin(view.time * 3 + u.bobPhase)
