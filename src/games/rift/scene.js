@@ -4698,7 +4698,7 @@ function buildMinion(m, barColor) {
     const bar = makeHpBar(2.2, barColor)
     bar.position.y = 4.6
     g.add(bar)
-    g.userData = { bar, crystal: flame, bits: [], fxUpdate: (t) => { flame.material.opacity = 0.7 + Math.sin(t * 9) * 0.25; flame.scale.setScalar(3.2 + Math.sin(t * 7) * 0.5) } }
+    g.userData = { bar, candle: true, flame, halo, bobPhase: Math.random() * 6 }
     return g
   }
   if (m.stone) {
@@ -9093,6 +9093,18 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           return
         }
         // 소환석: 위아래 부유 + 자전 + 타격 시 반짝 — 병사 로직(걷기·공격 모션)은 안 탄다
+        if (u.candle) { // 🕯️ 성가 촛대 — 불꽃 일렁임 + 타격당 1 피드백. 걷기 경로(u.body)로 떨어지면 크래시
+          u.flame.material.opacity = 0.65 + 0.3 * Math.abs(Math.sin(view.time * 8 + u.bobPhase))
+          u.flame.scale.setScalar(3.0 + Math.sin(view.time * 6.5 + u.bobPhase) * 0.5)
+          u.halo.material.opacity = 0.35 + 0.15 * Math.sin(view.time * 3 + u.bobPhase)
+          const cdHp = (u.lastHp == null ? m.hp : u.lastHp) - m.hp
+          u.lastHp = m.hp
+          if (cdHp > 0 && obj.visible) {
+            popDamage(m.x, m.z, 1, 'dmg')
+            particles.emit(m.x, 2.6, m.z, 0xffd060, 7, { spread: 7, up: 6, gravity: 18, size: 1.3, hard: true, lifeMin: 0.15, lifeMax: 0.32 })
+          }
+          return
+        }
         if (u.stone) {
           const bob = Math.sin(view.time * 2.1 + u.bobPhase) * 0.4
           u.crystal.position.y = 2.6 + bob

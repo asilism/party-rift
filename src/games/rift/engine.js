@@ -9046,9 +9046,10 @@ function stepBots(state, dt) {
         h.botLose = !healthy || sc.allies < sc.foes || sc.lifeT < sc.killT * 0.65
         if (isRaidMode(state.mode)) {
           if (foe.isBoss) {
-            // 체력이 넉넉한 동안(60%+)은 사거리 끝 트레이드, 그 아래는 일찍 빠져 회복 —
-            // 치명 패턴 메타에선 히트앤런 사이클이 정답이다(늦게 빠지면 패턴 한 방에 죽는다)
-            h.botLose = h.hp < h.maxHp * 0.6
+            // 체력이 넉넉한 동안은 사거리 끝 트레이드, 그 아래는 일찍 빠져 회복(히트앤런).
+            // 단 60%는 과했다 — 40~60% 구간 원거리 봇이 '불리'로 굳어 접근(②)도 못 하고
+            // 관망만 하는 사각지대(실기기 리포트: AD 원딜이 보스를 안 때리고 거리두기)
+            h.botLose = h.hp < h.maxHp * 0.5 // 0.45는 군세형(세라핌)에서 과공격(38%) — 0.5가 관망 해소·생존의 균형점
           }
           if (h.isBossAdd) {
             h.botWin = true
