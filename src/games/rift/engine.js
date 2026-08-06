@@ -262,11 +262,11 @@ export const CLASSES = {
     ult: { name: '바위감옥', icon: '🏔️', cd: 65, desc: '보이는 적 하나를 원형 돌벽으로 2.5초 가둔다 — 강제 1:1' },
   },
   runescribe: {
-    name: '각인사', icon: '🔯', desc: '적의 몸에 인장을 새겼다가 한꺼번에 터뜨리는 콤보 술사 — 평타마다 인장이 쌓이고, 5스택(완인)이면 그 적은 받는 피해가 늘어난다',
+    name: '각인사', icon: '🔯', desc: '적의 몸에 인장을 새겼다가 한꺼번에 터뜨리는 콤보 술사 — 평타마다 인장이 쌓이고, 5스택(완인)이면 그 적은 받는 피해가 크게 늘어난다',
     hp: 455, hpLvl: 49, atk: 40, atkLvl: 6, range: 11, atkCd: 1.0, speed: 12.1,
-    skill: { name: '인장탄', icon: '🌀', cd: 7, desc: '앞으로 인장탄을 쏴 일직선의 적을 관통 — 맞은 적 모두에게 인장 3스택 + 피해' },
-    skill2: { name: '각인 확산', icon: '🕸️', cd: 14, desc: '인장이 가장 많은 적의 인장을 주변 적들에게 그대로 퍼뜨린다' },
-    ult: { name: '파문', icon: '💠', cd: 60, desc: '보이는 모든 인장을 일제히 기폭 — 스택이 많을수록 큰 피해. 기폭으로 쓰러진 적의 인장은 주변 적에게 옮겨간다(연쇄)' },
+    skill: { name: '인장탄', icon: '🌀', cd: 6, desc: '앞으로 인장탄을 쏴 일직선의 적을 관통 — 맞은 적 모두에게 인장 3스택 + 피해' },
+    skill2: { name: '각인 확산', icon: '🕸️', cd: 14, desc: '인장이 가장 많은 적의 인장을 주변 적들에게 그대로 퍼뜨린다 — 번진 인장이 살을 태워 스택만큼 피해' },
+    ult: { name: '파문', icon: '💠', cd: 50, desc: '보이는 모든 인장을 일제히 기폭 — 스택이 많을수록 큰 피해. 기폭으로 쓰러진 적의 인장은 주변 적에게 옮겨간다(연쇄)' },
   },
   bloodknight: {
     name: '혈기사', icon: '🩸', desc: '자기 피를 태워 싸우는 근접 기사 — 스킬마다 체력을 대가로 치르고, 피가 모자랄수록 일격이 무거워진다',
@@ -377,9 +377,9 @@ export const ABILITY_SCALING = {
   fearmonger: { skill: { dmg: [30, 0.55], note: '1.5초 공포(통제 불능 질주 + 둔화)' }, skill2: { shield: [45, 0.7], note: '가속 + 어둠 장막' }, ult: { dmg: [40, 0.6], dot: [10, 0.18], dotDur: 2, note: '적에게 순간이동 · 주변 전체 1.6초 공포' } },
   illusionist: { skill: { dmg: [50, 0.9], note: '분신이 적을 쫓아가 내리찍음(확정 명중) + 0.9초 은신' }, skill2: { note: '분신과 자리바꿈' }, ult: { dmg: [40, 0.75], note: '연막 펑 — 3체 돌출, 전투 분신 2(평타 80%)' } },
   terramancer: { skill: { dmg: [30, 0.55], note: '0.5초 간격 3연투 · 각도는 첫 발에 고정' }, skill2: { dmg: [15, 0.25], note: '벽 명중 시 1.5초 기절 + 3초 길막' }, ult: { dmg: [35, 0.5], note: '원형 돌벽에 2.5초 가두기' } },
-  runescribe: { skill: { dmg: [26, 0.45], note: '관통 · 인장 3스택' }, skill2: { note: '인장 최다 표적의 스택을 주변에 복제' }, ult: { dmg: [30, 0.5], note: '인장 1스택당 피해 · 처치 시 스택이 주변으로 전이' } },
-  bloodknight: { skill: { dmg: [40, 0.85], note: '체력 6% 소모 · 잃은 체력만큼 최대 +60% · 맞힌 수만큼 흡혈' }, skill2: { dot: [12, 0.18], dotDur: 3, note: '체력 15% 소모 · 최대 3인 결속(멀어질 수 없음) + 준 피해 흡혈' }, ult: { dmg: [52, 0.78], note: '체력 20% 소모 · 반경 16 · 입힌 피해의 35% 회복(최대 체력 35% 상한)' } },
-  necromancer: { skill: { note: '그림자 병사 1기 소환(최대 3 · 15초)' }, skill2: { dmg: [40, 0.7], note: '관통 · 명중 시 그림자 한 단계 강화(최대 3단계 · 피해+55%·체력+45%)' }, ult: { note: '마지막 처치 영웅을 그 스탯 그대로 30초 사역(없으면 그림자 3기)' } },
+  runescribe: { skill: { dmg: [48, 0.85], note: '관통 · 인장 3스택' }, skill2: { dmg: [18, 0.28], note: '인장 최다 표적의 스택을 주변에 복제 · 번진 스택당 피해' }, ult: { dmg: [42, 0.7], note: '인장 1스택당 피해 · 처치 시 스택이 주변으로 전이' } },
+  bloodknight: { skill: { dmg: [34, 0.72], note: '체력 6% 소모 · 잃은 체력만큼 최대 +60% · 맞힌 수만큼 흡혈(상한 16%)' }, skill2: { dot: [12, 0.18], dotDur: 3, note: '체력 15% 소모 · 최대 3인 결속(멀어질 수 없음) + 준 피해 흡혈' }, ult: { dmg: [44, 0.66], note: '체력 20% 소모 · 반경 14.4 · 입힌 피해의 35% 회복(최대 체력 28% 상한)' } },
+  necromancer: { skill: { note: '그림자 병사 1기 소환(최대 3 · 11초)' }, skill2: { dmg: [44, 0.78], note: '관통 · 명중 시 그림자 한 단계 강화(최대 3단계 · 피해+55%·체력+45%)' }, ult: { note: '마지막 처치 영웅을 그 스탯 그대로 30초 사역(없으면 그림자 3기)' } },
   dreameater: { skill: { dmg: [26, 0.45], note: '멀리 관통(30) + 되돌아오며 한 번 더 · 스치면 둔화' }, skill2: { dmg: [30, 0.5], note: '명중 시 1.8초 매혹(시전자에게 강제 보행 · 행동 불가)' }, ult: { note: '내 자리 중심 반경 11 · 2.5초 · 영토 안 적은 조작 불능 + 서로를 공격(이탈 시 해제)' } },
 }
 
@@ -618,7 +618,7 @@ const SUMMON_SPEC = {
   turret: { hp: 90, hpCoef: 2.5, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity }, // 초반 ~210(4.7대) → 후반 ~490(3.3대)
   cannon: { hp: 480, hpCoef: 3.0, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 }, // 초반 ~620(13.7대) → 후반 ~960(6.4대)
   // 강령술사 그림자 병사: 약하지만 셋씩 몰려다닌다(자원이 아니라 쿨로 뽑는다)
-  shade: { hp: 380, hpCoef: 5.2, dmg: 34, coef: 0.2, range: 2.6, aggro: 16, speed: 9.8, mobile: true, cd: 1.0, life: 15 }, // 체력 2배 — 자폭까지 버텨야 한다(2026-08-05)
+  shade: { hp: 380, hpCoef: 5.2, dmg: 36, coef: 0.22, range: 2.6, aggro: 16, speed: 9.8, mobile: true, cd: 1.0, life: 11 }, // 수명이 진짜 축 — 3v3 76.7%(기준 60%)
   // 야수조련사 난투전 궁 전용: 진짜 용 — 크고 아프고 짧게 산다
   dragonpet: { hp: 300, hpCoef: 2.0, dmg: 36, coef: 0.15, range: 4.4, aggro: 22, speed: 8.2, mobile: true, cd: 1.6, life: 7 }, // 시뮬 승률 편중 반복 너프(2026-08-03, 최종 50%→)
 }
@@ -1347,16 +1347,16 @@ const BLOOD_COST_ULT = 0.20 // 혈우
 const BLOOD_RAGE_MAX = 0.6 // 잃은 체력 비례 피해 증가 상한(+60%)
 const BLOOD_SLASH_R = 5.5 // 혈인참 반경
 const BLOOD_SLASH_LEECH = 0.06 // 혈인참: 명중 1인당 최대 체력의 이 비율만큼 흡혈
-const BLOOD_SLASH_LEECH_CAP = 0.22 // 혈인참 1회 흡혈 상한(최대 체력 대비) — 병사 떼를 베어도 풀피가 되진 않게
+const BLOOD_SLASH_LEECH_CAP = 0.16 // 혈인참 1회 흡혈 상한(최대 체력 대비) — 난전이 클수록 이득이 커지는 걸 캡으로 눌렀다
 const BLOOD_CHAIN_RANGE = 9 // 사슬 결속 반경 — 이 안의 적이 함께 묶인다
 const BLOOD_CHAIN_MAX_TARGETS = 3 // 한 번에 묶을 수 있는 최대 인원(가까운 순)
 const BLOOD_CHAIN_MAX = 8.5 // 사슬 최대 길이 — 묶여도 숨 쉴 틈은 준다 — 넘어가면 서로 당겨진다
 const BLOOD_CHAIN_TIME = 2.4 // 결속 지속(3초 전원 봉쇄는 3v3에서 과했다)
 const BLOOD_CHAIN_TICK = 0.4 // 사슬 피해 간격(촘촘하게 — 지속 흡혈 체감)
-const BLOOD_CHAIN_LEECH = 1.1 // 사슬 흡혈 배율(개당) — 묶은 수만큼 쌓인다(코스트 10%는 넘게)
+const BLOOD_CHAIN_LEECH = 1.0 // 사슬 흡혈 배율(개당) — 묶은 동안은 순증이어야 정체성이 산다(0.8은 순손실이라 과했다)
 const BLOOD_RAIN_R = 14.4 // 혈우 반경(0.9배 하향 — 그래도 한타 전체를 적신다)
 const BLOOD_RAIN_LEECH = 0.35 // 혈우: 입힌 피해의 이 비율을 회복(반경 16이라 다수 명중이 쉽다 — 3v3 75% 조정)
-const BLOOD_RAIN_HEAL_CAP = 0.35 // 혈우 회복 상한(최대 체력 대비) — 코스트 20%를 넘되 무한 부활은 아니게
+const BLOOD_RAIN_HEAL_CAP = 0.28 // 혈우 회복 상한(최대 체력 대비) — 코스트 20%를 넘되 무한 부활은 아니게
 // 잃은 체력 비례 배수 — 빈사일수록 일격이 무거워진다(혈인참·혈우 공용)
 const bloodRage = (h) => 1 + Math.min(BLOOD_RAGE_MAX, 1 - h.hp / h.maxHp)
 // 피의 대가: 최대 체력의 frac만큼 치른다. 이걸로는 죽지 않는다(최소 1 보장).
@@ -1367,8 +1367,8 @@ function payBlood(h, frac) {
 // ── 각인사 인장(印章) — 적 몸에 쌓이는 스택. 만료는 '읽을 때' 판정하는 지연 방식이라
 //  히어로·병사·정글몹 어디에 붙어도 감쇠 루프가 필요 없다(runeStacks가 유일한 진입점).
 const RUNE_MAX = 5 // 최대 스택 = 완인(完印)
-const RUNE_DUR = 9 // 인장 지속(초) — 새로 새기면 갱신(6초는 셋업 전에 말랐다: 3v3 계측)
-const RUNE_FULL_AMP = 0.15 // 완인: 그 적이 받는 모든 피해 +15%
+const RUNE_DUR = 11 // 인장 지속(초) — 난전(5v5)에서 표적이 흩어져도 셋업이 살아남게(36.7%→)
+const RUNE_FULL_AMP = 0.22 // 완인: 그 적이 받는 모든 피해 +22%
 const SIGIL_RANGE = 13 // 인장탄 사거리
 const SIGIL_HALF = 1.4 // 인장탄 폭(반)
 const SPREAD_RANGE = 12 // 각인 확산: 원본 표적 탐색 거리
@@ -2291,7 +2291,7 @@ const SKILLS = {
       addRune(state, e, 3, h)
     }
     for (const m of [...state.minions]) if (m.team !== h.team && inLine(m)) addRune(state, m, 3, h)
-    lineDamage(state, h, h.x, h.z, dir, SIGIL_RANGE, SIGIL_HALF, skillDmg(h, 26, 0.45), 0) // 주문력 계수 (각인사)
+    lineDamage(state, h, h.x, h.z, dir, SIGIL_RANGE, SIGIL_HALF, skillDmg(h, 48, 0.85), 0) // 주문력 계수 (각인사) — 셋업기라도 딜러 몫은 한다
     state.projectiles.push({ // 시각: 앞으로 뻗는 인장 문양탄
       id: state.nextId++, kind: 'pierce', team: h.team, owner: h.id,
       x: h.x, z: h.z, vx: ux * 40, vz: uz * 40, travel: 0, max: SIGIL_RANGE,
@@ -2301,7 +2301,7 @@ const SKILLS = {
   // 혈기사 혈인참: 체력을 대가로 주변을 크게 벤다 — 잃은 체력에 비례해 무거워지고, 맞힌 수만큼 흡혈
   bloodknight(state, h) {
     payBlood(h, BLOOD_COST_SKILL) // 코스트 먼저 — 그만큼 이 일격이 세진다(자기 피가 곧 위력)
-    const dmg = skillDmg(h, 40, 0.85) * bloodRage(h) // 공격력 계수 (혈기사)
+    const dmg = skillDmg(h, 34, 0.72) * bloodRage(h) // 공격력 계수 (혈기사) — 5v5 난전 이득 축소
     const r2 = BLOOD_SLASH_R * BLOOD_SLASH_R
     let hits = 0
     for (const e of state.heroes) {
@@ -2818,7 +2818,7 @@ const ULTS = {
   // 각인사 파문: 보이는 인장을 전부 일제 기폭 — 스택당 피해.
   //  도미노: 기폭으로 쓰러진 적의 인장은 주변 적에게 옮겨가 다음 파문의 씨앗이 된다.
   runescribe(state, h) {
-    const per = skillDmg(h, 30, 0.5) // 스택 1개당 피해 (주문력 계수 — 각인사)
+    const per = skillDmg(h, 42, 0.7) // 스택 1개당 피해 (주문력 계수 — 각인사, 5v5 재상향)
     const r2 = BURST_RANGE * BURST_RANGE
     const marked = []
     for (const e of state.heroes) {
@@ -2866,7 +2866,7 @@ const ULTS = {
   // 혈기사 혈우: 체력을 크게 치르고 주변에 피의 비 — 입힌 피해의 절반을 회복(다수 명중 시 대역전)
   bloodknight(state, h) {
     payBlood(h, BLOOD_COST_ULT)
-    const dmg = skillDmg(h, 52, 0.78) * bloodRage(h) // 공격력 계수 (혈기사) — 반경 16이라 위력은 낮춘다(3v3 70%)
+    const dmg = skillDmg(h, 44, 0.66) * bloodRage(h) // 공격력 계수 (혈기사) — 5v5 73.3%(기준 50%) 재하향
     const r2 = BLOOD_RAIN_R * BLOOD_RAIN_R
     let dealt = 0
     state._ultHit = true // 궁 피해는 난투전 게이지를 재생산하지 않는다
@@ -3331,13 +3331,16 @@ const SKILLS2 = {
     }
     if (!src || best <= 0) return false // 퍼뜨릴 인장이 없으면 쿨을 안 쓴다
     const sr2 = SPREAD_RADIUS * SPREAD_RADIUS
+    const burn = skillDmg(h, 18, 0.28) * best // 주문력 계수 (각인사) — 번진 스택이 많을수록 아프다
     for (const e of state.heroes) {
       if (e === src || e.team === h.team || e.respawnT > 0 || e.hp <= 0 || dist2(src, e) > sr2) continue
-      addRune(state, e, best, h)
+      addRune(state, e, best, h) // 인장 먼저 — 완인이면 이 타격부터 증폭받는다
+      damageHero(state, e, burn, h, false, '각인 확산')
     }
     for (const m of state.minions) {
       if (m === src || m.team === h.team || dist2(src, m) > sr2) continue
       addRune(state, m, best, h)
+      damageMinion(state, m, burn, h)
     }
     pushFx(state, 'sigilspread', src.x, src.z, SPREAD_RADIUS, h.team, 0.9)
   },
@@ -3379,7 +3382,7 @@ const SKILLS2 = {
       souls++
     }
     for (const m of state.minions) if (m.team !== h.team && inBeam(m)) souls++
-    lineDamage(state, h, h.x, h.z, dir, DRAIN_RANGE, DRAIN_HALF, skillDmg(h, 40, 0.7), 0) // 주문력 계수 (강령술사)
+    lineDamage(state, h, h.x, h.z, dir, DRAIN_RANGE, DRAIN_HALF, skillDmg(h, 44, 0.78), 0) // 주문력 계수 (강령술사) — 3v3 76.7% 절반 롤백
     pushFxDir(state, 'souldrain', h.x, h.z, DRAIN_RANGE, dir, h.team)
     if (!souls) return false // 아무것도 못 빨았으면 쿨을 안 쓴다 — 맞히는 게 조건
     let grew = 0
@@ -5931,7 +5934,7 @@ function stepProjectiles(state, dt) {
       // 흡혈: 기본공격 탄(bolt)이 적 유닛에 적중하면 시전자가 회복 (구조물 제외)
       // 🔯 각인사 평타: 명중한 대상에 인장 1스택 — 콤보의 시작(스킬 없이도 쌓인다)
       if (p.kind === 'bolt' && owner.cls === 'runescribe' && p.target.tk !== 'tower' && p.target.tk !== 'nexus') {
-        addRune(state, e, 2, owner) // 평타 2스택 — 세 대면 완인, 콤보가 실제로 굴러가는 리듬
+        addRune(state, e, 3, owner) // 평타 3스택 — 두 대면 완인(5). 난전에서도 셋업이 익는다(5v5 30%→)
       }
       let ls = p.kind === 'bolt' && owner.items ? itemBonus(owner).lifesteal : 0
       if (p.kind === 'bolt' && owner.cls === 'gladiator') ls += GLAD_BASIC_LIFESTEAL // 검투사 고유 평타 흡혈
@@ -9799,7 +9802,7 @@ function botCombatSkills(state, h, foe, d, nearCount) {
     castUlt(state, h.id) // 그림자 사역 — 처치 기록이 있으면 바로 되살린다
   } else if (h.cls === 'bloodknight' && d < BLOOD_RAIN_R - 1 && (nearCount >= 2 || h.hp < h.maxHp * 0.55)) {
     castUlt(state, h.id) // 혈우 — 몰렸을 때(또는 다수 명중) 흡혈로 역전
-  } else if (h.cls === 'runescribe' && (runeStacks(state, foe) >= 4 || (nearCount >= 2 && runeStacks(state, foe) >= 2))) {
+  } else if (h.cls === 'runescribe' && (runeStacks(state, foe) >= 3 || (nearCount >= 2 && runeStacks(state, foe) >= 2))) {
     castUlt(state, h.id) // 파문 — 스택이 익었을 때 터뜨린다
   } else if (h.cls === 'terramancer' && d < CAGE_RANGE - 1 && foe.hp < foe.maxHp * 0.55) {
     castUlt(state, h.id) // 바위감옥 — 빈사 적을 가둬 마무리
