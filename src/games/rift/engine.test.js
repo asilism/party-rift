@@ -5498,6 +5498,35 @@ test('그림자는 영웅과 같은 순위로 조준된다 — 앞에 서 있으
   assert.equal(n.hp, nHp0, '뒤에 선 강령술사는 안 맞는다')
 })
 
+test('타락 대사제: 축복은 병사를 키우고, 물결은 되살리고, 3국면은 군세를 복제한다', () => {
+  const g = duo('warrior', 'tank')
+  startPlaying(g)
+  const b = g.heroes[1]
+  b.cls = 'boss_priest'
+  b.isBoss = true
+  b.isBot = true // 보스 두뇌(bossThink)는 봇 루프에서만 돈다
+  b.defenseBoss = true // 간이 경로(스테이지·각성 생략)로 bossPriest만 검증
+  b.bossPhase = 1
+  b.bossCd = { a: 1e9, b: 0, c: 1e9, summon: 1e9 } // 축복만 열어 둔다
+  b.x = 0; b.z = 0
+  g.heroes[0].x = 90; g.heroes[0].z = 90 // 낙뢰 표적 제거
+  for (let i = 0; i < 4; i++) plantMinion(g, b.team, 3 + i, 0, 300)
+  const m0 = g.minions[0]
+  run(g, 0.5)
+  assert.equal(m0.bless, 1, '축성 1스택')
+  assert.ok(m0.blessMul > 1 && m0.maxHp > 300, `강해지고 커진다 (hp ${m0.maxHp})`)
+  m0.hp = 10
+  b.bossCd.c = 0 // 물결 개방
+  run(g, 0.5)
+  assert.ok(m0.hp >= 10 + m0.maxHp * 0.45, `물결 — 군세 절반 회복 (${Math.round(m0.hp)}/${m0.maxHp})`)
+  const before = g.minions.filter((m) => m.team === b.team).length
+  b.bossPhase = 3 // 최후 국면 — 군세 복제
+  run(g, 0.5)
+  const after = g.minions.filter((m) => m.team === b.team).length
+  assert.equal(after, before * 2, `군세가 둘로 (${before}→${after})`)
+  assert.ok(g.minions.filter((m) => m.bless).length >= 2, '축성 스택까지 복제된다')
+})
+
 test('강령술사 영혼 흡수: 맞히면 관통 피해 + 그림자가 3단계까지 자란다', () => {
   const g = duo('necromancer', 'tank')
   startPlaying(g)
