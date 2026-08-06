@@ -5131,7 +5131,7 @@ test('어둠의 정적: 돌진으로 사망자가 나오면 지체 없이 연쇄
 
 // ══════════ 각인사(runescribe) — 인장·완인·파문 ══════════
 
-test('각인사: 평타가 인장 2스택을 새기고 지속이 끝나면 만료된다', () => {
+test('각인사: 평타가 인장 3스택을 새기고 지속이 끝나면 만료된다', () => {
   const g = duo('runescribe', 'tank')
   startPlaying(g)
   const [r, t] = g.heroes
@@ -5139,9 +5139,9 @@ test('각인사: 평타가 인장 2스택을 새기고 지속이 끝나면 만�
   t.x = 5; t.z = 0
   castAttack(g, r.id)
   run(g, 0.6) // 탄 비행 + 명중
-  assert.equal(makeView(g, 'rat').heroes.find((h) => h.id === 'ox').runeN, 2, '평타 = 인장 2스택')
+  assert.equal(makeView(g, 'rat').heroes.find((h) => h.id === 'ox').runeN, 3, '평타 = 인장 3스택')
   t.x = 60; t.z = 60 // 사거리 밖으로 — 자동 평타가 스택을 갱신하지 않게
-  run(g, 9.3) // 지속(9초) 경과
+  run(g, 11.3) // 지속(11초) 경과
   assert.equal(makeView(g, 'rat').heroes.find((h) => h.id === 'ox').runeN, 0, '만료되면 0으로 읽힌다')
 })
 
@@ -5352,7 +5352,7 @@ test('혈기사 핏빛 사슬: 반경 안 적을 한꺼번에 묶고 모두에�
   const hp2 = e2.hp
   run(g, 1.0)
   assert.ok(e1.hp < hp1 && e2.hp < hp2, '묶인 전원에게 지속 피해')
-  assert.ok(b.hp > hpAfterCost, `여럿에게서 빨아들여 순증 (${hpAfterCost}→${Math.round(b.hp)})`)
+  assert.ok(b.hp > hpAfterCost, `묶인 동안 빨아들여 순증한다 (${hpAfterCost}→${Math.round(b.hp)})`)
 })
 
 test('혈기사 핏빛 사슬: 묶을 상대가 없으면 피도 쿨도 쓰지 않는다', () => {
