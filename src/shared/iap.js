@@ -13,7 +13,7 @@ const NOADS_KEY = 'bgp.rift.noads.v1' // ads.js hasNoAds()와 같은 키 — 광
 const UNLOCK_ALL_KEY = 'bgp.rift.unlockall.v1'
 
 // 플레이 콘솔 → 수익 창출 설정 → 라이선스의 Base64 RSA 공개키. 비워 두면 서명 검증을 건너뛴다.
-const PLAY_LICENSE_KEY = ''
+const PLAY_LICENSE_KEY = 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuXRqenYhQZZSTEl1IFP2VGBG5VdK90V9Qq0EzmD4j2wwBe3H+luBss9J27nC7RvGoQ/qYyGFR2XjU0CPu6Fa61OwRPvgZCcE+dz4pl97e5kzMd7H4lWZWnh1l2b0drZCKPI/OKEfKHaseqlddl1G0QXy+i5HTbwj0ftPdCTvavtPmPecsB/JTvRG9WOnDa1BY8o8HatNdAKknbgYddDAVliZfcnRIijm5cfFDy90rOve66X1vOXqlIe47FU5nigTqRYOAfoHpR1R948M+dU/v3RA2DK0nYuXZKXqbuiONNGjIRKzhpunCD+LyxMbhrucHrJ4B0MJSCC8m7b3gaH12QIDAQAB'
 
 export function hasUnlockAll() {
   try {
