@@ -5498,6 +5498,39 @@ test('그림자는 영웅과 같은 순위로 조준된다 — 앞에 서 있으
   assert.equal(n.hp, nHp0, '뒤에 선 강령술사는 안 맞는다')
 })
 
+test('세라핌 성가 촛대: 소절마다 축성 부대를 워프하고, 부수면 성가가 역류한다', () => {
+  const g = duo('warrior', 'tank')
+  startPlaying(g)
+  const [w, b] = g.heroes
+  b.cls = 'boss_priest'
+  b.isBoss = true
+  b.isBot = true
+  b.bossAwake = true // 등장 각성 휴지기(보호막·정지) 생략 — 촛대 로직만 본다
+  g.time = 200 // 잠(~45초)·대량 소환 국면(~150초)을 지나 정예 국면에서 검증
+  b.bossPhase = 1
+  b.bossCd = { a: 1e9, b: 1e9, c: 1e9, d: 1e9, candle: 0, summon: 1e9, stones: 1e9 }
+  b.x = 0; b.z = 0
+  w.x = 12; w.z = 0 // 시야 안 — 촛대 설치 조건
+  run(g, 0.3)
+  const candle = g.minions.find((m) => m.candle)
+  assert.ok(candle, '촛대가 세워진다')
+  candle.hp = 500 // 격리: 라인 병사가 2소절 전에 부수지 않게 — 파괴는 마지막에 직접 검증
+  run(g, 2.6) // 첫 소절
+  const squad = g.minions.filter((m) => m.team === b.team && m.bless) // 워프 부대만(라인 병사 제외)
+  assert.ok(squad.length >= 4, `부대가 워프해 온다 (${squad.length}기)`)
+  assert.ok(squad.every((m) => m.bless === 1 && m.goldMul === 0.5), '1소절 = 1축성 · 골드 절반')
+  run(g, 6) // 둘째 소절
+  assert.ok(g.minions.some((m) => m.bless === 2), '소절이 거듭될수록 축성이 짙어진다')
+  candle.hp = 1
+  // 마지막 일격: 전사가 촛대를 부순다 — damageMinion 타격 1회
+  const hp0 = candle.hp
+  w.x = candle.x + 1; w.z = candle.z
+  castAttack(g, w.id, { tk: 'minion', id: candle.id })
+  run(g, 1.2)
+  assert.ok(!g.minions.includes(candle), `촛대 파괴 (${hp0}→소멸)`)
+  assert.ok(b.bossGroggyT > 0, '성가 역류 — 세라핌 그로기(CC 저항 무시 전용 경직)')
+})
+
 test('타락 대사제: 축복은 병사를 키우고, 물결은 되살리고, 3국면은 군세를 복제한다', () => {
   const g = duo('warrior', 'tank')
   startPlaying(g)

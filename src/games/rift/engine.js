@@ -3856,13 +3856,21 @@ function augOnKill(state, attacker, x, z, victimMaxHp, allowExplode = true) {
 function damageMinion(state, m, amount, attacker, allowExplode = true) {
   // 소환석(아르케인 의식): 피해량 무관 타격 1회당 1 — 딜이 아니라 "손이 몇 번 갔는가"의 DPS 체크.
   // 골드·경험치 없음: 의무 기믹은 파밍 대상이 아니다.
-  if (m.stone || m.heart) {
+  if (m.stone || m.heart || m.candle) {
     m.hp -= 1
     pushFx(state, 'rocksplash', m.x, m.z, 1.6, m.team, 0.4)
     if (m.hp > 0) return
     state.minions = state.minions.filter((o) => o !== m)
     pushFx(state, 'meteorhit', m.x, m.z, 3, 'blue', 0.8)
     if (m.heart) pushFeed(state, 'obj', '🥀 덩굴 심장이 부서졌다 — 가시밭이 시든다')
+    if (m.candle) { // 🕯️ 성가 촛대 파괴: 성가가 역류해 세라핌이 비틀거린다 — 짧은 딜 타임
+      const b = state.heroes.find((e) => e.isBoss && e.cls === 'boss_priest' && e.team === m.team && e.respawnT <= 0)
+      if (b) {
+        b.bossGroggyT = Math.max(b.bossGroggyT || 0, 2.5) // 기믹 보상 그로기 — CC 저항을 안 받는다
+        pushFx(state, 'abszero', b.x, b.z, 6, b.team, 1.0)
+        pushFeed(state, 'obj', '🕯️ 촛대가 부서졌다 — 성가가 역류해 대사제가 비틀거린다!')
+      }
+    }
     return
   }
   if (runeStacks(state, m) >= RUNE_MAX) amount *= 1 + RUNE_FULL_AMP // 🔯 완인: 병사에게도 똑같이 새겨진다
@@ -3876,7 +3884,7 @@ function damageMinion(state, m, amount, attacker, allowExplode = true) {
   pushFx(state, 'death', mx, mz, 2, m.team) // 그 자리에서 파티클로 분해
   if (attacker?.team) awardXp(state, attacker.team, m, MINION_XP, attacker)
   // 막타 골드는 영웅에게만 (병사/타워가 잡으면 없음). 폭발로 죽여도 정상 처치처럼 지급된다(공정).
-  if (attacker?.items) awardGold(state, attacker, mRanged ? GOLD_MINION_RANGED : GOLD_MINION_MELEE, mx, mz)
+  if (attacker?.items) awardGold(state, attacker, Math.round((mRanged ? GOLD_MINION_RANGED : GOLD_MINION_MELEE) * (m.goldMul || 1)), mx, mz)
   if (attacker?.soldierKills != null) attacker.soldierKills++ // 업적: 병사 막타 수
   augOnKill(state, attacker, mx, mz, mMax, allowExplode) // 증강: 킬 골드 + 연쇄 폭발(연쇄는 1회만)
 }
@@ -4030,6 +4038,7 @@ function giveXp(state, h, amount) {
 
 // ── 물리 1틱 ──
 export function step(state, dt) {
+  state.dtStep = dt // 보스 서브루틴(촛대 소절 틱 등)이 프레임 간격을 읽는다
   // 증강 뽑기 대기 중이면 완전 정지(시간·전투 모두) — 사람이 카드를 고를 때까지. 봇은 즉시 골라 안 걸린다.
   if (state.status === 'playing' && state.augPending) return state
   state.time += dt
@@ -7233,7 +7242,7 @@ function bossThink(state, h, dt) {
   if (!h.defenseBoss && state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.004 * dt)
   }
-  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34, hunt: 20, still: 30, seed: 14, root: 8, wall: 20, bloom: 34, burrow: 16 } // gaze/stomp/stones/seed/root = 보스전 전용 시그니처
+  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34, hunt: 20, still: 30, seed: 14, root: 8, wall: 20, bloom: 34, burrow: 16, candle: 22 } // gaze/stomp/stones/seed/root = 보스전 전용 시그니처
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
   // ── 예고된 처형기 집행: 예고가 끝나는 순간 발동한다 (시전 후 취소 없음 — 읽었다면 이미 피했다) ──
   // 뿌리 잠행 집행: 잠수해 있다가 예고가 끝나는 순간 심장 곁에서 솟구친다(가시 폭발은 존이 집행)
@@ -8149,6 +8158,49 @@ function bossColossus(state, h, foe) {
 function bossPriest(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd
+  // 🕯️ 성가 촛대(시그니처 · 보스전 전용): 워프게이트 — 부서질 때까지 소절(6초)마다 부대를
+  //  소환하고, 소절이 거듭될수록 그 부대의 축성이 +1(눈덩이). 세라핌은 그동안에도 계속 싸운다
+  //  (채널 없음 — 촛대를 무시하고 보스만 패는 선택지가 '틀린 답'이 되게).
+  //  워프 병사는 골드 절반(goldMul 0.5) — 자판기 파밍 차단. 부수면 성가 역류 그로기 2.5초.
+  if (!h.defenseBoss && p >= 2 && (h.bossCd.candle ?? 1) <= 0 // 2국면부터 — 1국면 파티는 감당 못 한다(시뮬 13%)
+    && !state.minions.some((m) => m.candle && m.team === h.team)
+    && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss && isHeroVisible(state, e, h.team) && dist(h, e) < 28)) {
+    h.bossCd.candle = 45 * BOSS_PHASE_CD[p - 1] * (1 - (1 - bossTierOf(state).cd) * 0.4) // 대기믹은 티어 가속 40%만
+    const a = state.rng() * Math.PI * 2
+    const aliveN = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss).length
+    const hits = Math.max(5, 3 + aliveN * 1.6) // 소환석과 같은 원리 — 부술 손 수에 비례한 타격 수
+    state.minions.push({
+      id: state.nextId++, team: h.team, candle: true, lane: 'mid', ranged: false,
+      x: h.x + Math.cos(a) * 12, z: h.z + Math.sin(a) * 12,
+      hp: Math.round(hits), maxHp: Math.round(hits), atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
+      candleT: 2.5, candleVerse: 0, // 첫 소절까지 2.5초
+    })
+    pushFeed(state, 'obj', '🕯️ 성가 촛대가 세워졌다 — 부수기 전까지 군세가 밀려온다!')
+  }
+  // 촛대 소환 틱 — 소절마다 부대 4기, 소절 수만큼 축성(최대 3)이 걸린 채 워프해 온다
+  for (const c of state.minions) {
+    if (!c.candle || c.team !== h.team) continue
+    c.candleT -= state.dtStep || 1 / 30
+    if (c.candleT > 0) continue
+    c.candleT = 8 // 소절 간격 — 6초는 봇 파티가 감당 못 했다(0%)
+    c.candleVerse = (c.candleVerse || 0) + 1
+    const bless = Math.min(2, c.candleVerse) // 워프 부대 축성 상한 2 — 3은 눈덩이가 과했다
+    const grow = MINION_HP_GROWTH * (state.time / 60) * 2
+    for (let i = 0; i < 3; i++) {
+      const ranged = i >= 2
+      const spec = ranged ? RANGED : MELEE
+      const hp = Math.round((spec.hp + grow) * (1.45 ** bless))
+      state.minions.push({
+        id: state.nextId++, team: h.team, lane: 'mid', ranged,
+        x: c.x + (state.rng() - 0.5) * 4, z: c.z + (state.rng() - 0.5) * 4,
+        hp, maxHp: hp, atkCd: i * 0.3, dir: 0, atkSeq: 0,
+        wpI: state.map.nearestWp('mid', c.x, c.z),
+        bless, blessMul: 1 + 0.35 * bless, goldMul: 0.5,
+      })
+    }
+    pushFx(state, 'summon', c.x, c.z, 6, h.team, 0.9)
+    if (c.candleVerse === 2) pushFeed(state, 'obj', '🕯️ 성가가 2소절째 — 워프 군세가 더 굵어진다, 촛대를 꺼라!')
+  }
   // 🕯️ 군세 복제(3국면 1회): 살아 있는 병사를 그대로 복사 — 축성 스택까지 복제된다.
   //  상한 12기(모바일 프레임 보호). 무한 방어에선 30웨+ 보스가 3국면으로 시작해 즉시 발동.
   if (p >= 3 && !h.priestCloned) {
@@ -8182,7 +8234,9 @@ function bossPriest(state, h, foe) {
   //  씬은 bless 스택만큼 병사를 키워 그린다 — '커지는 이펙트'가 곧 위협 표시.
   //  ⚠️ 레이드 초반 파밍 국면(대량 소환)엔 축성하지 않는다 — 저레벨 파티가 축성 물량에
   //  2~3분 만에 쓸려나갔다(시뮬 보통 38%). 군세의 공포는 정예 국면부터 시작된다.
-  if (h.bossCd.b <= 0 && (h.defenseBoss || state.time >= BOSS_MASS_END)) {
+  //  촛대가 타는 동안엔 축복도 쉰다 — 성장 엔진이 둘이면 봇도 사람도 감당 못 한다(시뮬 0%)
+  if (h.bossCd.b <= 0 && (h.defenseBoss || state.time >= BOSS_MASS_END)
+    && !state.minions.some((m) => m.candle && m.team === h.team)) {
     const near = state.minions.filter((m) =>
       m.team === h.team && !m.stone && !m.heart && (m.bless || 0) < 3 && dist2(h, m) <= 18 * 18)
     if (near.length >= 3) {
@@ -8848,6 +8902,7 @@ function stepBots(state, dt) {
     if (state.mode === 'boss' && h.team === 'blue' && botSeekSafe(state, h, dt)) continue
     // 소환 의식 = 소환석 철거가 유일한 임무(보스는 무적)
     if (state.mode === 'boss' && h.team === 'blue' && botBreakStones(state, h, dt)) continue
+    if (state.mode === 'boss' && h.team === 'blue' && botBreakCandle(state, h)) continue
     // 휘감는 채찍 경고 = 직선 수직 이탈 / 덩굴 심장 = 담당 봇이 철거 / 잠식 위 = 걸어 나온다
     if (state.mode === 'boss' && h.team === 'blue' && botDodgeWhip(state, h)) continue
     if (state.mode === 'boss' && h.team === 'blue' && botBreakHearts(state, h, dt)) continue
@@ -9385,6 +9440,30 @@ function botBreakStones(state, h, dt) {
     if (d2v < bd) { bd = d2v; best = m }
   }
   if (!best) return false
+  if (Math.sqrt(bd) > heroRange(h) * 0.92) steerToward(state, h, best)
+  else { h.mx = 0; h.mz = 0 }
+  castAttack(state, h.id, { tk: 'minion', id: best.id })
+  return true
+}
+
+// 🕯️ 촛대 철거(세라핌): 켜진 촛대는 소절마다 축성 부대를 워프시킨다 — 발견 즉시 전원이
+// 달려가 끈다(타격 수가 적어 몇 초면 꺼진다). 부수면 성가 역류 그로기 = 복귀 후 딜 타임.
+function botBreakCandle(state, h) {
+  let best = null
+  let bd = 40 * 40 // 너무 먼 촛대까지 원정 가진 않는다
+  for (const m of state.minions) {
+    if (!m.candle || m.team === h.team || m.hp <= 0) continue
+    const d2v = dist2(h, m)
+    if (d2v < bd) { bd = d2v; best = m }
+  }
+  if (!best) return false
+  // 전원이 몰려가면 보스를 방치하다 전멸한다(시뮬 0%) — 촛대에 가장 가까운 2명만 소방수로 간다
+  let closer = 0
+  for (const e of state.heroes) {
+    if (e.team !== h.team || e === h || e.respawnT > 0 || e.isBoss) continue
+    if (dist2(e, best) < bd) closer++
+  }
+  if (closer >= 2) return false
   if (Math.sqrt(bd) > heroRange(h) * 0.92) steerToward(state, h, best)
   else { h.mx = 0; h.mz = 0 }
   castAttack(state, h.id, { tk: 'minion', id: best.id })
@@ -10403,6 +10482,7 @@ export function makeView(state) {
       maxHp: Math.ceil(m.maxHp),
       ...(m.stone ? { stone: true } : null), // 소환석(아르케인 의식) — 씬이 부유 결정으로 그린다
       ...(m.heart ? { heart: true, creepR: r1(m.creepR || 0) } : null), // 덩굴 심장 — 씬이 심장+잠식 원으로 그린다
+      ...(m.candle ? { candle: true } : null), // 🕯️ 성가 촛대 — 씬이 금빛 촛불로 그린다
     })),
     monsters: state.monsters.map((m) => ({
       id: m.id,
