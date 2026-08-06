@@ -17,6 +17,7 @@ public class MainActivity extends BridgeActivity {
     // WindowCompat/WindowInsetsControllerCompat(공식 이전 경로)을 쓴다.
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(SavedGamesPlugin.class); // ☁️ 클라우드 세이브 — super.onCreate 전에 등록해야 브리지에 잡힌다
         super.onCreate(savedInstanceState);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false); // 엣지-투-엣지 — 웹뷰가 화면 전체를 쓴다
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

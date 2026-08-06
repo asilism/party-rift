@@ -27,6 +27,10 @@
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="ca-app-pub-9138089691431103~3734985001" />
+        <!-- ☁️ Play 게임 서비스(저장된 게임) — 프로젝트 ID는 strings.xml에서 관리 -->
+        <meta-data
+            android:name="com.google.android.gms.games.APP_ID"
+            android:value="@string/game_services_project_id" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
