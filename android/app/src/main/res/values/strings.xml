@@ -4,4 +4,7 @@
     <string name="title_activity_main">조디악 블리츠</string>
     <string name="package_name">com.asilism.zodiacblitz</string>
     <string name="custom_url_scheme">com.asilism.zodiacblitz</string>
+    <!-- ☁️ Play 게임 서비스 프로젝트 ID — 콘솔(Play 게임 서비스 → 설정)의 숫자 ID로 교체.
+         "0"(자리표시자)인 동안은 클라우드 세이브가 조용히 꺼져 있다 -->
+    <string name="game_services_project_id" translatable="false">0</string>
 </resources>

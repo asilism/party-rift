@@ -25,6 +25,7 @@ import { createTournament, nextRound, resolveRound, userPlacement, arenaLevelFor
 import Fireworks from '../shared/Fireworks.jsx'
 import { adsAvailable, showRewarded, hasNoAds } from '../shared/ads.js'
 import { IAP_NOADS, IAP_UNLOCK_ALL, hasUnlockAll, iapAvailable, initIap, iapPrice, buyIap, restoreIap } from '../shared/iap.js'
+import { cloudStatus, signInCloud, saveCloudNow } from '../shared/cloudSave.js'
 import MenuStage, { ArenaStage, ChampionStage } from './MenuStage.jsx'
 import HatPreview from './HatPreview.jsx'
 import FullscreenButton from '../shared/FullscreenButton.jsx'
@@ -2108,6 +2109,23 @@ const GFX_OPTS = [
 function SettingsScreen({ onBack, onLicenses }) {
   const [soundOn, setSoundOn] = useState(loadSoundOn)
   const [gfx, setGfx] = useState(loadRiftGfx)
+  const [cloud, setCloud] = useState(null) // null=확인 중 | {available, signedIn}
+  const [cloudMsg, setCloudMsg] = useState('')
+  useEffect(() => {
+    cloudStatus().then(setCloud)
+  }, [])
+  async function cloudLogin() {
+    sound.step()
+    const ok = await signInCloud()
+    setCloud((c) => ({ ...(c || { available: true }), signedIn: ok }))
+    setCloudMsg(ok ? '' : t('로그인에 실패했어요'))
+  }
+  async function cloudSave() {
+    sound.step()
+    setCloudMsg('…')
+    const ok = await saveCloudNow()
+    setCloudMsg(ok ? t('☁️ 저장했어요') : t('저장에 실패했어요'))
+  }
   const lang = getLang()
   function toggleSound() {
     const n = !soundOn
@@ -2163,8 +2181,22 @@ function SettingsScreen({ onBack, onLicenses }) {
             ))}
           </div>
         </div>
+        {cloud?.available && (
+          <div className="settings-row">
+            <span className="settings-row__label">☁️ {t('클라우드 저장')}</span>
+            <div className="settings-row__seg">
+              {cloud.signedIn
+                ? <button className="toy-pill" onClick={cloudSave}>{t('지금 저장')}</button>
+                : <button className="toy-pill" onClick={cloudLogin}>{t('Google 로그인')}</button>}
+              {cloudMsg && <span className="settings-cloud-msg">{cloudMsg}</span>}
+            </div>
+          </div>
+        )}
         <button className="settings-link" onClick={onLicenses}>{t('ⓘ 오픈소스 라이선스')} ›</button>
-        <p className="settings-note">{t('언어를 바꾸면 화면이 새로고침돼요')} · {t('그래픽은 다음 전투부터 적용돼요')}</p>
+        <p className="settings-note">
+          {t('언어를 바꾸면 화면이 새로고침돼요')} · {t('그래픽은 다음 전투부터 적용돼요')}
+          {cloud?.available ? <> · {t('클라우드 저장은 앱을 켤 때 자동으로 불러와요')}</> : null}
+        </p>
       </div>
     </div>
   )
