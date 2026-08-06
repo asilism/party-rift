@@ -618,7 +618,7 @@ const SUMMON_SPEC = {
   turret: { hp: 90, hpCoef: 2.5, dmg: 34, coef: 0.15, range: 12, aggro: 12, speed: 0, mobile: false, cd: 1.0, life: Infinity }, // 초반 ~210(4.7대) → 후반 ~490(3.3대)
   cannon: { hp: 480, hpCoef: 3.0, dmg: 72, coef: 0.34, range: 16, aggro: 16, speed: 0, mobile: false, cd: 1.3, life: 15 }, // 초반 ~620(13.7대) → 후반 ~960(6.4대)
   // 강령술사 그림자 병사: 약하지만 셋씩 몰려다닌다(자원이 아니라 쿨로 뽑는다)
-  shade: { hp: 380, hpCoef: 5.2, dmg: 36, coef: 0.22, range: 2.6, aggro: 16, speed: 9.8, mobile: true, cd: 1.0, life: 11 }, // 수명이 진짜 축 — 3v3 76.7%(기준 60%)
+  shade: { hp: 300, hpCoef: 3.2, dmg: 36, coef: 0.22, range: 2.6, aggro: 16, speed: 9.8, mobile: true, cd: 1.0, life: 11 }, // 조준 대상이 된 만큼 '맞으면 죽게' — 몸빵 가치를 되돌린다
   // 야수조련사 난투전 궁 전용: 진짜 용 — 크고 아프고 짧게 산다
   dragonpet: { hp: 300, hpCoef: 2.0, dmg: 36, coef: 0.15, range: 4.4, aggro: 22, speed: 8.2, mobile: true, cd: 1.6, life: 7 }, // 시뮬 승률 편중 반복 너프(2026-08-03, 최종 50%→)
 }
@@ -1494,9 +1494,14 @@ function nearestFoeHero(state, h, range) {
   return best
 }
 
-// 보이는 적 "영웅 또는 분신" — 환영무희 분신은 겉모습이 본체와 똑같으므로 평타 자동조준·
-// 봇 교전 판단에서 영웅과 같은 우선순위로 잡혀야 진짜 미끼가 된다. (스킬 자동조준은
-// 내부 필드가 다른 분신에 damageHero를 태울 수 없어 기존 nearestFoeHero를 그대로 쓴다)
+// 영웅과 같은 우선순위로 조준되는 소환물 — 사람 몸을 하고 전장에 서서 직접 때리는 것들.
+//  분신: 겉모습이 본체와 똑같아야 미끼가 성립한다.
+//  그림자: 안 그러면 아무도 못 때린다 — 난투전엔 병사도 타워도 없어 소환물 순위까지
+//   내려갈 일이 없고, 그래서 강령술사가 무적의 딜을 공짜로 넣었다(실측 832기 중 피격사 0기).
+const HEROLIKE_SUMMONS = new Set(['clone', 'shade'])
+
+// 보이는 적 "영웅 또는 영웅급 소환물" — 평타 자동조준·봇 교전 판단에서 같은 순위로 잡힌다.
+// (스킬 자동조준은 내부 필드가 다른 소환물에 damageHero를 태울 수 없어 nearestFoeHero를 그대로 쓴다)
 function nearestFoeHeroLike(state, h, range) {
   const r2 = range * range
   let best = null
@@ -1513,8 +1518,8 @@ function nearestFoeHeroLike(state, h, range) {
     }
   }
   for (const s of state.summons) {
-    if (s.kind !== 'clone' || s.team === h.team) continue
-    if (!isHeroVisible(state, s, h.team)) continue // 분신도 안개/시야 규칙을 따른다
+    if (s.team === h.team || !HEROLIKE_SUMMONS.has(s.kind)) continue
+    if (!isHeroVisible(state, s, h.team)) continue // 소환물도 안개/시야 규칙을 따른다
     const d = dist2(h, s)
     if (d < bd) {
       bd = d
@@ -6192,6 +6197,11 @@ function spawnSummon(state, owner, kind, x, z) {
   let smul = 1 + augOf(owner).summonMul
   // 난투전: 늑대·곰은 낙사도 링 축소도 무시하는 FFA 최적 병기 — 물량 가치만큼 개체를 감쇠(본편 무영향)
   if (state.mode === 'brawl' && (kind === 'wolfpet' || kind === 'bear')) smul *= 0.72
+  // 난투전 그림자: 8인 FFA는 '3킬마다 목숨 +1'이라 화력이 곧 생존이다. 그림자가 막타를
+  //  훔쳐 킬의 절반을 만들어내며 우승률 100%·평균 순위 1.0/8까지 갔다(실측: 그림자를 빼면
+  //  16.7%·3.29로 정상화). 개체를 줄여도 소용없다 — 쿨 8·수명 11이라 상한 3에 애초에 안 닿는다.
+  //  늑대·곰과 같은 문법으로 개체 가치만 깎는다(본편 3v3·5v5 무영향).
+  if (state.mode === 'brawl' && kind === 'shade') smul *= 0.22
   const hp = Math.round((spec.hp + (spec.hpCoef || 0) * ps) * smul)
   const su = {
     id: state.nextId++, kind, team: owner.team, owner: owner.id,

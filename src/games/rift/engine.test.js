@@ -1397,6 +1397,29 @@ test('타워: 사거리에 영웅이 없으면 병사를 때린다', () => {
   assert.ok(m.hp < 200 || !g.minions.includes(m)) // 병사가 맞는다
 })
 
+test('타워: 그림자도 병사처럼 걷어낸다 — 소환물이 무적으로 공성하지 못하게', () => {
+  const g = createGame(humans())
+  startPlaying(g)
+  const t = g.towers.find((o) => o.id === 'r-top-1')
+  for (const o of g.heroes) { // 영웅은 전부 멀리 — 타워가 그림자만 보게
+    o.x = NEXUS_POS[o.team].x
+    o.z = NEXUS_POS[o.team].z
+  }
+  const n = g.heroes.find((o) => o.team === 'blue')
+  n.cls = 'necromancer'
+  n.lvl = 18
+  n.x = t.x - 6; n.z = t.z
+  n.skillCd = 0
+  castSkill(g, n.id)
+  const shade = g.summons.find((su) => su.owner === n.id)
+  assert.ok(shade, '그림자 소환')
+  shade.x = t.x - 6; shade.z = t.z
+  const hp0 = shade.hp
+  n.x = NEXUS_POS.blue.x; n.z = NEXUS_POS.blue.z // 본체는 다시 멀리
+  run(g, 1.5)
+  assert.ok(shade.hp < hp0 || !g.summons.includes(shade), `타워가 그림자를 때린다 (${hp0}→${Math.round(shade.hp)})`)
+})
+
 test('수호석이 터지면 게임 종료 + 승리 팀 확정', () => {
   const g = createGame(humans())
   startPlaying(g)
@@ -5449,10 +5472,30 @@ test('강령술사: 주인이 쓰러지면 그림자도 함께 스러진다', ()
   assert.ok(g.summons.filter((su) => su.owner === n.id).length >= 2, '그림자 소환')
   const foe = g.heroes[1] // 적 영웅이 자동평타로 마무리한다
   foe.x = n.x + 2; foe.z = n.z
+  for (const su of g.summons) { su.x = n.x + 60; su.z = n.z + 60 } // 그림자를 멀리 — 평타가 본체로 가게
   n.hp = 1
   run(g, 3)
   assert.ok(n.respawnT > 0, '강령술사 사망')
   assert.equal(g.summons.filter((su) => su.owner === n.id).length, 0, '그림자도 전부 사라진다')
+})
+
+test('그림자는 영웅과 같은 순위로 조준된다 — 앞에 서 있으면 평타를 대신 맞는다', () => {
+  const g = duo('necromancer', 'tank')
+  startPlaying(g)
+  const [n, foe] = g.heroes
+  n.lvl = 18
+  n.x = 0; n.z = 0
+  n.skillCd = 0
+  castSkill(g, n.id)
+  const shade = g.summons.find((su) => su.owner === n.id)
+  assert.ok(shade, '그림자 소환')
+  foe.x = 8; foe.z = 0
+  shade.x = 5; shade.z = 0 // 적과 강령술사 사이 — 더 가깝다
+  const shadeHp0 = shade.hp
+  const nHp0 = n.hp
+  run(g, 2)
+  assert.ok(shade.hp < shadeHp0, `그림자가 맞는다 (${shadeHp0}→${Math.round(shade.hp)})`)
+  assert.equal(n.hp, nHp0, '뒤에 선 강령술사는 안 맞는다')
 })
 
 test('강령술사 영혼 흡수: 맞히면 관통 피해 + 그림자가 3단계까지 자란다', () => {
