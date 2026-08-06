@@ -5549,6 +5549,7 @@ const FX_LOOK = {
   bloodrain: { color: 0xb01818, ring: true, mode: 'out', pcolor: 0xff5050 }, // 혈우 — 피의 비
   shadowrise: { color: 0x7a4ad0, ring: true, mode: 'rise', pcolor: 0xb08aff }, // 그림자 융기 — 땅에서 솟는 원혼
   shadowboom: { color: 0x8a3ad0, ring: true, mode: 'out', pcolor: 0xd0a0ff }, // 그림자 폭발 — 자폭하는 원혼
+  souldrain: { color: 0x9a6aff, line: true, mode: 'forward', pcolor: 0xd0b0ff, w: 3.4 }, // 영혼 흡수 — 앞으로 뿜는 원혼 격류
   charmcast: { color: 0xff8ad0, ring: true, mode: 'out', pcolor: 0xffd0ea }, // 매혹 시전
   charmhit: { color: 0xff5ab0, ring: true, mode: 'in', pcolor: 0xffc0e0 }, // 매혹 명중 — 홀린다
   mist: { color: 0xc9a0ff, line: true, mode: 'forward', pcolor: 0xe8d0ff, w: 4.5 }, // 미혹의 안개
