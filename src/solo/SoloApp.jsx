@@ -1193,7 +1193,7 @@ function CharScreen({ profile, mode, diff, onStart, onBack, onHelp }) {
     if (!loadGuideSeen()) onHelp()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const [cls, setCls] = useState(CLASSES[saved?.cls] && unlocked.has(saved.cls) ? saved.cls : null)
+  const [cls, setCls] = useState(CLASSES[saved?.cls] && unlocked.has(saved.cls) && RELEASED_CLASSES.includes(saved.cls) ? saved.cls : null) // 미출시 직업이 저장 픽에 남아 있어도(테스트 개방기) 출전 못 하게
   // 낮은 화면에선 스킬 설명이 접혀 있다 — 누른 스킬만 펼친다(넉넉한 화면은 CSS가 전부 펼침)
   const [openSkill, setOpenSkill] = useState(null)
 
