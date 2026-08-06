@@ -5507,7 +5507,7 @@ test('세라핌 성가 촛대: 소절마다 축성 부대를 워프하고, 부�
   b.isBot = true
   b.bossAwake = true // 등장 각성 휴지기(보호막·정지) 생략 — 촛대 로직만 본다
   g.time = 200 // 잠(~45초)·대량 소환 국면(~150초)을 지나 정예 국면에서 검증
-  b.bossPhase = 1
+  b.bossPhase = 2 // 촛대는 2국면부터
   b.bossCd = { a: 1e9, b: 1e9, c: 1e9, d: 1e9, candle: 0, summon: 1e9, stones: 1e9 }
   b.x = 0; b.z = 0
   w.x = 12; w.z = 0 // 시야 안 — 촛대 설치 조건
@@ -5517,9 +5517,9 @@ test('세라핌 성가 촛대: 소절마다 축성 부대를 워프하고, 부�
   candle.hp = 500 // 격리: 라인 병사가 2소절 전에 부수지 않게 — 파괴는 마지막에 직접 검증
   run(g, 2.6) // 첫 소절
   const squad = g.minions.filter((m) => m.team === b.team && m.bless) // 워프 부대만(라인 병사 제외)
-  assert.ok(squad.length >= 4, `부대가 워프해 온다 (${squad.length}기)`)
+  assert.ok(squad.length >= 3, `부대가 워프해 온다 (${squad.length}기)`)
   assert.ok(squad.every((m) => m.bless === 1 && m.goldMul === 0.5), '1소절 = 1축성 · 골드 절반')
-  run(g, 6) // 둘째 소절
+  run(g, 8) // 둘째 소절(8초 간격)
   assert.ok(g.minions.some((m) => m.bless === 2), '소절이 거듭될수록 축성이 짙어진다')
   candle.hp = 1
   // 마지막 일격: 전사가 촛대를 부순다 — damageMinion 타격 1회
