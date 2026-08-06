@@ -5520,7 +5520,9 @@ test('세라핌 성가 촛대: 소절마다 축성 부대를 워프하고, 부�
   assert.ok(squad.length >= 2, `부대가 워프해 온다 (${squad.length}기)`) // 2국면 = 촛대 2개 × 부대 2기(위상차라 첫 소절엔 한 촛대만)
   assert.ok(squad.every((m) => m.bless === 1 && m.goldMul === 0.5), '1소절 = 1축성 · 골드 절반')
   run(g, 8) // 둘째 소절(8초 간격)
-  assert.ok(g.minions.some((m) => m.bless === 2), '소절이 거듭될수록 축성이 짙어진다')
+  const warped = g.minions.filter((m) => m.goldMul === 0.5)
+  assert.ok(warped.length > squad.length, `소절이 거듭될수록 군세가 는다 (${squad.length}→${warped.length})`)
+  assert.ok(warped.every((m) => m.bless <= 1), '축성 상한 = 국면-1 (2국면이면 1축성까지)')
   candle.hp = 1
   // 마지막 일격: 전사가 촛대를 부순다 — damageMinion 타격 1회
   const hp0 = candle.hp
