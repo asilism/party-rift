@@ -331,7 +331,7 @@ export const NEW_CLASS_IDS = ['runescribe', 'bloodknight', 'necromancer', 'dream
 // 🧪 테스트 개방: true면 신규 4종이 직업 선택에 나오고 코인 없이 바로 쓸 수 있다(봇도 픽한다).
 //  스토어 출시 전에는 false로 되돌려 잠근다. 정식 오픈은 이 플래그가 아니라
 //  UNRELEASED_CLASSES에서 id를 하나씩 빼는 방식으로 한다(하나씩 여는 계획).
-export const TEST_OPEN_NEW_CLASSES = true
+export const TEST_OPEN_NEW_CLASSES = false
 const UNRELEASED_CLASSES = new Set(TEST_OPEN_NEW_CLASSES ? [] : NEW_CLASS_IDS)
 export const RELEASED_CLASSES = CLASS_IDS.filter((c) => !UNRELEASED_CLASSES.has(c))
 
