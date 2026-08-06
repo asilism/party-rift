@@ -4681,6 +4681,26 @@ function updateHeroDeathParticles(u) {
 function buildMinion(m, barColor) {
   // 소환석(아르케인 의식): 공중에 살짝 떠서 위아래로 부유하는 마력 결정 —
   // 병사와 완전히 다른 실루엣이어야 "이걸 부숴야 한다"가 즉시 읽힌다
+  if (m.candle) { // 🕯️ 성가 촛대(세라핌) — 금빛 초와 일렁이는 불꽃, 워프게이트의 심지
+    const g = new THREE.Group()
+    const wax = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.55, 0.75, 2.6, 8),
+      new THREE.MeshLambertMaterial({ color: 0xf0e0b0, emissive: 0x6a5010, emissiveIntensity: 0.35 })
+    )
+    wax.position.y = 1.3
+    g.add(wax)
+    const flame = glowSprite(0xffc040, 3.6)
+    flame.position.y = 3.2
+    g.add(flame)
+    const halo = glowSprite(0xf0d060, 5.5)
+    halo.position.y = 1.6
+    g.add(halo)
+    const bar = makeHpBar(2.2, barColor)
+    bar.position.y = 4.6
+    g.add(bar)
+    g.userData = { bar, crystal: flame, bits: [], fxUpdate: (t) => { flame.material.opacity = 0.7 + Math.sin(t * 9) * 0.25; flame.scale.setScalar(3.2 + Math.sin(t * 7) * 0.5) } }
+    return g
+  }
   if (m.stone) {
     const g = new THREE.Group()
     const crystal = gemMesh(0x8a9aff, 1.05)
