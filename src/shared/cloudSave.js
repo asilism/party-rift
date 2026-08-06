@@ -62,8 +62,11 @@ const isNative = () =>
 
 let pluginP = null
 function plugin() {
+  // ⚠️ Capacitor 플러그인 프록시를 Promise 해석값으로 직접 주면 안 된다 — 프록시는 모든 속성
+  // 접근을 네이티브 메서드로 간주하는데, 엔진이 Promise를 풀며 .then을 호출해
+  // "SavedGames.then() is not implemented"로 터진다(v168 실기기에서 실제 발생). 래퍼로 감싼다.
   if (!pluginP) {
-    pluginP = import('@capacitor/core').then(({ registerPlugin }) => registerPlugin('SavedGames'))
+    pluginP = import('@capacitor/core').then(({ registerPlugin }) => ({ sg: registerPlugin('SavedGames') }))
   }
   return pluginP
 }
@@ -87,7 +90,8 @@ const markSaved = (t) => {
 export async function cloudStatus() {
   if (!isNative()) return { available: false, signedIn: false }
   try {
-    return await (await plugin()).status()
+    const { sg } = await plugin()
+    return await sg.status()
   } catch {
     return { available: false, signedIn: false }
   }
@@ -96,7 +100,8 @@ export async function cloudStatus() {
 export async function signInCloud() {
   if (!isNative()) return false
   try {
-    const r = await (await plugin()).signIn()
+    const { sg } = await plugin()
+    const r = await sg.signIn()
     return !!r?.signedIn
   } catch {
     return false
@@ -107,11 +112,11 @@ export async function signInCloud() {
 export async function saveCloudNow() {
   if (!isNative()) return false
   try {
-    const p = await plugin()
-    const st = await p.status()
+    const { sg } = await plugin()
+    const st = await sg.status()
     if (!st?.signedIn) return false
     const payload = collectProgress()
-    await p.save({ name: SNAPSHOT_NAME, data: JSON.stringify(payload) })
+    await sg.save({ name: SNAPSHOT_NAME, data: JSON.stringify(payload) })
     markSaved(payload.savedAt)
     return true
   } catch {
@@ -138,11 +143,11 @@ function wireAutoSave() {
 export async function initCloudSave() {
   if (!isNative()) return { applied: false }
   const work = (async () => {
-    const p = await plugin()
-    const st = await p.status()
+    const { sg } = await plugin()
+    const st = await sg.status()
     wireAutoSave() // 로그인 전이라도 걸어 둔다 — 나중에 로그인하면 그때부터 저장된다
     if (!st?.signedIn) return { applied: false }
-    const r = await p.loadData({ name: SNAPSHOT_NAME })
+    const r = await sg.loadData({ name: SNAPSHOT_NAME })
     if (!r?.data) return { applied: false }
     let remote = null
     try {
