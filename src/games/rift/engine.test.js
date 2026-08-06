@@ -5517,7 +5517,7 @@ test('세라핌 성가 촛대: 소절마다 축성 부대를 워프하고, 부�
   candle.hp = 500 // 격리: 라인 병사가 2소절 전에 부수지 않게 — 파괴는 마지막에 직접 검증
   run(g, 2.6) // 첫 소절
   const squad = g.minions.filter((m) => m.team === b.team && m.bless) // 워프 부대만(라인 병사 제외)
-  assert.ok(squad.length >= 3, `부대가 워프해 온다 (${squad.length}기)`)
+  assert.ok(squad.length >= 2, `부대가 워프해 온다 (${squad.length}기)`) // 2국면 = 촛대 2개 × 부대 2기(위상차라 첫 소절엔 한 촛대만)
   assert.ok(squad.every((m) => m.bless === 1 && m.goldMul === 0.5), '1소절 = 1축성 · 골드 절반')
   run(g, 8) // 둘째 소절(8초 간격)
   assert.ok(g.minions.some((m) => m.bless === 2), '소절이 거듭될수록 축성이 짙어진다')

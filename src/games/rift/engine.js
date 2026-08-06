@@ -325,7 +325,7 @@ export const CLASSES = {
   boss_priest: {
     boss: true, name: '타락 대사제', icon: '🕯️',
     desc: '군세를 기르고 되살리는 사제형 보스 — 병사를 방치하면 괴물이 되어 돌아온다',
-    hp: 24000, hpLvl: 700, atk: 88, atkLvl: 7, range: 14.5, atkCd: 0.95, speed: 7.0, def: 0.55,
+    hp: 24000, hpLvl: 700, atk: 78, atkLvl: 7, range: 14.5, atkCd: 0.95, speed: 7.0, def: 0.55, // 킷이 풍부해진 만큼(낙뢰·파동·촛대) 기본 압박은 낮게
     skill: { name: '축성 낙뢰', icon: '⚡', cd: 8, desc: '적들 머리 위로 성스러운 낙뢰를 예고하고 내리친다' },
     skill2: { name: '군세 축복', icon: '📿', cd: 13, desc: '주변 병사를 축성한다 — 더 크고 더 세게, 최대 3축성' },
     ult: { name: '성역의 물결', icon: '💫', cd: 24, desc: '빛의 물결로 자신과 군세의 상처를 씻어낸다' },
@@ -8162,20 +8162,25 @@ function bossPriest(state, h, foe) {
   //  소환하고, 소절이 거듭될수록 그 부대의 축성이 +1(눈덩이). 세라핌은 그동안에도 계속 싸운다
   //  (채널 없음 — 촛대를 무시하고 보스만 패는 선택지가 '틀린 답'이 되게).
   //  워프 병사는 골드 절반(goldMul 0.5) — 자판기 파밍 차단. 부수면 성가 역류 그로기 2.5초.
-  if (!h.defenseBoss && p >= 2 && (h.bossCd.candle ?? 1) <= 0 // 2국면부터 — 1국면 파티는 감당 못 한다(시뮬 13%)
-    && !state.minions.some((m) => m.candle && m.team === h.team)
+  if (!h.defenseBoss && state.time >= BOSS_MASS_END && (h.bossCd.candle ?? 1) <= 0 // 파밍 국면(대량 소환) 뒤부터 — 저레벨 파티가 워프 부대에 쓸리지 않게(축복과 같은 교훈)
+    && !state.minions.some((m) => m.candle && m.team === h.team) // 이전 의식의 촛대가 전부 꺼져야 다음 의식
     && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss && isHeroVisible(state, e, h.team) && dist(h, e) < 28)) {
     h.bossCd.candle = 45 * BOSS_PHASE_CD[p - 1] * (1 - (1 - bossTierOf(state).cd) * 0.4) // 대기믹은 티어 가속 40%만
-    const a = state.rng() * Math.PI * 2
     const aliveN = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss).length
     const hits = Math.max(5, 3 + aliveN * 1.6) // 소환석과 같은 원리 — 부술 손 수에 비례한 타격 수
-    state.minions.push({
-      id: state.nextId++, team: h.team, candle: true, lane: 'mid', ranged: false,
-      x: h.x + Math.cos(a) * 12, z: h.z + Math.sin(a) * 12,
-      hp: Math.round(hits), maxHp: Math.round(hits), atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
-      candleT: 2.5, candleVerse: 0, // 첫 소절까지 2.5초
-    })
-    pushFeed(state, 'obj', '🕯️ 성가 촛대가 세워졌다 — 부수기 전까지 군세가 밀려온다!')
+    const n = p // 국면 수만큼(1/2/3개) — 국면이 오를수록 꺼야 할 불이 늘어난다
+    const base = state.rng() * Math.PI * 2
+    for (let i = 0; i < n; i++) {
+      const a = base + (i / n) * Math.PI * 2 + (state.rng() - 0.5) * 0.5 // 방사형 — 서로도, 세라핌과도 겹치지 않게
+      const d = 10 + state.rng() * 4
+      state.minions.push({
+        id: state.nextId++, team: h.team, candle: true, lane: 'mid', ranged: false,
+        x: h.x + Math.cos(a) * d, z: h.z + Math.sin(a) * d,
+        hp: Math.round(hits), maxHp: Math.round(hits), atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
+        candleT: 2.5 + i * 2, candleVerse: 0, candleSquad: Math.max(1, 4 - n), // 촛대가 늘어도 워프 총량은 평평하게(38% 교훈)
+      })
+    }
+    pushFeed(state, 'obj', n > 1 ? `🕯️ 성가 촛대 ${n}개가 세워졌다 — 전부 꺼야 성가가 멎는다!` : '🕯️ 성가 촛대가 세워졌다 — 부수기 전까지 군세가 밀려온다!')
   }
   // 촛대 소환 틱 — 소절마다 부대 4기, 소절 수만큼 축성(최대 3)이 걸린 채 워프해 온다
   for (const c of state.minions) {
@@ -8184,10 +8189,11 @@ function bossPriest(state, h, foe) {
     if (c.candleT > 0) continue
     c.candleT = 8 // 소절 간격 — 6초는 봇 파티가 감당 못 했다(0%)
     c.candleVerse = (c.candleVerse || 0) + 1
-    const bless = Math.min(2, c.candleVerse) // 워프 부대 축성 상한 2 — 3은 눈덩이가 과했다
+    const bless = Math.min(Math.max(0, (h.bossPhase || 1) - 1), c.candleVerse) // 축성 상한 = 국면-1 (P1 0·P2 1·P3 2) — 파티가 약할 때 눈덩이를 늦춘다
     const grow = MINION_HP_GROWTH * (state.time / 60) * 2
-    for (let i = 0; i < 3; i++) {
-      const ranged = i >= 2
+    const squadN = c.candleSquad || 3
+    for (let i = 0; i < squadN; i++) {
+      const ranged = i >= squadN - 1
       const spec = ranged ? RANGED : MELEE
       const hp = Math.round((spec.hp + grow) * (1.45 ** bless))
       state.minions.push({
@@ -8226,7 +8232,7 @@ function bossPriest(state, h, foe) {
       h.bossCd.a = 8 * cdMul
       const picks = targets.sort(() => state.rng() - 0.5).slice(0, 1 + p)
       for (const e of picks) {
-        pushBossZone(state, h, { x: e.x, z: e.z, r: 4.2, delay: 1.5, dmg: skillDmg(h, 50, 0.85), aim: true, tag: '축성 낙뢰' })
+        pushBossZone(state, h, { x: e.x, z: e.z, r: 4.2, delay: 0.9, dmg: skillDmg(h, 26, 0.45), aim: true, vfx: 'descend', hue: 'holy', tag: '축성 낙뢰' }) // 예고 보고 바로 움직여야 피한다
       }
     }
   }
@@ -8250,6 +8256,15 @@ function bossPriest(state, h, foe) {
       pushFx(state, 'summon', h.x, h.z, 10, h.team, 0.9)
       pushFeed(state, 'obj', '📿 군세 축복 — 병사들이 부풀어 오른다, 커진 놈부터 잘라라!')
     }
+  }
+  // 🔔 참회의 파동: 세라핌을 중심으로 퍼지는 성광 고리 — 몸 곁(안쪽)은 안전, 어중간한
+  //  거리(원거리 카이팅 밴드)가 정확히 위험 지대다. '붙거나, 완전히 빠지거나'를 강요.
+  if (h.bossCd.d <= 0 && foe && dist(h, foe) < 20) {
+    h.bossCd.d = 20 * cdMul
+    pushBossZone(state, h, {
+      x: h.x, z: h.z, r: 16, rIn: 5, delay: 1.3, dmg: skillDmg(h, 48, 0.8), slow: 1.2,
+      vfx: 'quake', hue: 'holy', tag: '참회의 파동',
+    })
   }
   // 💫 성역의 물결: 자신 소량 + 군세 완전 회복 — 보스를 눕히는 지름길은 병사부터 끊는 것.
   //  자힐은 4%(레이드 정체 방지)·무한 방어 3%. 다친 대상이 있을 때만 쓴다(쿨 낭비 없음).
@@ -9515,6 +9530,7 @@ function botDodgeBossZone(state, h, dt) {
     if (!pending && !residual) continue
     const d2v = (h.x - z.x) ** 2 + (h.z - z.z) ** 2
     if (d2v > (pending ? (z.r + 0.8) ** 2 : z.r * z.r)) continue // 잔류는 "안에 있을 때만" — 근처는 무시
+    if (z.rIn > 0 && d2v < (z.rIn - 0.6) ** 2) continue // 도넛 안쪽 안전지대 — 이미 안전한데 링을 관통해 도망치지 않는다
     const left = pending ? z.delay - z.t : 0 // 잔류는 지금 당장이 급하다
     if (left < soonest) { soonest = left; zone = z }
   }
@@ -9522,10 +9538,13 @@ function botDodgeBossZone(state, h, dt) {
   const dx = h.x - zone.x
   const dz = h.z - zone.z
   const d = Math.hypot(dx, dz) || 0.001
-  // 중심에서 멀어지는 방향으로 반경 밖까지 빠진다
+  // 도넛(rIn>0)이면 가까운 쪽 가장자리로 — 안쪽 턱이 코앞인데 링 전체를 관통해 밖으로
+  // 뛰다 한복판에서 터져 죽는 것(참회의 파동 시뮬 38%)을 막는다
+  const inward = zone.rIn > 0 && (d - zone.rIn) < (zone.r - d)
+  const target = inward ? Math.max(0.5, zone.rIn - 1.5) : zone.r + 2.5
   steerToward(state, h, {
-    x: zone.x + (dx / d) * (zone.r + 2.5),
-    z: zone.z + (dz / d) * (zone.r + 2.5),
+    x: zone.x + (dx / d) * target,
+    z: zone.z + (dz / d) * target,
   })
   botAttack(state, h, dt) // 피하면서도 사거리 안이면 계속 때린다
   return true
