@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Rift3D from './Rift3D.jsx'
 import RiftMiniMap from './RiftMiniMap.jsx'
-import RiftControls from './RiftControls.jsx'
+import RiftControls, { getNativePad } from './RiftControls.jsx'
 import RiftShop from './RiftShop.jsx'
 import RiftAugmentDraw from './RiftAugmentDraw.jsx'
 import { AUG_BY_ID, RARITY_META } from './augments.js'
@@ -272,7 +272,15 @@ function PadProbe() {
       try {
         if (typeof navigator === 'undefined' || !navigator.getGamepads) return setInfo(t('이 웹뷰는 게임패드 API를 지원하지 않아요'))
         const pads = [...(navigator.getGamepads() || [])].filter(Boolean)
-        if (!pads.length) return setInfo(t('패드 감지 안 됨 — 패드의 아무 버튼이나 눌러 보세요'))
+        if (!pads.length) {
+          const np = getNativePad() // 웹뷰가 못 봐도 네이티브 브리지가 보고 있을 수 있다
+          if (np) {
+            const nb = np.buttons.map((b, i) => (b.pressed ? i : null)).filter((v) => v != null).join(',')
+            const na = np.axes.map((v) => (Math.abs(v) < 0.08 ? '0' : v.toFixed(1))).join(' ')
+            return setInfo(`🕹️ ${t('네이티브 브리지')} · ${t('버튼')}[${nb || '-'}] ${t('축')}[${na}]`)
+          }
+          return setInfo(t('패드 감지 안 됨 — 패드의 아무 버튼이나 눌러 보세요'))
+        }
         const gp = pads.find((g) => g.mapping === 'standard') || pads[0]
         const btns = gp.buttons.map((b, i) => (b.pressed ? i : null)).filter((v) => v != null).join(',')
         const ax = (gp.axes || []).slice(0, 4).map((v) => (Math.abs(v) < 0.08 ? '0' : v.toFixed(1))).join(' ')

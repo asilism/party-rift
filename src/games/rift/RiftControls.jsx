@@ -27,6 +27,21 @@ function abilityLines(clsId, slot, me) {
 }
 
 const JOY_RADIUS = 60 // px. 이만큼 끌면 풀 스피드
+// 🎮 네이티브 패드 셔틀 — 안드로이드 시스템 웹뷰는 Gamepad API가 없어(getGamepads 항상 빈 배열)
+// MainActivity가 KeyEvent/MotionEvent를 가로채 이 전역 훅으로 밀어 넣는다. Gamepad 객체와
+// 같은 모양(axes/buttons[].pressed/mapping)이라 폴링 루프가 구분 없이 소비한다.
+const nativePad = {
+  id: 'native-bridge(Android)', mapping: 'standard', t: 0,
+  axes: [0, 0],
+  buttons: Array.from({ length: 12 }, () => ({ pressed: false })),
+}
+if (typeof window !== 'undefined') {
+  window.__zbPadAxes = (x, y) => { nativePad.axes[0] = x; nativePad.axes[1] = y; nativePad.t = Date.now() }
+  window.__zbPadBtn = (i, p) => { if (nativePad.buttons[i]) nativePad.buttons[i].pressed = !!p; nativePad.t = Date.now() }
+}
+// 프로브(조작 설정 진단)·폴링 공용 — 최근 4초 안에 입력이 있었으면 살아 있는 패드로 본다
+export const getNativePad = () => (Date.now() - nativePad.t < 4000 ? nativePad : null)
+
 const ATK_REPEAT_MS = 220 // 공격 버튼을 누르고 있으면 연타해 준다
 
 // 이동 조작: 화면 아무 데나 드래그하면 그 자리에 조이스틱이 생기고(8방향 이동).
@@ -273,6 +288,7 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
       raf = requestAnimationFrame(poll)
       const pads = [...(navigator.getGamepads() || [])].filter(Boolean)
       const gp = pads.find((g) => g.mapping === 'standard') || pads[0] // 팬텀/비표준 장치가 앞자리를 차지해도 표준 패드 우선
+        || getNativePad() // 안드로이드 웹뷰: Gamepad API 부재 — 네이티브 브리지(MainActivity)가 대신 준다
       if (!gp) return
       // 좌 스틱 이동: 데드존을 제외하고 0~1로 다시 스케일 → 미세 조작이 부드럽다
       const x = gp.axes[0] || 0
