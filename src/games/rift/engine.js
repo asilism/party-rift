@@ -325,7 +325,7 @@ export const CLASSES = {
   boss_priest: {
     boss: true, name: '타락 대사제', icon: '😇', // 후광 얼굴 — '타락했는데 성스러운 척' 아이러니(촛불은 기믹 오브젝트 몫)
     desc: '군세를 기르고 되살리는 사제형 보스 — 병사를 방치하면 괴물이 되어 돌아온다',
-    hp: 24000, hpLvl: 700, atk: 72, atkLvl: 7, range: 14.5, atkCd: 0.95, speed: 7.0, def: 0.55, // 킷이 풍부해진 만큼(낙뢰·파동·촛대) 기본 압박은 낮게
+    hp: 26400, hpLvl: 700, atk: 79, atkLvl: 7, range: 14.5, atkCd: 0.95, speed: 7.0, def: 0.55, // 군세 -1 소환 보상 +10% — 물량이 아니라 본체 손싸움으로
     skill: { name: '축복 낙뢰', icon: '⚡', cd: 8, desc: '적들 머리 위로 성스러운 낙뢰를 예고하고 내리친다' },
     skill2: { name: '군세 축복', icon: '📿', cd: 13, desc: '주변 병사를 축복한다 — 더 크고 더 세게, 최대 3축복' },
     ult: { name: '성역의 물결', icon: '💫', cd: 24, desc: '빛의 물결로 군세의 상처를 씻어낸다 — 대사제 자신은 회복하지 않는다' },
@@ -7086,7 +7086,7 @@ const BOSS_LEASH = 18 // 진군 축(공성 목표)에서 이 이상 벗어난 �
 export function bossInvuln(state, h) {
   // 그림자 추격(죽음의 그림자)·어둠 소멸(어둠의 정적) 중엔 실체가 없다 — 무적
   return h.isBoss === true && (h.bossShieldT > 0 || h.stonesAt != null
-    || h.huntUntil != null || h.stillVanishAt != null || h.burrowAt != null || state.time < BOSS_SLEEP_END)
+    || h.huntUntil != null || h.stillVanishAt != null || h.burrowAt != null || h.flightStep != null || state.time < BOSS_SLEEP_END)
 }
 
 // ── 보스전 난이도 티어 ──
@@ -7258,7 +7258,7 @@ function bossThink(state, h, dt) {
   if (!h.defenseBoss && state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.004 * dt)
   }
-  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34, hunt: 20, still: 30, seed: 14, root: 8, wall: 20, bloom: 34, burrow: 16, candle: 22, storm: 18 } // gaze/stomp/stones/seed/root = 보스전 전용 시그니처
+  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34, hunt: 20, still: 30, seed: 14, root: 8, wall: 20, bloom: 34, burrow: 16, candle: 22, storm: 18, flight: 20 } // gaze/stomp/stones/seed/root = 보스전 전용 시그니처
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
   // ── 예고된 처형기 집행: 예고가 끝나는 순간 발동한다 (시전 후 취소 없음 — 읽었다면 이미 피했다) ──
   // 뿌리 잠행 집행: 잠수해 있다가 예고가 끝나는 순간 심장 곁에서 솟구친다(가시 폭발은 존이 집행)
@@ -7776,12 +7776,12 @@ function bossThink(state, h, dt) {
     if (stage === 'mass') {
       // 초반 파밍 국면(대량 소환)은 전 보스 공통 14마리 — 그대로 둔다
       h.bossCd.summon = BOSS_MASS_EVERY
-      bossSummon(state, h, { count: BOSS_MASS_COUNT, hpMul: 1.0 })
+      bossSummon(state, h, { count: BOSS_MASS_COUNT - (h.cls === 'boss_priest' ? 1 : 0), hpMul: 1.0 }) // 세라핌: 물량 대신 본체
     } else {
       // 진군 호위 파도는 전 보스 공통 10마리 — 한번 밀리기 시작하면 14마리씩 쌓여
       // 걷잡을 수 없던 문제를 완화한다. (초반 대량 소환 국면은 위에서 14 유지)
       h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
-      bossSummon(state, h, { count: 10 + bossTierOf(state).wave, ...(stage === 'elite' ? { hpMul: 1.0 } : null) })
+      bossSummon(state, h, { count: (h.cls === 'boss_priest' ? 9 : 10) + bossTierOf(state).wave, ...(stage === 'elite' ? { hpMul: 1.0 } : null) })
     }
   }
   // 소환 페이즈 동안 보스는 진군하지 않는다 — 옥좌를 지키며 성곽 안까지 덤벼드는 적만 상대한다.
@@ -7801,7 +7801,7 @@ function bossThink(state, h, dt) {
     else if (h.cls === 'boss_thorn') bossThorn(state, h, foe)
     else if (h.cls === 'boss_priest') {
       bossPriest(state, h, foe)
-      if (h.comboStep) { h.mx = 0; h.mz = 0; return } // 연격 중엔 제자리 — 리듬이 주인공
+      if (h.comboStep || h.flightStep) { h.mx = 0; h.mz = 0; return } // 연격·비행 중엔 제자리
     }
     else bossShadow(state, h, foe, { x: throne.x, z: throne.z })
     if (h.cls === 'boss_colossus' && h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
@@ -7894,7 +7894,7 @@ function bossThink(state, h, dt) {
   else if (h.cls === 'boss_thorn') bossThorn(state, h, foe)
   else if (h.cls === 'boss_priest') {
     bossPriest(state, h, foe)
-    if (h.comboStep) { h.mx = 0; h.mz = 0; return } // 연격 중엔 진군도 평타도 멈춘다
+    if (h.comboStep || h.flightStep) { h.mx = 0; h.mz = 0; return } // 연격·비행 중엔 진군도 평타도 멈춘다
   }
   else bossShadow(state, h, foe, siege)
   // 파멸의 삼중격 — 카르곤 전용(전사형의 정체성). 전방 세 갈래 검기, 근거리는 겹쳐 맞는다
@@ -8208,6 +8208,74 @@ function bossPriest(state, h, foe) {
     pushFx(state, 'summon', c.x, c.z, 6, h.team, 0.9)
     if (c.candleVerse === 2) pushFeed(state, 'obj', '🕯️ 성가가 깊어진다')
   }
+  // 🕊️ 비상 강하(2국면부터): 하늘로 솟구쳐 사라졌다가, 직선 예고 뒤 새처럼 몸을 기울여
+  //  맹렬히 활강한다 — 경로의 적은 피해+넉백. 3국면은 예고→활강을 두 번 잇는다.
+  if (h.flightStep) {
+    h.flightT -= dt
+    if (h.flightStep === 'rise') { // 솟구침 — 씬이 flyK(0→1)만큼 들어 올린다
+      h.flightK = Math.min(1, 1 - h.flightT / 0.9)
+      if (h.flightT <= 0) {
+        h.flightStep = 'warn'
+        h.flightT = 1.15
+        // 예고선: 보이는 적 하나를 관통하는 30유닛 직선 — 숨은 채 시작점으로 자리를 옮긴다
+        const marks = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss && isHeroVisible(state, e, h.team))
+        const tgt = marks[Math.floor(state.rng() * marks.length)]
+        const dir = state.rng() * Math.PI * 2
+        const cx = tgt ? tgt.x : h.x
+        const cz = tgt ? tgt.z : h.z
+        h.x = cx - Math.cos(dir) * 15
+        h.z = cz - Math.sin(dir) * 15
+        h.flightDir = dir
+        h.dir = dir
+        pushBossLine(state, h, dir, { count: 8, r: 3.0, gap: 3.6, delay: 1.1, step: 0.03, dmg: 0, hue: 'holy', tag: '비상 강하' })
+        pushFeed(state, 'obj', '🕊️ 하늘에서 활강 경로가 드리운다')
+      }
+    } else if (h.flightStep === 'warn') {
+      if (h.flightT <= 0) {
+        h.flightStep = 'fly'
+        h.flightT = 0.55
+        h.flightHit = {}
+        pushFxDir(state, 'dash', h.x, h.z, 30, h.flightDir, h.team)
+      }
+    } else if (h.flightStep === 'fly') { // 활강 — 실제 이동(30유닛/0.55초), 스치면 피해+넉백
+      h.x += Math.cos(h.flightDir) * (30 / 0.55) * dt
+      h.z += Math.sin(h.flightDir) * (30 / 0.55) * dt
+      for (const e of state.heroes) {
+        if (e.team === h.team || e.respawnT > 0 || e.isBoss || h.flightHit[e.id]) continue
+        if (dist(h, e) < 3.4) {
+          h.flightHit[e.id] = 1
+          damageHero(state, e, skillDmg(h, 340, 5.2), h, false, '비상 강하')
+          applyKnockback(state, e, e.x - Math.cos(h.flightDir), e.z - Math.sin(h.flightDir), 8) // 피해자 기준 원점 — 0거리 NaN 방지
+        }
+      }
+      if (h.flightT <= 0) {
+        state.map.resolveTerrain(h, 2.2, colliders(state))
+        if ((h.flightPass || 1) < ((h.bossPhase || 1) >= 3 ? 2 : 1)) { // 3국면: 한 번 더
+          h.flightPass = (h.flightPass || 1) + 1
+          h.flightStep = 'rise'
+          h.flightT = 0.6 // 두 번째 솟구침은 짧게 — 리듬 유지
+        } else {
+          h.flightStep = null
+          h.flightPass = 0
+          h.flightK = 0
+          pushFx(state, 'quake', h.x, h.z, 5, h.team, 0.8)
+        }
+      }
+    }
+    h.mx = 0
+    h.mz = 0
+    return // 비행 중엔 다른 모든 기술이 쉰다
+  }
+  if (p >= 2 && (h.bossCd.flight ?? 1) <= 0 && !h.defenseBoss && state.time >= (h.priestRestUntil || 0)
+    && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss && isHeroVisible(state, e, h.team) && dist(h, e) < 34)) {
+    h.bossCd.flight = 24 * BOSS_PHASE_CD[p - 1] * (1 - (1 - bossTierOf(state).cd) * 0.4) // 대기믹 — 티어 가속 40%만
+    h.priestRestUntil = state.time + 3.5
+    h.flightStep = 'rise'
+    h.flightT = 0.9
+    h.flightK = 0
+    h.flightPass = 1
+    pushFeed(state, 'obj', '🕊️ 세라핌이 여섯 날개로 하늘 높이 솟구친다')
+  }
   // 😇 연격 콤보: 탕(0)·탕(0.35)·탕(0.7) 근접 3연격 → 팡(1.05~1.45) 직선 돌진 관통+넉백.
   //  1.5초 안에 4박자가 일정한 리듬 — 순간이동이 아니라 실제로 내달린다. 다른 기술(낙뢰·축복·
   //  물결·파동·촛대 설치)은 콤보 동안 쉬지만, 이미 켜진 촛대의 소절 틱은 아래에서 계속 돈다.
@@ -8338,7 +8406,7 @@ function bossPriest(state, h, foe) {
         id: state.nextId++, team: h.team, candle: true, lane: 'mid', ranged: false,
         x: h.x + Math.cos(a) * d, z: h.z + Math.sin(a) * d,
         hp: Math.round(hits), maxHp: Math.round(hits), atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
-        candleT: 2.5 + i * 2, candleVerse: 0, candleSquad: Math.max(1, 4 - n), // 촛대가 늘어도 워프 총량은 평평하게(38% 교훈)
+        candleT: 2.5 + i * 2, candleVerse: 0, candleSquad: Math.max(1, 3 - n), // 촛대가 늘어도 워프 총량은 평평하게 + 전체 소환 -1(본체 손싸움 유도)
       })
     }
     pushFeed(state, 'obj', n > 1 ? `🕯️ 성가 촛대 ${n}개가 세워졌다` : '🕯️ 성가 촛대가 세워졌다')
@@ -10619,6 +10687,7 @@ export function makeView(state) {
       } : null),
       dragonT: r1(h.dragonT),
       baronT: r1(h.baronT),
+      ...(h.flightStep ? { flyStep: h.flightStep, flyK: r2d(h.flightK || 0) } : null), // 🕊️ 비상 강하 — 씬이 솟구침·소멸·활강 기울기를 그린다
       kills: h.kills,
       deaths: h.deaths,
       assists: h.assists,

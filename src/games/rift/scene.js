@@ -8864,7 +8864,30 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         // 섬멸의 광선 비행: 빛에 쏘아져 날아가는 동안 붕 뜬 채 맹렬히 돈다
         const fling = (h.beamFlingT || 0) > 0 ? 2.6 : 0
         const qlaunch = (h.brawlLaunchT || 0) > 0 ? Math.sin((1 - h.brawlLaunchT / 0.9) * Math.PI) : 0
-        obj.position.set(h.x, air * 3.2 + leap * 15 + fling + qlaunch * 9, h.z)
+        // 🕊️ 비상 강하(세라핌): 솟구침(작아지며 상승) → 소멸(warn) → 활강(낮게 떠서 새처럼 기울임)
+        if (h.flyStep === 'warn') {
+          obj.visible = false // 하늘로 사라졌다 — 예고선만 남는다
+          return
+        }
+        const flyRise = h.flyStep === 'rise' ? (h.flyK || 0) : 0
+        const flyGlide = h.flyStep === 'fly' ? 2.4 : 0
+        obj.position.set(h.x, air * 3.2 + leap * 15 + fling + qlaunch * 9 + flyRise * 18 + flyGlide, h.z)
+        if (h.flyStep === 'rise') {
+          u.wasFlight = true
+          obj.scale.setScalar(Math.max(0.35, 1 - flyRise * 0.55)) // 멀어질수록 작게 — '사라진다'가 읽힌다
+          particles.emit(h.x, flyRise * 18, h.z, 0xffe9a0, 3, { spread: 3, up: 9, gravity: 2, size: 1.7, lifeMin: 0.2, lifeMax: 0.45 })
+        } else if (h.flyStep === 'fly') {
+          u.wasFlight = true
+          obj.scale.setScalar(1)
+          const fd = h.dir || 0
+          obj.quaternion.setFromAxisAngle(new THREE.Vector3(Math.sin(fd), 0, -Math.cos(fd)), 0.55) // 진행 방향으로 몸을 기울인 활강
+          particles.emit(h.x, 2.2, h.z, 0xfff2c0, 4, { spread: 4, up: 1.5, gravity: 1, size: 1.9, hard: true, lifeMin: 0.12, lifeMax: 0.3 }) // 금빛 활강 궤적
+        } else if (u.wasFlight) {
+          u.wasFlight = false
+          obj.scale.setScalar(1)
+          obj.quaternion.set(0, 0, 0, 1)
+          obj.rotation.set(0, 0, 0)
+        }
         if (u.lastSlamSeq !== undefined && (h.bossSlamSeq || 0) !== u.lastSlamSeq) {
           u.lastSlamSeq = h.bossSlamSeq || 0
           camShakeUntil = performance.now() / 1000 + CAM_SHAKE_T // 착지 쿵 — 전장 전체가 흔들린다
