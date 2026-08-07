@@ -323,7 +323,7 @@ export const CLASSES = {
     ult: { name: '만개', icon: '🌸', cd: 40, desc: '잠식된 가시밭 전체가 일제히 개화 폭발한다' },
   },
   boss_priest: {
-    boss: true, name: '타락 대사제', icon: '🕯️',
+    boss: true, name: '타락 대사제', icon: '😇', // 후광 얼굴 — '타락했는데 성스러운 척' 아이러니(촛불은 기믹 오브젝트 몫)
     desc: '군세를 기르고 되살리는 사제형 보스 — 병사를 방치하면 괴물이 되어 돌아온다',
     hp: 24000, hpLvl: 700, atk: 78, atkLvl: 7, range: 14.5, atkCd: 0.95, speed: 7.0, def: 0.55, // 킷이 풍부해진 만큼(낙뢰·파동·촛대) 기본 압박은 낮게
     skill: { name: '축성 낙뢰', icon: '⚡', cd: 8, desc: '적들 머리 위로 성스러운 낙뢰를 예고하고 내리친다' },
