@@ -7796,7 +7796,7 @@ function bossThink(state, h, dt) {
       // 진군 호위 파도는 전 보스 공통 10마리 — 한번 밀리기 시작하면 14마리씩 쌓여
       // 걷잡을 수 없던 문제를 완화한다. (초반 대량 소환 국면은 위에서 14 유지)
       h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
-      bossSummon(state, h, { count: (h.cls === 'boss_priest' ? 7 : 10) + bossTierOf(state).wave, ...(stage === 'elite' ? { hpMul: 1.0 } : null) })
+      bossSummon(state, h, { count: (h.cls === 'boss_priest' ? 6 : 10) + bossTierOf(state).wave, ...(stage === 'elite' ? { hpMul: 1.0 } : null) })
     }
   }
   // 소환 페이즈 동안 보스는 진군하지 않는다 — 옥좌를 지키며 성곽 안까지 덤벼드는 적만 상대한다.
@@ -8236,7 +8236,10 @@ function bossPriest(state, h, foe) {
       })
     }
     pushFx(state, 'summon', c.x, c.z, 6, h.team, 0.9)
-    if (c.candleVerse === 2) pushFeed(state, 'obj', '🕯️ 성가가 깊어진다')
+// 촛대 방치 경고 — 소절이 거듭될수록 어조가 강렬해진다(안 부수면 쌓인다는 걸 확실히)
+    if (c.candleVerse === 2) pushFeed(state, 'obj', '🕯️ 성가가 깊어진다 — 촛대를 내버려 두면 군세가 쌓인다')
+    else if (c.candleVerse === 4) pushFeed(state, 'obj', '⚠️ 성가가 울려 퍼진다 — 워프 군세가 걷잡을 수 없이 불어난다!')
+    else if (c.candleVerse >= 6 && c.candleVerse % 2 === 0) pushFeed(state, 'obj', '🔥 촛대가 타오른다 — 군세가 계속 쌓이고 있다!')
   }
   // 🕊️ 비상 강하(2국면부터): 하늘로 솟구쳐 사라졌다가, 직선 예고 뒤 새처럼 몸을 기울여
   //  맹렬히 활강한다 — 경로의 적은 피해+넉백. 3국면은 예고→활강을 두 번 잇는다.
@@ -8455,7 +8458,7 @@ function bossPriest(state, h, foe) {
         id: state.nextId++, team: h.team, candle: true, lane: 'mid', ranged: false,
         x: cx, z: cz,
         hp: Math.round(hits), maxHp: Math.round(hits), atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
-        candleT: 2.5 + i * 2, candleVerse: 0, candleSquad: Math.max(1, 2 - n), // 촛대당 1기(전 국면) — 물량이 아니라 본체 손싸움
+        candleT: 2.5 + i * 2, candleVerse: 0, candleSquad: 2, // 촛대당 2기 — 호위는 빼고(6+티어) 촛대가 물량의 심장: 안 부수면 쌓인다
       })
     }
     pushFeed(state, 'obj', n > 1 ? `🕯️ 성가 촛대 ${n}개가 세워졌다` : '🕯️ 성가 촛대가 세워졌다')
