@@ -10052,6 +10052,22 @@ function brawlBotDuty(state, h, dt) {
     }
     if (near) { steerToward(state, h, near); botAttack(state, h, dt); return }
   }
+  // 🛡️ 리스폰 러시: 스폰 보호(무적)가 도는 동안 최상위 순위 상대에게 직행 —
+  //  무적 시간을 거리 좁히기에 쓴다. 내가 1등이면 자연히 2등, 그다음 순위가 표적이 된다.
+  if ((h.brawlGuardT || 0) > 0) {
+    let top = null
+    for (const e of state.heroes) {
+      if (e === h || e.respawnT > 0 || e.hp <= 0 || e.fallT > 0) continue
+      if (!top
+        || (e.brawlLives || 0) > (top.brawlLives || 0)
+        || ((e.brawlLives || 0) === (top.brawlLives || 0) && (e.kills || 0) > (top.kills || 0))) top = e
+    }
+    if (top && dist(h, top) > CLASSES[h.cls].range * 0.9) {
+      steerToward(state, h, top)
+      botAttack(state, h, dt)
+      return
+    }
+  }
   // 보급 욕심: 체력 여유가 있고 가까우면(14) 아이템부터 줍는다 — 아이템이 난전을 뒤집는다
   if (h.hp > h.maxHp * 0.45 && state.brawlPickups.length) {
     let pk = null
