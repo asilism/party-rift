@@ -3867,12 +3867,18 @@ function damageMinion(state, m, amount, attacker, allowExplode = true) {
     state.minions = state.minions.filter((o) => o !== m)
     pushFx(state, 'meteorhit', m.x, m.z, 3, 'blue', 0.8)
     if (m.heart) pushFeed(state, 'obj', '🥀 덩굴 심장이 부서졌다 — 가시밭이 시든다')
-    if (m.candle) { // 🕯️ 성가 촛대 파괴: 성가가 역류해 세라핌이 비틀거린다 — 짧은 딜 타임
+    if (m.candle) { // 🕯️ 성가 촛대 파괴 — 그로기는 '의식의 마지막 촛대'가 꺼질 때 1회만.
+      //  촛대마다 휘청이면 국면이 오를수록(촛대 1→3개) 딜 타임이 늘어 오히려 쉬워진다(실기기 리포트)
       const b = state.heroes.find((e) => e.isBoss && e.cls === 'boss_priest' && e.team === m.team && e.respawnT <= 0)
       if (b) {
-        b.bossGroggyT = Math.max(b.bossGroggyT || 0, 2.5) // 기믹 보상 그로기 — CC 저항을 안 받는다
-        pushFx(state, 'abszero', b.x, b.z, 6, b.team, 1.0)
-        pushFeed(state, 'obj', '🕯️ 촛대가 부서졌다 — 성가가 역류해 대사제가 비틀거린다!')
+        const left = state.minions.some((o) => o.candle && o.team === m.team) // 이 촛대는 이미 제거된 뒤
+        if (left) {
+          pushFeed(state, 'obj', '🕯️ 촛대 하나가 꺼졌다 — 성가는 아직 흐른다')
+        } else {
+          b.bossGroggyT = Math.max(b.bossGroggyT || 0, 2.5) // 기믹 보상 그로기 — CC 저항을 안 받는다
+          pushFx(state, 'abszero', b.x, b.z, 6, b.team, 1.0)
+          pushFeed(state, 'obj', '🕯️ 마지막 촛대가 꺼졌다 — 성가가 역류해 대사제가 비틀거린다!')
+        }
       }
     }
     return
@@ -7252,7 +7258,7 @@ function bossThink(state, h, dt) {
   if (!h.defenseBoss && state.time - h.lastHurt > 8 && h.hp < h.maxHp && !(h.bossShieldT > 0)) {
     h.hp = Math.min(h.maxHp, h.hp + h.maxHp * 0.004 * dt)
   }
-  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34, hunt: 20, still: 30, seed: 14, root: 8, wall: 20, bloom: 34, burrow: 16, candle: 22 } // gaze/stomp/stones/seed/root = 보스전 전용 시그니처
+  h.bossCd ||= { a: 5, b: 9, c: 14, d: 11, fan: 6, summon: 8, gaze: 26, stomp: 18, stack: 18, stones: 34, hunt: 20, still: 30, seed: 14, root: 8, wall: 20, bloom: 34, burrow: 16, candle: 22, storm: 18 } // gaze/stomp/stones/seed/root = 보스전 전용 시그니처
   for (const k in h.bossCd) h.bossCd[k] = Math.max(0, h.bossCd[k] - dt)
   // ── 예고된 처형기 집행: 예고가 끝나는 순간 발동한다 (시전 후 취소 없음 — 읽었다면 이미 피했다) ──
   // 뿌리 잠행 집행: 잠수해 있다가 예고가 끝나는 순간 심장 곁에서 솟구친다(가시 폭발은 존이 집행)
@@ -8286,6 +8292,33 @@ function bossPriest(state, h, foe) {
     }
   }
   if (h.comboStep) return // 콤보 프레임 마감 — 시전형 기술은 쉰다(촛대 소절 틱은 위에서 이미 돌았다)
+  // 🪽 깃털 폭풍: 여섯 날개를 떨쳐 6방향 직선 깃털 탄막이 별(✳) 모양으로 뻗는다 —
+  //  줄기 사이 쐐기 공간이 안전지대. 3국면은 직후 30도 돌린 2차가 빈틈을 노린다.
+  //  (어려움에서 타워 하나 안 잃고 클리어된다는 리포트 — 광역 압박 축 추가)
+  if (!h.defenseBoss && (h.bossCd.storm ?? 1) <= 0 && state.time >= (h.priestRestUntil || 0)
+    && state.heroes.some((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss && isHeroVisible(state, e, h.team) && dist(h, e) < 30)) {
+    h.bossCd.storm = 26 * BOSS_PHASE_CD[p - 1] * (1 - (1 - bossTierOf(state).cd) * 0.4) // 대기믹 — 티어 가속 40%만
+    h.priestRestUntil = state.time + 2.6
+    const base = state.rng() * Math.PI * 2
+    const volley = (rot, delayBase) => {
+      for (let k = 0; k < 6; k++) {
+        const dir = base + rot + (k / 6) * Math.PI * 2
+        pushBossLine(state, h, dir, { count: 5, r: 3.0, gap: 3.3, delay: delayBase, step: 0.05, dmg: skillDmg(h, 380, 5.8), hue: 'holy', tag: '깃털 폭풍' })
+      }
+    }
+    volley(0, 1.3)
+    if (p >= 3) volley(Math.PI / 6, 3.0) // 2차 — 방금 피한 쐐기가 위험지대로
+    h.stormBase = base
+    h.stormFx = [{ at: state.time + 1.3, rot: 0 }, ...(p >= 3 ? [{ at: state.time + 3.0, rot: Math.PI / 6 }] : [])]
+    pushFeed(state, 'obj', '🪽 여섯 날개가 크게 펼쳐진다')
+  }
+  // 깃털 탄막 발사 연출 — 예고가 끝나는 순간 6줄기 깃털이 실제로 날아간다(씬 featherstorm)
+  if (h.stormFx?.length && state.time >= h.stormFx[0].at) {
+    const v = h.stormFx.shift()
+    for (let k = 0; k < 6; k++) {
+      pushFxDir(state, 'featherstorm', h.x, h.z, 18, h.stormBase + v.rot + (k / 6) * Math.PI * 2, h.team)
+    }
+  }
   // 🕯️ 성가 촛대(시그니처 · 보스전 전용): 워프게이트 — 부서질 때까지 소절(6초)마다 부대를
   //  소환하고, 소절이 거듭될수록 그 부대의 축복이 +1(눈덩이). 세라핌은 그동안에도 계속 싸운다
   //  (채널 없음 — 촛대를 무시하고 보스만 패는 선택지가 '틀린 답'이 되게).

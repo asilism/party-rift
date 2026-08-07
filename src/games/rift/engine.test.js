@@ -5498,6 +5498,38 @@ test('그림자는 영웅과 같은 순위로 조준된다 — 앞에 서 있으
   assert.equal(n.hp, nHp0, '뒤에 선 강령술사는 안 맞는다')
 })
 
+test('세라핌 깃털 폭풍: 6방향 별 모양 직선 탄막 — 3국면은 30도 돌린 2차까지', () => {
+  const g = duo('warrior', 'tank')
+  startPlaying(g)
+  const [w, b] = g.heroes
+  b.cls = 'boss_priest'
+  b.isBoss = true
+  b.isBot = true
+  b.bossAwake = true
+  g.time = 200
+  b.bossPhase = 1
+  b.bossCd = { a: 1e9, b: 1e9, c: 1e9, d: 1e9, candle: 1e9, summon: 1e9, combo: 1e9, stones: 1e9, storm: 0 }
+  b.x = 0; b.z = 0
+  w.x = 12; w.z = 0
+  run(g, 0.3)
+  const zones1 = g.zones.filter((z) => z.tag === '깃털 폭풍')
+  assert.equal(zones1.length, 30, `1국면 = 6줄기 × 5칸 (${zones1.length})`)
+  // 3국면: 2차 발사까지
+  const g2 = duo('warrior', 'tank')
+  startPlaying(g2)
+  const [w2, b2] = g2.heroes
+  b2.cls = 'boss_priest'; b2.isBoss = true; b2.isBot = true; b2.bossAwake = true
+  g2.time = 200
+  b2.bossPhase = 3
+  b2.priestCloned = true // 복제 소음 제거
+  b2.bossCd = { a: 1e9, b: 1e9, c: 1e9, d: 1e9, candle: 1e9, summon: 1e9, combo: 1e9, stones: 1e9, storm: 0 }
+  b2.x = 0; b2.z = 0
+  w2.x = 12; w2.z = 0
+  run(g2, 0.3)
+  const zones2 = g2.zones.filter((z) => z.tag === '깃털 폭풍')
+  assert.equal(zones2.length, 60, `3국면 = 1차+30도 2차 (${zones2.length})`)
+})
+
 test('세라핌 연격 콤보: 탕탕탕 3연격 뒤 실제로 내달리는 돌진 관통+넉백', () => {
   const g = duo('warrior', 'tank')
   startPlaying(g)
@@ -5548,14 +5580,26 @@ test('세라핌 성가 촛대: 소절마다 축복 부대를 워프하고, 부�
   const warped = g.minions.filter((m) => m.goldMul === 0.5)
   assert.ok(warped.length > squad.length, `소절이 거듭될수록 군세가 는다 (${squad.length}→${warped.length})`)
   assert.ok(warped.every((m) => m.bless <= 2), '축복 상한 = min(2, 국면) — 2국면이면 2축복까지')
+  // 파괴 시퀀스 격리: 워프 부대를 치우고 전사를 온전케 — 맞다가 공격이 무산되지 않게
+  g.minions = g.minions.filter((m) => m.candle || !m.goldMul)
+  w.hp = w.maxHp
+  w.atkCd = 0
   candle.hp = 1
-  // 마지막 일격: 전사가 촛대를 부순다 — damageMinion 타격 1회
-  const hp0 = candle.hp
   w.x = candle.x + 1; w.z = candle.z
   castAttack(g, w.id, { tk: 'minion', id: candle.id })
   run(g, 1.2)
-  assert.ok(!g.minions.includes(candle), `촛대 파괴 (${hp0}→소멸)`)
-  assert.ok(b.bossGroggyT > 0, '성가 역류 — 세라핌 그로기(CC 저항 무시 전용 경직)')
+  assert.ok(!g.minions.includes(candle), '첫 촛대 파괴')
+  assert.ok(!(b.bossGroggyT > 0), '촛대가 남아 있으면 그로기 없음 — 국면 오를수록 쉬워지던 역설 차단')
+  const candle2 = g.minions.find((m) => m.candle)
+  assert.ok(candle2, '2국면 둘째 촛대')
+  g.minions = g.minions.filter((m) => m.candle || !m.goldMul)
+  w.hp = w.maxHp
+  w.atkCd = 0
+  candle2.hp = 1
+  w.x = candle2.x + 1; w.z = candle2.z
+  castAttack(g, w.id, { tk: 'minion', id: candle2.id })
+  run(g, 1.2)
+  assert.ok(b.bossGroggyT > 0, '마지막 촛대 소등 — 성가 역류 그로기 1회(CC 저항 무시 전용 경직)')
 })
 
 test('타락 대사제: 축복은 병사를 키우고, 물결은 되살리고, 3국면은 군세를 복제한다', () => {
