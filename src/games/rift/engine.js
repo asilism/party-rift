@@ -7652,7 +7652,7 @@ function bossThink(state, h, dt) {
     h.mz = 0
     if (!h.bossWakeWarned && state.time > BOSS_SLEEP_END - 15) {
       h.bossWakeWarned = true
-      pushFeed(state, 'obj', '⚠️ 보스가 곧 깨어난다 — 어둠이 낮게 술렁인다')
+      pushFeed(state, 'obj', '⚠️ 보스가 곧 깨어난다')
     }
     return
   }
@@ -7692,7 +7692,7 @@ function bossThink(state, h, dt) {
       h.stunT = 0; h.freezeT = 0; h.fearT = 0; h.airT = 0; h.rootT = 0; h.pullT = 0
       pushFx(state, 'berserk', h.x, h.z, 6, h.team, 1.0)
       pushFeed(state, 'obj', wantPhase === 3
-        ? `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다`
+        ? `🔥 ${h.name}이(가) 필사적으로 날뛴다`
         : `💢 ${h.name}의 분노가 끓어오른다`)
     } else {
     // 각성 휴지기: 어둠의 보호막에 감싸여 30초 무적·정지 — 게임의 시계가 잠시 멈추고,
@@ -7707,13 +7707,13 @@ function bossThink(state, h, dt) {
     })
     pushFeed(state, 'obj', wantPhase === 2
       ? `💢 ${h.name}의 분노가 끓어오른다`
-      : `🔥 ${h.name}이(가) 필사적으로 날뛴다 — 마지막 발악이다`)
+      : `🔥 ${h.name}이(가) 필사적으로 날뛴다`)
     pushFeed(state, 'obj', `🛡️ ${h.name}이(가) 어둠의 보호막에 감싸여 힘을 모은다`)
     // 필사 국면: 그림자 영웅들이 다시 일어난다 — 보스가 힘을 모으는 동안 최후의 군세가 앞장선다
     if (wantPhase === 3 && !h.bossAddsDone2) {
       h.bossAddsDone2 = true
       bossSummonAdds(state, h)
-      pushFeed(state, 'obj', `⚔️ ${h.name}의 부름에 그림자 영웅들이 다시 일어난다 — 최후의 군세다!`)
+      pushFeed(state, 'obj', `⚔️ ${h.name}의 부름에 그림자 영웅들이 다시 일어난다`)
     }
     }
   }
@@ -7727,7 +7727,7 @@ function bossThink(state, h, dt) {
     h.mz = 0
     if (h.bossShieldT <= 0) {
       pushFx(state, 'berserk', h.x, h.z, 9, h.team, 1.2)
-      pushFeed(state, 'obj', `💥 보호막이 깨졌다 — 더 크고 사나워진 ${h.name}이(가) 다시 움직인다!`)
+      pushFeed(state, 'obj', `💥 보호막이 깨졌다 — ${h.name}이(가) 다시 움직인다`)
     }
     return
   }
@@ -7752,7 +7752,7 @@ function bossThink(state, h, dt) {
   if (!h.defenseBoss && stage !== 'mass' && !h.bossAddsDone) {
     h.bossAddsDone = true
     bossSummonAdds(state, h)
-    pushFeed(state, 'obj', `⚔️ ${h.name}이(가) 정예 그림자 영웅들을 불러냈다 — 진군의 선봉이다`)
+    pushFeed(state, 'obj', `⚔️ ${h.name}이(가) 정예 그림자 영웅들을 불러냈다`)
   }
   // 병사 소환 — 스킬과 독립으로, 어느 국면이든 끊기지 않는다(정예를 빨리 정리해도
   // 파밍이 붕 뜨지 않게). 대량 국면 14마리/10초 → 정예 국면 10마리 → 진군 후 14마리.
@@ -8220,7 +8220,7 @@ function bossPriest(state, h, foe) {
     }
     if (mine.length) {
       pushFx(state, 'summon', h.x, h.z, 14, h.team, 1.3)
-      pushFeed(state, 'obj', `🕯️ ${h.name} — 군세가 둘로 늘어난다! (${mine.length}기 복제)`)
+      pushFeed(state, 'obj', '🕯️ 성가가 절정에 닿는다 — 군세가 배로 불어난다')
     }
   }
   // ⚡ 축성 낙뢰: 보이는 적 영웅들 머리 위 예고 낙뢰 — 국면당 한 줄기씩 늘어난다(1+p).
@@ -8399,7 +8399,7 @@ function bossArchmage(state, h, foe) {
       }
       h.comboRestUntil = state.time + 3.6 // 운석 3연타가 끝날 때까지 다른 대기술 없음
       pushFx(state, 'rocksplash', mark.x, mark.z, 5, h.team, 0.8)
-      pushFeed(state, 'obj', `🪨 ${caged}명이 바위감옥에 갇혔다 — 하늘이 무너져 내린다`)
+      pushFeed(state, 'obj', `🪨 ${caged}명이 바위감옥에 갇혔다`)
     }
   }
   // 서리 숨결(한빙술사 콘 크게): 부채꼴 예고 1.1초 → 전방 부채꼴 전체 빙결 —
@@ -8696,7 +8696,7 @@ function bossShadow(state, h, foe, siege) {
     h.dashFeedDone = false
     h.stealthT = Math.max(h.stealthT, 8) // 등장(경고) 때 벗긴다
     pushFx(state, 'blink', h.x, h.z, 5, h.team, 0.9)
-    pushFeed(state, 'obj', '🌫️ 녹스가 어둠 속으로 사라졌다 — 어둠이 짙어진다')
+    pushFeed(state, 'obj', '🌫️ 녹스가 어둠 속으로 스며든다')
     return
   }
   // 공포의 응시(시그니처): 반경 안에 적이 있으면 눈을 부릅뜨는 채널 개시 — 집행은 bossThink 펜딩 섹션.
