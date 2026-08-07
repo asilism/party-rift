@@ -5498,6 +5498,31 @@ test('그림자는 영웅과 같은 순위로 조준된다 — 앞에 서 있으
   assert.equal(n.hp, nHp0, '뒤에 선 강령술사는 안 맞는다')
 })
 
+test('세라핌 연격 콤보: 탕탕탕 3연격 뒤 실제로 내달리는 돌진 관통+넉백', () => {
+  const g = duo('warrior', 'tank')
+  startPlaying(g)
+  const [w, b] = g.heroes
+  b.cls = 'boss_priest'
+  b.isBoss = true
+  b.isBot = true
+  b.defenseBoss = true // 간이 경로 — 콤보만 본다
+  b.bossAwake = true
+  b.bossPhase = 1
+  b.bossCd = { a: 1e9, b: 1e9, c: 1e9, d: 1e9, candle: 1e9, summon: 1e9, combo: 0 }
+  b.x = 0; b.z = 0
+  w.x = 5; w.z = 0 // 근접 — 콤보 트리거
+  const hp0 = w.hp
+  const bx0 = b.x
+  run(g, 0.9) // 탕·탕·탕 (0/0.35/0.7)
+  assert.ok(w.hp < hp0, `3연격 피해 (${Math.round(hp0)}→${Math.round(w.hp)})`)
+  const hp3 = w.hp
+  run(g, 0.8) // 팡 — 돌진 관통
+  assert.ok(b.x - bx0 > 10, `실제 직선 이동 (${bx0.toFixed(1)}→${b.x.toFixed(1)})`)
+  assert.ok(w.hp < hp3 || w.knockT > 0 || dist({ x: 5, z: 0 }, w) > 2, '돌진에 맞거나 밀려났다')
+  assert.equal(b.comboStep, 0, '콤보 종료')
+  assert.ok(b.bossCd.combo > 0, '쿨 소모')
+})
+
 test('세라핌 성가 촛대: 소절마다 축성 부대를 워프하고, 부수면 성가가 역류한다', () => {
   const g = duo('warrior', 'tank')
   startPlaying(g)

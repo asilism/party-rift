@@ -636,6 +636,8 @@ const NECRO_MAX_SHADES = 3 // 강령술사가 동시에 거느리는 그림자 �
 const DRAIN_RANGE = 13 // 영혼 흡수 사거리
 const DRAIN_HALF = 1.9 // 영혼 흡수 폭(반)
 const NECRO_TIER_MAX = 3 // 그림자 강화 단계 상한
+const COMBO_DASH_LEN = 16 // 세라핌 연격 4타 돌진 거리
+const COMBO_DASH_T = 0.4 // 돌진 시간(초) — 실주행 속도 40/s
 const NECRO_TIER_DMG = 0.55 // 단계당 피해 증가율
 const NECRO_TIER_HP = 0.45 // 단계당 체력 증가율
 const NECRO_SHADOW_LIFE = 30 // 그림자 영웅(궁) 수명 — 되살린 적을 오래 부린다
@@ -7783,7 +7785,10 @@ function bossThink(state, h, dt) {
     if (h.cls === 'boss_colossus') bossColossus(state, h, foe)
     else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
     else if (h.cls === 'boss_thorn') bossThorn(state, h, foe)
-    else if (h.cls === 'boss_priest') bossPriest(state, h, foe)
+    else if (h.cls === 'boss_priest') {
+      bossPriest(state, h, foe)
+      if (h.comboStep) { h.mx = 0; h.mz = 0; return } // 연격 중엔 제자리 — 리듬이 주인공
+    }
     else bossShadow(state, h, foe, { x: throne.x, z: throne.z })
     if (h.cls === 'boss_colossus' && h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
       h.bossCd.fan = 6 * BOSS_PHASE_CD[h.bossPhase - 1] * bossTierOf(state).cd
@@ -7873,7 +7878,10 @@ function bossThink(state, h, dt) {
   if (h.cls === 'boss_colossus') bossColossus(state, h, foe)
   else if (h.cls === 'boss_archmage') bossArchmage(state, h, foe)
   else if (h.cls === 'boss_thorn') bossThorn(state, h, foe)
-  else if (h.cls === 'boss_priest') bossPriest(state, h, foe)
+  else if (h.cls === 'boss_priest') {
+    bossPriest(state, h, foe)
+    if (h.comboStep) { h.mx = 0; h.mz = 0; return } // 연격 중엔 진군도 평타도 멈춘다
+  }
   else bossShadow(state, h, foe, siege)
   // 파멸의 삼중격 — 카르곤 전용(전사형의 정체성). 전방 세 갈래 검기, 근거리는 겹쳐 맞는다
   if (h.cls === 'boss_colossus' && h.bossCd.fan <= 0 && foe && dist(h, foe) < 13) {
@@ -8158,6 +8166,118 @@ function bossColossus(state, h, foe) {
 function bossPriest(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd
+  const dt = state.dtStep || 1 / 30
+  // 촛대 소환 틱 — 소절마다 부대 4기, 소절 수만큼 축성(최대 3)이 걸린 채 워프해 온다
+  for (const c of state.minions) {
+    if (!c.candle || c.team !== h.team) continue
+    c.candleT -= state.dtStep || 1 / 30
+    if (c.candleT > 0) continue
+    // 물량 상한(방어전 45와 같은 원리): 전선이 교착돼도 군세가 무한 적재되지 않는다(성능·밸런스 동시 보호)
+    if (state.minions.filter((m) => m.team === h.team).length > 40) { c.candleT = 4; continue }
+    c.candleT = 8 // 소절 간격 — 6초는 봇 파티가 감당 못 했다(0%)
+    c.candleVerse = (c.candleVerse || 0) + 1
+    const bless = Math.min(Math.max(0, (h.bossPhase || 1) - 1), c.candleVerse) // 축성 상한 = 국면-1 (P1 0·P2 1·P3 2) — 파티가 약할 때 눈덩이를 늦춘다
+    const grow = MINION_HP_GROWTH * (state.time / 60) * 2
+    const squadN = c.candleSquad || 3
+    for (let i = 0; i < squadN; i++) {
+      const ranged = i >= squadN - 1
+      const spec = ranged ? RANGED : MELEE
+      const hp = Math.round((spec.hp + grow) * (1.45 ** bless))
+      state.minions.push({
+        id: state.nextId++, team: h.team, lane: 'mid', ranged,
+        x: c.x + (state.rng() - 0.5) * 4, z: c.z + (state.rng() - 0.5) * 4,
+        hp, maxHp: hp, atkCd: i * 0.3, dir: 0, atkSeq: 0,
+        wpI: state.map.nearestWp('mid', c.x, c.z),
+        bless, blessMul: 1 + 0.35 * bless, goldMul: 0.5,
+      })
+    }
+    pushFx(state, 'summon', c.x, c.z, 6, h.team, 0.9)
+    if (c.candleVerse === 2) pushFeed(state, 'obj', '🕯️ 성가가 깊어진다')
+  }
+  // 😇 연격 콤보: 탕(0)·탕(0.35)·탕(0.7) 근접 3연격 → 팡(1.05~1.45) 직선 돌진 관통+넉백.
+  //  1.5초 안에 4박자가 일정한 리듬 — 순간이동이 아니라 실제로 내달린다. 다른 기술(낙뢰·축복·
+  //  물결·파동·촛대 설치)은 콤보 동안 쉬지만, 이미 켜진 촛대의 소절 틱은 아래에서 계속 돈다.
+  if (h.comboStep) {
+    if (h.bossGroggyT > 0 || h.stunT > 0 || h.freezeT > 0) {
+      h.comboStep = 0 // 경직되면 콤보가 끊긴다 — 촛대 역류가 콤보 캔슬도 겸한다
+    } else {
+      h.comboT += dt
+      const strike = (mult) => { // 근접 연격 한 발 — 가장 가까운 적을 향해 휘두른다
+        let tgt = null
+        let bd = 8.5 * 8.5
+        for (const e of state.heroes) {
+          if (e.team === h.team || e.respawnT > 0 || e.isBoss) continue
+          const d2v = dist2(h, e)
+          if (d2v < bd) { bd = d2v; tgt = e }
+        }
+        if (tgt) {
+          h.comboDir = Math.atan2(tgt.z - h.z, tgt.x - h.x) // 진군 로직이 h.dir를 덮어써서 조준각은 따로 든다
+          h.dir = h.comboDir
+          damageHero(state, tgt, atkOf(h, state) * mult, h, false, '연격')
+          pushFx(state, 'rocksplash', tgt.x, tgt.z, 2.2, h.team, 0.5)
+        }
+        h.atkSeq = (h.atkSeq || 0) + 1 // 씬: 휘두르기 모션
+      }
+      if (h.comboStep === 1 && h.comboT >= 0) { strike(0.45); h.comboStep = 2 }
+      else if (h.comboStep === 2 && h.comboT >= 0.35) { strike(0.45); h.comboStep = 3 }
+      else if (h.comboStep === 3 && h.comboT >= 0.7) {
+        strike(0.5)
+        // 4타 예고: 돌진 경로 화살표 — 0.35초 뒤 내달린다(봇도 이 존을 보고 비킨다)
+        pushBossZone(state, h, {
+          x: h.x + Math.cos(h.comboDir ?? h.dir) * COMBO_DASH_LEN, z: h.z + Math.sin(h.comboDir ?? h.dir) * COMBO_DASH_LEN,
+          r: 3.2, delay: 0.35, dmg: 0, from: { x: h.x, z: h.z }, vfx: 'quake', hue: 'holy', tag: '연격 돌진',
+        })
+        h.comboStep = 4
+      } else if (h.comboStep === 4 && h.comboT >= 1.05) {
+        h.comboStep = 5
+        h.comboDashT = COMBO_DASH_T
+        h.comboDashDir = h.comboDir ?? h.dir
+        h.comboHit = {} // 관통 — 한 적은 한 번만 맞는다
+      }
+      if (h.comboStep === 5) { // 팡! — 실제 직선 질주(프레임 이동), 스치는 적 전원 피해+넉백
+        h.x += Math.cos(h.comboDashDir) * (COMBO_DASH_LEN / COMBO_DASH_T) * dt
+        h.z += Math.sin(h.comboDashDir) * (COMBO_DASH_LEN / COMBO_DASH_T) * dt
+        state.map.resolveTerrain(h, 2.2, colliders(state))
+        for (const e of state.heroes) {
+          if (e.team === h.team || e.respawnT > 0 || e.isBoss || h.comboHit[e.id]) continue
+          if (dist(h, e) < 3.4) {
+            h.comboHit[e.id] = 1
+            damageHero(state, e, skillDmg(h, 40, 0.7), h, false, '연격 돌진')
+            // 넉백 원점은 '피해자 한 걸음 뒤'(돌진 방향 기준) — 보스 뒤 고정점은 피해자와 정확히
+            // 겹치는 순간(0거리 정규화) NaN이 전파돼 좌표계가 무너진다(실측)
+            applyKnockback(state, e, e.x - Math.cos(h.comboDashDir), e.z - Math.sin(h.comboDashDir), 7)
+          }
+        }
+        h.comboDashT -= dt
+        if (h.comboDashT <= 0) {
+          h.comboStep = 0
+          pushFx(state, 'quake', h.x, h.z, 5, h.team, 0.8)
+        }
+      }
+      h.mx = 0
+      h.mz = 0
+      // 콤보 중에도 촛대 소절 틱은 계속 돌아야 하므로 return하지 않는다 —
+      // 아래 기술 블록들은 각자 쿨 게이트라 이번 프레임에 겹쳐도 새 시전만 안 하면 된다
+    }
+  }
+  // 연격 시작: 근접에 적이 있고 쿨이 돌았을 때 — foe 인자는 진군 경로에서 비어 오므로 자체 스캔
+  if (!h.comboStep && (h.bossCd.combo ?? 0) <= 0) {
+    let near = null
+    let nd = 9 * 9
+    for (const e of state.heroes) {
+      if (e.team === h.team || e.respawnT > 0 || e.isBoss || !isHeroVisible(state, e, h.team)) continue
+      const d2v = dist2(h, e)
+      if (d2v < nd) { nd = d2v; near = e }
+    }
+    if (near) {
+      h.bossCd.combo = 18 * cdMul
+      h.comboStep = 1
+      h.comboT = 0
+      h.comboDir = Math.atan2(near.z - h.z, near.x - h.x)
+      h.dir = h.comboDir
+    }
+  }
+  if (h.comboStep) return // 콤보 프레임 마감 — 시전형 기술은 쉰다(촛대 소절 틱은 위에서 이미 돌았다)
   // 🕯️ 성가 촛대(시그니처 · 보스전 전용): 워프게이트 — 부서질 때까지 소절(6초)마다 부대를
   //  소환하고, 소절이 거듭될수록 그 부대의 축성이 +1(눈덩이). 세라핌은 그동안에도 계속 싸운다
   //  (채널 없음 — 촛대를 무시하고 보스만 패는 선택지가 '틀린 답'이 되게).
@@ -8181,31 +8301,6 @@ function bossPriest(state, h, foe) {
       })
     }
     pushFeed(state, 'obj', n > 1 ? `🕯️ 성가 촛대 ${n}개가 세워졌다` : '🕯️ 성가 촛대가 세워졌다')
-  }
-  // 촛대 소환 틱 — 소절마다 부대 4기, 소절 수만큼 축성(최대 3)이 걸린 채 워프해 온다
-  for (const c of state.minions) {
-    if (!c.candle || c.team !== h.team) continue
-    c.candleT -= state.dtStep || 1 / 30
-    if (c.candleT > 0) continue
-    c.candleT = 8 // 소절 간격 — 6초는 봇 파티가 감당 못 했다(0%)
-    c.candleVerse = (c.candleVerse || 0) + 1
-    const bless = Math.min(Math.max(0, (h.bossPhase || 1) - 1), c.candleVerse) // 축성 상한 = 국면-1 (P1 0·P2 1·P3 2) — 파티가 약할 때 눈덩이를 늦춘다
-    const grow = MINION_HP_GROWTH * (state.time / 60) * 2
-    const squadN = c.candleSquad || 3
-    for (let i = 0; i < squadN; i++) {
-      const ranged = i >= squadN - 1
-      const spec = ranged ? RANGED : MELEE
-      const hp = Math.round((spec.hp + grow) * (1.45 ** bless))
-      state.minions.push({
-        id: state.nextId++, team: h.team, lane: 'mid', ranged,
-        x: c.x + (state.rng() - 0.5) * 4, z: c.z + (state.rng() - 0.5) * 4,
-        hp, maxHp: hp, atkCd: i * 0.3, dir: 0, atkSeq: 0,
-        wpI: state.map.nearestWp('mid', c.x, c.z),
-        bless, blessMul: 1 + 0.35 * bless, goldMul: 0.5,
-      })
-    }
-    pushFx(state, 'summon', c.x, c.z, 6, h.team, 0.9)
-    if (c.candleVerse === 2) pushFeed(state, 'obj', '🕯️ 성가가 깊어진다')
   }
   // 🕯️ 군세 복제(3국면 1회): 살아 있는 병사를 그대로 복사 — 축성 스택까지 복제된다.
   //  상한 12기(모바일 프레임 보호). 무한 방어에선 30웨+ 보스가 3국면으로 시작해 즉시 발동.
