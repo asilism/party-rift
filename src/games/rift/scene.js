@@ -5667,6 +5667,7 @@ const FX_LOOK = {
   summon: { color: 0xffd06a, ring: true, mode: 'rise', pcolor: 0xffe6a8 }, // 야수조련사 소환 — 솟아오르는 마력
   descend: { color: 0xb266ff, ring: true, mode: 'rise', pcolor: 0xe0c8ff, pillar: true, beam: true }, // 그림자 정예 강림 — 하늘에서 내리는 보랏빛 빛기둥
   skybolt: { color: 0xfff2b0, bolt: true, ring: true, mode: 'out', pcolor: 0xffe680 }, // ⚡ 축복 낙뢰(세라핌) — 하늘에서 내리꽂는 갈지자 번개 가닥
+  featherstorm: { color: 0xffe9b0, feather: true, pcolor: 0xfff2c0 }, // 🪽 깃털 폭풍(세라핌) — 깃털 실루엣 탄막이 줄지어 날아간다
   deploy: { color: 0x9fb0c4, ring: true, mode: 'out', pcolor: 0xd6e0ec }, // 엔지니어 설치 — 기계 조립 불꽃
   snare: { color: 0x6fbf3a, ring: true, mode: 'out', pcolor: 0xbfe88a, spikes: 0x77c24a }, // 넝쿨사냥꾼 포획망 — 솟는 넝쿨 가시
   vine: { color: 0x5fae33, line: true, mode: 'forward', pcolor: 0xbfe88a, w: 2.4, ground: true }, // 올가미 — 땅에서 솟아 앞으로 뻗는 넝쿨
@@ -5809,6 +5810,49 @@ function buildFxObject(n) {
   const g = new THREE.Group()
   g.position.set(n.x, 0, n.z)
   const ups = []
+  if (look.feather) {
+    // 🪽 깃털 탄막: 깃대+양쪽 깃판을 갖춘 '진짜 깃털' 9장이 시간차로 줄지어 날아간다 —
+    //  저마다 회전하며 위아래로 살랑이고, 사거리 끝에서 오므라들며 사라진다
+    g.rotation.y = -(n.dir || 0) // +x가 비행 방향
+    const gold = new THREE.MeshLambertMaterial({ color: 0xfff3d6, emissive: 0xc9982a, emissiveIntensity: 0.55 })
+    const pale = new THREE.MeshLambertMaterial({ color: 0xfff9ea, emissive: 0xa8842a, emissiveIntensity: 0.35 })
+    const feathers = []
+    for (let i = 0; i < 9; i++) {
+      const f = new THREE.Group()
+      const quill = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.02, 1.1, 4), pale) // 깃대
+      quill.rotation.z = Math.PI / 2
+      f.add(quill)
+      for (const vz of [1, -1]) { // 양쪽 깃판 — 납작한 물방울 두 장이 깃대에 비스듬히
+        const vane = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 6), gold)
+        vane.scale.set(1.05, 0.1, 0.34)
+        vane.position.set(0.08, 0, vz * 0.16)
+        vane.rotation.y = vz * 0.35 // 깃끝이 뒤로 쓸리는 각
+        f.add(vane)
+      }
+      g.add(f)
+      feathers.push({
+        f,
+        off: (i % 5) * 0.09, // 시간차 발사(줄지어)
+        lane: ((i % 3) - 1) * 1.15 + (i % 2) * 0.35, // 세 갈래 레인 + 흔들림
+        spin: 2.5 + (i % 4) * 1.9,
+        size: 0.75 + (i % 3) * 0.28,
+        bob: i * 1.3,
+      })
+    }
+    const len = n.r || 16
+    ups.push((t) => {
+      const life = n.life || 0.8
+      for (const fd of feathers) {
+        const k = Math.min(1, Math.max(0, t / life - fd.off) / Math.max(0.001, 1 - fd.off))
+        fd.f.visible = k > 0
+        if (k <= 0) continue
+        fd.f.position.set(2 + k * (len - 2), 1.7 + Math.sin(k * Math.PI * 2 + fd.bob) * 0.45, fd.lane)
+        fd.f.rotation.x = t * fd.spin + fd.bob // 깃털이 팽글팽글 돌며 난다
+        const shrink = k > 0.85 ? Math.max(0.001, 1 - (k - 0.85) / 0.15) : 1 // 끝에서 오므라들며 소멸
+        fd.f.scale.setScalar(fd.size * (k < 0.08 ? k / 0.08 : 1) * shrink)
+      }
+    })
+  }
   if (look.bolt) {
     // ⚡ 낙뢰: 하늘(y≈26)→땅을 잇는 갈지자 가닥 2줄 + 곁가지 — 0.12초 백열 섬광 뒤 급히 사그라든다
     const mat = new THREE.MeshBasicMaterial({ color: look.color, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending })
