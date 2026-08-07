@@ -325,7 +325,7 @@ export const CLASSES = {
   boss_priest: {
     boss: true, name: '타락 대사제', icon: '😇', // 후광 얼굴 — '타락했는데 성스러운 척' 아이러니(촛불은 기믹 오브젝트 몫)
     desc: '군세를 기르고 되살리는 사제형 보스 — 병사를 방치하면 괴물이 되어 돌아온다',
-    hp: 24000, hpLvl: 700, atk: 78, atkLvl: 7, range: 14.5, atkCd: 0.95, speed: 7.0, def: 0.55, // 킷이 풍부해진 만큼(낙뢰·파동·촛대) 기본 압박은 낮게
+    hp: 24000, hpLvl: 700, atk: 72, atkLvl: 7, range: 14.5, atkCd: 0.95, speed: 7.0, def: 0.55, // 킷이 풍부해진 만큼(낙뢰·파동·촛대) 기본 압박은 낮게
     skill: { name: '축성 낙뢰', icon: '⚡', cd: 8, desc: '적들 머리 위로 성스러운 낙뢰를 예고하고 내리친다' },
     skill2: { name: '군세 축복', icon: '📿', cd: 13, desc: '주변 병사를 축성한다 — 더 크고 더 세게, 최대 3축성' },
     ult: { name: '성역의 물결', icon: '💫', cd: 24, desc: '빛의 물결로 자신과 군세의 상처를 씻어낸다' },
@@ -8232,7 +8232,7 @@ function bossPriest(state, h, foe) {
       h.bossCd.a = 8 * cdMul
       const picks = targets.sort(() => state.rng() - 0.5).slice(0, 1 + p)
       for (const e of picks) {
-        pushBossZone(state, h, { x: e.x, z: e.z, r: 4.2, delay: 0.9, dmg: skillDmg(h, 26, 0.45), aim: true, vfx: 'skybolt', hue: 'holy', tag: '축성 낙뢰' }) // 예고 보고 바로 움직여야 피한다
+        pushBossZone(state, h, { x: e.x, z: e.z, r: 4.2, delay: 0.9, dmg: skillDmg(h, 42, 0.7), aim: true, vfx: 'skybolt', hue: 'holy', tag: '축성 낙뢰' }) // 예고 보고 바로 움직여야 피한다
       }
     }
   }
@@ -8262,7 +8262,7 @@ function bossPriest(state, h, foe) {
   if (h.bossCd.d <= 0 && foe && dist(h, foe) < 20) {
     h.bossCd.d = 20 * cdMul
     pushBossZone(state, h, {
-      x: h.x, z: h.z, r: 16, rIn: 5, delay: 1.3, dmg: skillDmg(h, 48, 0.8), slow: 1.2,
+      x: h.x, z: h.z, r: 16, rIn: 5, delay: 1.3, dmg: skillDmg(h, 62, 1.05), slow: 1.2,
       vfx: 'quake', hue: 'holy', tag: '참회의 파동',
     })
   }
