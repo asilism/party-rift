@@ -1481,6 +1481,25 @@ const HAT_BUILDERS = {
     return g
   },
   // 가시 왕관(브램블 전리품 · 비매품): 덩굴 링 + 가시 돌기 + 붉은 장미 한 송이
+  // 후광(세라핌 전리품·보통): 머리 위에 떠 있는 금빛 고리 — 은은히 빛난다
+  halocrown(s) {
+    const g = new THREE.Group()
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.58 * s, 0.07 * s, 8, 24),
+      new THREE.MeshLambertMaterial({ color: 0xffe9a0, emissive: 0xcfa42a, emissiveIntensity: 0.85 })
+    )
+    ring.rotation.x = Math.PI / 2
+    ring.position.y = 0.62 * s // 머리에서 살짝 떠 있다
+    g.add(ring)
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture(), color: 0xffe9a0, transparent: true, opacity: 0.4,
+      depthWrite: false, blending: THREE.AdditiveBlending,
+    }))
+    glow.scale.set(2.2 * s, 2.2 * s, 1)
+    glow.position.y = 0.62 * s
+    g.add(glow)
+    return g
+  },
   thorncrown(s) {
     const g = new THREE.Group()
     const vine = new THREE.Mesh(new THREE.TorusGeometry(0.76 * s, 0.08 * s, 6, 18), lamb(0x4a7e3a))
@@ -2083,6 +2102,30 @@ const COSTUME_BUILDERS = {
     return g
   },
   // 천사 날개: 등에 펼친 흰 깃 두 장 — 크고 작은 깃털 타원을 부채꼴로
+  // 세라핌의 날개(전리품·어려움): 대천사의 세 갈래 금빛 깃 — 기본 천사 날개보다 크고 화려하다
+  seraphwings(s) {
+    const g = new THREE.Group()
+    const gold = new THREE.MeshLambertMaterial({ color: 0xfff3d6, emissive: 0xc9982a, emissiveIntensity: 0.35 })
+    for (const sz of [1, -1]) {
+      const wing = new THREE.Group()
+      wing.position.set(-0.95 * s, 1.0 * s, sz * 0.5 * s)
+      wing.rotation.x = sz * 0.8 // 바깥 위로 활짝
+      const big = new THREE.Mesh(new THREE.SphereGeometry(0.85 * s, 10, 8), gold)
+      big.scale.set(0.18, 1.95, 0.6)
+      big.position.y = 1.1 * s
+      const mid = new THREE.Mesh(new THREE.SphereGeometry(0.65 * s, 10, 8), gold)
+      mid.scale.set(0.18, 1.5, 0.55)
+      mid.position.set(0, 0.62 * s, sz * 0.55 * s)
+      mid.rotation.x = sz * 0.42
+      const low = new THREE.Mesh(new THREE.SphereGeometry(0.5 * s, 10, 8), gold)
+      low.scale.set(0.18, 1.15, 0.5)
+      low.position.set(0, 0.2 * s, sz * 1.0 * s)
+      low.rotation.x = sz * 0.8
+      wing.add(big, mid, low)
+      g.add(wing)
+    }
+    return g
+  },
   wings(s) {
     const g = new THREE.Group()
     const white = new THREE.MeshLambertMaterial({ color: 0xf7f5ee, emissive: 0x8a8ca0, emissiveIntensity: 0.18 })
@@ -2956,6 +2999,24 @@ function bladeGlow(mesh, color, opacity = 0.3, sx = 1.05, sy = 2.0, sz = 1.8) {
 }
 
 const WEAPON_SKINS = {
+  // 축복의 홀(세라핌 전리품·악몽): 백금 자루 끝에 후광 고리와 성광 보석
+  benedictstaff(g) {
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 1.8, 8), lamb(0xf0e6c8))
+    shaft.rotation.z = -Math.PI / 2
+    shaft.position.x = 0.9
+    g.add(shaft)
+    const halo = new THREE.Mesh(
+      new THREE.TorusGeometry(0.24, 0.045, 8, 20),
+      new THREE.MeshLambertMaterial({ color: 0xffe9a0, emissive: 0xcfa42a, emissiveIntensity: 0.9 })
+    )
+    halo.rotation.y = Math.PI / 2
+    halo.position.x = 2.0
+    g.add(halo)
+    const head = gemMesh(0xfff0b8, 0.2)
+    head.position.x = 2.0
+    g.add(head)
+    g.userData.gem = head
+  },
   // 성벽 파쇄퇴(무한방어 100파도): 돌탑 모양 대형 메이스 — 성벽 그 자체를 휘두른다
   wardmaul(g) {
     const stone = lamb(0xcfc3ae)
@@ -4230,6 +4291,10 @@ function buildTrophyAura(s, setBoss) {
 }
 
 function buildHero(h, mine, barColor, hatId = null, costumeId = null, weaponSkinId = null) {
+  if (h.cls === 'boss_priest') { // 😇 대천사 실루엣 — 세라핌은 날개·후광이 몸의 일부다(전리품과 같은 조형)
+    costumeId = 'seraphwings'
+    hatId = hatId || 'halocrown'
+  }
   const g = new THREE.Group()
   const col = TEAM_COLOR[h.team]
   const s = CLS_SCALE[h.cls] || 1

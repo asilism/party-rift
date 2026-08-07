@@ -754,7 +754,7 @@ const ZERO_BONUS = sumStats([])
 //  (원래 1.0 ↔ 한때 1.2 사이의 중간값)
 export const HP_SCALE = 1.1
 // statMul: 콜로세움 봇 난이도 보정 배율(체력·공격력·주문력 공통) — createGame이 봇에만 심는다.
-const heroMaxHp = (h) => Math.round((CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1) + itemBonus(h).hp) * HP_SCALE * (h.statMul || 1) * (1 + augOf(h).hpMul))
+const heroMaxHp = (h) => Math.round((CLASSES[h.cls].hp + CLASSES[h.cls].hpLvl * (h.lvl - 1) + itemBonus(h).hp) * HP_SCALE * (h.statMul || 1) * (1 + augOf(h).hpMul + trophyFx(h).hpMul))
 // 밸런스: 공격력 기반 딜러(근접·원거리)는 순간 딜링이 과해 마법사·물몸이 버티기 어려웠다.
 //  직업 고유 공격력 곡선(기본 + 레벨 성장)을 20% 낮춘다 — 평타와 공격력 계수 스킬 모두에 함께 반영된다.
 //  (아이템 공격력은 그대로 둬서 장비 투자 가치는 유지) 탱커·하이브리드(소환사)는 딜러가 아니라 제외.
@@ -782,6 +782,7 @@ export const TROPHY_SETS = {
   boss_archmage: { hat: 'nebulacrown', costume: 'galaxyrobe', weapon: 'cometstaff', fx: { powerMul: 0.03 } }, // 대마도사 세트: 주문력 +3%
   boss_shadow: { hat: 'shadowmask', costume: 'abysscloak', weapon: 'crescentscythe', fx: { speed: 0.4 } }, // 그림자 세트: 이속 +3%
   boss_thorn: { hat: 'thorncrown', costume: 'vinemail', weapon: 'bramblesword', fx: { def: 0.03 } }, // 가시 세트: 피해감소 +3%
+  boss_priest: { hat: 'halocrown', costume: 'seraphwings', weapon: 'benedictstaff', fx: { hpMul: 0.03 } }, // 세라핌 세트: 최대 체력 +3%
   brawl_champ: { hat: 'champlaurel', costume: 'champbelt', weapon: 'champblade', fx: { speed: 0.3 } }, // 챔피언 세트(난투전 1·2·3위): 이속 소량
   defense_ward: { hat: 'wardhelm', costume: 'wardplate', weapon: 'wardmaul', fx: { def: 0.03 } }, // 수문장 세트(무한방어 30/60/100파도): 피해감소
   arena_glad: { hat: 'gladhelm', costume: 'gladpauldron', weapon: 'gladius', fx: { atkMul: 0.03 } }, // 검투사 세트(콜로세움 우승 1/3/5회): 공격력
@@ -793,7 +794,7 @@ export function trophySetOf(hat, costume, weapon) {
   }
   return null
 }
-const TROPHY_ZERO = { speed: 0, atkMul: 0, powerMul: 0, def: 0 }
+const TROPHY_ZERO = { speed: 0, atkMul: 0, powerMul: 0, def: 0, hpMul: 0 }
 // 모듈 초기화 때 미기재 키를 0으로 채워 둔다 — trophyFx가 핫패스(heroSpeed 등)라 매 호출 병합 금지
 for (const set of Object.values(TROPHY_SETS)) set.fx = { ...TROPHY_ZERO, ...set.fx }
 const trophyFx = (h) => (h.trophySet && TROPHY_SETS[h.trophySet]?.fx) || TROPHY_ZERO
