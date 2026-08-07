@@ -271,7 +271,8 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
     }
     const poll = () => {
       raf = requestAnimationFrame(poll)
-      const gp = [...(navigator.getGamepads() || [])].find(Boolean)
+      const pads = [...(navigator.getGamepads() || [])].filter(Boolean)
+      const gp = pads.find((g) => g.mapping === 'standard') || pads[0] // 팬텀/비표준 장치가 앞자리를 차지해도 표준 패드 우선
       if (!gp) return
       // 좌 스틱 이동: 데드존을 제외하고 0~1로 다시 스케일 → 미세 조작이 부드럽다
       const x = gp.axes[0] || 0
