@@ -5498,6 +5498,52 @@ test('그림자는 영웅과 같은 순위로 조준된다 — 앞에 서 있으
   assert.equal(n.hp, nHp0, '뒤에 선 강령술사는 안 맞는다')
 })
 
+test('세라핌 비상 강하: 솟구쳐 사라진 뒤 직선 예고 → 활강 관통+넉백, 3국면은 2연속', () => {
+  const g = duo('warrior', 'tank')
+  startPlaying(g)
+  const [w, b] = g.heroes
+  b.cls = 'boss_priest'
+  b.isBoss = true
+  b.isBot = true
+  b.bossAwake = true
+  g.time = 200
+  b.bossPhase = 2
+  b.bossCd = { a: 1e9, b: 1e9, c: 1e9, d: 1e9, candle: 1e9, summon: 1e9, combo: 1e9, stones: 1e9, storm: 1e9, flight: 0 }
+  b.x = 0; b.z = 0
+  w.x = 10; w.z = 0
+  run(g, 0.3)
+  assert.equal(b.flightStep, 'rise', '솟구침 시작')
+  assert.ok(bossInvuln(g, b), '비행 전 과정 무적(실체 없음)')
+  run(g, 0.9)
+  assert.equal(b.flightStep, 'warn', '예고 국면')
+  assert.ok(g.zones.some((z) => z.tag === '비상 강하'), '직선 예고선')
+  const hp0 = w.hp
+  run(g, 2.2) // 활강 통과까지
+  assert.ok(!b.flightStep, '착지 — 비행 종료')
+  assert.ok(w.hp < hp0 || dist({ x: 10, z: 0 }, w) > 2, '경로의 적은 맞거나 밀려났다')
+  // 3국면: 두 번 활강
+  const g2 = duo('warrior', 'tank')
+  startPlaying(g2)
+  const [w2, b2] = g2.heroes
+  b2.cls = 'boss_priest'; b2.isBoss = true; b2.isBot = true; b2.bossAwake = true
+  g2.time = 200
+  b2.bossPhase = 3
+  b2.priestCloned = true
+  b2.bossCd = { a: 1e9, b: 1e9, c: 1e9, d: 1e9, candle: 1e9, summon: 1e9, combo: 1e9, stones: 1e9, storm: 1e9, flight: 0 }
+  b2.x = 0; b2.z = 0
+  w2.x = 10; w2.z = 0
+  run(g2, 0.3)
+  let flights = 0
+  let prev = null
+  for (let i = 0; i < 300; i++) {
+    run(g2, 1 / 30)
+    if (b2.flightStep === 'fly' && prev !== 'fly') flights++
+    prev = b2.flightStep
+    if (!b2.flightStep) break
+  }
+  assert.equal(flights, 2, `3국면은 예고→활강 2연속 (${flights}회)`)
+})
+
 test('세라핌 깃털 폭풍: 6방향 별 모양 직선 탄막 — 3국면은 30도 돌린 2차까지', () => {
   const g = duo('warrior', 'tank')
   startPlaying(g)
@@ -5574,16 +5620,17 @@ test('세라핌 성가 촛대: 소절마다 축복 부대를 워프하고, 부�
   candle.hp = 500 // 격리: 라인 병사가 2소절 전에 부수지 않게 — 파괴는 마지막에 직접 검증
   run(g, 2.6) // 첫 소절
   const squad = g.minions.filter((m) => m.team === b.team && m.bless) // 워프 부대만(라인 병사 제외)
-  assert.ok(squad.length >= 2, `부대가 워프해 온다 (${squad.length}기)`) // 2국면 = 촛대 2개 × 부대 2기(위상차라 첫 소절엔 한 촛대만)
+  assert.ok(squad.length >= 1, `부대가 워프해 온다 (${squad.length}기)`) // 전체 소환 -1 후 P2 촛대당 1기 // 2국면 = 촛대 2개 × 부대 2기(위상차라 첫 소절엔 한 촛대만)
   assert.ok(squad.every((m) => m.bless === 1 && m.goldMul === 0.5), '1소절 = 1축복 · 골드 절반')
   run(g, 8) // 둘째 소절(8초 간격)
   const warped = g.minions.filter((m) => m.goldMul === 0.5)
   assert.ok(warped.length > squad.length, `소절이 거듭될수록 군세가 는다 (${squad.length}→${warped.length})`)
   assert.ok(warped.every((m) => m.bless <= 2), '축복 상한 = min(2, 국면) — 2국면이면 2축복까지')
-  // 파괴 시퀀스 격리: 워프 부대를 치우고 전사를 온전케 — 맞다가 공격이 무산되지 않게
+  // 파괴 시퀀스 격리: 워프 부대를 치우고 전사를 온전케 — 맞거나 CC로 공격이 무산되지 않게
   g.minions = g.minions.filter((m) => m.candle || !m.goldMul)
   w.hp = w.maxHp
   w.atkCd = 0
+  w.stunT = 0; w.knockT = 0; w.freezeT = 0
   candle.hp = 1
   w.x = candle.x + 1; w.z = candle.z
   castAttack(g, w.id, { tk: 'minion', id: candle.id })
@@ -5595,6 +5642,7 @@ test('세라핌 성가 촛대: 소절마다 축복 부대를 워프하고, 부�
   g.minions = g.minions.filter((m) => m.candle || !m.goldMul)
   w.hp = w.maxHp
   w.atkCd = 0
+  w.stunT = 0; w.knockT = 0; w.freezeT = 0
   candle2.hp = 1
   w.x = candle2.x + 1; w.z = candle2.z
   castAttack(g, w.id, { tk: 'minion', id: candle2.id })
