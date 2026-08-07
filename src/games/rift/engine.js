@@ -7083,6 +7083,21 @@ const BOSS_LEASH = 18 // 진군 축(공성 목표)에서 이 이상 벗어난 �
 
 // 보스가 무적인가 — ① 각성 휴지기(어둠의 보호막) ② 기상 전 수면 ③ 소환 의식 채널(아르케인).
 // 표적·피해 판정에서 함께 쓴다. 의식 무적은 "보스 말고 소환석을 쳐라"를 시스템이 강제하는 장치.
+// 최전방 앵커: 다음 공성 목표(가장 앞선 파란 미드 타워, 없으면 수호석) 곁 — 타워 사거리 밖 지점.
+//  순간이동류 기술 뒤의 복귀 기준점이자 세라핌 촛대의 소환 기준점. 보스가 전선에서 '붕 뜨는' 것 방지.
+function bossFrontAnchor(state, h) {
+  let tower = null
+  let bestX = -Infinity
+  for (const t of state.towers) {
+    if (!t.alive || t.team !== 'blue' || t.lane !== 'mid') continue
+    if (t.x > bestX) { bestX = t.x; tower = t }
+  }
+  const nb = state.map.NEXUS_POS.blue
+  const sx = tower ? tower.x : nb.x
+  const sz2 = tower ? tower.z : nb.z
+  return { x: sx + TOWER_RANGE + 4, z: sz2, tower } // 붉은 진영 쪽으로 사거리+4 — 절대 사거리 안엔 안 선다
+}
+
 export function bossInvuln(state, h) {
   // 그림자 추격(죽음의 그림자)·어둠 소멸(어둠의 정적) 중엔 실체가 없다 — 무적
   return h.isBoss === true && (h.bossShieldT > 0 || h.stonesAt != null
@@ -7865,6 +7880,21 @@ function bossThink(state, h, dt) {
     h.bossFocusWarned = true
     pushFeed(state, 'obj', '💢 보스가 방어선 파괴에 몰두한다')
   }
+  // 전선 복귀 감시(전 보스 공통): 순간이동류 기술 뒤 전선에서 38+ 떨어져 '붕 뜨면'
+  // 빛기둥 강림으로 최전방 곁에 돌아온다 — 특수 상태(돌진·잠행·추격·비행) 중엔 판정하지 않는다.
+  if (!h.defenseBoss && !h.flightStep && !h.comboStep && !h.bossDash
+    && h.burrowAt == null && h.huntUntil == null && h.stillVanishAt == null
+    && (h.reanchorCd || 0) <= state.time) {
+    const anc = bossFrontAnchor(state, h)
+    if (Math.hypot(anc.x - h.x, anc.z - h.z) > 38) {
+      h.reanchorCd = state.time + 8
+      h.x = anc.x + (state.rng() - 0.5) * 3
+      h.z = anc.z + (state.rng() - 0.5) * 3
+      state.map.resolveTerrain(h, 2.2, colliders(state))
+      pushFx(state, 'descend', h.x, h.z, 5, h.team, 1.2)
+      pushFeed(state, 'obj', `👹 ${h.name}이(가) 전선으로 돌아온다`)
+    }
+  }
   // 표적: 공성 목표 근처(BOSS_LEASH 안)의 보이는 적 중 "가장 약한" 영웅 — 우물 캠핑·낚시 방지.
   // 최약체를 노리는 이유: 보스가 마음먹으면 하나는 반드시 죽는다는 처형압이 난이도의 심장이다.
   const bf = state.map.FOUNTAIN_POS.blue
@@ -8259,6 +8289,13 @@ function bossPriest(state, h, foe) {
           h.flightPass = 0
           h.flightK = 0
           pushFx(state, 'quake', h.x, h.z, 5, h.team, 0.8)
+          const anc = bossFrontAnchor(state, h) // 활강 끝이 전선에서 멀면 빛기둥으로 재강림 — 붕 뜨지 않는다
+          if (Math.hypot(anc.x - h.x, anc.z - h.z) > 22) {
+            h.x = anc.x + (state.rng() - 0.5) * 3
+            h.z = anc.z + (state.rng() - 0.5) * 3
+            state.map.resolveTerrain(h, 2.2, colliders(state))
+            pushFx(state, 'descend', h.x, h.z, 5, h.team, 1.2)
+          }
         }
       }
     }
@@ -8398,13 +8435,25 @@ function bossPriest(state, h, foe) {
     const aliveN = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss).length
     const hits = Math.max(5, 3 + aliveN * 1.6) // 소환석과 같은 원리 — 부술 손 수에 비례한 타격 수
     const n = p // 국면 수만큼(1/2/3개) — 국면이 오를수록 꺼야 할 불이 늘어난다
+    const anc = bossFrontAnchor(state, h) // 최전방 곁 — 쌩뚱맞은 곳에 서서 못 보고 지나치지 않게
     const base = state.rng() * Math.PI * 2
     for (let i = 0; i < n; i++) {
-      const a = base + (i / n) * Math.PI * 2 + (state.rng() - 0.5) * 0.5 // 방사형 — 서로도, 세라핌과도 겹치지 않게
-      const d = 10 + state.rng() * 4
+      const a = base + (i / n) * Math.PI * 2 + (state.rng() - 0.5) * 0.5 // 앵커 둘레 방사형
+      const d = 4 + state.rng() * 3
+      let cx = anc.x + Math.cos(a) * d
+      let cz = anc.z + Math.sin(a) * d
+      if (anc.tower) { // 타워 사거리 안으로는 절대 안 들어간다 — 밖으로 밀어낸다
+        const tdx = cx - anc.tower.x
+        const tdz = cz - anc.tower.z
+        const td = Math.hypot(tdx, tdz) || 1
+        if (td < TOWER_RANGE + 2.5) {
+          cx = anc.tower.x + (tdx / td) * (TOWER_RANGE + 2.5)
+          cz = anc.tower.z + (tdz / td) * (TOWER_RANGE + 2.5)
+        }
+      }
       state.minions.push({
         id: state.nextId++, team: h.team, candle: true, lane: 'mid', ranged: false,
-        x: h.x + Math.cos(a) * d, z: h.z + Math.sin(a) * d,
+        x: cx, z: cz,
         hp: Math.round(hits), maxHp: Math.round(hits), atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
         candleT: 2.5 + i * 2, candleVerse: 0, candleSquad: Math.max(1, 3 - n), // 촛대가 늘어도 워프 총량은 평평하게 + 전체 소환 -1(본체 손싸움 유도)
       })
