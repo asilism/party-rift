@@ -4104,7 +4104,7 @@ export function step(state, dt) {
   if (state.mode === 'boss' && state.status === 'playing') {
     const boss = state.heroes.find((b) => b.isBoss)
     if (!boss || boss.respawnT > 0 || boss.hp <= 0) {
-      pushFeed(state, 'obj', '👑 보스 격파! 전설의 사냥이 끝났다!')
+      pushFeed(state, 'obj', '👑 보스 격파!')
       if (boss) {
         // 토벌 피날레 — 쓰러진 자리에서 다단 폭발(클라 endFlash 파동과 겹쳐 붕괴감을 만든다)
         pushFx(state, 'meteorhit', boss.x, boss.z, 14, 'blue', 1.3)
@@ -7233,7 +7233,7 @@ function pushBossLine(state, h, dir, { count = 5, r = 4.2, gap = 3.4, delay = 1.
 function bossThink(state, h, dt) {
   if (!h.bossIntro) {
     h.bossIntro = true
-    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name} ${h.name} 등장 — 전설의 사냥이 시작된다`)
+    pushFeed(state, 'obj', `👹 ${CLASSES[h.cls].name} ${h.name}이(가) 모습을 드러냈다`)
   }
   // 보스는 레벨 개념이 없다 — 시간 자동 레벨업 없음(위협은 국면 전환으로 강해진다).
   //  체력바가 최대치와 함께 훅 오르던 혼란을 없앤다. 스탯은 개전부터 고정(BOSS_LEVEL로 고정 계산).
@@ -7844,7 +7844,7 @@ function bossThink(state, h, dt) {
   const focus = h.bossSiegeT > BOSS_FOCUS_AFTER
   if (focus && !h.bossFocusWarned) {
     h.bossFocusWarned = true
-    pushFeed(state, 'obj', '💢 보스가 방어선 파괴에 몰두한다 — 다른 것은 눈에 없다')
+    pushFeed(state, 'obj', '💢 보스가 방어선 파괴에 몰두한다')
   }
   // 표적: 공성 목표 근처(BOSS_LEASH 안)의 보이는 적 중 "가장 약한" 영웅 — 우물 캠핑·낚시 방지.
   // 최약체를 노리는 이유: 보스가 마음먹으면 하나는 반드시 죽는다는 처형압이 난이도의 심장이다.
@@ -8180,7 +8180,7 @@ function bossPriest(state, h, foe) {
         candleT: 2.5 + i * 2, candleVerse: 0, candleSquad: Math.max(1, 4 - n), // 촛대가 늘어도 워프 총량은 평평하게(38% 교훈)
       })
     }
-    pushFeed(state, 'obj', n > 1 ? `🕯️ 성가 촛대 ${n}개가 세워졌다 — 전부 꺼야 성가가 멎는다!` : '🕯️ 성가 촛대가 세워졌다 — 부수기 전까지 군세가 밀려온다!')
+    pushFeed(state, 'obj', n > 1 ? `🕯️ 성가 촛대 ${n}개가 세워졌다` : '🕯️ 성가 촛대가 세워졌다')
   }
   // 촛대 소환 틱 — 소절마다 부대 4기, 소절 수만큼 축성(최대 3)이 걸린 채 워프해 온다
   for (const c of state.minions) {
@@ -8205,7 +8205,7 @@ function bossPriest(state, h, foe) {
       })
     }
     pushFx(state, 'summon', c.x, c.z, 6, h.team, 0.9)
-    if (c.candleVerse === 2) pushFeed(state, 'obj', '🕯️ 성가가 2소절째 — 워프 군세가 더 굵어진다, 촛대를 꺼라!')
+    if (c.candleVerse === 2) pushFeed(state, 'obj', '🕯️ 성가가 깊어진다')
   }
   // 🕯️ 군세 복제(3국면 1회): 살아 있는 병사를 그대로 복사 — 축성 스택까지 복제된다.
   //  상한 12기(모바일 프레임 보호). 무한 방어에선 30웨+ 보스가 3국면으로 시작해 즉시 발동.
@@ -8254,7 +8254,7 @@ function bossPriest(state, h, foe) {
         m.hp = m.maxHp
       }
       pushFx(state, 'summon', h.x, h.z, 10, h.team, 0.9)
-      pushFeed(state, 'obj', '📿 군세 축복 — 병사들이 부풀어 오른다, 커진 놈부터 잘라라!')
+      pushFeed(state, 'obj', '📿 군세 축복 — 병사들이 부풀어 오른다')
     }
   }
   // 🔔 참회의 파동: 세라핌을 중심으로 퍼지는 성광 고리 — 몸 곁(안쪽)은 안전, 어중간한
