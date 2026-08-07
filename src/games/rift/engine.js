@@ -328,7 +328,7 @@ export const CLASSES = {
     hp: 24000, hpLvl: 700, atk: 72, atkLvl: 7, range: 14.5, atkCd: 0.95, speed: 7.0, def: 0.55, // 킷이 풍부해진 만큼(낙뢰·파동·촛대) 기본 압박은 낮게
     skill: { name: '축복 낙뢰', icon: '⚡', cd: 8, desc: '적들 머리 위로 성스러운 낙뢰를 예고하고 내리친다' },
     skill2: { name: '군세 축복', icon: '📿', cd: 13, desc: '주변 병사를 축복한다 — 더 크고 더 세게, 최대 3축복' },
-    ult: { name: '성역의 물결', icon: '💫', cd: 24, desc: '빛의 물결로 자신과 군세의 상처를 씻어낸다' },
+    ult: { name: '성역의 물결', icon: '💫', cd: 24, desc: '빛의 물결로 군세의 상처를 씻어낸다 — 대사제 자신은 회복하지 않는다' },
   },
 }
 export const BOSS_IDS = Object.keys(CLASSES).filter((c) => CLASSES[c].boss)
@@ -8370,19 +8370,18 @@ function bossPriest(state, h, foe) {
       vfx: 'quake', hue: 'holy', tag: '참회의 파동',
     })
   }
-  // 💫 성역의 물결: 자신 소량 + 군세 완전 회복 — 보스를 눕히는 지름길은 병사부터 끊는 것.
-  //  자힐은 4%(레이드 정체 방지)·무한 방어 3%. 다친 대상이 있을 때만 쓴다(쿨 낭비 없음).
+  // 💫 성역의 물결: 군세만 회복 — 본체는 스스로 치유하지 않는다(깎은 보스 체력은 돌아오지
+  //  않아야 파티의 진행이 존중된다). 다친 군세가 있을 때만 쓴다(쿨 낭비 없음).
   if (h.bossCd.c <= 0) {
     const hurtMinion = state.minions.some((m) => m.team === h.team && !m.stone && !m.heart && m.hp < m.maxHp && dist2(h, m) <= 16 * 16)
-    if (hurtMinion || h.hp < h.maxHp * 0.97) {
+    if (hurtMinion) {
       h.bossCd.c = Math.max(16, 24 * cdMul) // P3 가속(10.8초)에 하한 — 군세 벽이 영원하지 않게
-      h.hp = Math.min(h.maxHp, h.hp + h.maxHp * (h.defenseBoss ? 0.03 : 0.04))
       for (const m of state.minions) {
         if (m.team !== h.team || m.stone || m.heart || dist2(h, m) > 16 * 16) continue
         m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.5) // 잃은 만큼이 아니라 절반 — 군세 벽이 영원하지 않게
       }
       pushFx(state, 'summon', h.x, h.z, 16, h.team, 1.1)
-      pushFeed(state, 'obj', '💫 성역의 물결 — 대사제와 군세의 상처가 씻겨 나간다')
+      pushFeed(state, 'obj', '💫 성역의 물결 — 군세의 상처가 씻겨 나간다')
     }
   }
 }
