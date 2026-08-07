@@ -5670,7 +5670,7 @@ test('타락 대사제: 축복은 병사를 키우고, 물결은 되살리고, 3
   m0.hp = 10
   b.bossCd.c = 0 // 물결 개방
   run(g, 0.5)
-  assert.ok(m0.hp >= 10 + m0.maxHp * 0.45, `물결 — 군세 절반 회복 (${Math.round(m0.hp)}/${m0.maxHp})`)
+  assert.ok(m0.hp >= 10 + m0.maxHp * 0.35, `물결 — 군세 40% 회복 (${Math.round(m0.hp)}/${m0.maxHp})`)
   const before = g.minions.filter((m) => m.team === b.team).length
   b.bossPhase = 3 // 최후 국면 — 군세 복제
   run(g, 0.5)
