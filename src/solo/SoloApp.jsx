@@ -1711,6 +1711,7 @@ const HATS = [
   { id: 'nebulacrown', name: '성운의 관', trophy: { boss: 'boss_archmage', tier: 'normal' }, fx: true },
   { id: 'shadowmask', name: '그림자 가면', trophy: { boss: 'boss_shadow', tier: 'normal' }, fx: true },
   { id: 'thorncrown', name: '가시 왕관', trophy: { boss: 'boss_thorn', tier: 'normal' }, fx: true },
+  { id: 'halocrown', name: '후광', trophy: { boss: 'boss_priest', tier: 'normal' }, fx: true },
   // ── 무한방어 수문장 세트(비매품): trophy = { defense: N } — N파도 도달 시 지급 ──
   { id: 'wardhelm', name: '파수꾼 투구', trophy: { defense: 30 }, fx: true },
   // ── 콜로세움 검투사 세트(비매품): trophy = { arena: N } — 토너먼트 우승 누적 N회 ──
@@ -1741,6 +1742,7 @@ const COSTUMES = [
   { id: 'galaxyrobe', name: '은하 로브', trophy: { boss: 'boss_archmage', tier: 'hard' }, fx: true },
   { id: 'abysscloak', name: '심연 망토', trophy: { boss: 'boss_shadow', tier: 'hard' }, fx: true },
   { id: 'vinemail', name: '덩굴 갑옷', trophy: { boss: 'boss_thorn', tier: 'hard' }, fx: true },
+  { id: 'seraphwings', name: '세라핌의 날개', trophy: { boss: 'boss_priest', tier: 'hard' }, fx: true },
   { id: 'wardplate', name: '수문장 흉갑', trophy: { defense: 60 }, fx: true },
   { id: 'gladpauldron', name: '백부장 견갑', trophy: { arena: 3 }, fx: true },
   { id: 'champbelt', name: '챔피언 벨트', trophy: { brawl: 2 }, fx: true },
@@ -1768,6 +1770,7 @@ const WEAPONS = [
   { id: 'cometstaff', name: '운석 지팡이', trophy: { boss: 'boss_archmage', tier: 'nightmare' }, fx: true },
   { id: 'crescentscythe', name: '그믐의 낫', trophy: { boss: 'boss_shadow', tier: 'nightmare' }, fx: true },
   { id: 'bramblesword', name: '가시 대검', trophy: { boss: 'boss_thorn', tier: 'nightmare' }, fx: true },
+  { id: 'benedictstaff', name: '축복의 홀', trophy: { boss: 'boss_priest', tier: 'nightmare' }, fx: true },
   { id: 'wardmaul', name: '성벽 파쇄퇴', trophy: { defense: 100 }, fx: true },
   { id: 'gladius', name: '투기장 글라디우스', trophy: { arena: 5 }, fx: true },
   { id: 'champblade', name: '우승자의 황금검', trophy: { brawl: 1 }, fx: true },
