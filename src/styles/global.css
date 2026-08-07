@@ -3255,7 +3255,6 @@ body {
 .settings-link:hover { color: var(--ink); text-decoration: underline; }
 .settings-note { margin: 0; text-align: center; color: #8a80ad; font-size: clamp(11px, 2vh, 12.5px); }
 .settings-cloud-msg { align-self: center; color: #8a80ad; font-size: clamp(11px, 2vh, 12.5px); } /* ☁️ 저장 결과 짧은 안내 */
-.rift-settings__padprobe { margin: 4px 2px 0; padding: 6px 8px; border-radius: 8px; background: rgba(20, 14, 40, 0.65); color: #cfe6ff; font-size: 11px; font-family: monospace; word-break: break-all; } /* 🎮 패드 진단 */
 
 /* ── 보상형 광고 버튼 ── */
 /* (배너 내 광고 버튼은 win-modal__ad로 이동 — 배너는 장식 영역이라 카드에 덮여 안 눌렸다) */

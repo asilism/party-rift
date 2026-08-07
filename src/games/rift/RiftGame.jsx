@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Rift3D from './Rift3D.jsx'
 import RiftMiniMap from './RiftMiniMap.jsx'
-import RiftControls, { getNativePad } from './RiftControls.jsx'
+import RiftControls from './RiftControls.jsx'
 import RiftShop from './RiftShop.jsx'
 import RiftAugmentDraw from './RiftAugmentDraw.jsx'
 import { AUG_BY_ID, RARITY_META } from './augments.js'
@@ -262,46 +262,6 @@ const CONTROL_SCHEMES = [
   { id: 'xbox', icon: '🎮', label: 'Xbox 컨트롤러', desc: '스틱 이동, A 평타, X/Y/B 스킬, LB·RB 아이템' },
 ]
 
-// 🎮 패드 프로브 — 조작 설정이 열려 있는 동안 웹뷰가 실제로 보는 게임패드 상태를 보여 준다.
-//  "OS는 인식하는데 게임은 안 먹는" 문제를 가르기 위한 진단: getGamepads 지원 여부 →
-//  패드 노출 여부 → 매핑 종류 → 실제 입력(버튼/축)이 들어오는지 단계별로 드러난다.
-function PadProbe() {
-  const [info, setInfo] = useState('…')
-  useEffect(() => {
-    const read = () => {
-      try {
-        if (typeof navigator === 'undefined' || !navigator.getGamepads) return setInfo(t('이 웹뷰는 게임패드 API를 지원하지 않아요'))
-        const pads = [...(navigator.getGamepads() || [])].filter(Boolean)
-        if (!pads.length) {
-          const np = getNativePad() // 웹뷰가 못 봐도 네이티브 브리지가 보고 있을 수 있다
-          if (np) {
-            const nb = np.buttons.map((b, i) => (b.pressed ? i : null)).filter((v) => v != null).join(',')
-            const na = np.axes.map((v) => (Math.abs(v) < 0.08 ? '0' : v.toFixed(1))).join(' ')
-            return setInfo(`🕹️ ${t('네이티브 브리지')} · ${t('버튼')}[${nb || '-'}] ${t('축')}[${na}]`)
-          }
-          return setInfo(t('패드 감지 안 됨 — 패드의 아무 버튼이나 눌러 보세요'))
-        }
-        const gp = pads.find((g) => g.mapping === 'standard') || pads[0]
-        const btns = gp.buttons.map((b, i) => (b.pressed ? i : null)).filter((v) => v != null).join(',')
-        const ax = (gp.axes || []).slice(0, 4).map((v) => (Math.abs(v) < 0.08 ? '0' : v.toFixed(1))).join(' ')
-        setInfo(`✅ ${gp.id.slice(0, 28)} · ${gp.mapping || t('비표준 매핑')} · ${t('버튼')}[${btns || '-'}] ${t('축')}[${ax}]`)
-      } catch (e) {
-        setInfo(`getGamepads ${t('오류')}: ${e?.message || e}`)
-      }
-    }
-    read()
-    const iv = setInterval(read, 250)
-    window.addEventListener('gamepadconnected', read)
-    window.addEventListener('gamepaddisconnected', read)
-    return () => {
-      clearInterval(iv)
-      window.removeEventListener('gamepadconnected', read)
-      window.removeEventListener('gamepaddisconnected', read)
-    }
-  }, [])
-  return <div className="rift-settings__padprobe">{info}</div>
-}
-
 // 보스전 레이드 체력바 — 화면 상단 중앙 고정. 이름·레벨, 국면 색 채움(빨강→주황→보라),
 // 70%/40% 국면 마커(금색), 각성 휴지기엔 💤 + 보라 광택으로 '무적·정비 시간'을 알린다.
 const BOSS_FACE = { boss_colossus: '👹', boss_archmage: '🧙', boss_shadow: '👺', boss_thorn: '🌵' }
@@ -462,7 +422,6 @@ function RiftSettingsMenu({ paused, finished, onTogglePause, soundOn, onToggleSo
               {scheme === s.id && <span className="rift-settings__scheme-check">✓</span>}
             </button>
           ))}
-          {scheme === 'xbox' && <PadProbe />}
 
           <div className="rift-settings__sep" />
           <button
