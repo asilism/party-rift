@@ -8237,9 +8237,9 @@ function bossPriest(state, h, foe) {
     }
     pushFx(state, 'summon', c.x, c.z, 6, h.team, 0.9)
 // 촛대 방치 경고 — 소절이 거듭될수록 어조가 강렬해진다(안 부수면 쌓인다는 걸 확실히)
-    if (c.candleVerse === 2) pushFeed(state, 'obj', '🕯️ 성가가 깊어진다 — 촛대를 내버려 두면 군세가 쌓인다')
-    else if (c.candleVerse === 4) pushFeed(state, 'obj', '⚠️ 성가가 울려 퍼진다 — 워프 군세가 걷잡을 수 없이 불어난다!')
-    else if (c.candleVerse >= 6 && c.candleVerse % 2 === 0) pushFeed(state, 'obj', '🔥 촛대가 타오른다 — 군세가 계속 쌓이고 있다!')
+    if (c.candleVerse === 2) pushFeed(state, 'obj', '🕯️ 성가가 깊어진다')
+    else if (c.candleVerse === 4) pushFeed(state, 'obj', '⚠️ 성가가 울려 퍼진다')
+    else if (c.candleVerse >= 6 && c.candleVerse % 2 === 0) pushFeed(state, 'obj', '🔥 촛대가 타오른다')
   }
   // 🕊️ 비상 강하(2국면부터): 하늘로 솟구쳐 사라졌다가, 직선 예고 뒤 새처럼 몸을 기울여
   //  맹렬히 활강한다 — 경로의 적은 피해+넉백. 3국면은 예고→활강을 두 번 잇는다.
