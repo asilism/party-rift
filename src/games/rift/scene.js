@@ -1490,14 +1490,7 @@ const HAT_BUILDERS = {
     )
     ring.rotation.x = Math.PI / 2
     ring.position.y = 0.62 * s // 머리에서 살짝 떠 있다
-    g.add(ring)
-    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: glowTexture(), color: 0xffe9a0, transparent: true, opacity: 0.4,
-      depthWrite: false, blending: THREE.AdditiveBlending,
-    }))
-    glow.scale.set(2.2 * s, 2.2 * s, 1)
-    glow.position.y = 0.62 * s
-    g.add(glow)
+    g.add(ring) // 발광 연출은 HAT_FX.halocrown(성광)이 맡는다
     return g
   },
   thorncrown(s) {
@@ -1577,19 +1570,20 @@ const HAT_FX = {
       }
     }
   },
-  // 천사 고리: 성광 — 링 발광이 숨쉬고, 흰 글린트가 테를 돌고, 빛방울이 피어오른다
-  halo(g, s) {
+  // 후광(세라핌 전리품): 성광 — 링 발광이 숨쉬고, 흰 글린트가 테를 돌고, 빛방울이 피어오른다.
+  //  (원래 천사 고리의 이펙트 — 전리품이 상점 모자보다 화려해야 해서 옮겨 왔다)
+  halocrown(g, s) {
     const ring = g.children[0]
     const rim = fxSprite(g, 0xfff6d0, 0.6 * s)
     const motes = [0, 1, 2].map(() => fxSprite(g, 0xfff2c0, 0.3 * s, false))
     return (t) => {
-      ring.material.emissiveIntensity = 0.55 + 0.3 * Math.sin(t * 2.2) // 숨쉬는 발광
+      ring.material.emissiveIntensity = 0.6 + 0.35 * Math.sin(t * 2.2) // 숨쉬는 발광
       const a = t * 1.3
-      rim.position.set(Math.cos(a) * 0.62 * s, 0.55 * s, Math.sin(a) * 0.62 * s)
+      rim.position.set(Math.cos(a) * 0.58 * s, 0.62 * s, Math.sin(a) * 0.58 * s)
       fire(rim, 0.25 + glintCurve(t, 2.2, 0) * 0.75, t)
       motes.forEach((m, i) => {
         const c = (t / 3.2 + i / 3) % 1 // 링 언저리에서 위로 떠오르며 사라지는 빛방울
-        m.position.set(Math.cos(i * 2.1 + t * 0.3) * 0.4 * s, (0.35 + c * 0.9) * s, 0.25 * s)
+        m.position.set(Math.cos(i * 2.1 + t * 0.3) * 0.4 * s, (0.42 + c * 0.9) * s, 0.25 * s)
         m.material.opacity = Math.sin(c * Math.PI) * 0.5
         m.scale.setScalar(m.userData.base * (0.6 + 0.4 * Math.sin(c * Math.PI)))
       })

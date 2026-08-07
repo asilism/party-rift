@@ -1700,7 +1700,7 @@ const HATS = [
   { id: 'flower', name: '꽃 한 송이', price: 350 },
   { id: 'horns', name: '도깨비 뿔', price: 400, fx: true }, // fx: 전용 반짝이 연출(scene.js HAT_FX)
   { id: 'headphones', name: '헤드폰', price: 450 },
-  { id: 'halo', name: '천사 고리', price: 600, fx: true },
+  { id: 'halo', name: '천사 고리', price: 600 }, // 성광 이펙트는 세라핌 전리품 '후광'으로 이관
   { id: 'wizard', name: '마법사 고깔', price: 600, fx: true },
   { id: 'tophat', name: '신사 모자', price: 800, fx: true },
   { id: 'viking', name: '바이킹 투구', price: 900, fx: true },
