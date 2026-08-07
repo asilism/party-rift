@@ -289,6 +289,10 @@ export default function RiftControls({ onMove, onAttack, onSkill, onSkill2, onUl
       const pads = [...(navigator.getGamepads() || [])].filter(Boolean)
       const gp = pads.find((g) => g.mapping === 'standard') || pads[0] // 팬텀/비표준 장치가 앞자리를 차지해도 표준 패드 우선
         || getNativePad() // 안드로이드 웹뷰: Gamepad API 부재 — 네이티브 브리지(MainActivity)가 대신 준다
+      if (window.__padDebug) { // 진단 훅 — 폴링이 도는지·뭘 읽는지 (window.__padDebug=1로 활성)
+        const dbg = gp ? `gp=${gp.id.slice(0, 20)} ax=${(gp.axes[0] || 0).toFixed(1)},${(gp.axes[1] || 0).toFixed(1)} btn=${gp.buttons.map((b, i) => (b.pressed ? i : '')).filter(Boolean).join(',')}` : 'gp=null'
+        if (dbg !== window.__padDbgLast) { window.__padDbgLast = dbg; console.log('DIAG|poll ' + dbg) }
+      }
       if (!gp) return
       // 좌 스틱 이동: 데드존을 제외하고 0~1로 다시 스케일 → 미세 조작이 부드럽다
       const x = gp.axes[0] || 0
