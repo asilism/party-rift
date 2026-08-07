@@ -8232,7 +8232,7 @@ function bossPriest(state, h, foe) {
       h.bossCd.a = 8 * cdMul
       const picks = targets.sort(() => state.rng() - 0.5).slice(0, 1 + p)
       for (const e of picks) {
-        pushBossZone(state, h, { x: e.x, z: e.z, r: 4.2, delay: 0.9, dmg: skillDmg(h, 26, 0.45), aim: true, vfx: 'descend', hue: 'holy', tag: '축성 낙뢰' }) // 예고 보고 바로 움직여야 피한다
+        pushBossZone(state, h, { x: e.x, z: e.z, r: 4.2, delay: 0.9, dmg: skillDmg(h, 26, 0.45), aim: true, vfx: 'skybolt', hue: 'holy', tag: '축성 낙뢰' }) // 예고 보고 바로 움직여야 피한다
       }
     }
   }

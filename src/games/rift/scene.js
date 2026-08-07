@@ -5587,6 +5587,7 @@ const FX_LOOK = {
   doom: { color: 0x8a3bd0, ring: true, mode: 'out', pcolor: 0xc89af0, ring2: true }, // 주술사 파멸의 낙인 — 이중 낙인
   summon: { color: 0xffd06a, ring: true, mode: 'rise', pcolor: 0xffe6a8 }, // 야수조련사 소환 — 솟아오르는 마력
   descend: { color: 0xb266ff, ring: true, mode: 'rise', pcolor: 0xe0c8ff, pillar: true, beam: true }, // 그림자 정예 강림 — 하늘에서 내리는 보랏빛 빛기둥
+  skybolt: { color: 0xfff2b0, bolt: true, ring: true, mode: 'out', pcolor: 0xffe680 }, // ⚡ 축성 낙뢰(세라핌) — 하늘에서 내리꽂는 갈지자 번개 가닥
   deploy: { color: 0x9fb0c4, ring: true, mode: 'out', pcolor: 0xd6e0ec }, // 엔지니어 설치 — 기계 조립 불꽃
   snare: { color: 0x6fbf3a, ring: true, mode: 'out', pcolor: 0xbfe88a, spikes: 0x77c24a }, // 넝쿨사냥꾼 포획망 — 솟는 넝쿨 가시
   vine: { color: 0x5fae33, line: true, mode: 'forward', pcolor: 0xbfe88a, w: 2.4, ground: true }, // 올가미 — 땅에서 솟아 앞으로 뻗는 넝쿨
@@ -5729,6 +5730,48 @@ function buildFxObject(n) {
   const g = new THREE.Group()
   g.position.set(n.x, 0, n.z)
   const ups = []
+  if (look.bolt) {
+    // ⚡ 낙뢰: 하늘(y≈26)→땅을 잇는 갈지자 가닥 2줄 + 곁가지 — 0.12초 백열 섬광 뒤 급히 사그라든다
+    const mat = new THREE.MeshBasicMaterial({ color: look.color, transparent: true, opacity: 1, depthWrite: false, blending: THREE.AdditiveBlending })
+    const seg = (a, b, rad) => {
+      const dirV = new THREE.Vector3().subVectors(b, a)
+      const len = dirV.length()
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, len, 4), mat)
+      m.position.copy(a).addScaledVector(dirV, 0.5)
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dirV.normalize())
+      g.add(m)
+    }
+    const strand = (jitter, rad) => {
+      const pts = []
+      const N = 7
+      for (let i = 0; i <= N; i++) {
+        const k = i / N
+        const sway = Math.sin(k * Math.PI) // 가운데가 제일 크게 꺾인다
+        pts.push(new THREE.Vector3((Math.random() - 0.5) * jitter * sway, 26 * (1 - k), (Math.random() - 0.5) * jitter * sway))
+      }
+      pts[N].set(0, 0.1, 0) // 끝은 정확히 착탄점
+      for (let i = 0; i < N; i++) seg(pts[i], pts[i + 1], rad)
+      return pts
+    }
+    const main = strand(3.4, 0.16)
+    strand(4.6, 0.07) // 겹쳐 흐르는 잔가닥
+    { // 곁가지: 중간에서 비스듬히 뻗다 허공에서 끊긴다
+      const from = main[3].clone()
+      const a1 = from.clone().add(new THREE.Vector3((Math.random() - 0.5) * 5, -3.5, (Math.random() - 0.5) * 5))
+      const a2 = a1.clone().add(new THREE.Vector3((Math.random() - 0.5) * 4, -3, (Math.random() - 0.5) * 4))
+      seg(from, a1, 0.09)
+      seg(a1, a2, 0.06)
+    }
+    const flash = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending }))
+    flash.scale.set(9, 9, 1)
+    flash.position.y = 0.8
+    g.add(flash)
+    ups.push((t) => {
+      const hot = t < 0.12 ? 1 : Math.max(0, 1 - (t - 0.12) / 0.3) // 백열 → 급감쇠
+      mat.opacity = hot
+      flash.material.opacity = 0.95 * hot
+    })
+  }
   if (look.tornado) {
     // 회오리 기둥: 위로 갈수록 넓어지는 원뿔들을 쌓아 통째로 빠르게 회전 + 솟구쳤다 잦아든다.
     const life = n.life || 0.8
@@ -9102,6 +9145,26 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
           u.flame.material.opacity = 0.65 + 0.3 * Math.abs(Math.sin(view.time * 8 + u.bobPhase))
           u.flame.scale.setScalar(3.0 + Math.sin(view.time * 6.5 + u.bobPhase) * 0.5)
           u.halo.material.opacity = 0.35 + 0.15 * Math.sin(view.time * 3 + u.bobPhase)
+          // 🎵 성가가 흘러나온다 — 불꽃에서 음표가 떠올라 흔들리며 사라진다(상징: 성가=소환의 근원)
+          u.noteT = (u.noteT ?? 0) - dt
+          u.notes ??= []
+          if (u.noteT <= 0 && obj.visible) {
+            u.noteT = 0.8 + Math.random() * 0.5
+            const note = emojiSprite(Math.random() < 0.5 ? '🎵' : '🎶', 1.5)
+            note.position.set((Math.random() - 0.5) * 1.2, 4.3 + cbob, (Math.random() - 0.5) * 1.2)
+            note.userData = { t: 0, sway: Math.random() * 6 }
+            obj.add(note)
+            u.notes.push(note)
+          }
+          for (let ni = u.notes.length - 1; ni >= 0; ni--) {
+            const nt = u.notes[ni]
+            nt.userData.t += dt
+            const k = nt.userData.t / 1.7
+            if (k >= 1) { obj.remove(nt); u.notes.splice(ni, 1); continue }
+            nt.position.y += dt * 2.2 // 떠오르며
+            nt.position.x += Math.sin(view.time * 3 + nt.userData.sway) * dt * 0.8 // 좌우로 하늘하늘
+            nt.material.opacity = k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85
+          }
           const cdHp = (u.lastHp == null ? m.hp : u.lastHp) - m.hp
           u.lastHp = m.hp
           if (cdHp > 0 && obj.visible) {
