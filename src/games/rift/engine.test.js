@@ -5523,7 +5523,7 @@ test('세라핌 연격 콤보: 탕탕탕 3연격 뒤 실제로 내달리는 돌�
   assert.ok(b.bossCd.combo > 0, '쿨 소모')
 })
 
-test('세라핌 성가 촛대: 소절마다 축성 부대를 워프하고, 부수면 성가가 역류한다', () => {
+test('세라핌 성가 촛대: 소절마다 축복 부대를 워프하고, 부수면 성가가 역류한다', () => {
   const g = duo('warrior', 'tank')
   startPlaying(g)
   const [w, b] = g.heroes
@@ -5543,11 +5543,11 @@ test('세라핌 성가 촛대: 소절마다 축성 부대를 워프하고, 부�
   run(g, 2.6) // 첫 소절
   const squad = g.minions.filter((m) => m.team === b.team && m.bless) // 워프 부대만(라인 병사 제외)
   assert.ok(squad.length >= 2, `부대가 워프해 온다 (${squad.length}기)`) // 2국면 = 촛대 2개 × 부대 2기(위상차라 첫 소절엔 한 촛대만)
-  assert.ok(squad.every((m) => m.bless === 1 && m.goldMul === 0.5), '1소절 = 1축성 · 골드 절반')
+  assert.ok(squad.every((m) => m.bless === 1 && m.goldMul === 0.5), '1소절 = 1축복 · 골드 절반')
   run(g, 8) // 둘째 소절(8초 간격)
   const warped = g.minions.filter((m) => m.goldMul === 0.5)
   assert.ok(warped.length > squad.length, `소절이 거듭될수록 군세가 는다 (${squad.length}→${warped.length})`)
-  assert.ok(warped.every((m) => m.bless <= 1), '축성 상한 = 국면-1 (2국면이면 1축성까지)')
+  assert.ok(warped.every((m) => m.bless <= 2), '축복 상한 = min(2, 국면) — 2국면이면 2축복까지')
   candle.hp = 1
   // 마지막 일격: 전사가 촛대를 부순다 — damageMinion 타격 1회
   const hp0 = candle.hp
@@ -5573,7 +5573,7 @@ test('타락 대사제: 축복은 병사를 키우고, 물결은 되살리고, 3
   for (let i = 0; i < 4; i++) plantMinion(g, b.team, 3 + i, 0, 300)
   const m0 = g.minions[0]
   run(g, 0.5)
-  assert.equal(m0.bless, 1, '축성 1스택')
+  assert.equal(m0.bless, 1, '축복 1스택')
   assert.ok(m0.blessMul > 1 && m0.maxHp > 300, `강해지고 커진다 (hp ${m0.maxHp})`)
   m0.hp = 10
   b.bossCd.c = 0 // 물결 개방
@@ -5584,7 +5584,7 @@ test('타락 대사제: 축복은 병사를 키우고, 물결은 되살리고, 3
   run(g, 0.5)
   const after = g.minions.filter((m) => m.team === b.team).length
   assert.equal(after, before * 2, `군세가 둘로 (${before}→${after})`)
-  assert.ok(g.minions.filter((m) => m.bless).length >= 2, '축성 스택까지 복제된다')
+  assert.ok(g.minions.filter((m) => m.bless).length >= 2, '축복 스택까지 복제된다')
 })
 
 test('강령술사 영혼 흡수: 맞히면 관통 피해 + 그림자가 3단계까지 자란다', () => {

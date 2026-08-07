@@ -326,8 +326,8 @@ export const CLASSES = {
     boss: true, name: '타락 대사제', icon: '😇', // 후광 얼굴 — '타락했는데 성스러운 척' 아이러니(촛불은 기믹 오브젝트 몫)
     desc: '군세를 기르고 되살리는 사제형 보스 — 병사를 방치하면 괴물이 되어 돌아온다',
     hp: 24000, hpLvl: 700, atk: 72, atkLvl: 7, range: 14.5, atkCd: 0.95, speed: 7.0, def: 0.55, // 킷이 풍부해진 만큼(낙뢰·파동·촛대) 기본 압박은 낮게
-    skill: { name: '축성 낙뢰', icon: '⚡', cd: 8, desc: '적들 머리 위로 성스러운 낙뢰를 예고하고 내리친다' },
-    skill2: { name: '군세 축복', icon: '📿', cd: 13, desc: '주변 병사를 축성한다 — 더 크고 더 세게, 최대 3축성' },
+    skill: { name: '축복 낙뢰', icon: '⚡', cd: 8, desc: '적들 머리 위로 성스러운 낙뢰를 예고하고 내리친다' },
+    skill2: { name: '군세 축복', icon: '📿', cd: 13, desc: '주변 병사를 축복한다 — 더 크고 더 세게, 최대 3축복' },
     ult: { name: '성역의 물결', icon: '💫', cd: 24, desc: '빛의 물결로 자신과 군세의 상처를 씻어낸다' },
   },
 }
@@ -5487,7 +5487,7 @@ function stepMinions(state, dt) {
           m.atkSeq++
           // 상대가 병사이면 피해를 깎아 라인 교전이 천천히 풀리게 한다
           let out = tgt.ref.tk === 'minion' ? spec.dmg * MINION_VS_MINION : spec.dmg
-          out *= m.blessMul || 1 // 📿 군세 축복(타락 대사제): 축성된 병사는 더 아프다
+          out *= m.blessMul || 1 // 📿 군세 축복(타락 대사제): 축복된 병사는 더 아프다
           // 보스전 역할 분리: 병사의 일은 건물 철거 — 영웅에겐 잽 수준. 영웅 사냥은 보스의 몫
           if ((tgt.ref.tk === 'tower' || tgt.ref.tk === 'nexus') && m.towerMul) out *= m.towerMul // 🕯️ 워프 군세: 공성은 반감 — 기지 레이스가 아니라 영웅 압박이 일
           if (isRaidMode(state.mode) && m.team === 'red' && tgt.ref.tk === 'hero') {
@@ -8174,7 +8174,7 @@ function bossPriest(state, h, foe) {
   const p = h.bossPhase || 1
   const cdMul = BOSS_PHASE_CD[p - 1] * bossTierOf(state).cd
   const dt = state.dtStep || 1 / 30
-  // 촛대 소환 틱 — 소절마다 부대 4기, 소절 수만큼 축성(최대 3)이 걸린 채 워프해 온다
+  // 촛대 소환 틱 — 소절마다 부대 4기, 소절 수만큼 축복(최대 3)이 걸린 채 워프해 온다
   for (const c of state.minions) {
     if (!c.candle || c.team !== h.team) continue
     c.candleT -= state.dtStep || 1 / 30
@@ -8183,7 +8183,7 @@ function bossPriest(state, h, foe) {
     if (state.minions.filter((m) => m.team === h.team).length > 40) { c.candleT = 4; continue }
     c.candleT = 8 // 소절 간격 — 6초는 봇 파티가 감당 못 했다(0%)
     c.candleVerse = (c.candleVerse || 0) + 1
-    const bless = Math.min(Math.max(0, (h.bossPhase || 1) - 1), c.candleVerse) // 축성 상한 = 국면-1 (P1 0·P2 1·P3 2) — 파티가 약할 때 눈덩이를 늦춘다
+    const bless = Math.min(Math.min(2, h.bossPhase || 1), c.candleVerse) // 축복 상한 P1 1·P2+ 2 — 1국면부터 물리되 눈덩이는 2에서 멈춘다
     const grow = MINION_HP_GROWTH * (state.time / 60) * 2
     const squadN = c.candleSquad || 3
     for (let i = 0; i < squadN; i++) {
@@ -8286,7 +8286,7 @@ function bossPriest(state, h, foe) {
   }
   if (h.comboStep) return // 콤보 프레임 마감 — 시전형 기술은 쉰다(촛대 소절 틱은 위에서 이미 돌았다)
   // 🕯️ 성가 촛대(시그니처 · 보스전 전용): 워프게이트 — 부서질 때까지 소절(6초)마다 부대를
-  //  소환하고, 소절이 거듭될수록 그 부대의 축성이 +1(눈덩이). 세라핌은 그동안에도 계속 싸운다
+  //  소환하고, 소절이 거듭될수록 그 부대의 축복이 +1(눈덩이). 세라핌은 그동안에도 계속 싸운다
   //  (채널 없음 — 촛대를 무시하고 보스만 패는 선택지가 '틀린 답'이 되게).
   //  워프 병사는 골드 절반(goldMul 0.5) — 자판기 파밍 차단. 부수면 성가 역류 그로기 2.5초.
   if (!h.defenseBoss && state.time >= BOSS_MASS_END && (h.bossCd.candle ?? 1) <= 0 // 파밍 국면(대량 소환) 뒤부터 — 저레벨 파티가 워프 부대에 쓸리지 않게(축복과 같은 교훈)
@@ -8309,11 +8309,11 @@ function bossPriest(state, h, foe) {
     }
     pushFeed(state, 'obj', n > 1 ? `🕯️ 성가 촛대 ${n}개가 세워졌다` : '🕯️ 성가 촛대가 세워졌다')
   }
-  // 🕯️ 군세 복제(3국면 1회): 살아 있는 병사를 그대로 복사 — 축성 스택까지 복제된다.
+  // 🕯️ 군세 복제(3국면 1회): 살아 있는 병사를 그대로 복사 — 축복 스택까지 복제된다.
   //  상한 12기(모바일 프레임 보호). 무한 방어에선 30웨+ 보스가 3국면으로 시작해 즉시 발동.
   if (p >= 3 && !h.priestCloned) {
     h.priestCloned = true
-    const mine = state.minions.filter((m) => m.team === h.team && !m.stone && !m.heart).slice(0, 12)
+    const mine = state.minions.filter((m) => m.team === h.team && !m.stone && !m.heart).slice(0, 8) // 상한 8 — P3 진입 스파이크 완화
     for (const m of mine) {
       state.minions.push({
         ...m, id: state.nextId++, atkCd: 0.6,
@@ -8325,7 +8325,7 @@ function bossPriest(state, h, foe) {
       pushFeed(state, 'obj', '🕯️ 성가가 절정에 닿는다 — 군세가 배로 불어난다')
     }
   }
-  // ⚡ 축성 낙뢰: 보이는 적 영웅들 머리 위 예고 낙뢰 — 국면당 한 줄기씩 늘어난다(1+p).
+  // ⚡ 축복 낙뢰: 보이는 적 영웅들 머리 위 예고 낙뢰 — 국면당 한 줄기씩 늘어난다(1+p).
   //  '중간중간 떨어지는 낙뢰'가 이 보스의 유일한 직접 딜 — 자리만 옮기면 피할 수 있다.
   if (h.bossCd.a <= 0 && state.time >= (h.priestRestUntil || 0)) {
     const targets = state.heroes.filter((e) =>
@@ -8333,15 +8333,15 @@ function bossPriest(state, h, foe) {
     if (targets.length) {
       h.bossCd.a = 11 * cdMul // 치명화된 만큼 빈도로 회수 — 위협은 '한 방'이 담당
       h.priestRestUntil = state.time + 2.2
-      const picks = targets.sort(() => state.rng() - 0.5).slice(0, p) // 치명 위력이 된 만큼 국면당 1발(1/2/3)
+      const picks = targets.sort(() => state.rng() - 0.5).slice(0, 2) // 전 국면 2발 — P1 심심함·P3 절벽(6.6배)을 동시에 평탄화
       for (const e of picks) {
-        pushBossZone(state, h, { x: e.x, z: e.z, r: 3.6, delay: 0.9, dmg: skillDmg(h, 380, 5.8), aim: true, vfx: 'skybolt', hue: 'holy', tag: '축성 낙뢰' }) // 예고 보고 바로 움직여야 피한다
+        pushBossZone(state, h, { x: e.x, z: e.z, r: 3.6, delay: 0.9, dmg: skillDmg(h, 380, 5.8), aim: true, vfx: 'skybolt', hue: 'holy', tag: '축복 낙뢰' }) // 예고 보고 바로 움직여야 피한다
       }
     }
   }
-  // 📿 군세 축복: 주변 병사를 영구 강화(피해 +50%·체력 +45%/축성, 최대 3) + 그 자리에서 온전해진다.
+  // 📿 군세 축복: 주변 병사를 영구 강화(피해 +50%·체력 +45%/축복, 최대 3) + 그 자리에서 온전해진다.
   //  씬은 bless 스택만큼 병사를 키워 그린다 — '커지는 이펙트'가 곧 위협 표시.
-  //  ⚠️ 레이드 초반 파밍 국면(대량 소환)엔 축성하지 않는다 — 저레벨 파티가 축성 물량에
+  //  ⚠️ 레이드 초반 파밍 국면(대량 소환)엔 축복하지 않는다 — 저레벨 파티가 축복 물량에
   //  2~3분 만에 쓸려나갔다(시뮬 보통 38%). 군세의 공포는 정예 국면부터 시작된다.
   //  촛대가 타는 동안엔 축복도 쉰다 — 성장 엔진이 둘이면 봇도 사람도 감당 못 한다(시뮬 0%)
   if (h.bossCd.b <= 0 && (h.defenseBoss || state.time >= BOSS_MASS_END)
@@ -8352,7 +8352,7 @@ function bossPriest(state, h, foe) {
       h.bossCd.b = 13 * cdMul
       for (const m of near.slice(0, 10)) {
         m.bless = (m.bless || 0) + 1
-        m.blessMul = 1 + 0.35 * m.bless // 3축성 = ×2.05 — 위협은 덩치·체력이 주연
+        m.blessMul = 1 + 0.35 * m.bless // 3축복 = ×2.05 — 위협은 덩치·체력이 주연
         m.maxHp = Math.round(m.maxHp * 1.45)
         m.hp = m.maxHp
       }
@@ -8375,7 +8375,7 @@ function bossPriest(state, h, foe) {
   if (h.bossCd.c <= 0) {
     const hurtMinion = state.minions.some((m) => m.team === h.team && !m.stone && !m.heart && m.hp < m.maxHp && dist2(h, m) <= 16 * 16)
     if (hurtMinion || h.hp < h.maxHp * 0.97) {
-      h.bossCd.c = 24 * cdMul
+      h.bossCd.c = Math.max(16, 24 * cdMul) // P3 가속(10.8초)에 하한 — 군세 벽이 영원하지 않게
       h.hp = Math.min(h.maxHp, h.hp + h.maxHp * (h.defenseBoss ? 0.03 : 0.04))
       for (const m of state.minions) {
         if (m.team !== h.team || m.stone || m.heart || dist2(h, m) > 16 * 16) continue
@@ -9569,7 +9569,7 @@ function botBreakStones(state, h, dt) {
   return true
 }
 
-// 🕯️ 촛대 철거(세라핌): 켜진 촛대는 소절마다 축성 부대를 워프시킨다 — 발견 즉시 전원이
+// 🕯️ 촛대 철거(세라핌): 켜진 촛대는 소절마다 축복 부대를 워프시킨다 — 발견 즉시 전원이
 // 달려가 끈다(타격 수가 적어 몇 초면 꺼진다). 부수면 성가 역류 그로기 = 복귀 후 딜 타임.
 function botBreakCandle(state, h) {
   let best = null
@@ -10600,7 +10600,7 @@ export function makeView(state) {
       id: m.id,
       team: m.team,
       ranged: m.ranged,
-      ...(m.bless ? { bless: m.bless } : null), // 📿 축성 — 씬이 스택만큼 키워 그린다
+      ...(m.bless ? { bless: m.bless } : null), // 📿 축복 — 씬이 스택만큼 키워 그린다
       x: r1(m.x),
       z: r1(m.z),
       dir: r2d(m.dir),

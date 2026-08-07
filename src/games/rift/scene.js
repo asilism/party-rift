@@ -5587,7 +5587,7 @@ const FX_LOOK = {
   doom: { color: 0x8a3bd0, ring: true, mode: 'out', pcolor: 0xc89af0, ring2: true }, // 주술사 파멸의 낙인 — 이중 낙인
   summon: { color: 0xffd06a, ring: true, mode: 'rise', pcolor: 0xffe6a8 }, // 야수조련사 소환 — 솟아오르는 마력
   descend: { color: 0xb266ff, ring: true, mode: 'rise', pcolor: 0xe0c8ff, pillar: true, beam: true }, // 그림자 정예 강림 — 하늘에서 내리는 보랏빛 빛기둥
-  skybolt: { color: 0xfff2b0, bolt: true, ring: true, mode: 'out', pcolor: 0xffe680 }, // ⚡ 축성 낙뢰(세라핌) — 하늘에서 내리꽂는 갈지자 번개 가닥
+  skybolt: { color: 0xfff2b0, bolt: true, ring: true, mode: 'out', pcolor: 0xffe680 }, // ⚡ 축복 낙뢰(세라핌) — 하늘에서 내리꽂는 갈지자 번개 가닥
   deploy: { color: 0x9fb0c4, ring: true, mode: 'out', pcolor: 0xd6e0ec }, // 엔지니어 설치 — 기계 조립 불꽃
   snare: { color: 0x6fbf3a, ring: true, mode: 'out', pcolor: 0xbfe88a, spikes: 0x77c24a }, // 넝쿨사냥꾼 포획망 — 솟는 넝쿨 가시
   vine: { color: 0x5fae33, line: true, mode: 'forward', pcolor: 0xbfe88a, w: 2.4, ground: true }, // 올가미 — 땅에서 솟아 앞으로 뻗는 넝쿨
@@ -9104,7 +9104,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
         obj.position.set(m.x, 0, m.z)
         const u = obj.userData
         setHpBar(u.bar, m.hp / m.maxHp)
-        { // 📿 군세 축복(타락 대사제): 축성 스택만큼 병사가 부풀어 오른다 — 커진 놈이 위협 표식
+        { // 📿 군세 축복(타락 대사제): 축복 스택만큼 병사가 부풀어 오른다 — 커진 놈이 위협 표식
           const want = 1 + (m.bless || 0) * 0.22
           if (Math.abs(obj.scale.x - want) > 0.01) obj.scale.setScalar(obj.scale.x + (want - obj.scale.x) * Math.min(1, dt * 4))
         }
