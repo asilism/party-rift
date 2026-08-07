@@ -7791,12 +7791,12 @@ function bossThink(state, h, dt) {
     if (stage === 'mass') {
       // 초반 파밍 국면(대량 소환)은 전 보스 공통 14마리 — 그대로 둔다
       h.bossCd.summon = BOSS_MASS_EVERY
-      bossSummon(state, h, { count: BOSS_MASS_COUNT - (h.cls === 'boss_priest' ? 2 : 0), hpMul: 1.0 }) // 세라핌: 물량 대신 본체(-2)
+      bossSummon(state, h, { count: BOSS_MASS_COUNT, hpMul: 1.0 }) // 파밍 파도는 전 보스 동일 — 아군 성장 연료라 깎지 않는다
     } else {
       // 진군 호위 파도는 전 보스 공통 10마리 — 한번 밀리기 시작하면 14마리씩 쌓여
       // 걷잡을 수 없던 문제를 완화한다. (초반 대량 소환 국면은 위에서 14 유지)
       h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
-      bossSummon(state, h, { count: (h.cls === 'boss_priest' ? 8 : 10) + bossTierOf(state).wave, ...(stage === 'elite' ? { hpMul: 1.0 } : null) })
+      bossSummon(state, h, { count: (h.cls === 'boss_priest' ? 7 : 10) + bossTierOf(state).wave, ...(stage === 'elite' ? { hpMul: 1.0 } : null) })
     }
   }
   // 소환 페이즈 동안 보스는 진군하지 않는다 — 옥좌를 지키며 성곽 안까지 덤벼드는 적만 상대한다.
@@ -8529,7 +8529,7 @@ function bossPriest(state, h, foe) {
       h.bossCd.c = Math.max(16, 24 * cdMul) // P3 가속(10.8초)에 하한 — 군세 벽이 영원하지 않게
       for (const m of state.minions) {
         if (m.team !== h.team || m.stone || m.heart || dist2(h, m) > 16 * 16) continue
-        m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.5) // 잃은 만큼이 아니라 절반 — 군세 벽이 영원하지 않게
+        m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.4) // 40% — 군세 벽이 영원하지 않게(0.5에서 소폭 너프)
       }
       pushFx(state, 'summon', h.x, h.z, 16, h.team, 1.1)
       pushFeed(state, 'obj', '💫 성역의 물결 — 군세의 상처가 씻겨 나간다')
