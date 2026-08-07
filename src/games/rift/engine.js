@@ -9038,7 +9038,9 @@ function stepBots(state, dt) {
     }
     // 후퇴 판단 (탱커는 더 끈질기게 버틴다).
     // 그림자 영웅(보스 정예 소환수)은 후퇴가 없다 — 소모품답게 끝까지 몰아붙인다.
-    const panic = h.isBossAdd ? 0 : h.cls === 'tank' ? 0.22 : 0.3
+    const panic = h.isBossAdd ? 0
+      : isRaidMode(state.mode) ? (h.cls === 'tank' ? 0.3 : 0.4) // 레이드: 보스 스킬이 치명이라 더 일찍, 더 확실히 빠진다(회복 후 85%에 복귀)
+        : h.cls === 'tank' ? 0.22 : 0.3
     if (h.hp < h.maxHp * panic) h.botRetreat = true
     if (h.botRetreat && h.hp > h.maxHp * 0.85) h.botRetreat = false
     if (h.botRetreat) {
@@ -9165,10 +9167,11 @@ function stepBots(state, dt) {
         h.botLose = !healthy || sc.allies < sc.foes || sc.lifeT < sc.killT * 0.65
         if (isRaidMode(state.mode)) {
           if (foe.isBoss) {
-            // 체력이 넉넉한 동안은 사거리 끝 트레이드, 그 아래는 일찍 빠져 회복(히트앤런).
-            // 단 60%는 과했다 — 40~60% 구간 원거리 봇이 '불리'로 굳어 접근(②)도 못 하고
-            // 관망만 하는 사각지대(실기기 리포트: AD 원딜이 보스를 안 때리고 거리두기)
-            h.botLose = h.hp < h.maxHp * 0.5 // 0.45는 군세형(세라핌)에서 과공격(38%) — 0.5가 관망 해소·생존의 균형점
+            // 보스는 항상 나보다 체력이 많다 — 킬타임·체력비 같은 '상대 비교'는 영구 불리로
+            // 굳어 근접 봇이 영영 거리만 유지한다(실기기 리포트). 판단 기준은 오직 내 체력:
+            // 절반 위면 근접이든 원거리든 붙어 싸우고, 절반 아래면 확실히 빠져 정비 후 복귀.
+            h.botWin = h.hp >= h.maxHp * 0.5
+            h.botLose = h.hp < h.maxHp * 0.5
           }
           if (h.isBossAdd) {
             h.botWin = true
