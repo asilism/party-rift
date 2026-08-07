@@ -325,7 +325,7 @@ export const CLASSES = {
   boss_priest: {
     boss: true, name: '타락 대사제', icon: '😇', // 후광 얼굴 — '타락했는데 성스러운 척' 아이러니(촛불은 기믹 오브젝트 몫)
     desc: '군세를 기르고 되살리는 사제형 보스 — 병사를 방치하면 괴물이 되어 돌아온다',
-    hp: 26400, hpLvl: 700, atk: 79, atkLvl: 7, range: 14.5, atkCd: 0.95, speed: 7.0, def: 0.55, // 군세 -1 소환 보상 +10% — 물량이 아니라 본체 손싸움으로
+    hp: 26400, hpLvl: 700, atk: 79, atkLvl: 7, range: 14.5, atkCd: 0.88, speed: 7.4, def: 0.55, // 동작 소폭 상향(공속·이속) // 군세 -1 소환 보상 +10% — 물량이 아니라 본체 손싸움으로
     skill: { name: '축복 낙뢰', icon: '⚡', cd: 8, desc: '적들 머리 위로 성스러운 낙뢰를 예고하고 내리친다' },
     skill2: { name: '군세 축복', icon: '📿', cd: 13, desc: '주변 병사를 축복한다 — 더 크고 더 세게, 최대 3축복' },
     ult: { name: '성역의 물결', icon: '💫', cd: 24, desc: '빛의 물결로 군세의 상처를 씻어낸다 — 대사제 자신은 회복하지 않는다' },
@@ -7791,12 +7791,12 @@ function bossThink(state, h, dt) {
     if (stage === 'mass') {
       // 초반 파밍 국면(대량 소환)은 전 보스 공통 14마리 — 그대로 둔다
       h.bossCd.summon = BOSS_MASS_EVERY
-      bossSummon(state, h, { count: BOSS_MASS_COUNT - (h.cls === 'boss_priest' ? 1 : 0), hpMul: 1.0 }) // 세라핌: 물량 대신 본체
+      bossSummon(state, h, { count: BOSS_MASS_COUNT - (h.cls === 'boss_priest' ? 2 : 0), hpMul: 1.0 }) // 세라핌: 물량 대신 본체(-2)
     } else {
       // 진군 호위 파도는 전 보스 공통 10마리 — 한번 밀리기 시작하면 14마리씩 쌓여
       // 걷잡을 수 없던 문제를 완화한다. (초반 대량 소환 국면은 위에서 14 유지)
       h.bossCd.summon = BOSS_SUMMON_CD * BOSS_PHASE_SUMMON[h.bossPhase - 1]
-      bossSummon(state, h, { count: (h.cls === 'boss_priest' ? 9 : 10) + bossTierOf(state).wave, ...(stage === 'elite' ? { hpMul: 1.0 } : null) })
+      bossSummon(state, h, { count: (h.cls === 'boss_priest' ? 8 : 10) + bossTierOf(state).wave, ...(stage === 'elite' ? { hpMul: 1.0 } : null) })
     }
   }
   // 소환 페이즈 동안 보스는 진군하지 않는다 — 옥좌를 지키며 성곽 안까지 덤벼드는 적만 상대한다.
@@ -8246,7 +8246,7 @@ function bossPriest(state, h, foe) {
       h.flightK = Math.min(1, 1 - h.flightT / 0.9)
       if (h.flightT <= 0) {
         h.flightStep = 'warn'
-        h.flightT = 1.15
+        h.flightT = 0.95 // 예고 1.15→0.95
         // 예고선: 보이는 적 하나를 관통하는 30유닛 직선 — 숨은 채 시작점으로 자리를 옮긴다
         const marks = state.heroes.filter((e) => e.team !== h.team && e.respawnT <= 0 && !e.isBoss && isHeroVisible(state, e, h.team))
         const tgt = marks[Math.floor(state.rng() * marks.length)]
@@ -8257,7 +8257,7 @@ function bossPriest(state, h, foe) {
         h.z = cz - Math.sin(dir) * 15
         h.flightDir = dir
         h.dir = dir
-        pushBossLine(state, h, dir, { count: 8, r: 3.0, gap: 3.6, delay: 1.1, step: 0.03, dmg: 0, hue: 'holy', tag: '비상 강하' })
+        pushBossLine(state, h, dir, { count: 8, r: 3.0, gap: 3.6, delay: 0.9, step: 0.03, dmg: 0, hue: 'holy', tag: '비상 강하' })
         pushFeed(state, 'obj', '🕊️ 하늘에서 활강 경로가 드리운다')
       }
     } else if (h.flightStep === 'warn') {
@@ -8411,10 +8411,10 @@ function bossPriest(state, h, foe) {
         pushBossLine(state, h, dir, { count: 5, r: 3.0, gap: 3.3, delay: delayBase, step: 0.05, dmg: skillDmg(h, 380, 5.8), hue: 'holy', tag: '깃털 폭풍' })
       }
     }
-    volley(0, 1.3)
-    if (p >= 3) volley(Math.PI / 6, 3.0) // 2차 — 방금 피한 쐐기가 위험지대로
+    volley(0, 1.05) // 예고 1.3→1.05
+    if (p >= 3) volley(Math.PI / 6, 2.6) // 2차 — 방금 피한 쐐기가 위험지대로
     h.stormBase = base
-    h.stormFx = [{ at: state.time + 1.3, rot: 0 }, ...(p >= 3 ? [{ at: state.time + 3.0, rot: Math.PI / 6 }] : [])]
+    h.stormFx = [{ at: state.time + 1.05, rot: 0 }, ...(p >= 3 ? [{ at: state.time + 2.6, rot: Math.PI / 6 }] : [])]
     pushFeed(state, 'obj', '🪽 여섯 날개가 크게 펼쳐진다')
   }
   // 깃털 탄막 발사 연출 — 예고가 끝나는 순간 6줄기 깃털이 실제로 날아간다(씬 featherstorm)
@@ -8455,7 +8455,7 @@ function bossPriest(state, h, foe) {
         id: state.nextId++, team: h.team, candle: true, lane: 'mid', ranged: false,
         x: cx, z: cz,
         hp: Math.round(hits), maxHp: Math.round(hits), atkCd: 0, wpI: 0, dir: 0, atkSeq: 0,
-        candleT: 2.5 + i * 2, candleVerse: 0, candleSquad: Math.max(1, 3 - n), // 촛대가 늘어도 워프 총량은 평평하게 + 전체 소환 -1(본체 손싸움 유도)
+        candleT: 2.5 + i * 2, candleVerse: 0, candleSquad: Math.max(1, 2 - n), // 촛대당 1기(전 국면) — 물량이 아니라 본체 손싸움
       })
     }
     pushFeed(state, 'obj', n > 1 ? `🕯️ 성가 촛대 ${n}개가 세워졌다` : '🕯️ 성가 촛대가 세워졌다')
@@ -8517,7 +8517,7 @@ function bossPriest(state, h, foe) {
     h.bossCd.d = 20 * cdMul
     h.priestRestUntil = state.time + 2.2
     pushBossZone(state, h, {
-      x: h.x, z: h.z, r: 16, rIn: 5, delay: 1.3, dmg: skillDmg(h, 420, 6.3),
+      x: h.x, z: h.z, r: 16, rIn: 5, delay: 1.0, dmg: skillDmg(h, 420, 6.3), // 예고 1.3→1.0 — 읽고 바로 움직여야
       vfx: 'quake', hue: 'holy', tag: '참회의 파동',
     })
   }
