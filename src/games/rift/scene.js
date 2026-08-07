@@ -2096,27 +2096,47 @@ const COSTUME_BUILDERS = {
     return g
   },
   // 천사 날개: 등에 펼친 흰 깃 두 장 — 크고 작은 깃털 타원을 부채꼴로
-  // 세라핌의 날개(전리품·어려움): 대천사의 세 갈래 금빛 깃 — 기본 천사 날개보다 크고 화려하다
+  // 세라핌의 날개(전리품·어려움): 전통 도상 6익 — 한쪽에 상·중·하 세 장.
+  //  각 날개 = 밖으로 뻗는 팔깃 + 팔깃 선상에서 아래로 꺾여 드리우는 층깃 3장(새 날개 실루엣).
+  //  층깃은 부착점·각도를 수식으로 정렬해 팔깃에서 떨어져 흩어지지 않는다.
   seraphwings(s) {
     const g = new THREE.Group()
     const gold = new THREE.MeshLambertMaterial({ color: 0xfff3d6, emissive: 0xc9982a, emissiveIntensity: 0.35 })
+    const tip = new THREE.MeshLambertMaterial({ color: 0xffe9b8, emissive: 0xa8842a, emissiveIntensity: 0.3 }) // 끝깃도 금빛 계열 — 회색빛으로 튀지 않게
+    const makeWing = (sz, len) => {
+      const w = new THREE.Group()
+      const arm = new THREE.Mesh(new THREE.SphereGeometry(0.6 * s * len, 10, 8), gold)
+      arm.scale.set(0.16, 1.8, 0.45)
+      arm.position.y = 1.05 * s * len
+      w.add(arm)
+      // 층깃: 팔깃 위 부착점(ay)에서 각도 φ로 꺾여 내려온다 — 중심 = 부착점 + 절반 길이×방향
+      const feathers = [
+        [1.1, 1.2, 0.85], // [부착 y, 전체 길이, 꺾임각(rad)] — 팔깃을 따라가다 끝에서만 살짝 꺾이는 낫 모양 다발
+        [1.6, 1.5, 1.0],
+        [2.0, 1.9, 1.15],
+      ]
+      feathers.forEach(([ay, fl, phi], k) => {
+        const f = new THREE.Mesh(new THREE.SphereGeometry(0.5 * s * fl * 0.68, 8, 7), k === 2 ? tip : gold)
+        f.scale.set(0.14, 1.47, 0.4)
+        f.position.set(
+          -0.02 * (k + 1) * s, // 살짝 뒤로 층지게 — z-파이팅 방지
+          (ay + (fl / 2) * Math.cos(phi)) * s * len,
+          sz * (fl / 2) * Math.sin(phi) * s * len
+        )
+        f.rotation.x = sz * phi
+        w.add(f)
+      })
+      return w
+    }
     for (const sz of [1, -1]) {
-      const wing = new THREE.Group()
-      wing.position.set(-0.95 * s, 1.0 * s, sz * 0.5 * s)
-      wing.rotation.x = sz * 0.8 // 바깥 위로 활짝
-      const big = new THREE.Mesh(new THREE.SphereGeometry(0.85 * s, 10, 8), gold)
-      big.scale.set(0.18, 1.95, 0.6)
-      big.position.y = 1.1 * s
-      const mid = new THREE.Mesh(new THREE.SphereGeometry(0.65 * s, 10, 8), gold)
-      mid.scale.set(0.18, 1.5, 0.55)
-      mid.position.set(0, 0.62 * s, sz * 0.55 * s)
-      mid.rotation.x = sz * 0.42
-      const low = new THREE.Mesh(new THREE.SphereGeometry(0.5 * s, 10, 8), gold)
-      low.scale.set(0.18, 1.15, 0.5)
-      low.position.set(0, 0.2 * s, sz * 1.0 * s)
-      low.rotation.x = sz * 0.8
-      wing.add(big, mid, low)
-      g.add(wing)
+      // 한쪽 세 장: 상(치켜듦)·중(수평)·하(내려뻗음) — 등 아래쪽에서 방사형, 머리는 가리지 않는다
+      const pitches = [[0.3, 1.05], [1.05, 1.15], [1.8, 0.95]] // 세 장을 넓게 벌려 겹침 없이 방사형으로
+      pitches.forEach(([pitch, len], i) => {
+        const w = makeWing(sz, len)
+        w.position.set((-0.95 - 0.04 * i) * s, 0.55 * s, sz * 0.4 * s)
+        w.rotation.x = sz * pitch
+        g.add(w)
+      })
     }
     return g
   },
