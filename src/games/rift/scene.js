@@ -9250,7 +9250,7 @@ export function createRiftScene(canvas, map = buildMap('3v3'), quality = 'med') 
       scene, minionPool, view.minions,
       (m) => buildMinion(m, barColorOf(m.team)),
       (obj, m) => {
-        obj.visible = isUnitVisible(view, m, myTeam)
+        obj.visible = m.candle ? true : isUnitVisible(view, m, myTeam) // 🕯️ 촛대는 안개 무관 — 기믹 목표는 늘 보인다
         obj.position.set(m.x, 0, m.z)
         const u = obj.userData
         setHpBar(u.bar, m.hp / m.maxHp)
