@@ -3504,6 +3504,7 @@ function healHero(h, amount) {
 //  redirected=true 는 결속 리다이렉트로 수호기사가 대신 맞는 호출(무한 연쇄 방지 플래그).
 function damageHero(state, victim, amount, attacker, redirected = false, tag = null, dot = false) {
   if (victim.respawnT > 0 || state.status !== 'playing') return
+  if (state._dbgTags && victim.team === 'blue') { const k = tag || (attacker?.isBoss ? '평타(보스)' : attacker?.isBossAdd ? '정예' : attacker?.id ? '평타:' + (attacker.cls || '?') : dot ? '도트' : '병사/무주'); state._dbgTags[k] = (state._dbgTags[k] || 0) + amount; victim._lastTag = k } // [진단]
   if (state.mode === 'brawl' && (victim.brawlGuardT > 0 || victim.brawlStarT > 0)) return // 난투전: 스폰 보호 또는 ⭐ 별 무적
   if (state.mode === 'arena' && state.arenaPhase === 'shop' && attacker) return // 준비 결계: 전투 불가
   if (victim.isBoss && bossInvuln(state, victim)) return // 무적(각성 휴지기 보호막 / 기상 전 수면)
@@ -5488,7 +5489,13 @@ function stepMinions(state, dt) {
           let out = tgt.ref.tk === 'minion' ? spec.dmg * MINION_VS_MINION : spec.dmg
           out *= m.blessMul || 1 // 📿 군세 축복(타락 대사제): 축성된 병사는 더 아프다
           // 보스전 역할 분리: 병사의 일은 건물 철거 — 영웅에겐 잽 수준. 영웅 사냥은 보스의 몫
-          if (isRaidMode(state.mode) && m.team === 'red' && tgt.ref.tk === 'hero') out *= state.mode === 'defense' ? 0.75 : 0.55
+          if ((tgt.ref.tk === 'tower' || tgt.ref.tk === 'nexus') && m.towerMul) out *= m.towerMul // 🕯️ 워프 군세: 공성은 반감 — 기지 레이스가 아니라 영웅 압박이 일
+          if (isRaidMode(state.mode) && m.team === 'red' && tgt.ref.tk === 'hero') {
+            // 세라핌전은 군세 물량 자체가 기믹이라 병사 잽을 한 번 더 누른다 — 영웅 처형은
+            // 보스 스킬(낙뢰·파동·연격)의 몫, 군세는 '자리를 뺏는 압박'의 몫(봇 감사: 병사가 팀데스 55%)
+            const priestRaid = state.mode === 'boss' && state.heroes.some((b) => b.isBoss && b.cls === 'boss_priest')
+            out *= state.mode === 'defense' ? 0.75 : priestRaid ? 0.36 : 0.55
+          }
           if (m.ranged) {
             // 원거리 병사는 작은 화살을 쏜다 ('mbolt' — 영웅 탄과 구분되는 작은 투사체)
             state.projectiles.push({
@@ -7967,7 +7974,7 @@ const BOSS_ADD_SQUADS = {
   boss_archmage: ['mage', 'cryomancer', 'warlock', 'terramancer', 'chronomancer'],
   boss_thorn: ['snarer', 'beastmaster', 'terramancer', 'windcaller', 'catcher'], // 자연군 — 덩굴 정령들
   boss_shadow: ['assassin', 'illusionist', 'fearmonger', 'snarer', 'catcher'],
-  boss_priest: ['healer', 'guardian', 'chronomancer', 'windcaller', 'terramancer'], // 성직군 — 지키고 되살리는 자들
+  boss_priest: ['healer', 'guardian', 'chronomancer', 'windcaller'], // 성직군 4기 — 정예 CC+낙뢰 처형 나선 완화(막타 감사)
 }
 // 정예 소환은 두 박자다: ① 바닥에 예고 장판(강림 자리) → ② delay 뒤 그 자리에서 강림.
 //  · 장판이 흩뿌려져 깔리므로 아군 봇은 '공격 스킬처럼' 인지해 흩어진다(botDodgeBossZone) —
@@ -8188,7 +8195,7 @@ function bossPriest(state, h, foe) {
         x: c.x + (state.rng() - 0.5) * 4, z: c.z + (state.rng() - 0.5) * 4,
         hp, maxHp: hp, atkCd: i * 0.3, dir: 0, atkSeq: 0,
         wpI: state.map.nearestWp('mid', c.x, c.z),
-        bless, blessMul: 1 + 0.35 * bless, goldMul: 0.5,
+        bless, blessMul: 1 + 0.35 * bless, goldMul: 0.5, towerMul: 0.35, // 워프 부대 — 골드 절반·공성 1/3(기지 6분컷 방지)
       })
     }
     pushFx(state, 'summon', c.x, c.z, 6, h.team, 0.9)
@@ -8242,7 +8249,7 @@ function bossPriest(state, h, foe) {
           if (e.team === h.team || e.respawnT > 0 || e.isBoss || h.comboHit[e.id]) continue
           if (dist(h, e) < 3.4) {
             h.comboHit[e.id] = 1
-            damageHero(state, e, skillDmg(h, 40, 0.7), h, false, '연격 돌진')
+            damageHero(state, e, skillDmg(h, 200, 2.8), h, false, '연격 돌진')
             // 넉백 원점은 '피해자 한 걸음 뒤'(돌진 방향 기준) — 보스 뒤 고정점은 피해자와 정확히
             // 겹치는 순간(0거리 정규화) NaN이 전파돼 좌표계가 무너진다(실측)
             applyKnockback(state, e, e.x - Math.cos(h.comboDashDir), e.z - Math.sin(h.comboDashDir), 7)
@@ -8320,14 +8327,15 @@ function bossPriest(state, h, foe) {
   }
   // ⚡ 축성 낙뢰: 보이는 적 영웅들 머리 위 예고 낙뢰 — 국면당 한 줄기씩 늘어난다(1+p).
   //  '중간중간 떨어지는 낙뢰'가 이 보스의 유일한 직접 딜 — 자리만 옮기면 피할 수 있다.
-  if (h.bossCd.a <= 0) {
+  if (h.bossCd.a <= 0 && state.time >= (h.priestRestUntil || 0)) {
     const targets = state.heroes.filter((e) =>
       e.team !== h.team && e.respawnT <= 0 && !e.isBoss && isHeroVisible(state, e, h.team) && dist(h, e) < 32)
     if (targets.length) {
-      h.bossCd.a = 8 * cdMul
-      const picks = targets.sort(() => state.rng() - 0.5).slice(0, 1 + p)
+      h.bossCd.a = 11 * cdMul // 치명화된 만큼 빈도로 회수 — 위협은 '한 방'이 담당
+      h.priestRestUntil = state.time + 2.2
+      const picks = targets.sort(() => state.rng() - 0.5).slice(0, p) // 치명 위력이 된 만큼 국면당 1발(1/2/3)
       for (const e of picks) {
-        pushBossZone(state, h, { x: e.x, z: e.z, r: 4.2, delay: 0.9, dmg: skillDmg(h, 42, 0.7), aim: true, vfx: 'skybolt', hue: 'holy', tag: '축성 낙뢰' }) // 예고 보고 바로 움직여야 피한다
+        pushBossZone(state, h, { x: e.x, z: e.z, r: 3.6, delay: 0.9, dmg: skillDmg(h, 380, 5.8), aim: true, vfx: 'skybolt', hue: 'holy', tag: '축성 낙뢰' }) // 예고 보고 바로 움직여야 피한다
       }
     }
   }
@@ -8354,10 +8362,11 @@ function bossPriest(state, h, foe) {
   }
   // 🔔 참회의 파동: 세라핌을 중심으로 퍼지는 성광 고리 — 몸 곁(안쪽)은 안전, 어중간한
   //  거리(원거리 카이팅 밴드)가 정확히 위험 지대다. '붙거나, 완전히 빠지거나'를 강요.
-  if (h.bossCd.d <= 0 && foe && dist(h, foe) < 20) {
+  if (h.bossCd.d <= 0 && foe && dist(h, foe) < 20 && state.time >= (h.priestRestUntil || 0)) {
     h.bossCd.d = 20 * cdMul
+    h.priestRestUntil = state.time + 2.2
     pushBossZone(state, h, {
-      x: h.x, z: h.z, r: 16, rIn: 5, delay: 1.3, dmg: skillDmg(h, 62, 1.05), slow: 1.2,
+      x: h.x, z: h.z, r: 16, rIn: 5, delay: 1.3, dmg: skillDmg(h, 420, 6.3),
       vfx: 'quake', hue: 'holy', tag: '참회의 파동',
     })
   }
