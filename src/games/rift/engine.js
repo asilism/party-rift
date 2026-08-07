@@ -4355,8 +4355,21 @@ function stepBrawl(state, dt) {
     const z = Math.sin(a) * rr
     const roll = state.rng()
     if (roll < 0.3 || sudden) {
-      // ☄️ 심판의 광선 — 예고 원 뒤 낙뢰. 중립(team 'sky')이라 전원이 피해자, 명중 시 밖으로 밀쳐낸다
-      state.zones.push({ id: state.nextId++, kind: 'meteor', team: 'sky', owner: null, x, z, r: 6.5, t: 0, delay: 1.7, dmg: 370, tag: '심판의 광선', brawlBlast: true })
+      // ☄️ 심판의 광선 — 예고 원 뒤 낙뢰. 중립(team 'sky')이라 전원이 피해자, 명중 시 밖으로 밀쳐낸다.
+      //  45%는 현재 1위의 발밑을 노린다 — 멀리서 구경만 하는 선두를 하늘이 견제한다
+      let mx = x
+      let mz = z
+      const lead = brawlLeader(state)
+      if (lead && state.rng() < 0.45) {
+        mx = lead.x + (state.rng() - 0.5) * 7
+        mz = lead.z + (state.rng() - 0.5) * 7
+        const rr2 = Math.hypot(mx, mz)
+        if (rr2 > state.brawlR - 4) { // 링 안으로 클램프
+          mx *= (state.brawlR - 4) / rr2
+          mz *= (state.brawlR - 4) / rr2
+        }
+      }
+      state.zones.push({ id: state.nextId++, kind: 'meteor', team: 'sky', owner: null, x: mx, z: mz, r: 6.5, t: 0, delay: 1.7, dmg: 370, tag: '심판의 광선', brawlBlast: true })
     } else {
       // 통합 드롭 풀 — 아이템 11칸 + 열매 3칸(전체의 15%). 아이템이 난투의 주인공.
       const kinds = ['hammer', 'hammer', 'mush', 'star', 'bolt', 'bomb', 'bomb', 'banana', 'magnet', 'gust', 'mystery', 'heal', 'heal', 'heal']
@@ -9991,10 +10004,23 @@ function arenaBotDuty(state, h, dt) {
   }
 }
 
+// 난투전 현재 1위 — 목숨이 많고, 같으면 킬이 많은 생존자. '안 싸우고 1등' 견제의 기준점.
+function brawlLeader(state) {
+  let lead = null
+  for (const e of state.heroes) {
+    if (e.respawnT > 0 || e.hp <= 0 || e.fallT > 0) continue
+    if (!lead
+      || (e.brawlLives || 0) > (lead.brawlLives || 0)
+      || ((e.brawlLives || 0) === (lead.brawlLives || 0) && (e.kills || 0) > (lead.kills || 0))) lead = e
+  }
+  return lead
+}
+
 // 난투전 전용 봇 두뇌 — FFA: 원한(마지막으로 날 때린 상대)+가까움+빈사 보너스로 표적을 고르고,
 //  체력이 밀리거나 가장자리에 몰리면 중앙 쪽으로 몸을 뺀다(넉백 장외 방지). 상점·라인 습관 없음.
 function brawlBotDuty(state, h, dt) {
   const myR = Math.hypot(h.x, h.z)
+  const lead = brawlLeader(state) // 1위 견제 — 구경만 하는 선두를 판이 가만두지 않는다
   let foe = null
   let best = -1e9
   for (const e of state.heroes) {
@@ -10006,6 +10032,10 @@ function brawlBotDuty(state, h, dt) {
     if (e.hp < e.maxHp * 0.3) sc += 9 // 막타 기회
     // 목숨 리더 견제: 나보다 목숨이 많은 상대일수록 우선 표적 — '안 싸우고 1등' 전략의 카운터
     sc += Math.max(-8, Math.min(20, ((e.brawlLives || 0) - (h.brawlLives || 0)) * 3))
+    if (e === lead && e !== h) { // 현재 1위: 판이 무르익을수록 어그로가 세지고, 멀어도 찾아간다
+      sc += 8 + Math.min(16, state.time / 20)
+      sc += ed * 0.4 // 거리 감쇠 40% 환급 — '멀리서 구경'이 안전지대가 아니게
+    }
     if ((e.brawlGuardT || 0) > 0 || (e.brawlStarT || 0) > 0) sc -= 30 // 무적자는 두들겨도 헛손질
     if ((e.brawlBombT || 0) > 0) sc -= 45 // 폭탄 든 놈 근처엔 안 간다
     if (sc > best) { best = sc; foe = e }
