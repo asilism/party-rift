@@ -10094,6 +10094,21 @@ function brawlBotDuty(state, h, dt) {
   }
   let goal
   if ((frail && d < 13) || nearEdge) {
+    // 🌀 빈사 압박이면 대포 발사대(30 안·가동 중)부터 — 밟으면 무적으로 반대편 이탈(최고의 도주기)
+    if (frail && !state.brawlPadsDead) {
+      let pad = null
+      let pd = 30
+      for (const c of state.brawlCannons) {
+        if (c.cd > 0.6) continue // 쿨 도는 대포로 뛰어가 봐야 문전 대기
+        const cd2 = Math.hypot(h.x - c.x, h.z - c.z)
+        if (cd2 < pd) { pd = cd2; pad = c }
+      }
+      if (pad) {
+        steerToward(state, h, pad)
+        botAttack(state, h, dt) // 달아나면서도 사거리 안이면 반격
+        return
+      }
+    }
     // 중앙 지향 카이팅 — 단 '적이 가까울 때만'. 무조건 후퇴는 1:1 무한 대치를 만든다
     //  (자연재생이 없어 빈사가 안 풀림 — 열매도 없고 적도 멀면 그냥 싸우러 간다)
     goal = { x: h.x * 0.5, z: h.z * 0.5 }
